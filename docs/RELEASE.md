@@ -1,41 +1,58 @@
 # Release Guide
 
-## Branching and cadence
+## Current automation state
 
-- `main` is the protected integration branch.
-- Standard cadence: every 2 weeks.
-- Cut `release/vX.Y` from `main`.
-- Ship tag `vX.Y.Z`.
+- GitHub workflows remain disabled under `.github/workflows-disabled/`.
+- Do not re-enable workflows as part of standard release preparation.
+- When enablement is approved later, follow `docs/GITHUB_ENABLEMENT_RUNBOOK.md`.
 
-## Pre-release checklist
+## Dry-run-first release sequence
 
-```bash
-npm ci
-npm run typecheck
-npm run build
-npm run test
+Run this exact sequence from repository root:
+
+```powershell
+$version = "vX.Y.Z"
+$releaseBranch = "release/vX.Y"
+
+git checkout main
+git pull --ff-only
+
 npm run repo:check-nested-git
+npm run release:validate -- -DryRun -AllowDirty
+npm run release:changelog:prepare -- -Version $version -DryRun
+npm run release:tag:dry -- -Version $version
 ```
 
-Required before tagging:
+If the dry-run phase is clean, execute the release prep:
+
+```powershell
+git checkout -b $releaseBranch
+
+npm run release:validate
+npm run release:changelog:prepare -- -Version $version
+npm run release:tag:dry -- -Version $version
+```
+
+Finalize and publish:
+
+```powershell
+git add CHANGELOG.md
+git commit -m "chore(release): prepare $version"
+git tag -a $version -m "release: $version"
+git push origin $releaseBranch
+git push origin $version
+```
+
+## Required release checks
 
 - No open `release-blocker` issues.
-- Docs updated for user-facing behavior changes.
-- Migration notes included for schema/protocol changes.
-
-## Tag and publish flow
-
-1. Update versions/changelog.
-2. Create release branch `release/vX.Y`.
-3. Run full validation checks.
-4. Tag release commit: `git tag vX.Y.Z`.
-5. Push branch and tag.
-6. Publish package artifacts (internal/public registry policy).
-7. Create GitHub release notes from merged PRs.
+- `CHANGELOG.md` contains a dated section for the target tag.
+- Docs are updated for user-facing behavior changes.
+- Migration notes are included for schema or protocol changes.
 
 ## Rollback
 
-1. Mark release as revoked in GitHub release notes.
+1. Mark release as revoked in release notes.
 2. Revert offending commit(s) on `main`.
-3. Cut hotfix branch `hotfix/<name>`.
-4. Retag patched release as `vX.Y.(Z+1)`.
+3. Cut `hotfix/<name>` from `main`.
+4. Tag patched release as `vX.Y.(Z+1)`.

@@ -29,12 +29,12 @@ Status legend:
 ### Issues
 - [x] Request envelope and capability/version surface added.
 - [x] Metrics and health observability polish.
-- [-] Daemon recovery and restart robustness.
+- [x] Daemon recovery and restart robustness.
 
 ### Acceptance
 - [x] Health and metrics endpoints reliable.
 - [x] Structured logs contain request/session trace fields.
-- [-] Failure scenarios have deterministic recovery behavior.
+- [x] Failure scenarios have deterministic recovery behavior.
 
 ## Sprint 3 (Days 61-90): Product Surface (CLI/MCP/UI)
 
@@ -44,15 +44,19 @@ Status legend:
 ### Issues
 - [x] CLI install/bootstrap/doctor/status/repair baseline.
 - [x] MCP bootstrap compatibility matrix update.
-- [ ] UI install/status/repair wizard integration.
+- [x] UI install/status/repair wizard integration.
+- [x] UI enterprise operations panel for diagnostics/audit/backups.
+- [x] UI route split delivered for primary and operations workflows.
 - [x] GitHub repo governance baseline (templates/docs/checks).
-- [-] Nested `packages/ui` migration into monorepo tracking.
+- [x] Nested `packages/ui` migration into monorepo tracking.
+- [x] Release dry-run automation scripts for validation/changelog/tag preview.
 
 ### Acceptance
 - [x] First-time setup under 5 minutes for supported clients.
 - [x] `0ctx doctor` produces actionable diagnostics.
-- [ ] UI can show health/bootstrap status and repair actions.
-- [-] No nested `.git` remains under `packages/*`.
+- [x] UI can show health/bootstrap status and repair actions.
+- [x] No nested `.git` remains under `packages/*`.
+- [x] Dry-run-first local release prep flow is documented and executable.
 
 ## GitHub Operations Track
 
@@ -63,13 +67,15 @@ Status legend:
 - [x] PR governance workflow for issue linking.
 - [x] CODEOWNERS scaffold added.
 - [x] Repo-management and onboarding docs added.
+- [x] `packages/ui` is governed under the monorepo root.
+- [-] Release automation phase 1 complete; GitHub settings/workflow rollout pending.
 
 ### Next
 
 - [ ] Configure branch protection rules in GitHub settings.
 - [ ] Create and apply label baseline in GitHub.
-- [ ] Move `packages/ui` from nested repo to monorepo tracking.
-- [ ] Validate release branch and tagging flow.
+- [ ] Re-enable workflows from `.github/workflows-disabled/` after approval.
+- [ ] Validate release branch/tag flow with GitHub release publication.
 
 ## Risk Log
 

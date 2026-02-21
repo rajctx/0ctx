@@ -1,156 +1,163 @@
-import { Terminal, Network, Shield, ArrowRight, Layers, Zap, Cpu } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowRight, Database, Lock, Network, ScanSearch, Workflow } from 'lucide-react';
+import { ThemeToggle } from '@/components/theme/theme-toggle';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Panel } from '@/components/ui/panel';
 
-export default function Home() {
+const highlights = [
+  {
+    title: 'Persistent Decision Memory',
+    description:
+      'Store goals, assumptions, constraints, and decisions in a durable local graph shared across AI tools.',
+    icon: Workflow
+  },
+  {
+    title: 'MCP-native Context Access',
+    description:
+      'Expose your context engine through MCP so assistants can query and reason over real project state.',
+    icon: Network
+  },
+  {
+    title: 'Local-first Security Posture',
+    description:
+      'SQLite-first architecture keeps source-of-truth on your machine with backup and encryption support.',
+    icon: Lock
+  }
+];
+
+export default function HomePage() {
   return (
-    <main className="relative min-h-screen overflow-hidden">
-      {/* Background Decorative Elements */}
-      <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-indigo-600/20 blur-[120px] rounded-full mix-blend-screen pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-5%] w-[40%] h-[40%] bg-purple-600/20 blur-[100px] rounded-full mix-blend-screen pointer-events-none" />
-
-      {/* Navigation */}
-      <nav className="fixed top-0 w-full z-50 glass-panel border-b border-white/5 border-t-0 border-x-0">
-        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-              <Network className="text-white w-6 h-6" />
+    <main className="min-h-screen text-[var(--text-primary)]">
+      <header className="sticky top-0 z-40 border-b border-[var(--border-muted)] bg-[var(--surface-overlay)]/92 backdrop-blur-xl">
+        <div className="mx-auto flex w-full max-w-[1300px] items-center justify-between px-4 py-3">
+          <Link href="/" className="flex items-center gap-3">
+            <div className="glass-layer flex h-9 w-9 items-center justify-center rounded-xl">
+              <Network className="h-4 w-4 text-[var(--accent-strong)]" />
             </div>
-            <span className="text-2xl font-bold tracking-tight">0ctx</span>
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.16em] text-[var(--text-muted)]">0ctx</p>
+              <p className="text-sm font-semibold">Context Engine</p>
+            </div>
+          </Link>
+          <div className="flex items-center gap-2">
+            <ThemeToggle compact />
+            <Button variant="secondary" size="sm" className="hidden sm:inline-flex">
+              Docs
+            </Button>
+            <Link href="/dashboard">
+              <Button variant="primary" size="sm">
+                Open Dashboard
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
           </div>
-          <div className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-300">
-            <a href="#features" className="hover:text-white transition-colors">Features</a>
-            <a href="#mcp" className="hover:text-white transition-colors">MCP Protocol</a>
-            <a href="#security" className="hover:text-white transition-colors">Security</a>
+        </div>
+      </header>
+
+      <section className="mx-auto grid w-full max-w-[1300px] gap-8 px-4 pb-10 pt-14 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+        <div className="space-y-6 ui-rise-in">
+          <Badge>Enterprise-ready local context orchestration</Badge>
+          <h1 className="max-w-2xl text-4xl font-semibold leading-tight sm:text-5xl">
+            Keep AI workflows grounded in a shared, living context graph.
+          </h1>
+          <p className="max-w-2xl text-base leading-relaxed text-[var(--text-secondary)] sm:text-lg">
+            0ctx eliminates context drift between tools by storing your decisions, constraints, goals, and
+            artifacts in a local-first graph. Teams get consistency, traceability, and operational confidence.
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <Link href="/dashboard">
+              <Button variant="primary" size="lg">
+                Launch local workspace
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
+            <Button variant="secondary" size="lg">
+              <ScanSearch className="h-4 w-4" />
+              See architecture
+            </Button>
           </div>
-          <button className="px-5 py-2.5 rounded-full bg-white/10 hover:bg-white/15 border border-white/10 text-white font-medium text-sm transition-all hover:scale-105 active:scale-95">
-            Documentation
-          </button>
-        </div>
-      </nav>
-
-      {/* Hero Section */}
-      <section className="relative pt-40 pb-20 px-6 max-w-7xl mx-auto flex flex-col items-center text-center z-10">
-        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass-panel border-indigo-500/30 text-indigo-300 text-sm font-medium mb-8 animate-slide-up">
-          <Zap className="w-4 h-4 text-indigo-400" />
-          <span>v1.0 is now available for local development</span>
+          <div className="grid max-w-xl grid-cols-3 gap-3 pt-2">
+            <Metric label="Node Queries" value="<50ms" />
+            <Metric label="Deployment" value="Local-first" />
+            <Metric label="Protocol" value="MCP Native" />
+          </div>
         </div>
 
-        <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight mb-6 animate-slide-up delay-100 max-w-4xl mx-auto leading-tight">
-          Zero Context Loss. <br />
-          <span className="gradient-text">For Everyone Who Uses AI.</span>
-        </h1>
+        <Panel className="overflow-hidden p-6 ui-rise-in ui-delay-1">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-xs uppercase tracking-[0.13em] text-[var(--text-muted)]">Live Context Stream</p>
+              <Badge muted>Active</Badge>
+            </div>
+            <Panel className="space-y-3 p-4">
+              <Row label="Current Workspace" value="Product Reliability Program" />
+              <Row label="Selected Node Type" value="Decision" />
+              <Row label="Connected Methods" value="31" />
+            </Panel>
 
-        <p className="text-lg md:text-xl text-gray-400 max-w-2xl mx-auto mb-12 animate-slide-up delay-200">
-          The persistent, local-first, graph-based engine that holds the living state of your thinking — instantly available to every AI tool you use.
-        </p>
+            <Panel className="space-y-2 p-4">
+              <p className="text-sm font-semibold">Latest Decision Snapshot</p>
+              <p className="text-sm text-[var(--text-secondary)]">
+                Prioritize deterministic context retrieval and active checkpointing before expanding autonomous flows.
+              </p>
+              <div className="pt-2 text-xs text-[var(--text-muted)]">Updated 2 minutes ago</div>
+            </Panel>
+          </div>
+        </Panel>
+      </section>
 
-        <div className="flex flex-col sm:flex-row items-center gap-4 animate-slide-up delay-300">
-          <a href="/dashboard" className="px-8 py-4 rounded-full bg-indigo-600 text-white font-semibold flex items-center gap-2 hover:bg-indigo-500 transition-all shadow-[0_0_30px_-5px_rgba(99,102,241,0.5)]">
-            Open Local Graph <ArrowRight className="w-4 h-4" />
-          </a>
-          <button className="px-8 py-4 rounded-full glass-panel font-semibold flex items-center gap-2 hover:bg-white/10 transition-all text-gray-200">
-            <Terminal className="w-4 h-4" /> View Docs
-          </button>
+      <section className="mx-auto w-full max-w-[1300px] px-4 pb-16 pt-8">
+        <div className="grid gap-4 md:grid-cols-3">
+          {highlights.map((item, index) => (
+            <Panel key={item.title} className={`p-5 ui-rise-in ui-delay-${index + 1}`}>
+              <div className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent-strong)]">
+                <item.icon className="h-5 w-5" />
+              </div>
+              <h2 className="text-lg font-semibold">{item.title}</h2>
+              <p className="mt-2 text-sm leading-relaxed text-[var(--text-secondary)]">{item.description}</p>
+            </Panel>
+          ))}
         </div>
       </section>
 
-      {/* Dashboard Preview / Visualization */}
-      <section className="px-6 max-w-6xl mx-auto mb-32 z-10 relative animate-slide-up delay-400">
-        <div className="w-full aspect-video rounded-2xl glass-panel relative overflow-hidden group">
-          {/* Header Bar */}
-          <div className="absolute top-0 w-full h-12 border-b border-white/10 bg-black/40 flex items-center px-4 gap-2 z-20">
-            <div className="flex gap-1.5">
-              <div className="w-3 h-3 rounded-full bg-red-500/80" />
-              <div className="w-3 h-3 rounded-full bg-yellow-500/80" />
-              <div className="w-3 h-3 rounded-full bg-green-500/80" />
-            </div>
-            <div className="mx-auto px-4 py-1 rounded-md bg-white/5 text-xs text-gray-400 flex items-center gap-2 border border-white/5">
-              <Network className="w-3 h-3" /> 0ctx local graph visualizer
-            </div>
+      <section className="mx-auto w-full max-w-[1300px] px-4 pb-20">
+        <Panel className="flex flex-col gap-5 p-6 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.13em] text-[var(--text-muted)]">Ready to standardize context?</p>
+            <h3 className="mt-2 text-2xl font-semibold">Move from context copy-paste to context infrastructure.</h3>
           </div>
-
-          {/* Mock Graph Editor */}
-          <div className="absolute inset-0 pt-12 flex relative">
-            <div className="w-64 border-r border-white/5 bg-black/20 p-4">
-              <div className="text-sm font-semibold text-gray-300 mb-4 px-2 tracking-wider uppercase text-xs">Active Workspaces</div>
-              <div className="space-y-1">
-                <div className="px-3 py-2 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-sm font-medium flex items-center gap-2">
-                  <Layers className="w-4 h-4" /> Project Acme
-                </div>
-                <div className="px-3 py-2 rounded-lg hover:bg-white/5 text-gray-400 text-sm font-medium transition-colors flex items-center gap-2 cursor-pointer">
-                  <Layers className="w-4 h-4" /> System Architecture
-                </div>
-              </div>
-            </div>
-            <div className="flex-1 p-8 relative">
-              {/* Nodes Mapping (Mock) */}
-              <div className="absolute top-1/2 left-1/4 -translate-y-1/2 w-48 p-4 rounded-xl glass-panel border-indigo-500/30 text-sm z-10 hover:scale-105 transition-transform cursor-pointer">
-                <span className="text-xs text-indigo-400 font-bold uppercase tracking-wider mb-1 block">Decision</span>
-                Use Postgres for full-text search backend
-              </div>
-
-              <div className="absolute top-1/4 right-1/4 w-48 p-4 rounded-xl glass-panel border-red-500/30 text-sm z-10 hover:scale-105 transition-transform cursor-pointer">
-                <span className="text-xs text-red-400 font-bold uppercase tracking-wider mb-1 block">Constraint</span>
-                Latency must be under 50ms for typing
-              </div>
-
-              <div className="absolute bottom-1/4 right-1/3 w-48 p-4 rounded-xl glass-panel border-emerald-500/30 text-sm z-10 hover:scale-105 transition-transform cursor-pointer">
-                <span className="text-xs text-emerald-400 font-bold uppercase tracking-wider mb-1 block">Goal</span>
-                Robust real-time sync across devices
-              </div>
-
-              {/* SVG Edges */}
-              <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-40">
-                <path d="M 300 180 C 400 180, 450 120, 520 120" stroke="currentColor" strokeWidth="2" strokeDasharray="4 4" fill="none" className="text-indigo-400" />
-                <path d="M 300 220 C 400 220, 350 280, 450 280" stroke="currentColor" strokeWidth="2" fill="none" className="text-indigo-400" />
-              </svg>
-            </div>
+          <div className="flex gap-3">
+            <Link href="/dashboard">
+              <Button variant="primary" size="lg">
+                Open dashboard
+              </Button>
+            </Link>
+            <Button variant="secondary" size="lg">
+              <Database className="h-4 w-4" />
+              Data model
+            </Button>
           </div>
-        </div>
+        </Panel>
       </section>
-
-      {/* Features grid */}
-      <section id="features" className="max-w-7xl mx-auto px-6 py-20 border-t border-white/10 relative z-10">
-        <div className="mb-16 text-center max-w-2xl mx-auto">
-          <h2 className="text-3xl font-bold mb-4">You shouldn&apos;t have to repeat yourself.</h2>
-          <p className="text-gray-400">0ctx intercepts context drop-offs by giving your LLM direct access to every rule, decision, and asset you&apos;ve already defined.</p>
-        </div>
-
-        <div className="grid md:grid-cols-3 gap-6">
-          <FeatureCard
-            icon={<Cpu className="w-6 h-6 text-indigo-400" />}
-            title="MCP Native API"
-            desc="Built entirely on the standard Model Context Protocol. Works instantly with Claude Desktop, Cursor, and Windsurf."
-          />
-          <FeatureCard
-            icon={<Layers className="w-6 h-6 text-purple-400" />}
-            title="Smart Relevance Pruning"
-            desc="Temporal decay and structural graph ranking ensure the LLM's context window stays clean and performant."
-          />
-          <FeatureCard
-            icon={<Shield className="w-6 h-6 text-emerald-400" />}
-            title="Encrypted Local-First"
-            desc="Your graph lives in SQLite on your disk. You own your context. Zero-knowledge by design."
-          />
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="border-t border-white/10 py-12 text-center text-sm text-gray-500 mt-20 relative z-10">
-        <p className="mb-2">0ctx - Zero Context Loss</p>
-        <p>Built for the AI era.</p>
-      </footer>
     </main>
   );
 }
 
-function FeatureCard({ icon, title, desc }: { icon: React.ReactNode, title: string, desc: string }) {
+function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="glass-panel p-8 rounded-2xl hover:bg-white/[0.08] transition-all group cursor-default">
-      <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-        {icon}
-      </div>
-      <h3 className="text-xl font-bold text-gray-100 mb-3">{title}</h3>
-      <p className="text-gray-400 leading-relaxed text-sm">{desc}</p>
+    <div className="flex items-center justify-between rounded-xl border border-[var(--border-muted)] bg-[var(--surface-subtle)] px-3 py-2">
+      <span className="text-xs text-[var(--text-muted)]">{label}</span>
+      <span className="text-sm font-medium text-[var(--text-primary)]">{value}</span>
     </div>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <Panel className="px-3 py-2">
+      <p className="text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-[var(--text-primary)]">{value}</p>
+    </Panel>
   );
 }

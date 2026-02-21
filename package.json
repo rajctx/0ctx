@@ -20,6 +20,9 @@
     "repo:adopt-ui:dry": "powershell -ExecutionPolicy Bypass -File scripts/repo/adopt-ui-monorepo.ps1",
     "repo:adopt-ui": "powershell -ExecutionPolicy Bypass -File scripts/repo/adopt-ui-monorepo.ps1 -Apply",
     "repo:github:bootstrap:dry": "powershell -ExecutionPolicy Bypass -File scripts/repo/bootstrap-github.ps1 -DryRun",
+    "release:validate": "powershell -ExecutionPolicy Bypass -File scripts/release/validate-release.ps1",
+    "release:changelog:prepare": "powershell -ExecutionPolicy Bypass -File scripts/release/prepare-changelog.ps1",
+    "release:tag:dry": "powershell -ExecutionPolicy Bypass -File scripts/release/tag-preview.ps1",
     "lint": "eslint packages/*/src/**/*.ts",
     "test": "vitest run",
     "test:watch": "vitest"

@@ -11,19 +11,214 @@ import { RequestMetrics } from './metrics';
 import { log } from './logger';
 
 const IS_WIN = os.platform() === 'win32';
-const SOCKET_PATH = IS_WIN ? '\\\\.\\pipe\\0ctx.sock' : path.join(os.homedir(), '.0ctx', '0ctx.sock');
+const DEFAULT_SOCKET_PATH = IS_WIN ? '\\\\.\\pipe\\0ctx.sock' : path.join(os.homedir(), '.0ctx', '0ctx.sock');
+const DEFAULT_PROBE_TIMEOUT_MS = 750;
 
-export function startDaemon() {
-    // Unix specifically throws EACCES if the domain socket file already exists from a prior run.
-    if (!IS_WIN && fs.existsSync(SOCKET_PATH)) {
-        try {
-            fs.unlinkSync(SOCKET_PATH);
-        } catch (e) {
-            log('error', 'failed_to_cleanup_socket', { error: e instanceof Error ? e.message : String(e), socketPath: SOCKET_PATH });
-        }
+type StartupProbeResult = 'daemon' | 'stale_endpoint' | 'occupied';
+
+export interface StartDaemonOptions {
+    socketPath?: string;
+    dbPath?: string;
+    probeTimeoutMs?: number;
+    registerSignalHandlers?: boolean;
+}
+
+export type StartDaemonResult =
+    | {
+        status: 'started';
+        socketPath: string;
+        close: () => Promise<void>;
     }
+    | {
+        status: 'already_running';
+        socketPath: string;
+    };
 
-    const db = openDb();
+function isNamedPipePath(socketPath: string): boolean {
+    return socketPath.startsWith('\\\\.\\pipe\\');
+}
+
+function isAddressInUse(error: unknown): error is NodeJS.ErrnoException {
+    return typeof error === 'object' && error !== null && 'code' in error && (error as NodeJS.ErrnoException).code === 'EADDRINUSE';
+}
+
+function isStaleEndpointError(error: unknown): boolean {
+    if (!(typeof error === 'object' && error !== null && 'code' in error)) return false;
+    const code = (error as NodeJS.ErrnoException).code;
+    return code === 'ENOENT' || code === 'ECONNREFUSED' || code === 'ENOTSOCK';
+}
+
+function listenOnSocket(server: net.Server, socketPath: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const onListening = () => {
+            cleanup();
+            resolve();
+        };
+
+        const onError = (error: Error) => {
+            cleanup();
+            reject(error);
+        };
+
+        const cleanup = () => {
+            server.off('listening', onListening);
+            server.off('error', onError);
+        };
+
+        server.once('listening', onListening);
+        server.once('error', onError);
+
+        try {
+            server.listen(socketPath);
+        } catch (error) {
+            cleanup();
+            reject(error);
+        }
+    });
+}
+
+function probeExistingEndpoint(socketPath: string, timeoutMs: number): Promise<StartupProbeResult> {
+    return new Promise(resolve => {
+        const socket = net.createConnection(socketPath);
+        let settled = false;
+        let buffer = '';
+
+        const finish = (result: StartupProbeResult) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            socket.removeAllListeners();
+            socket.destroy();
+            resolve(result);
+        };
+
+        const timer = setTimeout(() => {
+            finish('occupied');
+        }, timeoutMs);
+
+        socket.once('connect', () => {
+            const healthRequest: DaemonRequest = {
+                method: 'health',
+                params: {},
+                requestId: randomUUID(),
+                apiVersion: '2'
+            };
+            socket.write(JSON.stringify(healthRequest) + '\n');
+        });
+
+        socket.on('data', data => {
+            buffer += data.toString();
+            const newlineIndex = buffer.indexOf('\n');
+            if (newlineIndex === -1) return;
+
+            const message = buffer.slice(0, newlineIndex);
+            try {
+                const response = JSON.parse(message) as DaemonResponse;
+                const result = response.result as { status?: string } | undefined;
+                if (response.ok && result?.status === 'ok') {
+                    finish('daemon');
+                    return;
+                }
+            } catch {
+                // Any invalid response means an endpoint is bound, but it is not a 0ctx daemon.
+            }
+
+            finish('occupied');
+        });
+
+        socket.once('error', error => {
+            if (isStaleEndpointError(error)) {
+                finish('stale_endpoint');
+                return;
+            }
+            finish('occupied');
+        });
+
+        socket.once('end', () => {
+            finish('occupied');
+        });
+    });
+}
+
+function createDaemonCloser(server: net.Server, db: ReturnType<typeof openDb>, socketPath: string): () => Promise<void> {
+    let closed = false;
+
+    return async () => {
+        if (closed) return;
+        closed = true;
+
+        await new Promise<void>(resolve => {
+            if (!server.listening) {
+                resolve();
+                return;
+            }
+
+            server.close(closeError => {
+                if (closeError) {
+                    log('warn', 'daemon_close_error', {
+                        socketPath,
+                        error: closeError.message
+                    });
+                }
+                resolve();
+            });
+        });
+
+        try {
+            db.close();
+        } catch (closeError) {
+            log('warn', 'daemon_db_close_error', {
+                error: closeError instanceof Error ? closeError.message : String(closeError)
+            });
+        }
+    };
+}
+
+function registerShutdownHandlers(closeDaemon: () => Promise<void>): void {
+    const shutdown = (signal: 'SIGINT' | 'SIGTERM') => {
+        log('info', 'daemon_shutdown', { signal });
+        void closeDaemon().finally(() => {
+            process.exit();
+        });
+    };
+
+    process.once('SIGINT', () => shutdown('SIGINT'));
+    process.once('SIGTERM', () => shutdown('SIGTERM'));
+}
+
+async function bindDaemonServer(server: net.Server, socketPath: string, probeTimeoutMs: number): Promise<'started' | 'already_running'> {
+    try {
+        await listenOnSocket(server, socketPath);
+        return 'started';
+    } catch (error) {
+        if (!isAddressInUse(error)) throw error;
+
+        const probeResult = await probeExistingEndpoint(socketPath, probeTimeoutMs);
+
+        if (probeResult === 'daemon') {
+            return 'already_running';
+        }
+
+        if (!isNamedPipePath(socketPath) && probeResult === 'stale_endpoint') {
+            try {
+                fs.unlinkSync(socketPath);
+            } catch (unlinkError) {
+                if (!(typeof unlinkError === 'object' && unlinkError !== null && 'code' in unlinkError && (unlinkError as NodeJS.ErrnoException).code === 'ENOENT')) {
+                    throw unlinkError;
+                }
+            }
+            await listenOnSocket(server, socketPath);
+            return 'started';
+        }
+
+        throw new Error(`Address ${socketPath} is already in use by a non-daemon process.`);
+    }
+}
+
+export async function startDaemon(options: StartDaemonOptions = {}): Promise<StartDaemonResult> {
+    const socketPath = options.socketPath ?? DEFAULT_SOCKET_PATH;
+    const probeTimeoutMs = options.probeTimeoutMs ?? DEFAULT_PROBE_TIMEOUT_MS;
+    const db = openDb(options.dbPath ? { dbPath: options.dbPath } : undefined);
     const graph = new Graph(db);
     const startedAt = Date.now();
     const metrics = new RequestMetrics();
@@ -97,18 +292,36 @@ export function startDaemon() {
         });
     });
 
-    server.listen(SOCKET_PATH, () => {
-        log('info', 'daemon_started', { socketPath: SOCKET_PATH });
-    });
+    const closeDaemon = createDaemonCloser(server, db, socketPath);
 
-    process.on('SIGINT', () => {
-        log('info', 'daemon_shutdown', { signal: 'SIGINT' });
-        server.close();
-        process.exit();
-    });
-    process.on('SIGTERM', () => {
-        log('info', 'daemon_shutdown', { signal: 'SIGTERM' });
-        server.close();
-        process.exit();
-    });
+    try {
+        const status = await bindDaemonServer(server, socketPath, probeTimeoutMs);
+        if (status === 'already_running') {
+            await closeDaemon();
+            log('info', 'daemon_already_running', { socketPath });
+            return { status: 'already_running', socketPath };
+        }
+
+        log('info', 'daemon_started', { socketPath });
+
+        server.on('error', error => {
+            log('error', 'daemon_server_error', {
+                socketPath,
+                error: error.message
+            });
+        });
+
+        if (options.registerSignalHandlers !== false) {
+            registerShutdownHandlers(closeDaemon);
+        }
+
+        return {
+            status: 'started',
+            socketPath,
+            close: closeDaemon
+        };
+    } catch (error) {
+        await closeDaemon();
+        throw error;
+    }
 }

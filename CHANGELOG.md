@@ -1,15 +1,24 @@
 # Changelog
 
+All notable changes to 0ctx are tracked here.
+
 ## [Unreleased]
 
-### Added
+### Platform (Core/Daemon/MCP)
 
-- Enterprise hardening features across core/daemon/mcp (audit, backup, metrics, protocol/session).
-- Product CLI (`@0ctx/cli`) for install/bootstrap/doctor/repair workflows.
-- MCP auto-bootstrap for Claude/Cursor/Windsurf.
-- GitHub governance and repo management docs/templates.
+- Added enterprise hardening features across core/daemon/mcp (audit, backup, metrics, protocol/session).
 
-### Changed
+### Product (CLI/UI)
 
-- Build/typecheck graph includes CLI package.
-- AGENTS guidance updated for enterprise workflow and repo policy.
+- Added product CLI (`@0ctx/cli`) for install/bootstrap/doctor/repair workflows.
+- Added MCP auto-bootstrap for Claude/Cursor/Windsurf.
+
+### Governance & Release
+
+- Added GitHub governance and repo management docs/templates.
+- Changed build/typecheck graph to include the CLI package.
+- Changed agent guidance for enterprise workflow and repository policy.
+
+### Security & Compliance
+
+- _None recorded._
