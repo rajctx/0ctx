@@ -5,17 +5,29 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "tsc -b packages/core/tsconfig.json packages/daemon/tsconfig.json packages/mcp/tsconfig.json",
+    "build": "tsc -b packages/core/tsconfig.json packages/daemon/tsconfig.json packages/mcp/tsconfig.json packages/cli/tsconfig.json",
+    "typecheck": "tsc -b packages/core/tsconfig.json packages/daemon/tsconfig.json packages/mcp/tsconfig.json packages/cli/tsconfig.json --pretty false",
     "dev": "npm run dev --workspace=packages/daemon",
+    "dev:cli": "npm run dev --workspace=@0ctx/cli",
     "dev:ui": "npm run dev --workspace=@0ctx/ui",
     "start:ui": "npm run start --workspace=@0ctx/ui",
     "start:mcp": "node packages/mcp/dist/index.js",
     "dev:mcp": "node packages/mcp/dist/index.js",
-    "lint": "eslint packages/*/src/**/*.ts"
+    "cli": "node packages/cli/dist/index.js",
+    "bootstrap:mcp": "npm run build && node packages/mcp/dist/bootstrap.js",
+    "bootstrap:mcp:dry": "npm run build && node packages/mcp/dist/bootstrap.js --dry-run",
+    "repo:check-nested-git": "powershell -ExecutionPolicy Bypass -File scripts/repo/check-nested-git.ps1",
+    "repo:adopt-ui:dry": "powershell -ExecutionPolicy Bypass -File scripts/repo/adopt-ui-monorepo.ps1",
+    "repo:adopt-ui": "powershell -ExecutionPolicy Bypass -File scripts/repo/adopt-ui-monorepo.ps1 -Apply",
+    "repo:github:bootstrap:dry": "powershell -ExecutionPolicy Bypass -File scripts/repo/bootstrap-github.ps1 -DryRun",
+    "lint": "eslint packages/*/src/**/*.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
     "@types/node": "^22.13.4",
     "eslint": "^9.20.1",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "vitest": "^4.0.18"
   }
 }

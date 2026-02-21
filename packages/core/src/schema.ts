@@ -48,3 +48,48 @@ export interface Context {
     paths: string[];          // mapped local paths (optional — many contexts are not tied to a directory)
     createdAt: number;
 }
+
+export type AuditAction =
+    | 'create_context'
+    | 'delete_context'
+    | 'switch_context'
+    | 'add_node'
+    | 'update_node'
+    | 'delete_node'
+    | 'add_edge'
+    | 'save_checkpoint'
+    | 'rewind'
+    | 'create_backup'
+    | 'restore_backup';
+
+export interface AuditMetadata {
+    actor?: string | null;
+    source?: string | null;
+    sessionToken?: string | null;
+    connectionId?: string | null;
+    requestId?: string | null;
+    method?: string | null;
+}
+
+export interface AuditEntry {
+    id: string;
+    action: AuditAction;
+    contextId?: string | null;
+    payload: Record<string, unknown>;
+    result?: Record<string, unknown> | null;
+    actor?: string | null;
+    source?: string | null;
+    sessionToken?: string | null;
+    connectionId?: string | null;
+    requestId?: string | null;
+    createdAt: number;
+}
+
+export interface ContextDump {
+    version: 1;
+    exportedAt: number;
+    context: Context;
+    nodes: ContextNode[];
+    edges: ContextEdge[];
+    checkpoints: Checkpoint[];
+}

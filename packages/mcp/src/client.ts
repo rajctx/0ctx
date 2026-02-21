@@ -1,14 +1,29 @@
 import net from 'net';
 import path from 'path';
 import os from 'os';
+import { randomUUID } from 'crypto';
 
 const IS_WIN = os.platform() === 'win32';
 const SOCKET_PATH = IS_WIN ? '\\\\.\\pipe\\0ctx.sock' : path.join(os.homedir(), '.0ctx', '0ctx.sock');
 
-export function sendToDaemon(method: string, params: any): Promise<any> {
+export interface SendToDaemonOptions {
+    requestId?: string;
+    sessionToken?: string;
+    apiVersion?: string;
+}
+
+export function sendToDaemon(method: string, params: Record<string, unknown> = {}, options: SendToDaemonOptions = {}): Promise<any> {
     return new Promise((resolve, reject) => {
+        const requestId = options.requestId || randomUUID();
+
         const socket = net.createConnection(SOCKET_PATH);
-        socket.write(JSON.stringify({ method, params }) + '\n');
+        socket.write(JSON.stringify({
+            method,
+            params,
+            requestId,
+            sessionToken: options.sessionToken,
+            apiVersion: options.apiVersion ?? '2'
+        }) + '\n');
 
         let responseData = '';
         socket.on('data', data => {

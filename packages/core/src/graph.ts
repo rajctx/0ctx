@@ -1,6 +1,17 @@
 import { randomUUID } from 'crypto';
 import type Database from 'better-sqlite3';
-import type { ContextNode, ContextEdge, NodeType, EdgeType, Checkpoint, Context } from './schema';
+import type {
+    ContextNode,
+    ContextEdge,
+    NodeType,
+    EdgeType,
+    Checkpoint,
+    Context,
+    AuditEntry,
+    AuditAction,
+    AuditMetadata,
+    ContextDump
+} from './schema';
 
 export class Graph {
     constructor(private db: Database.Database) { }
@@ -191,6 +202,186 @@ export class Graph {
             nodes: nodesRows.map(r => ({ ...r, tags: JSON.parse(r.tags) })),
             edges: edgesRows
         };
+    }
+
+    // ── Audit ─────────────────────────────────────────────────────
+    recordAuditEvent(params: {
+        action: AuditAction;
+        contextId?: string | null;
+        payload?: Record<string, unknown>;
+        result?: Record<string, unknown> | null;
+        metadata?: AuditMetadata;
+    }): AuditEntry {
+        const entry: AuditEntry = {
+            id: randomUUID(),
+            action: params.action,
+            contextId: params.contextId ?? null,
+            payload: params.payload ?? {},
+            result: params.result ?? null,
+            actor: params.metadata?.actor ?? null,
+            source: params.metadata?.source ?? null,
+            sessionToken: params.metadata?.sessionToken ?? null,
+            connectionId: params.metadata?.connectionId ?? null,
+            requestId: params.metadata?.requestId ?? null,
+            createdAt: Date.now()
+        };
+
+        this.db.prepare(`
+      INSERT INTO audit_logs (
+        id, action, contextId, payload, result, actor, source, sessionToken, connectionId, requestId, createdAt
+      ) VALUES (
+        @id, @action, @contextId, @payload, @result, @actor, @source, @sessionToken, @connectionId, @requestId, @createdAt
+      )
+    `).run({
+            ...entry,
+            payload: JSON.stringify(entry.payload),
+            result: entry.result ? JSON.stringify(entry.result) : null
+        });
+
+        return entry;
+    }
+
+    listAuditEvents(contextId?: string, limit = 50): AuditEntry[] {
+        const normalizedLimit = Math.max(1, Math.min(limit, 500));
+        const rows = contextId
+            ? this.db.prepare(`
+          SELECT * FROM audit_logs
+          WHERE contextId = ?
+          ORDER BY createdAt DESC
+          LIMIT ?
+        `).all(contextId, normalizedLimit) as any[]
+            : this.db.prepare(`
+          SELECT * FROM audit_logs
+          ORDER BY createdAt DESC
+          LIMIT ?
+        `).all(normalizedLimit) as any[];
+
+        return rows.map((row): AuditEntry => ({
+            id: row.id,
+            action: row.action as AuditAction,
+            contextId: row.contextId ?? null,
+            payload: row.payload ? JSON.parse(row.payload) : {},
+            result: row.result ? JSON.parse(row.result) : null,
+            actor: row.actor ?? null,
+            source: row.source ?? null,
+            sessionToken: row.sessionToken ?? null,
+            connectionId: row.connectionId ?? null,
+            requestId: row.requestId ?? null,
+            createdAt: row.createdAt
+        }));
+    }
+
+    // ── Backup / Restore ──────────────────────────────────────────
+    exportContextDump(contextId: string): ContextDump {
+        const context = this.getContext(contextId);
+        if (!context) {
+            throw new Error(`Context ${contextId} not found`);
+        }
+
+        const nodes = (this.db.prepare('SELECT * FROM nodes WHERE contextId = ? ORDER BY createdAt ASC').all(contextId) as any[])
+            .map(row => ({ ...row, tags: JSON.parse(row.tags) }));
+
+        const nodeIds = nodes.map(node => node.id);
+        const idPlaceholders = nodeIds.map(() => '?').join(', ');
+
+        const edges = nodeIds.length === 0
+            ? []
+            : this.db.prepare(`
+          SELECT * FROM edges
+          WHERE fromId IN (${idPlaceholders}) OR toId IN (${idPlaceholders})
+          ORDER BY createdAt ASC
+        `).all(...nodeIds, ...nodeIds) as ContextEdge[];
+
+        const checkpoints = this.listCheckpoints(contextId);
+
+        return {
+            version: 1,
+            exportedAt: Date.now(),
+            context,
+            nodes,
+            edges,
+            checkpoints
+        };
+    }
+
+    importContextDump(dump: ContextDump, options?: { name?: string }): Context {
+        if (dump.version !== 1) {
+            throw new Error(`Unsupported dump version ${dump.version}`);
+        }
+
+        const context = this.createContext(options?.name || dump.context.name, dump.context.paths);
+        const nodeIdMap = new Map<string, string>();
+
+        const insertNode = this.db.prepare(`
+      INSERT INTO nodes (id, contextId, thread, type, content, key, tags, source, createdAt)
+      VALUES (@id, @contextId, @thread, @type, @content, @key, @tags, @source, @createdAt)
+    `);
+
+        const insertNodeFts = this.db.prepare(`
+      INSERT INTO nodes_fts (id, content, tags) VALUES (?, ?, ?)
+    `);
+
+        const insertEdge = this.db.prepare(`
+      INSERT INTO edges (id, fromId, toId, relation, createdAt)
+      VALUES (@id, @fromId, @toId, @relation, @createdAt)
+    `);
+
+        const insertCheckpoint = this.db.prepare(`
+      INSERT INTO checkpoints (id, contextId, name, nodeIds, createdAt)
+      VALUES (@id, @contextId, @name, @nodeIds, @createdAt)
+    `);
+
+        const tx = this.db.transaction(() => {
+            for (const node of dump.nodes) {
+                const newId = randomUUID();
+                nodeIdMap.set(node.id, newId);
+
+                insertNode.run({
+                    id: newId,
+                    contextId: context.id,
+                    thread: node.thread || null,
+                    type: node.type,
+                    content: node.content,
+                    key: node.key || null,
+                    tags: JSON.stringify(node.tags ?? []),
+                    source: node.source || null,
+                    createdAt: node.createdAt
+                });
+
+                insertNodeFts.run(newId, node.content, (node.tags ?? []).join(' '));
+            }
+
+            for (const edge of dump.edges) {
+                const fromId = nodeIdMap.get(edge.fromId);
+                const toId = nodeIdMap.get(edge.toId);
+                if (!fromId || !toId) continue;
+
+                insertEdge.run({
+                    id: randomUUID(),
+                    fromId,
+                    toId,
+                    relation: edge.relation,
+                    createdAt: edge.createdAt
+                });
+            }
+
+            for (const checkpoint of dump.checkpoints) {
+                const mappedNodeIds = checkpoint.nodeIds
+                    .map(nodeId => nodeIdMap.get(nodeId))
+                    .filter((nodeId): nodeId is string => Boolean(nodeId));
+
+                insertCheckpoint.run({
+                    id: randomUUID(),
+                    contextId: context.id,
+                    name: checkpoint.name,
+                    nodeIds: JSON.stringify(mappedNodeIds),
+                    createdAt: checkpoint.createdAt
+                });
+            }
+        });
+
+        tx();
+        return context;
     }
 
     // ── Checkpoints ────────────────────────────────────────────────

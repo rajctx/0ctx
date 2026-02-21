@@ -1,11 +1,24 @@
 import Database from 'better-sqlite3';
+import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
 const DB_PATH = path.join(os.homedir(), '.0ctx', '0ctx.db');
+export const CURRENT_SCHEMA_VERSION = 2;
 
-export function openDb(): Database.Database {
-    const db = new Database(DB_PATH);
+export interface OpenDbOptions {
+    dbPath?: string;
+}
+
+function resolveDbPath(options?: OpenDbOptions): string {
+    return options?.dbPath || process.env.CTX_DB_PATH || DB_PATH;
+}
+
+export function openDb(options?: OpenDbOptions): Database.Database {
+    const dbPath = resolveDbPath(options);
+    fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+
+    const db = new Database(dbPath);
     db.pragma('journal_mode = WAL');
     db.pragma('foreign_keys = ON');
     migrate(db);
@@ -13,6 +26,26 @@ export function openDb(): Database.Database {
 }
 
 function migrate(db: Database.Database) {
+    db.exec(`
+    CREATE TABLE IF NOT EXISTS schema_meta (
+      key   TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+  `);
+
+    const version = getSchemaVersion(db);
+    if (version < 1) {
+        migrateToV1(db);
+        setSchemaVersion(db, 1);
+    }
+
+    if (version < 2) {
+        migrateToV2(db);
+        setSchemaVersion(db, 2);
+    }
+}
+
+function migrateToV1(db: Database.Database) {
     db.exec(`
     CREATE TABLE IF NOT EXISTS contexts (
       id         TEXT PRIMARY KEY,
@@ -57,4 +90,44 @@ function migrate(db: Database.Database) {
     CREATE VIRTUAL TABLE IF NOT EXISTS nodes_fts
       USING fts5(id UNINDEXED, content, tags, tokenize='porter ascii');
   `);
+}
+
+function migrateToV2(db: Database.Database) {
+    db.exec(`
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id            TEXT PRIMARY KEY,
+      action        TEXT NOT NULL,
+      contextId     TEXT,
+      payload       TEXT NOT NULL DEFAULT '{}',
+      result        TEXT,
+      actor         TEXT,
+      source        TEXT,
+      sessionToken  TEXT,
+      connectionId  TEXT,
+      requestId     TEXT,
+      createdAt     INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_audit_logs_context_created
+      ON audit_logs(contextId, createdAt DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_audit_logs_created
+      ON audit_logs(createdAt DESC);
+  `);
+}
+
+export function getSchemaVersion(db: Database.Database): number {
+    const row = db.prepare('SELECT value FROM schema_meta WHERE key = ?').get('schema_version') as { value: string } | undefined;
+    if (!row) return 0;
+
+    const value = Number(row.value);
+    return Number.isNaN(value) ? 0 : value;
+}
+
+function setSchemaVersion(db: Database.Database, version: number): void {
+    db.prepare(`
+    INSERT INTO schema_meta (key, value)
+    VALUES (?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `).run('schema_version', String(version));
 }

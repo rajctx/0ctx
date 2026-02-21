@@ -1,0 +1,11 @@
+* @rajctx
+
+/packages/core/ @rajctx
+/packages/daemon/ @rajctx
+/packages/mcp/ @rajctx
+/packages/cli/ @rajctx
+/packages/ui/ @rajctx
+
+/.github/ @rajctx
+/docs/ @rajctx
+/scripts/ @rajctx

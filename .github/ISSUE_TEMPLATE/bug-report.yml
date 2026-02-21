@@ -1,0 +1,60 @@
+name: Bug report
+description: Report a reproducible defect.
+title: "[Bug] "
+labels:
+  - type/bug
+  - status/needs-info
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What is broken?
+      placeholder: Clear description of the issue.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Exact commands/UI actions to reproduce.
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: OS, Node version, npm version, 0ctx commands used.
+      placeholder: |
+        OS:
+        Node:
+        npm:
+        Command(s):
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / diagnostics
+      description: Attach relevant output (`0ctx doctor --json`, daemon logs, screenshots).

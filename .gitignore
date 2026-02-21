@@ -17,6 +17,7 @@ node_modules
 
 # next.js
 /.next/
+**/.next/
 /out/
 
 # production
@@ -44,4 +45,6 @@ next-env.d.ts
 
 **/dist
 
-ui/
+# local repo migration artifacts
+.repo-backups/
+

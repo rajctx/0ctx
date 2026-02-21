@@ -1,0 +1,61 @@
+name: Risk log
+description: Track delivery risks and mitigations.
+title: "[Risk] "
+labels:
+  - priority/high
+  - status/needs-info
+body:
+  - type: input
+    id: owner
+    attributes:
+      label: Owner
+      description: Who owns this risk?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Impact
+      options:
+        - High
+        - Medium
+        - Low
+    validations:
+      required: true
+
+  - type: dropdown
+    id: likelihood
+    attributes:
+      label: Likelihood
+      options:
+        - High
+        - Medium
+        - Low
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Risk description
+    validations:
+      required: true
+
+  - type: textarea
+    id: mitigation
+    attributes:
+      label: Mitigation plan
+    validations:
+      required: true
+
+  - type: dropdown
+    id: status
+    attributes:
+      label: Status
+      options:
+        - Open
+        - Mitigated
+        - Accepted
+    validations:
+      required: true

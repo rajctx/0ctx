@@ -41,6 +41,7 @@ export const tools = [
                 content: { type: 'string', description: 'The content of the context entry' },
                 key: { type: 'string', description: 'Optional named key for direct lookup (e.g. auth-strategy)' },
                 tags: { type: 'array', items: { type: 'string' } },
+                contextId: { type: 'string', description: 'Optional explicit context ID override for this operation.' },
                 relatesTo: { type: 'string', description: 'Optional node ID this relates to' },
                 relation: { type: 'string', enum: ['caused_by', 'constrains', 'supersedes', 'depends_on', 'contradicts'] },
             },
@@ -54,6 +55,7 @@ export const tools = [
             type: 'object',
             properties: {
                 key: { type: 'string' },
+                contextId: { type: 'string', description: 'Optional explicit context ID override for this operation.' },
             },
             required: ['key'],
         },
@@ -79,6 +81,7 @@ export const tools = [
             properties: {
                 query: { type: 'string', description: 'The search query string.' },
                 limit: { type: 'number', description: 'Max results (default 10)' },
+                contextId: { type: 'string', description: 'Optional explicit context ID override for this operation.' },
             },
             required: ['query'],
         },
@@ -102,6 +105,7 @@ export const tools = [
             type: 'object',
             properties: {
                 name: { type: 'string' },
+                contextId: { type: 'string', description: 'Optional explicit context ID override for this operation.' },
             },
             required: ['name'],
         },
@@ -115,6 +119,70 @@ export const tools = [
                 checkpointId: { type: 'string' },
             },
             required: ['checkpointId'],
+        },
+    },
+    {
+        name: 'ctx_health',
+        description: 'Check local daemon health and protocol status.',
+        inputSchema: {
+            type: 'object',
+            properties: {},
+            required: [],
+        },
+    },
+    {
+        name: 'ctx_metrics',
+        description: 'Get daemon request metrics snapshot for operations and latency trends.',
+        inputSchema: {
+            type: 'object',
+            properties: {},
+            required: [],
+        },
+    },
+    {
+        name: 'ctx_audit_recent',
+        description: 'List recent audit events for the active context (or a specific contextId).',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                contextId: { type: 'string', description: 'Optional explicit context ID override for this operation.' },
+                limit: { type: 'number', description: 'Max results (default 25).' },
+            },
+            required: [],
+        },
+    },
+    {
+        name: 'ctx_backup_create',
+        description: 'Create an encrypted local backup file for the active context.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                contextId: { type: 'string', description: 'Optional explicit context ID override for this operation.' },
+                name: { type: 'string', description: 'Optional backup name.' },
+                encrypted: { type: 'boolean', description: 'Whether to encrypt the backup payload (default true).' }
+            },
+            required: [],
+        },
+    },
+    {
+        name: 'ctx_backup_list',
+        description: 'List available local backup files.',
+        inputSchema: {
+            type: 'object',
+            properties: {},
+            required: [],
+        },
+    },
+    {
+        name: 'ctx_backup_restore',
+        description: 'Restore a context from a local backup file. Creates a new context.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                fileName: { type: 'string', description: 'Backup filename from ctx_backup_list.' },
+                name: { type: 'string', description: 'Optional name override for the restored context.' }
+            },
+            required: ['fileName'],
         },
     }
 ];
