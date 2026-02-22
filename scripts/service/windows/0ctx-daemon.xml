@@ -1,0 +1,32 @@
+<service>
+  <!-- Windows Service definition for the 0ctx daemon -->
+  <!-- This file is copied to ~/.0ctx/service/ at install time -->
+  <!-- The CLI replaces %NODE_PATH% and %DAEMON_ENTRY% before writing -->
+
+  <id>0ctx-daemon</id>
+  <name>0ctx Daemon</name>
+  <description>0ctx persistent local context engine — graph storage and IPC service</description>
+
+  <executable>%NODE_PATH%</executable>
+  <arguments>%DAEMON_ENTRY%</arguments>
+
+  <startmode>Automatic</startmode>
+  <delayedAutoStart>false</delayedAutoStart>
+
+  <!-- Restart on failure: 3 attempts, 5 s delay each -->
+  <onfailure action="restart" delay="5 sec"/>
+  <onfailure action="restart" delay="10 sec"/>
+  <onfailure action="restart" delay="30 sec"/>
+  <resetfailure>1 hour</resetfailure>
+
+  <!-- Log output from the daemon process -->
+  <logpath>%USERPROFILE%\.0ctx\logs</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>5</keepFiles>
+  </log>
+
+  <!-- Environment passthrough -->
+  <env name="NODE_ENV" value="production"/>
+
+</service>

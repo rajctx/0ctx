@@ -5,9 +5,20 @@ import path from 'path';
 import { spawn } from 'child_process';
 import { bootstrapMcpRegistration } from '@0ctx/mcp/dist/bootstrap';
 import { sendToDaemon } from '@0ctx/mcp/dist/client';
+import {
+    installService,
+    enableService,
+    disableService,
+    uninstallService,
+    statusService,
+    startService,
+    stopService,
+    restartService,
+} from './service-windows';
 
 type SupportedClient = 'claude' | 'cursor' | 'windsurf';
 type CheckStatus = 'pass' | 'warn' | 'fail';
+type BootstrapResult = { client: string; status: string; configPath: string; message?: string };
 
 interface DoctorCheck {
     id: string;
@@ -19,6 +30,7 @@ interface DoctorCheck {
 interface ParsedArgs {
     command: string;
     subcommand?: string;
+    serviceAction?: string;
     flags: Record<string, string | boolean>;
 }
 
@@ -57,9 +69,15 @@ function parseArgs(argv: string[]): ParsedArgs {
     }
 
     const hasSubcommand = command === 'daemon';
+    const sub = hasSubcommand ? maybeSubcommand : undefined;
+    // 3-level: daemon service <action>
+    const serviceAction = (sub === 'service' && rest[0] && !rest[0].startsWith('--'))
+        ? rest[0]
+        : undefined;
     return {
         command,
-        subcommand: hasSubcommand ? maybeSubcommand : undefined,
+        subcommand: sub,
+        serviceAction,
         flags
     };
 }
@@ -136,7 +154,7 @@ function runBootstrap(clients: SupportedClient[], dryRun: boolean): ReturnType<t
     });
 }
 
-function printBootstrapResults(results: ReturnType<typeof bootstrapMcpRegistration>, dryRun: boolean): void {
+function printBootstrapResults(results: BootstrapResult[], dryRun: boolean): void {
     const mode = dryRun ? 'DRY RUN' : 'APPLIED';
     console.log(`\nMCP bootstrap (${mode})`);
     for (const result of results) {
@@ -174,7 +192,7 @@ async function commandBootstrap(flags: Record<string, string | boolean>): Promis
     const dryRun = Boolean(flags['dry-run']);
     const results = runBootstrap(clients, dryRun);
     printBootstrapResults(results, dryRun);
-    return results.some(result => result.status === 'failed') ? 1 : 0;
+    return results.some((result: BootstrapResult) => result.status === 'failed') ? 1 : 0;
 }
 
 async function commandInstall(flags: Record<string, string | boolean>): Promise<number> {
@@ -230,7 +248,7 @@ async function commandDoctor(flags: Record<string, string | boolean>): Promise<n
     });
 
     const dryRunResults = runBootstrap(parseClients(flags.clients), true);
-    const failedBootstrap = dryRunResults.some(result => result.status === 'failed');
+    const failedBootstrap = dryRunResults.some((result: BootstrapResult) => result.status === 'failed');
     checks.push({
         id: 'bootstrap_dry_run',
         status: failedBootstrap ? 'fail' : 'pass',
@@ -286,7 +304,50 @@ Usage:
   0ctx status
   0ctx repair [--clients=...]
   0ctx daemon start
+
+Windows service management (requires Administrator):
+  0ctx daemon service install    Register daemon as a Windows service
+  0ctx daemon service enable     Set service start type to Automatic
+  0ctx daemon service disable    Set service start type to Manual
+  0ctx daemon service start      Start the service
+  0ctx daemon service stop       Stop the service
+  0ctx daemon service restart    Stop then start the service
+  0ctx daemon service status     Show current service state
+  0ctx daemon service uninstall  Remove service registration
 `);
+}
+
+async function commandDaemonService(action: string | undefined): Promise<number> {
+    if (os.platform() !== 'win32') {
+        console.error('daemon service commands are Windows-only.');
+        console.error('macOS: use SVC-02 (launchd) — coming soon.');
+        console.error('Linux: use SVC-03 (systemd) — coming soon.');
+        return 1;
+    }
+
+    const validActions = ['install', 'enable', 'disable', 'uninstall', 'status', 'start', 'stop', 'restart'];
+    if (!action || !validActions.includes(action)) {
+        console.error(`Unknown service action: '${action ?? ''}'`);
+        console.error(`Valid actions: ${validActions.join(', ')}`);
+        return 1;
+    }
+
+    try {
+        switch (action) {
+            case 'install': installService(); break;
+            case 'enable': enableService(); break;
+            case 'disable': disableService(); break;
+            case 'uninstall': uninstallService(); break;
+            case 'status': statusService(); break;
+            case 'start': startService(); break;
+            case 'stop': stopService(); break;
+            case 'restart': restartService(); break;
+        }
+        return 0;
+    } catch (error) {
+        console.error(`service ${action} failed:`, error instanceof Error ? error.message : String(error));
+        return 1;
+    }
 }
 
 async function main(): Promise<number> {
@@ -314,6 +375,9 @@ async function main(): Promise<number> {
                 const ok = await waitForDaemon();
                 console.log(ok ? 'daemon started' : 'daemon start timeout');
                 return ok ? 0 : 1;
+            }
+            if (parsed.subcommand === 'service') {
+                return commandDaemonService(parsed.serviceAction);
             }
             printHelp();
             return 1;

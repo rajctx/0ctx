@@ -37,5 +37,8 @@
   "devDependencies": {
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0"
+  },
+  "optionalDependencies": {
+    "winsw": "^3.0.0"
   }
 }
