@@ -12,6 +12,7 @@ import {
   History,
   LayoutGrid,
   Loader2,
+  LogOut,
   Plus,
   RefreshCw,
   ServerCog,
@@ -250,6 +251,18 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                     {extension.label}
                   </Link>
                 ))}
+              </div>
+            </section>
+
+            <section>
+              <div className="mt-2">
+                <a
+                  href="/auth/logout"
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-[var(--text-muted)] transition-colors hover:bg-rose-500/10 hover:text-rose-400"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Sign out
+                </a>
               </div>
             </section>
           </div>

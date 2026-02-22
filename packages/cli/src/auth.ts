@@ -1,12 +1,12 @@
 /**
  * AUTH-01: CLI-side device code auth (RFC 8628)
  *
- * Token store: ~/.0ctx/auth.json (owner-read-only, 0o600)
- * Auth server: CTX_AUTH_SERVER env var (default: https://auth.0ctx.com)
+ * Token store (SEC-02 priority order):
+ *   1. CTX_AUTH_TOKEN env var (SEC-01)
+ *   2. OS keyring (macOS Keychain / Windows Credential Manager / Linux Secret Service)
+ *   3. ~/.0ctx/auth.json fallback (0o600) — or forced via --insecure-storage
  *
- * This module is intentionally backend-agnostic. The actual auth server
- * will be wired in SYNC-01; until then, `auth login` fails gracefully
- * with a connection error when no server is reachable.
+ * Auth server: CTX_AUTH_SERVER env var (default: https://auth.0ctx.com)
  */
 
 import fs from 'fs';
@@ -15,6 +15,7 @@ import path from 'path';
 import https from 'https';
 import http from 'http';
 import { execSync } from 'child_process';
+import { storeToKeyring, readFromKeyring, deleteFromKeyring } from './keyring.js';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -60,9 +61,10 @@ interface TokenErrorResponse {
     error_description?: string;
 }
 
-// ─── Token store I/O ─────────────────────────────────────────────────────────
+// ─── Token store I/O (SEC-02: keyring-first, file-fallback) ───────────────────
 
-export function readTokenStore(): TokenStore | null {
+/** Read from file only (sync fallback). */
+function readTokenFile(): TokenStore | null {
     try {
         if (!fs.existsSync(TOKEN_FILE)) return null;
         const raw = fs.readFileSync(TOKEN_FILE, 'utf8');
@@ -72,14 +74,52 @@ export function readTokenStore(): TokenStore | null {
     }
 }
 
-export function writeTokenStore(store: TokenStore): void {
+function writeTokenFile(store: TokenStore): void {
     const dir = path.dirname(TOKEN_FILE);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(TOKEN_FILE, JSON.stringify(store, null, 2), { encoding: 'utf8', mode: 0o600 });
 }
 
-export function clearTokenStore(): void {
+function clearTokenFile(): void {
     try { fs.unlinkSync(TOKEN_FILE); } catch { /* already gone */ }
+}
+
+/** Read token: keyring first, then file (sync compat wrapper). */
+export function readTokenStore(): TokenStore | null {
+    return readTokenFile();
+}
+
+/** Write token to keyring + file. Async because keyring is async. */
+export async function writeTokenStoreSecure(store: TokenStore, insecureOnly = false): Promise<'keyring' | 'file'> {
+    const json = JSON.stringify(store, null, 2);
+    if (!insecureOnly) {
+        const stored = await storeToKeyring(json);
+        if (stored) {
+            // Also write file as backup (daemon reads from file)
+            writeTokenFile(store);
+            return 'keyring';
+        }
+    }
+    writeTokenFile(store);
+    return 'file';
+}
+
+/** Read token: tries keyring first, falls back to file. */
+export async function readTokenStoreSecure(): Promise<{ store: TokenStore | null; source: 'keyring' | 'file' | null }> {
+    const keyringRaw = await readFromKeyring();
+    if (keyringRaw) {
+        try {
+            return { store: JSON.parse(keyringRaw) as TokenStore, source: 'keyring' };
+        } catch { /* corrupt keyring entry, try file */ }
+    }
+    const fileStore = readTokenFile();
+    return { store: fileStore, source: fileStore ? 'file' : null };
+}
+
+/** Clear token from both keyring and file. */
+export async function clearTokenStoreSecure(): Promise<void> {
+    await deleteFromKeyring();
+    clearTokenFile();
 }
 
 export function isTokenExpired(store: TokenStore): boolean {
@@ -300,7 +340,7 @@ export async function refreshAccessToken(store: TokenStore): Promise<TokenStore>
         email: resp.email ?? store.email,
         tenantId: resp.tenant_id ?? store.tenantId
     };
-    writeTokenStore(updated);
+    writeTokenFile(updated);
     return updated;
 }
 
@@ -365,18 +405,25 @@ export async function commandAuthLogin(flags: Record<string, string | boolean>):
         email: tokenResp.email ?? '',
         tenantId: tokenResp.tenant_id ?? ''
     };
-    writeTokenStore(store);
+
+    // SEC-02: Store to keyring first, file fallback
+    const insecure = Boolean(flags['insecure-storage']);
+    const storageDest = await writeTokenStoreSecure(store, insecure);
 
     console.log('');
     console.log(`Logged in as: ${store.email}`);
     if (store.tenantId) console.log(`Tenant:       ${store.tenantId}`);
-    console.log(`Token file:   ${TOKEN_FILE}`);
+    console.log(`Stored in:    ${storageDest === 'keyring' ? 'OS credential store' : TOKEN_FILE}`);
+    if (storageDest === 'file' && !insecure) {
+        console.log('  (OS keyring unavailable — using plaintext file fallback)');
+    }
     return 0;
 }
 
-export function commandAuthLogout(): number {
+export async function commandAuthLogout(): Promise<number> {
     const existing = readTokenStore();
-    clearTokenStore();
+    // SEC-02: Clear from both keyring and file
+    await clearTokenStoreSecure();
     if (existing) {
         console.log(`Logged out (was: ${existing.email})`);
     } else {

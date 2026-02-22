@@ -196,10 +196,10 @@ Exit criteria:
 | AUTH-02 | Daemon | Secure session/token persistence and tenant binding | `packages/daemon/src/*` | Daemon reports tenant/auth state with secure token handling | AUTH-01 | Done | Platform | Phase C |
 | AUTH-03 | UI | Auth/setup/connect flows in UI | `packages/ui/src/app/*`, `packages/ui/src/components/*` | User can complete auth and tenant binding from UI | AUTH-01, AUTH-02 | Done | UI | Phase C |
 | SEC-01 | CLI | `CTX_AUTH_TOKEN` env var bypass for CI/CD + headless auth | `packages/cli/src/auth.ts`, daemon auth reader | `0ctx` commands authenticate in CI without interactive device flow | AUTH-01 | Done | Platform | Phase C.1 |
-| SEC-02 | CLI | OS keyring/credential storage (macOS Keychain, Windows Credential Manager, Linux secret-service) with `--insecure-storage` fallback | `packages/cli/src/auth.ts` + new keyring module | Tokens stored in OS credential manager by default; plaintext only with explicit opt-in | AUTH-01 | Planned | Platform | Phase C.1 |
+| SEC-02 | CLI | OS keyring/credential storage (macOS Keychain, Windows Credential Manager, Linux secret-service) with `--insecure-storage` fallback | `packages/cli/src/auth.ts` + `packages/cli/src/keyring.ts` | Tokens stored in OS credential manager by default; plaintext only with explicit opt-in | AUTH-01 | Done | Platform | Phase C.1 |
 | SEC-03 | CLI | Auto-open browser for verification URL + `--no-browser` flag | `packages/cli/src/auth.ts` | Login flow opens browser automatically (like gh/az/gcloud) | AUTH-01 | Done | Platform | Phase C.1 |
 | SEC-04 | CLI | RFC 9700 compliance fixes: scope param, token_type validation, refresh rotation warning | `packages/cli/src/auth.ts` | Auth flow meets RFC 9700 BCP (Jan 2025) requirements | AUTH-01 | Done | Platform | Phase C.1 |
-| SEC-05 | UI | Dashboard session auth gate via Auth0 (`@auth0/nextjs-auth0`) — PKCE browser flow, protected routes, session middleware. CLI/daemon auth stays custom (gh/gcloud pattern). | `packages/ui/src/middleware.ts`, `packages/ui/src/app/api/auth/[auth0]/*`, Auth0 tenant config | Dashboard routes require Auth0 session; unauthenticated users redirected to Auth0 login; server actions reject unauthenticated calls | AUTH-01 | Planned | UI | Phase C.1 |
+| SEC-05 | UI | Dashboard session auth gate via Auth0 (`@auth0/nextjs-auth0`) — PKCE browser flow, protected routes, session middleware. CLI/daemon auth stays custom (gh/gcloud pattern). | `packages/ui/src/proxy.ts`, `packages/ui/src/lib/auth0.ts`, `packages/ui/src/app/login/page.tsx` | Dashboard routes require Auth0 session; unauthenticated users redirected to Auth0 login; server actions reject unauthenticated calls | AUTH-01 | Done | UI | Phase C.1 |
 | SYNC-01 | Daemon | Encrypted sync envelope, queue, retry/backoff | `packages/daemon/src/*` | Sync succeeds with encryption and retry semantics | AUTH-02 | Planned | Platform | Phase D |
 | SYNC-02 | UI/CLI | Sync status and manual sync controls | UI routes/components + CLI command | User can inspect sync health and trigger sync | SYNC-01 | Planned | Platform + UI | Phase D |
 | MCP-01 | MCP | Add runtime capability/status exposure for connected/degraded modes | `packages/mcp/src/*`, `packages/daemon/src/*` | MCP clients can query runtime connection posture | AUTH-02, SYNC-01 | Planned | Platform | Phase D |
@@ -223,10 +223,10 @@ Exit criteria:
 | AUTH-02 | Phase C | Daemon secure auth session state | Platform | Done | 2026-02-22 | — | — |
 | AUTH-03 | Phase C | UI auth/connect setup flow | UI | Done | 2026-02-22 | — | — |
 | SEC-01 | Phase C.1 | CI/CD auth token env var | Platform | Done | 2026-02-22 | — | — |
-| SEC-02 | Phase C.1 | OS keyring credential storage | Platform | Planned | TBD | AUTH-01 | TBD |
+| SEC-02 | Phase C.1 | OS keyring credential storage | Platform | Done | 2026-02-22 | — | — |
 | SEC-03 | Phase C.1 | Browser auto-open for device flow | Platform | Done | 2026-02-22 | — | — |
 | SEC-04 | Phase C.1 | RFC 9700 compliance (scope, token_type, rotation) | Platform | Done | 2026-02-22 | — | — |
-| SEC-05 | Phase C.1 | UI dashboard session auth gate | UI + Platform | Planned | TBD | AUTH-01, SEC-01 | TBD |
+| SEC-05 | Phase C.1 | UI dashboard session auth gate | UI + Platform | Done | 2026-02-22 | — | — |
 | SYNC-01 | Phase D | Encrypted sync pipeline | Platform | Planned | TBD | AUTH-02 | TBD |
 | SYNC-02 | Phase D | Sync observability in UI/CLI | Platform + UI | Planned | TBD | SYNC-01 | TBD |
 | MCP-01 | Phase D | MCP capability/degraded mode exposure | Platform | Planned | TBD | AUTH-02, SYNC-01 | TBD |
@@ -309,3 +309,5 @@ Exit criteria:
 - 2026-02-22: Security audit performed — multi-role review (Security Engineer, Product Architect, DevOps, Compliance) against RFC 9700, OWASP, GitHub CLI / gcloud / AWS CLI patterns. 7 gaps identified; added SEC-01..SEC-04 to backlog as Phase C.1 (security hardening before sync).
 - 2026-02-22: Added SEC-05 (UI session auth gate) — dashboard has no access control; unauthenticated users can access all routes. Requires PKCE browser flow, Next.js middleware, and protected server actions.
 - 2026-02-22: SEC-01 + SEC-03 + SEC-04 completed — added `CTX_AUTH_TOKEN`/`CTX_AUTH_TOKEN_FILE` env var bypass with `resolveToken()` + `getEnvToken()` (CLI + daemon); auto-open browser on login (platform-specific, `--no-browser` to suppress); `scope` param in device code request; `token_type` validation per RFC 6749 §5.1; refresh token rotation warning per RFC 9700 §4.14. Phase C.1 (partial) complete.
+- 2026-02-22: SEC-02 completed — new `packages/cli/src/keyring.ts` wrapping `cross-keychain` (dynamic import, flat API); `writeTokenStoreSecure` / `readTokenStoreSecure` / `clearTokenStoreSecure` in auth.ts; `--insecure-storage` flag for CI/headless. Token precedence: env var > keyring > file.
+- 2026-02-22: SEC-05 completed — `@auth0/nextjs-auth0` v4 SDK; `middleware.ts` protects `/dashboard/*` with Auth0 session check; `lib/auth0.ts` shared client; `app/login/page.tsx` styled login page; `.env.example` with Auth0 setup instructions; Sign out link in sidebar. Phase C.1 complete.

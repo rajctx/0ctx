@@ -32,7 +32,8 @@
   },
   "dependencies": {
     "@0ctx/daemon": "^1.0.0",
-    "@0ctx/mcp": "^1.0.0"
+    "@0ctx/mcp": "^1.0.0",
+    "cross-keychain": "^1.1.0"
   },
   "devDependencies": {
     "ts-node": "^10.9.2",
