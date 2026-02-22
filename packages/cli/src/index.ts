@@ -6,15 +6,35 @@ import { spawn } from 'child_process';
 import { bootstrapMcpRegistration } from '@0ctx/mcp/dist/bootstrap';
 import { sendToDaemon } from '@0ctx/mcp/dist/client';
 import {
-    installService,
-    enableService,
-    disableService,
-    uninstallService,
-    statusService,
-    startService,
-    stopService,
-    restartService,
+    installService as installServiceWindows,
+    enableService as enableServiceWindows,
+    disableService as disableServiceWindows,
+    uninstallService as uninstallServiceWindows,
+    statusService as statusServiceWindows,
+    startService as startServiceWindows,
+    stopService as stopServiceWindows,
+    restartService as restartServiceWindows,
 } from './service-windows';
+import {
+    installService as installServiceMac,
+    enableService as enableServiceMac,
+    disableService as disableServiceMac,
+    uninstallService as uninstallServiceMac,
+    statusService as statusServiceMac,
+    startService as startServiceMac,
+    stopService as stopServiceMac,
+    restartService as restartServiceMac,
+} from './service-macos';
+import {
+    installService as installServiceLinux,
+    enableService as enableServiceLinux,
+    disableService as disableServiceLinux,
+    uninstallService as uninstallServiceLinux,
+    statusService as statusServiceLinux,
+    startService as startServiceLinux,
+    stopService as stopServiceLinux,
+    restartService as restartServiceLinux,
+} from './service-linux';
 
 type SupportedClient = 'claude' | 'cursor' | 'windsurf';
 type CheckStatus = 'pass' | 'warn' | 'fail';
@@ -318,10 +338,55 @@ Windows service management (requires Administrator):
 }
 
 async function commandDaemonService(action: string | undefined): Promise<number> {
-    if (os.platform() !== 'win32') {
-        console.error('daemon service commands are Windows-only.');
-        console.error('macOS: use SVC-02 (launchd) — coming soon.');
-        console.error('Linux: use SVC-03 (systemd) — coming soon.');
+    const platform = os.platform();
+
+    type ServiceOps = {
+        install: () => void;
+        enable: () => void;
+        disable: () => void;
+        uninstall: () => void;
+        status: () => void;
+        start: () => void;
+        stop: () => void;
+        restart: () => void;
+    };
+
+    let ops: ServiceOps | undefined;
+    if (platform === 'win32') {
+        ops = {
+            install: installServiceWindows,
+            enable: enableServiceWindows,
+            disable: disableServiceWindows,
+            uninstall: uninstallServiceWindows,
+            status: statusServiceWindows,
+            start: startServiceWindows,
+            stop: stopServiceWindows,
+            restart: restartServiceWindows,
+        };
+    } else if (platform === 'darwin') {
+        ops = {
+            install: installServiceMac,
+            enable: enableServiceMac,
+            disable: disableServiceMac,
+            uninstall: uninstallServiceMac,
+            status: statusServiceMac,
+            start: startServiceMac,
+            stop: stopServiceMac,
+            restart: restartServiceMac,
+        };
+    } else if (platform === 'linux') {
+        ops = {
+            install: installServiceLinux,
+            enable: enableServiceLinux,
+            disable: disableServiceLinux,
+            uninstall: uninstallServiceLinux,
+            status: statusServiceLinux,
+            start: startServiceLinux,
+            stop: stopServiceLinux,
+            restart: restartServiceLinux,
+        };
+    } else {
+        console.error(`daemon service commands are not supported on platform: ${platform}`);
         return 1;
     }
 
@@ -333,16 +398,7 @@ async function commandDaemonService(action: string | undefined): Promise<number>
     }
 
     try {
-        switch (action) {
-            case 'install': installService(); break;
-            case 'enable': enableService(); break;
-            case 'disable': disableService(); break;
-            case 'uninstall': uninstallService(); break;
-            case 'status': statusService(); break;
-            case 'start': startService(); break;
-            case 'stop': stopService(); break;
-            case 'restart': restartService(); break;
-        }
+        ops[action as keyof ServiceOps]();
         return 0;
     } catch (error) {
         console.error(`service ${action} failed:`, error instanceof Error ? error.message : String(error));

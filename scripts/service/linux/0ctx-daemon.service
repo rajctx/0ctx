@@ -1,0 +1,22 @@
+[Unit]
+Description=0ctx Daemon — persistent local context engine
+Documentation=https://github.com/0ctx-com/0ctx
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=%NODE_PATH% %DAEMON_ENTRY%
+Restart=on-failure
+RestartSec=5s
+# Escalating restart delays
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+# Run as the installing user (see install instructions for user-level service)
+# Environment
+Environment=NODE_ENV=production
+
+# Logging goes to journald automatically (use: journalctl -u 0ctx-daemon)
+
+[Install]
+WantedBy=default.target
