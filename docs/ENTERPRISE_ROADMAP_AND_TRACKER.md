@@ -195,6 +195,10 @@ Exit criteria:
 | AUTH-01 | CLI | Device code login/logout and token refresh support | `packages/cli/src/index.ts` + auth module | `0ctx auth login/logout/status` works reliably | PKG-01 | Done | Platform | Phase C |
 | AUTH-02 | Daemon | Secure session/token persistence and tenant binding | `packages/daemon/src/*` | Daemon reports tenant/auth state with secure token handling | AUTH-01 | Done | Platform | Phase C |
 | AUTH-03 | UI | Auth/setup/connect flows in UI | `packages/ui/src/app/*`, `packages/ui/src/components/*` | User can complete auth and tenant binding from UI | AUTH-01, AUTH-02 | Done | UI | Phase C |
+| SEC-01 | CLI | `CTX_AUTH_TOKEN` env var bypass for CI/CD + headless auth | `packages/cli/src/auth.ts`, daemon auth reader | `0ctx` commands authenticate in CI without interactive device flow | AUTH-01 | Planned | Platform | Phase C.1 |
+| SEC-02 | CLI | OS keyring/credential storage (macOS Keychain, Windows Credential Manager, Linux secret-service) with `--insecure-storage` fallback | `packages/cli/src/auth.ts` + new keyring module | Tokens stored in OS credential manager by default; plaintext only with explicit opt-in | AUTH-01 | Planned | Platform | Phase C.1 |
+| SEC-03 | CLI | Auto-open browser for verification URL + `--no-browser` flag | `packages/cli/src/auth.ts` | Login flow opens browser automatically (like gh/az/gcloud) | AUTH-01 | Planned | Platform | Phase C.1 |
+| SEC-04 | CLI | RFC 9700 compliance fixes: scope param, token_type validation, refresh rotation warning | `packages/cli/src/auth.ts` | Auth flow meets RFC 9700 BCP (Jan 2025) requirements | AUTH-01 | Planned | Platform | Phase C.1 |
 | SYNC-01 | Daemon | Encrypted sync envelope, queue, retry/backoff | `packages/daemon/src/*` | Sync succeeds with encryption and retry semantics | AUTH-02 | Planned | Platform | Phase D |
 | SYNC-02 | UI/CLI | Sync status and manual sync controls | UI routes/components + CLI command | User can inspect sync health and trigger sync | SYNC-01 | Planned | Platform + UI | Phase D |
 | MCP-01 | MCP | Add runtime capability/status exposure for connected/degraded modes | `packages/mcp/src/*`, `packages/daemon/src/*` | MCP clients can query runtime connection posture | AUTH-02, SYNC-01 | Planned | Platform | Phase D |
@@ -217,6 +221,10 @@ Exit criteria:
 | AUTH-01 | Phase C | CLI device code auth | Platform | Done | 2026-02-22 | — | — |
 | AUTH-02 | Phase C | Daemon secure auth session state | Platform | Done | 2026-02-22 | — | — |
 | AUTH-03 | Phase C | UI auth/connect setup flow | UI | Done | 2026-02-22 | — | — |
+| SEC-01 | Phase C.1 | CI/CD auth token env var | Platform | Planned | TBD | AUTH-01 | TBD |
+| SEC-02 | Phase C.1 | OS keyring credential storage | Platform | Planned | TBD | AUTH-01 | TBD |
+| SEC-03 | Phase C.1 | Browser auto-open for device flow | Platform | Planned | TBD | AUTH-01 | TBD |
+| SEC-04 | Phase C.1 | RFC 9700 compliance (scope, token_type, rotation) | Platform | Planned | TBD | AUTH-01 | TBD |
 | SYNC-01 | Phase D | Encrypted sync pipeline | Platform | Planned | TBD | AUTH-02 | TBD |
 | SYNC-02 | Phase D | Sync observability in UI/CLI | Platform + UI | Planned | TBD | SYNC-01 | TBD |
 | MCP-01 | Phase D | MCP capability/degraded mode exposure | Platform | Planned | TBD | AUTH-02, SYNC-01 | TBD |
@@ -242,6 +250,14 @@ Exit criteria:
 - Device code success, expiry, cancel, token refresh paths.
 - Logout clears local credentials.
 - Tenant reachability failures surface actionable errors.
+
+## Security Hardening (Phase C.1)
+- `CTX_AUTH_TOKEN` env var authentication works in CI/CD (no interactive flow).
+- Tokens stored in OS keyring by default; `--insecure-storage` flag required for plaintext.
+- Browser auto-opens verification URL; `--no-browser` suppresses.
+- Device code request includes explicit `scope` parameter.
+- Token response `token_type` validated as `Bearer`.
+- Warning logged when auth server does not rotate refresh token.
 
 ## Sync
 - Encrypted payload sync success.
@@ -285,3 +301,4 @@ Exit criteria:
 - 2026-02-22: AUTH-02 completed — added `packages/daemon/src/auth.ts` (read-only token store reader, `AuthState` type); extended `health` IPC response with `auth` field; added `auth/status` IPC method; updated `getCapabilities` features + methods list.
 - 2026-02-22: AUTH-03 completed — new `/dashboard/settings` UI route (auth state panel, CLI reference, daemon health passthrough); `getAuthStatus()` server action; Settings nav item in sidebar; dead-end Docs/Help support buttons wired to GitHub links. Phase C complete.
 - 2026-02-22: UI-01 + UI-02 completed — Extensions sidebar items wired to `/dashboard/operations?client=<name>`; landing page "See architecture" and "Data model" CTAs wired to GitHub README/docs. Phase E (partial) complete.
+- 2026-02-22: Security audit performed — multi-role review (Security Engineer, Product Architect, DevOps, Compliance) against RFC 9700, OWASP, GitHub CLI / gcloud / AWS CLI patterns. 7 gaps identified; added SEC-01..SEC-04 to backlog as Phase C.1 (security hardening before sync).
