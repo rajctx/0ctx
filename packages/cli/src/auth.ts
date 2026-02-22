@@ -16,6 +16,7 @@ import https from 'https';
 import http from 'http';
 import { execSync } from 'child_process';
 import { storeToKeyring, readFromKeyring, deleteFromKeyring } from './keyring.js';
+import { getConfigValue, saveConfig } from '@0ctx/core';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -25,7 +26,7 @@ const DEFAULT_SCOPE = 'profile sync';
 const TOKEN_FILE = path.join(os.homedir(), '.0ctx', 'auth.json');
 
 function getAuthServer(): string {
-    return (process.env.CTX_AUTH_SERVER ?? DEFAULT_AUTH_SERVER).replace(/\/$/, '');
+    return getConfigValue('auth.server').replace(/\/$/, '');
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -417,6 +418,21 @@ export async function commandAuthLogin(flags: Record<string, string | boolean>):
     if (storageDest === 'file' && !insecure) {
         console.log('  (OS keyring unavailable — using plaintext file fallback)');
     }
+
+    // SYNC-02: Auto-configure sync after successful login
+    try {
+        const serverUrl = new URL(authServer);
+        const apiBase = `${serverUrl.protocol}//api.${serverUrl.hostname.replace(/^auth\./, '')}`;
+        saveConfig({
+            'auth.server': authServer,
+            'sync.enabled': true,
+            'sync.endpoint': `${apiBase}/v1/sync`
+        });
+        console.log(`Sync:         enabled (${apiBase}/v1/sync)`);
+    } catch {
+        // Config write failure shouldn't block login
+    }
+
     return 0;
 }
 

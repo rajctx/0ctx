@@ -12,6 +12,7 @@ import {
 import { listBackups, readContextBackup, writeContextBackup } from './backup';
 import { readAuthState } from './auth';
 import type { MetricsSnapshot } from './metrics';
+import type { SyncEngine } from './sync-engine';
 
 const CONTEXT_REQUIRED_METHODS = new Set([
     'addNode',
@@ -28,6 +29,7 @@ type RequestParams = Record<string, unknown>;
 export interface HandlerRuntimeContext {
     startedAt: number;
     getMetricsSnapshot?: () => MetricsSnapshot;
+    syncEngine?: SyncEngine;
 }
 
 const MUTATING_ACTIONS: Record<string, AuditAction> = {
@@ -131,7 +133,8 @@ export function handleRequest(
                 email: auth.email,
                 tenantId: auth.tenantId,
                 tokenExpired: auth.tokenExpired
-            }
+            },
+            sync: runtime.syncEngine ? runtime.syncEngine.getStatus() : null
         };
     }
 
@@ -150,9 +153,22 @@ export function handleRequest(
                 'saveCheckpoint', 'rewind', 'listCheckpoints',
                 'createSession', 'refreshSession', 'health', 'getCapabilities', 'metricsSnapshot',
                 'listAuditEvents', 'createBackup', 'listBackups', 'restoreBackup',
-                'auth/status'
+                'auth/status', 'syncStatus', 'syncNow'
             ]
         };
+    }
+
+    if (req.method === 'syncStatus') {
+        return runtime.syncEngine ? runtime.syncEngine.getStatus() : { enabled: false, running: false, lastPushAt: null, lastPullAt: null, lastError: null, queue: { pending: 0, inFlight: 0, failed: 0, done: 0 } };
+    }
+
+    if (req.method === 'syncNow') {
+        if (!runtime.syncEngine) {
+            throw new Error('Sync engine not available');
+        }
+        // syncNow is async but handleRequest is sync — fire and return status
+        void runtime.syncEngine.syncNow();
+        return runtime.syncEngine.getStatus();
     }
 
     if (req.method === 'createSession') {
@@ -251,6 +267,7 @@ export function handleRequest(
         case 'addNode': {
             const result = graph.addNode({ ...params, contextId: contextId! } as Parameters<Graph['addNode']>[0]);
             recordMutationAudit(graph, req, 'add_node', contextId, params, { id: result.id, contextId: result.contextId }, auditMetadata);
+            runtime.syncEngine?.enqueue(contextId!);
             return result;
         }
         case 'getNode':
@@ -258,6 +275,7 @@ export function handleRequest(
         case 'updateNode': {
             const result = graph.updateNode(params.id as string, params.updates as Parameters<Graph['updateNode']>[1]);
             recordMutationAudit(graph, req, 'update_node', contextId, params, { id: params.id as string, updated: Boolean(result) }, auditMetadata);
+            if (contextId) runtime.syncEngine?.enqueue(contextId);
             return result;
         }
         case 'getByKey':
@@ -266,11 +284,13 @@ export function handleRequest(
             graph.deleteNode(params.id as string);
             const result = { success: true };
             recordMutationAudit(graph, req, 'delete_node', contextId, params, result, auditMetadata);
+            if (contextId) runtime.syncEngine?.enqueue(contextId);
             return result;
         }
         case 'addEdge': {
             const result = graph.addEdge(params.fromId as string, params.toId as string, params.relation as Parameters<Graph['addEdge']>[2]);
             recordMutationAudit(graph, req, 'add_edge', contextId, params, { id: result.id }, auditMetadata);
+            if (contextId) runtime.syncEngine?.enqueue(contextId);
             return result;
         }
         case 'getSubgraph':
@@ -282,12 +302,14 @@ export function handleRequest(
         case 'saveCheckpoint': {
             const result = graph.saveCheckpoint(contextId!, params.name as string);
             recordMutationAudit(graph, req, 'save_checkpoint', contextId, params, { id: result.id }, auditMetadata);
+            runtime.syncEngine?.enqueue(contextId!);
             return result;
         }
         case 'rewind': {
             graph.rewind(params.checkpointId as string);
             const result = { success: true };
             recordMutationAudit(graph, req, 'rewind', contextId, params, result, auditMetadata);
+            if (contextId) runtime.syncEngine?.enqueue(contextId);
             return result;
         }
         case 'listCheckpoints':

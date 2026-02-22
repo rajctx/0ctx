@@ -93,3 +93,26 @@ export interface ContextDump {
     edges: ContextEdge[];
     checkpoints: Checkpoint[];
 }
+
+// ── SYNC-01: Sync types ────────────────────────────────────────
+
+export type SyncStatus = 'pending' | 'in_flight' | 'done' | 'failed';
+
+export interface SyncQueueEntry {
+    id: string;
+    contextId: string;
+    status: SyncStatus;
+    retryCount: number;
+    lastError?: string | null;
+    createdAt: number;       // unix ms
+    updatedAt: number;       // unix ms
+}
+
+export interface SyncEnvelope {
+    version: 1;
+    contextId: string;
+    tenantId: string;
+    timestamp: number;       // unix ms
+    encrypted: boolean;
+    payload: unknown;        // EncryptedPayload or raw ContextDump
+}

@@ -5,6 +5,8 @@ import path from 'path';
 import { spawn } from 'child_process';
 import { bootstrapMcpRegistration } from '@0ctx/mcp/dist/bootstrap';
 import { sendToDaemon } from '@0ctx/mcp/dist/client';
+import { listConfig, getConfigValue, setConfigValue, isValidConfigKey, getConfigPath } from '@0ctx/core';
+import type { AppConfig } from '@0ctx/core';
 import {
     installService as installServiceWindows,
     enableService as enableServiceWindows,
@@ -52,6 +54,7 @@ interface ParsedArgs {
     command: string;
     subcommand?: string;
     serviceAction?: string;
+    positionalArgs: string[];
     flags: Record<string, string | boolean>;
 }
 
@@ -89,16 +92,19 @@ function parseArgs(argv: string[]): ParsedArgs {
         flags[key] = true;
     }
 
-    const hasSubcommand = command === 'daemon' || command === 'auth';
+    const hasSubcommand = command === 'daemon' || command === 'auth' || command === 'config' || command === 'sync';
     const sub = hasSubcommand ? maybeSubcommand : undefined;
     // 3-level: daemon service <action>
     const serviceAction = (sub === 'service' && rest[0] && !rest[0].startsWith('--'))
         ? rest[0]
         : undefined;
+    // Collect non-flag positional args (for config get/set key value)
+    const positionalArgs = rest.filter(arg => !arg.startsWith('--'));
     return {
         command,
         subcommand: sub,
         serviceAction,
+        positionalArgs,
         flags
     };
 }
@@ -332,6 +338,16 @@ Authentication:
   0ctx auth status   Show current auth state
   0ctx auth status --json
 
+Configuration:
+  0ctx config list              Show all settings
+  0ctx config get <key>         Get a specific setting
+  0ctx config set <key> <value> Set a specific setting
+
+  Config keys: auth.server, sync.enabled, sync.endpoint, ui.url
+
+Sync:
+  0ctx sync status   Show sync engine health and queue
+
 Windows/macOS/Linux service management (requires Admin on Windows):
   0ctx daemon service install    Register daemon as a service
   0ctx daemon service enable     Set service start type to Automatic
@@ -342,6 +358,92 @@ Windows/macOS/Linux service management (requires Admin on Windows):
   0ctx daemon service status     Show current service state
   0ctx daemon service uninstall  Remove service registration
 `);
+}
+
+// ─── Config command ──────────────────────────────────────────────────────────
+
+function commandConfigList(): number {
+    const entries = listConfig();
+    console.log(`\nConfig (${getConfigPath()})\n`);
+    for (const entry of entries) {
+        const srcTag = entry.source === 'default' ? ' (default)' : entry.source === 'env' ? ' (env)' : '';
+        console.log(`  ${entry.key} = ${JSON.stringify(entry.value)}${srcTag}`);
+    }
+    console.log('');
+    return 0;
+}
+
+function commandConfigGet(key: string | undefined): number {
+    if (!key) {
+        console.error('Usage: 0ctx config get <key>');
+        return 1;
+    }
+    if (!isValidConfigKey(key)) {
+        console.error(`Unknown config key: ${key}`);
+        console.error(`Valid keys: ${listConfig().map(e => e.key).join(', ')}`);
+        return 1;
+    }
+    console.log(getConfigValue(key));
+    return 0;
+}
+
+function commandConfigSet(key: string | undefined, value: string | undefined): number {
+    if (!key || value === undefined) {
+        console.error('Usage: 0ctx config set <key> <value>');
+        return 1;
+    }
+    if (!isValidConfigKey(key)) {
+        console.error(`Unknown config key: ${key}`);
+        console.error(`Valid keys: ${listConfig().map(e => e.key).join(', ')}`);
+        return 1;
+    }
+
+    // Parse boolean for sync.enabled
+    let parsed: unknown = value;
+    if (key === 'sync.enabled') {
+        parsed = value === 'true' || value === '1';
+    }
+
+    setConfigValue(key, parsed as AppConfig[typeof key]);
+    console.log(`Set ${key} = ${JSON.stringify(parsed)}`);
+    return 0;
+}
+
+// ─── Sync command ────────────────────────────────────────────────────────────
+
+async function commandSyncStatus(): Promise<number> {
+    try {
+        const status = await sendToDaemon('syncStatus', {}) as {
+            enabled: boolean;
+            running: boolean;
+            lastPushAt: number | null;
+            lastPullAt: number | null;
+            lastError: string | null;
+            queue: { pending: number; inFlight: number; failed: number; done: number };
+        };
+
+        console.log('\nSync Status\n');
+        console.log(`  Enabled:     ${status.enabled}`);
+        console.log(`  Running:     ${status.running}`);
+        console.log(`  Endpoint:    ${getConfigValue('sync.endpoint')}`);
+        console.log(`  Last push:   ${status.lastPushAt ? new Date(status.lastPushAt).toISOString() : 'never'}`);
+        console.log(`  Last pull:   ${status.lastPullAt ? new Date(status.lastPullAt).toISOString() : 'never'}`);
+        if (status.lastError) {
+            console.log(`  Last error:  ${status.lastError}`);
+        }
+        console.log('');
+        console.log('  Queue:');
+        console.log(`    Pending:   ${status.queue.pending}`);
+        console.log(`    In-flight: ${status.queue.inFlight}`);
+        console.log(`    Failed:    ${status.queue.failed}`);
+        console.log(`    Done:      ${status.queue.done}`);
+        console.log('');
+        return 0;
+    } catch (error) {
+        console.error('Failed to get sync status:', error instanceof Error ? error.message : String(error));
+        console.error('Is the daemon running? Try: 0ctx daemon start');
+        return 1;
+    }
 }
 
 async function commandDaemonService(action: string | undefined): Promise<number> {
@@ -456,6 +558,20 @@ async function main(): Promise<number> {
         default:
             printHelp();
             return 0;
+        case 'config': {
+            const sub = parsed.subcommand;
+            if (sub === 'list' || !sub) return commandConfigList();
+            if (sub === 'get') return commandConfigGet(parsed.positionalArgs[0]);
+            if (sub === 'set') return commandConfigSet(parsed.positionalArgs[0], parsed.positionalArgs[1]);
+            printHelp();
+            return 1;
+        }
+        case 'sync': {
+            const sub = parsed.subcommand;
+            if (sub === 'status' || !sub) return commandSyncStatus();
+            printHelp();
+            return 1;
+        }
     }
 }
 

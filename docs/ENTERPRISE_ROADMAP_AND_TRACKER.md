@@ -200,8 +200,8 @@ Exit criteria:
 | SEC-03 | CLI | Auto-open browser for verification URL + `--no-browser` flag | `packages/cli/src/auth.ts` | Login flow opens browser automatically (like gh/az/gcloud) | AUTH-01 | Done | Platform | Phase C.1 |
 | SEC-04 | CLI | RFC 9700 compliance fixes: scope param, token_type validation, refresh rotation warning | `packages/cli/src/auth.ts` | Auth flow meets RFC 9700 BCP (Jan 2025) requirements | AUTH-01 | Done | Platform | Phase C.1 |
 | SEC-05 | UI | Dashboard session auth gate via Auth0 (`@auth0/nextjs-auth0`) — PKCE browser flow, protected routes, session middleware. CLI/daemon auth stays custom (gh/gcloud pattern). | `packages/ui/src/proxy.ts`, `packages/ui/src/lib/auth0.ts`, `packages/ui/src/app/login/page.tsx` | Dashboard routes require Auth0 session; unauthenticated users redirected to Auth0 login; server actions reject unauthenticated calls | AUTH-01 | Done | UI | Phase C.1 |
-| SYNC-01 | Daemon | Encrypted sync envelope, queue, retry/backoff | `packages/daemon/src/*` | Sync succeeds with encryption and retry semantics | AUTH-02 | Planned | Platform | Phase D |
-| SYNC-02 | UI/CLI | Sync status and manual sync controls | UI routes/components + CLI command | User can inspect sync health and trigger sync | SYNC-01 | Planned | Platform + UI | Phase D |
+| SYNC-01 | Daemon | Encrypted sync envelope, queue, retry/backoff | `packages/daemon/src/sync-engine.ts`, `packages/daemon/src/sync-queue.ts`, `packages/daemon/src/sync-transport.ts` | Sync succeeds with encryption and retry semantics | AUTH-02 | Done | Platform | Phase D |
+| SYNC-02 | UI/CLI | Sync status and manual sync controls + global config system (`~/.0ctx/config.json`) | `packages/core/src/config.ts`, CLI `config`/`sync` commands, daemon health | User can inspect sync health, configure endpoints, and manage sync settings | SYNC-01 | Done | Platform + UI | Phase D |
 | MCP-01 | MCP | Add runtime capability/status exposure for connected/degraded modes | `packages/mcp/src/*`, `packages/daemon/src/*` | MCP clients can query runtime connection posture | AUTH-02, SYNC-01 | Planned | Platform | Phase D |
 | UI-01 | UI | Remove or wire non-functional sidebar/support/extension actions | `packages/ui/src/components/dashboard/dashboard-shell.tsx` | No dead-end primary UI actions remain | None | Done | UI | Phase E |
 | UI-02 | UI | Wire landing page secondary CTAs to real destinations | `packages/ui/src/app/page.tsx` | All visible CTAs have meaningful navigation | None | Done | UI | Phase E |
@@ -227,8 +227,8 @@ Exit criteria:
 | SEC-03 | Phase C.1 | Browser auto-open for device flow | Platform | Done | 2026-02-22 | — | — |
 | SEC-04 | Phase C.1 | RFC 9700 compliance (scope, token_type, rotation) | Platform | Done | 2026-02-22 | — | — |
 | SEC-05 | Phase C.1 | UI dashboard session auth gate | UI + Platform | Done | 2026-02-22 | — | — |
-| SYNC-01 | Phase D | Encrypted sync pipeline | Platform | Planned | TBD | AUTH-02 | TBD |
-| SYNC-02 | Phase D | Sync observability in UI/CLI | Platform + UI | Planned | TBD | SYNC-01 | TBD |
+| SYNC-01 | Phase D | Encrypted sync pipeline | Platform | Done | 2026-02-22 | — | — |
+| SYNC-02 | Phase D | Config system + sync observability | Platform + UI | Done | 2026-02-22 | — | — |
 | MCP-01 | Phase D | MCP capability/degraded mode exposure | Platform | Planned | TBD | AUTH-02, SYNC-01 | TBD |
 | UI-01 | Phase E | Sidebar placeholder cleanup | UI | Done | 2026-02-22 | — | — |
 | UI-02 | Phase E | Landing CTA wiring | UI | Done | 2026-02-22 | — | — |
@@ -310,4 +310,6 @@ Exit criteria:
 - 2026-02-22: Added SEC-05 (UI session auth gate) — dashboard has no access control; unauthenticated users can access all routes. Requires PKCE browser flow, Next.js middleware, and protected server actions.
 - 2026-02-22: SEC-01 + SEC-03 + SEC-04 completed — added `CTX_AUTH_TOKEN`/`CTX_AUTH_TOKEN_FILE` env var bypass with `resolveToken()` + `getEnvToken()` (CLI + daemon); auto-open browser on login (platform-specific, `--no-browser` to suppress); `scope` param in device code request; `token_type` validation per RFC 6749 §5.1; refresh token rotation warning per RFC 9700 §4.14. Phase C.1 (partial) complete.
 - 2026-02-22: SEC-02 completed — new `packages/cli/src/keyring.ts` wrapping `cross-keychain` (dynamic import, flat API); `writeTokenStoreSecure` / `readTokenStoreSecure` / `clearTokenStoreSecure` in auth.ts; `--insecure-storage` flag for CI/headless. Token precedence: env var > keyring > file.
-- 2026-02-22: SEC-05 completed — `@auth0/nextjs-auth0` v4 SDK; `middleware.ts` protects `/dashboard/*` with Auth0 session check; `lib/auth0.ts` shared client; `app/login/page.tsx` styled login page; `.env.example` with Auth0 setup instructions; Sign out link in sidebar. Phase C.1 complete.
+- 2026-02-22: SEC-05 completed — `@auth0/nextjs-auth0` v4 SDK; `proxy.ts` protects `/dashboard/*` with Auth0 session check; `lib/auth0.ts` shared client; `app/login/page.tsx` styled login page; `.env.example` with Auth0 setup instructions; Sign out link in sidebar. Phase C.1 complete.
+- 2026-02-22: SYNC-01 completed — Encrypted sync pipeline: `sync-queue.ts` (SQLite-backed persistent queue with dedup, retry/backoff, cleanup), `sync-transport.ts` (HTTPS push/pull, zero deps), `sync-engine.ts` (background orchestrator with timer, enqueue-on-mutate). Wired into `server.ts` lifecycle + `handlers.ts` mutation hooks. New `syncStatus` and `syncNow` method handlers. 10 new unit tests. Opt-in via `CTX_SYNC_ENABLED=1`.
+- 2026-02-22: SYNC-02 completed — Global config system: `config.ts` in core (`~/.0ctx/config.json`, env→config→default resolution). CLI `0ctx config list/get/set` + `0ctx sync status`. Auth login auto-sets `sync.enabled`+`sync.endpoint` in config. Daemon reads config for sync enabled/endpoint. Health handler includes sync status. Help text updated.
