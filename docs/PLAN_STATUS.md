@@ -1,6 +1,10 @@
 # Plan Status
 
-Updated: 2026-02-21
+Updated: 2026-02-22
+
+## Canonical Tracker
+
+- Primary roadmap and execution tracker: `docs/ENTERPRISE_ROADMAP_AND_TRACKER.md`
 
 ## Completed
 

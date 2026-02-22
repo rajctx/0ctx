@@ -50,6 +50,7 @@ npm run cli -- install --clients=all
 ## Documentation
 
 - `AGENTS.md`: implementation guidance and architecture.
+- `docs/ENTERPRISE_ROADMAP_AND_TRACKER.md`: single source of truth for enterprise roadmap + execution tracker.
 - `docs/INSTALL.md`: install and environment setup.
 - `docs/QUICKSTART.md`: first-run workflow.
 - `docs/GITHUB_REPO_MANAGEMENT.md`: repo governance and branch protection.
