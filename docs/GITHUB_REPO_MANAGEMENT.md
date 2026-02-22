@@ -1,5 +1,9 @@
 # GitHub Repo Management Guide
 
+Canonical enterprise roadmap and tracker:
+
+- `docs/ENTERPRISE_ROADMAP_AND_TRACKER.md`
+
 ## Repository model
 
 Use one monorepo root for all packages under `packages/*`.
@@ -46,6 +50,7 @@ Protect `main` with:
 Implementation checklist:
 
 - `docs/GITHUB_SETTINGS_CHECKLIST.md`
+- `docs/GITHUB_ENABLEMENT_RUNBOOK.md` (for workflow re-enable sequencing)
 
 ## Required labels
 

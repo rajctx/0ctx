@@ -1,5 +1,9 @@
 # Maintainer Onboarding
 
+Primary planning/tracking source:
+
+- `docs/ENTERPRISE_ROADMAP_AND_TRACKER.md`
+
 ## 1) Local setup
 
 ```bash
@@ -32,6 +36,7 @@ npm run cli -- doctor --json
 - Follow PR template and link issues.
 - Use labels from `docs/GITHUB_REPO_MANAGEMENT.md`.
 - Do not merge if required checks fail.
+- Workflows are currently parked under `.github/workflows-disabled/`; use `docs/GITHUB_ENABLEMENT_RUNBOOK.md` when re-enable is approved.
 
 ## 5) Repo hygiene checks
 

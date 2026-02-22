@@ -2,6 +2,11 @@
 
 Use this checklist once per repository to enforce the workflow in this monorepo.
 
+Current state:
+
+- Workflow YAML files are currently parked in `.github/workflows-disabled/`.
+- Re-enable flow is documented in `docs/GITHUB_ENABLEMENT_RUNBOOK.md`.
+
 ## 1) Branch protection (`main`)
 
 GitHub path: `Settings -> Branches -> Add branch protection rule`
@@ -31,8 +36,9 @@ In the same branch protection rule, require these exact checks:
 
 Workflow sources:
 
-- `.github/workflows/ci.yml`
-- `.github/workflows/pr-governance.yml`
+- Current parked location: `.github/workflows-disabled/ci.yml`
+- Current parked location: `.github/workflows-disabled/pr-governance.yml`
+- Expected active location after enablement: `.github/workflows/*.yml`
 
 ## 3) CODEOWNERS enforcement
 
@@ -76,7 +82,7 @@ Create GitHub Project `0ctx Delivery` (or equivalent) with:
 
 ## 6) Release operation
 
-Use workflow dispatch for release tags:
+Use workflow dispatch for release tags after workflows are re-enabled:
 
 1. Open `Actions -> Release Manual`.
 2. Run workflow with `version` like `v1.2.3`.
@@ -85,7 +91,8 @@ Use workflow dispatch for release tags:
 
 Workflow source:
 
-- `.github/workflows/release-manual.yml`
+- Current parked location: `.github/workflows-disabled/release-manual.yml`
+- Expected active location after enablement: `.github/workflows/release-manual.yml`
 
 ## 7) Smoke test policy
 

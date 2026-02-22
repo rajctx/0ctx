@@ -12,7 +12,7 @@ Status legend:
 ## 1) Locked Decisions
 
 - Product model: managed cloud + local agent.
-- Distribution path: GitHub Packages (npm), no repo clone required for end users.
+- Distribution path: npm registry (`@0ctx` scope), no repo clone required for end users.
 - Auth model: device code login + API tokens.
 - Data model: full encrypted sync.
 - Tenancy model: single-tenant deployments first.
@@ -21,7 +21,7 @@ Status legend:
 ## 2) Target User Experience (No Clone)
 
 1. User installs CLI:
-   - `npm install -g @0ctx/cli --registry <github-packages-registry>`
+   - `npm install -g @0ctx/cli`
 2. User authenticates:
    - `0ctx auth login`
 3. User installs and enables background service:
@@ -127,7 +127,7 @@ Scope:
 - Publishable package graph and install scripts.
 
 Deliverables:
-- GitHub Packages publish path working for all runtime packages.
+- npm publish path working for all runtime packages.
 - CLI install path validated on clean machine.
 
 Exit criteria:
@@ -187,7 +187,7 @@ Exit criteria:
 | ID | Area | Description | Files to Update | Acceptance Criteria | Dependencies | Status | Owner | Milestone |
 |---|---|---|---|---|---|---|---|---|
 | PKG-01 | Packaging | Make package dependency graph publishable and no-clone compatible | `packages/*/package.json` | Published installs no longer require local workspace paths | None | Planned | Platform | Phase A |
-| PKG-02 | Release | Add publish orchestration for GitHub Packages in deterministic order | root `package.json`, `docs/RELEASE.md`, release scripts | Single command path can validate and publish packages | PKG-01 | Planned | Platform | Phase A |
+| PKG-02 | Release | Add publish orchestration for npm in deterministic order | root `package.json`, `docs/RELEASE.md`, release scripts | Single command path can validate and publish packages | PKG-01 | Planned | Platform | Phase A |
 | PKG-03 | Docs | Align INSTALL/QUICKSTART with real packaged install path | `docs/INSTALL.md`, `docs/QUICKSTART.md` | Docs match actual end-user install behavior | PKG-01, PKG-02 | Planned | Product Docs | Phase A |
 | SVC-01 | CLI/Daemon | Add Windows service lifecycle commands and health checks | `packages/cli/src/index.ts`, service scripts | Daemon auto-starts and is manageable after reboot on Windows | PKG-01 | Planned | Platform | Phase B |
 | SVC-02 | CLI/Daemon | Add macOS launchd lifecycle commands | CLI + `scripts/service/macos/*` | Daemon auto-starts and is manageable after reboot on macOS | PKG-01 | Planned | Platform | Phase B |
@@ -209,7 +209,7 @@ Exit criteria:
 | Task ID | Milestone | Task | Owner | Status | ETA | Blocker | PR/Issue |
 |---|---|---|---|---|---|---|---|
 | PKG-01 | Phase A | Publishable dependency graph cleanup | Platform | Planned | TBD | Release versioning choices | TBD |
-| PKG-02 | Phase A | GitHub Packages publish pipeline | Platform | Planned | TBD | PKG-01 | TBD |
+| PKG-02 | Phase A | npm publish pipeline | Platform | Planned | TBD | PKG-01 | TBD |
 | PKG-03 | Phase A | Install/quickstart doc alignment | Product Docs | Planned | TBD | PKG-01 | TBD |
 | SVC-01 | Phase B | Windows service lifecycle | Platform | Planned | TBD | PKG-01 | TBD |
 | SVC-02 | Phase B | macOS launchd lifecycle | Platform | Planned | TBD | PKG-01 | TBD |
@@ -229,7 +229,7 @@ Exit criteria:
 ## 8) Test Matrix
 
 ## Packaging and Install
-- Clean machine install from GitHub Packages registry.
+- Clean machine install from npm registry.
 - `0ctx` bin available globally post-install.
 - `0ctx install --clients=all` succeeds without local source checkout.
 
@@ -276,4 +276,3 @@ Exit criteria:
 ## 11) Change Log (Append-Only)
 
 - 2026-02-22: Created initial combined roadmap + tracker document with locked decisions, architecture, milestones, backlog, and test matrix.
-

@@ -223,7 +223,8 @@ Local state under `~/.0ctx/`:
   - `packages/core/test/*`
   - `packages/daemon/test/*`
 - CI workflow:
-  - `.github/workflows/ci.yml`
+  - current parked location: `.github/workflows-disabled/ci.yml`
+  - expected active location after enablement: `.github/workflows/ci.yml`
   - Runs `npm ci`, `npm run typecheck`, `npm run build`, `npm run test`
 
 ## Repo Governance
@@ -233,6 +234,8 @@ Local state under `~/.0ctx/`:
 - If nested git is detected (for example `packages/ui/.git`), migrate with:
   - `scripts/repo/adopt-ui-monorepo.ps1` (or npm scripts above)
 - Governance references:
+  - `docs/ENTERPRISE_ROADMAP_AND_TRACKER.md`
   - `docs/GITHUB_REPO_MANAGEMENT.md`
+  - `docs/GITHUB_ENABLEMENT_RUNBOOK.md`
   - `docs/TRACKING_90_DAYS.md`
   - `docs/RELEASE.md`

@@ -18,7 +18,7 @@
 
 ## Installation Models
 
-Published package install (recommended for end users once published to your registry):
+Enterprise packaged install (target no-clone path on npm):
 
 ```bash
 npm install -g @0ctx/cli
@@ -26,7 +26,7 @@ npm install -g @0ctx/cli
 0ctx doctor --json
 ```
 
-Monorepo development/install (current source workflow):
+Monorepo development/install (current reliable source workflow):
 
 ```bash
 npm install
@@ -54,6 +54,7 @@ npm run cli -- install --clients=all
 - `docs/INSTALL.md`: install and environment setup.
 - `docs/QUICKSTART.md`: first-run workflow.
 - `docs/GITHUB_REPO_MANAGEMENT.md`: repo governance and branch protection.
+- `docs/GITHUB_ENABLEMENT_RUNBOOK.md`: workflow re-enable procedure and rollback.
 - `docs/TRACKING_90_DAYS.md`: execution tracking plan.
 - `docs/PLAN_STATUS.md`: completed/in-progress/planned status.
 - `docs/RELEASE.md`: release checklist and tagging.

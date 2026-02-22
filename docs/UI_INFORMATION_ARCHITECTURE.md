@@ -1,6 +1,10 @@
 # UI Information Architecture
 
-Updated: 2026-02-21
+Updated: 2026-02-22
+
+Related tracking:
+
+- `docs/ENTERPRISE_ROADMAP_AND_TRACKER.md`
 
 ## Goals
 
@@ -50,4 +54,3 @@ Implemented in dashboard layout/shell:
 - Keep enterprise visual language consistent with existing dark shell.
 - Minimize floating overlays outside focused task areas.
 - Preserve keyboard access patterns where applicable.
-

@@ -43,6 +43,15 @@ git push origin $releaseBranch
 git push origin $version
 ```
 
+Publish packages (npm):
+
+```powershell
+npm publish --workspace @0ctx/core --access public
+npm publish --workspace @0ctx/daemon --access public
+npm publish --workspace @0ctx/mcp --access public
+npm publish --workspace @0ctx/cli --access public
+```
+
 ## Required release checks
 
 - No open `release-blocker` issues.

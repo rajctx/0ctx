@@ -1,5 +1,24 @@
 # Quickstart
 
+## 0) Ensure CLI is available
+
+Use one of:
+
+- Packaged install (when registry publishing is available for your org):
+
+```bash
+npm install -g @0ctx/cli
+```
+
+- Monorepo fallback:
+
+```bash
+npm install
+npm run build
+```
+
+See `docs/INSTALL.md` for full setup details.
+
 ## 1) Install and bootstrap
 
 ```bash
@@ -30,6 +49,13 @@ npm run dev:ui
 ```
 
 Open `http://localhost:3000`.
+
+Dashboard routes:
+
+- `/dashboard/workspace`
+- `/dashboard/operations`
+- `/dashboard/audit`
+- `/dashboard/backups`
 
 ## 5) Verify MCP from your AI client
 
