@@ -54,3 +54,13 @@ npm run repo:adopt-ui
 ## 6) Release readiness
 
 Use `docs/RELEASE.md` checklist before cutting `release/vX.Y`.
+
+Key release scripts:
+
+```bash
+npm run release:validate       # typecheck + build + test + clean-tree check
+npm run release:changelog:prepare -- -Version vX.Y.Z
+npm run release:tag:dry -- -Version vX.Y.Z
+npm run release:publish:dry    # pack dry-run all packages (no registry writes)
+npm run release:publish        # publish core → daemon → mcp → cli
+```

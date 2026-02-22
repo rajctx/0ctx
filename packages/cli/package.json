@@ -1,21 +1,38 @@
 {
   "name": "@0ctx/cli",
   "version": "1.0.0",
-  "description": "0ctx product CLI",
+  "description": "0ctx product CLI – install, bootstrap, doctor, and service management",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "bin": {
     "0ctx": "dist/index.js"
   },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "start": "node dist/index.js",
-    "dev": "ts-node-dev --respawn src/index.ts"
+    "dev": "ts-node-dev --respawn src/index.ts",
+    "prepublishOnly": "tsc -b"
   },
-  "keywords": [],
+  "keywords": [
+    "context",
+    "cli",
+    "0ctx"
+  ],
   "author": "",
   "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/0ctx-com/0ctx.git",
+    "directory": "packages/cli"
+  },
   "dependencies": {
-    "@0ctx/daemon": "file:../daemon",
-    "@0ctx/mcp": "file:../mcp"
+    "@0ctx/daemon": "^1.0.0",
+    "@0ctx/mcp": "^1.0.0"
   },
   "devDependencies": {
     "ts-node": "^10.9.2",

@@ -1,78 +1,66 @@
 # Quickstart
 
-## 0) Ensure CLI is available
+Get 0ctx running in under 5 minutes.
 
-Use one of:
-
-- Packaged install (when registry publishing is available for your org):
+## 1) Install the CLI
 
 ```bash
 npm install -g @0ctx/cli
 ```
 
-- Monorepo fallback:
+> **Developer install (source checkout):** If you are working on the 0ctx source, run `npm install && npm run build` from the repo root and use `node packages/cli/dist/index.js` in place of `0ctx`. See `docs/INSTALL.md` for details.
 
-```bash
-npm install
-npm run build
-```
-
-See `docs/INSTALL.md` for full setup details.
-
-## 1) Install and bootstrap
+## 2) Install and bootstrap
 
 ```bash
 0ctx install --clients=all
 ```
 
-This starts the daemon (if needed), registers MCP config for supported clients, and prints status.
+This starts the daemon (if needed), registers the MCP server with all supported AI clients (Claude, Cursor, Windsurf), and prints a status summary.
 
-## 2) Check health
+## 3) Verify health
 
 ```bash
 0ctx doctor --json
 0ctx status
 ```
 
-## 3) Start MCP server
+Expected: `daemon_reachable: pass`, `bootstrap_dry_run: pass`.
 
-If you are running from the monorepo:
+## 4) Restart your AI client
+
+After bootstrap, restart your AI client (Claude Desktop, Cursor, or Windsurf). Confirm 0ctx tools appear:
+
+- `ctx_create_context`, `ctx_switch_context`, `ctx_list_contexts`
+- `ctx_set`, `ctx_get`, `ctx_query`, `ctx_search`
+- `ctx_checkpoint`, `ctx_rewind`
+- `ctx_health`, `ctx_metrics`, `ctx_audit_recent`
+- `ctx_backup_create`, `ctx_backup_list`, `ctx_backup_restore`
+
+## 5) Common operations
 
 ```bash
-npm run start:mcp
+# Re-run bootstrap for a specific client
+0ctx bootstrap --clients=claude
+
+# Repair daemon + re-register MCP
+0ctx repair --clients=all
+
+# Check full system state
+0ctx doctor --json
+
+# Start daemon manually (if not auto-started)
+0ctx daemon start
 ```
 
-## 4) Open UI (monorepo/developer flow)
+---
+
+## Developer: Local UI
+
+When running from a source checkout, a local graph visualization UI is available:
 
 ```bash
 npm run dev:ui
 ```
 
-Open `http://localhost:3000`.
-
-Dashboard routes:
-
-- `/dashboard/workspace`
-- `/dashboard/operations`
-- `/dashboard/audit`
-- `/dashboard/backups`
-
-## 5) Verify MCP from your AI client
-
-After bootstrap, restart the AI client and confirm 0ctx tools appear:
-
-- `ctx_list_contexts`
-- `ctx_create_context`
-- `ctx_switch_context`
-- `ctx_set`
-- `ctx_get`
-- `ctx_query`
-- `ctx_search`
-- `ctx_checkpoint`
-- `ctx_rewind`
-
-## Common Operations
-
-- `0ctx bootstrap --dry-run --clients=all`
-- `0ctx repair --clients=all`
-- `0ctx daemon start`
+Open `http://localhost:3000`. Routes: `/dashboard/workspace`, `/dashboard/operations`, `/dashboard/audit`, `/dashboard/backups`.

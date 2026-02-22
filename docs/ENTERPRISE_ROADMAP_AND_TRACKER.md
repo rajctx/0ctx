@@ -186,9 +186,9 @@ Exit criteria:
 
 | ID | Area | Description | Files to Update | Acceptance Criteria | Dependencies | Status | Owner | Milestone |
 |---|---|---|---|---|---|---|---|---|
-| PKG-01 | Packaging | Make package dependency graph publishable and no-clone compatible | `packages/*/package.json` | Published installs no longer require local workspace paths | None | Planned | Platform | Phase A |
-| PKG-02 | Release | Add publish orchestration for npm in deterministic order | root `package.json`, `docs/RELEASE.md`, release scripts | Single command path can validate and publish packages | PKG-01 | Planned | Platform | Phase A |
-| PKG-03 | Docs | Align INSTALL/QUICKSTART with real packaged install path | `docs/INSTALL.md`, `docs/QUICKSTART.md` | Docs match actual end-user install behavior | PKG-01, PKG-02 | Planned | Product Docs | Phase A |
+| PKG-01 | Packaging | Make package dependency graph publishable and no-clone compatible | `packages/*/package.json` | Published installs no longer require local workspace paths | None | Done | Platform | Phase A |
+| PKG-02 | Release | Add publish orchestration for npm in deterministic order | root `package.json`, `docs/RELEASE.md`, release scripts | Single command path can validate and publish packages | PKG-01 | Done | Platform | Phase A |
+| PKG-03 | Docs | Align INSTALL/QUICKSTART with real packaged install path | `docs/INSTALL.md`, `docs/QUICKSTART.md` | Docs match actual end-user install behavior | PKG-01, PKG-02 | Done | Product Docs | Phase A |
 | SVC-01 | CLI/Daemon | Add Windows service lifecycle commands and health checks | `packages/cli/src/index.ts`, service scripts | Daemon auto-starts and is manageable after reboot on Windows | PKG-01 | Planned | Platform | Phase B |
 | SVC-02 | CLI/Daemon | Add macOS launchd lifecycle commands | CLI + `scripts/service/macos/*` | Daemon auto-starts and is manageable after reboot on macOS | PKG-01 | Planned | Platform | Phase B |
 | SVC-03 | CLI/Daemon | Add Linux systemd lifecycle commands | CLI + `scripts/service/linux/*` | Daemon auto-starts and is manageable after reboot on Linux | PKG-01 | Planned | Platform | Phase B |
@@ -208,9 +208,9 @@ Exit criteria:
 
 | Task ID | Milestone | Task | Owner | Status | ETA | Blocker | PR/Issue |
 |---|---|---|---|---|---|---|---|
-| PKG-01 | Phase A | Publishable dependency graph cleanup | Platform | Planned | TBD | Release versioning choices | TBD |
-| PKG-02 | Phase A | npm publish pipeline | Platform | Planned | TBD | PKG-01 | TBD |
-| PKG-03 | Phase A | Install/quickstart doc alignment | Product Docs | Planned | TBD | PKG-01 | TBD |
+| PKG-01 | Phase A | Publishable dependency graph cleanup | Platform | Done | 2026-02-22 | — | — |
+| PKG-02 | Phase A | npm publish pipeline | Platform | Done | 2026-02-22 | — | — |
+| PKG-03 | Phase A | Install/quickstart doc alignment | Product Docs | Done | 2026-02-22 | — | — |
 | SVC-01 | Phase B | Windows service lifecycle | Platform | Planned | TBD | PKG-01 | TBD |
 | SVC-02 | Phase B | macOS launchd lifecycle | Platform | Planned | TBD | PKG-01 | TBD |
 | SVC-03 | Phase B | Linux systemd lifecycle | Platform | Planned | TBD | PKG-01 | TBD |
@@ -276,3 +276,6 @@ Exit criteria:
 ## 11) Change Log (Append-Only)
 
 - 2026-02-22: Created initial combined roadmap + tracker document with locked decisions, architecture, milestones, backlog, and test matrix.
+- 2026-02-22: PKG-01 completed — replaced all `file:` dependency references with semver `^1.0.0` ranges, added `exports`, `files`, `publishConfig`, `prepublishOnly`, `repository` to all four publishable packages. Added `release:pack:dry` script to root.
+- 2026-02-22: PKG-02 completed — added `scripts/release/publish-packages.ps1` (deterministic order, dry-run, OTP, version-consistency check), `release:publish:dry` and `release:publish` root npm scripts, updated `docs/RELEASE.md` publish section.
+- 2026-02-22: PKG-03 completed — rewrote `docs/INSTALL.md` and `docs/QUICKSTART.md` to make npm global install the primary end-user path; separated developer/contributor steps; updated `docs/ONBOARDING.md` with full release script reference. Phase A complete.

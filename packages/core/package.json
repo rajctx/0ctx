@@ -1,15 +1,39 @@
 {
   "name": "@0ctx/core",
   "version": "1.0.0",
-  "description": "",
+  "description": "Persistent local-first graph-based context engine – core library",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./dist/*": "./dist/*"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
+    "prepublishOnly": "tsc -b",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
+  "keywords": [
+    "context",
+    "graph",
+    "sqlite",
+    "local-first"
+  ],
   "author": "",
   "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/0ctx-com/0ctx.git",
+    "directory": "packages/core"
+  },
   "dependencies": {
     "better-sqlite3": "^11.8.1"
   },

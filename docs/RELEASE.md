@@ -43,14 +43,23 @@ git push origin $releaseBranch
 git push origin $version
 ```
 
-Publish packages (npm):
+Validate the publish tarball contents (no registry writes):
 
 ```powershell
-npm publish --workspace @0ctx/core --access public
-npm publish --workspace @0ctx/daemon --access public
-npm publish --workspace @0ctx/mcp --access public
-npm publish --workspace @0ctx/cli --access public
+npm run release:publish:dry
 ```
+
+Publish all packages in deterministic order (`core → daemon → mcp → cli`):
+
+```powershell
+# Without 2FA
+npm run release:publish
+
+# With 2FA (OTP from authenticator app)
+powershell -ExecutionPolicy Bypass -File scripts/release/publish-packages.ps1 -OTP 123456
+```
+
+The script enforces the correct publish order and verifies version consistency across packages before publishing.
 
 ## Required release checks
 

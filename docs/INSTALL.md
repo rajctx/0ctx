@@ -1,15 +1,12 @@
 # Installation Guide
 
-Canonical roadmap/tracker:
-- `docs/ENTERPRISE_ROADMAP_AND_TRACKER.md`
-
 ## Prerequisites
 
 - Node.js 22+
 - npm 10+
 - Local filesystem write access to `~/.0ctx/`
 
-## Option A: Install from npm (target no-clone path)
+## Install from npm
 
 ```bash
 npm install -g @0ctx/cli
@@ -23,21 +20,15 @@ Then run first-time setup:
 0ctx status
 ```
 
-If `@0ctx/cli` is not available on npm yet, use Option B.
-
-## Option B: Install from monorepo source (current fallback)
-
-```bash
-npm install
-npm run build
-npm run cli -- install --clients=all
-```
+`0ctx install` starts the daemon (if not already running), registers the MCP server with all supported AI clients (Claude, Cursor, Windsurf), and prints a status summary.
 
 ## Environment Variables
 
-- `CTX_DB_PATH`: override SQLite path (default `~/.0ctx/0ctx.db`)
-- `CTX_SOCKET_PATH`: override socket/pipe path
-- `CTX_MASTER_KEY`: encryption key override for backup payload encryption
+| Variable | Default | Purpose |
+|---|---|---|
+| `CTX_DB_PATH` | `~/.0ctx/0ctx.db` | Override SQLite database path |
+| `CTX_SOCKET_PATH` | `~/.0ctx/0ctx.sock` (Unix) / `\\.\pipe\0ctx.sock` (Windows) | Override IPC socket path |
+| `CTX_MASTER_KEY` | _(reads `~/.0ctx/master.key`)_ | Encryption key for backup payload encryption |
 
 ## Validate Installation
 
@@ -45,29 +36,38 @@ npm run cli -- install --clients=all
 0ctx doctor --json
 ```
 
-Expected:
+Expected output:
 
 - `daemon_reachable`: `pass`
 - `bootstrap_dry_run`: `pass`
-- `db_path`: `pass` or `warn` on first run
-
-## Current Productization Status
-
-- No-clone packaged installation is the target enterprise experience.
-- If package publishing is not yet active in your environment, continue with Option B until release/publish milestones are completed.
+- `db_path`: `pass` or `warn` on first run (created on first write)
 
 ## Troubleshooting
 
-If daemon is not reachable:
+**Daemon not reachable:**
 
 ```bash
 0ctx daemon start
 0ctx status
 ```
 
-If MCP config registration fails:
+**MCP config registration failed:**
 
 ```bash
 0ctx bootstrap --clients=all
 0ctx doctor --json
 ```
+
+## Contributing / Development Install
+
+If you are working on the 0ctx source:
+
+```bash
+git clone https://github.com/0ctx-com/0ctx.git
+cd 0ctx
+npm install
+npm run build
+node packages/cli/dist/index.js install --clients=all
+```
+
+See `AGENTS.md` for build commands and monorepo architecture.
