@@ -199,6 +199,7 @@ Exit criteria:
 | SEC-02 | CLI | OS keyring/credential storage (macOS Keychain, Windows Credential Manager, Linux secret-service) with `--insecure-storage` fallback | `packages/cli/src/auth.ts` + new keyring module | Tokens stored in OS credential manager by default; plaintext only with explicit opt-in | AUTH-01 | Planned | Platform | Phase C.1 |
 | SEC-03 | CLI | Auto-open browser for verification URL + `--no-browser` flag | `packages/cli/src/auth.ts` | Login flow opens browser automatically (like gh/az/gcloud) | AUTH-01 | Planned | Platform | Phase C.1 |
 | SEC-04 | CLI | RFC 9700 compliance fixes: scope param, token_type validation, refresh rotation warning | `packages/cli/src/auth.ts` | Auth flow meets RFC 9700 BCP (Jan 2025) requirements | AUTH-01 | Planned | Platform | Phase C.1 |
+| SEC-05 | UI | Dashboard session auth gate — PKCE browser flow, protected routes, session middleware | `packages/ui/src/middleware.ts`, `packages/ui/src/app/api/auth/*`, `packages/ui/src/lib/session.ts` | Dashboard routes require authenticated session; unauthenticated users redirected to login | AUTH-01, SEC-01 | Planned | UI + Platform | Phase C.1 |
 | SYNC-01 | Daemon | Encrypted sync envelope, queue, retry/backoff | `packages/daemon/src/*` | Sync succeeds with encryption and retry semantics | AUTH-02 | Planned | Platform | Phase D |
 | SYNC-02 | UI/CLI | Sync status and manual sync controls | UI routes/components + CLI command | User can inspect sync health and trigger sync | SYNC-01 | Planned | Platform + UI | Phase D |
 | MCP-01 | MCP | Add runtime capability/status exposure for connected/degraded modes | `packages/mcp/src/*`, `packages/daemon/src/*` | MCP clients can query runtime connection posture | AUTH-02, SYNC-01 | Planned | Platform | Phase D |
@@ -225,6 +226,7 @@ Exit criteria:
 | SEC-02 | Phase C.1 | OS keyring credential storage | Platform | Planned | TBD | AUTH-01 | TBD |
 | SEC-03 | Phase C.1 | Browser auto-open for device flow | Platform | Planned | TBD | AUTH-01 | TBD |
 | SEC-04 | Phase C.1 | RFC 9700 compliance (scope, token_type, rotation) | Platform | Planned | TBD | AUTH-01 | TBD |
+| SEC-05 | Phase C.1 | UI dashboard session auth gate | UI + Platform | Planned | TBD | AUTH-01, SEC-01 | TBD |
 | SYNC-01 | Phase D | Encrypted sync pipeline | Platform | Planned | TBD | AUTH-02 | TBD |
 | SYNC-02 | Phase D | Sync observability in UI/CLI | Platform + UI | Planned | TBD | SYNC-01 | TBD |
 | MCP-01 | Phase D | MCP capability/degraded mode exposure | Platform | Planned | TBD | AUTH-02, SYNC-01 | TBD |
@@ -258,6 +260,9 @@ Exit criteria:
 - Device code request includes explicit `scope` parameter.
 - Token response `token_type` validated as `Bearer`.
 - Warning logged when auth server does not rotate refresh token.
+- Unauthenticated users redirected to login page when accessing `/dashboard/*`.
+- UI session cookie secured (HttpOnly, SameSite=Strict, Secure in production).
+- Server actions reject requests without valid session.
 
 ## Sync
 - Encrypted payload sync success.
@@ -302,3 +307,4 @@ Exit criteria:
 - 2026-02-22: AUTH-03 completed — new `/dashboard/settings` UI route (auth state panel, CLI reference, daemon health passthrough); `getAuthStatus()` server action; Settings nav item in sidebar; dead-end Docs/Help support buttons wired to GitHub links. Phase C complete.
 - 2026-02-22: UI-01 + UI-02 completed — Extensions sidebar items wired to `/dashboard/operations?client=<name>`; landing page "See architecture" and "Data model" CTAs wired to GitHub README/docs. Phase E (partial) complete.
 - 2026-02-22: Security audit performed — multi-role review (Security Engineer, Product Architect, DevOps, Compliance) against RFC 9700, OWASP, GitHub CLI / gcloud / AWS CLI patterns. 7 gaps identified; added SEC-01..SEC-04 to backlog as Phase C.1 (security hardening before sync).
+- 2026-02-22: Added SEC-05 (UI session auth gate) — dashboard has no access control; unauthenticated users can access all routes. Requires PKCE browser flow, Next.js middleware, and protected server actions.
