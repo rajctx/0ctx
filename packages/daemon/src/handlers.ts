@@ -10,6 +10,7 @@ import {
     touchSession
 } from './resolver';
 import { listBackups, readContextBackup, writeContextBackup } from './backup';
+import { readAuthState } from './auth';
 import type { MetricsSnapshot } from './metrics';
 
 const CONTEXT_REQUIRED_METHODS = new Set([
@@ -119,11 +120,18 @@ export function handleRequest(
     assertValidSession(req, Boolean(session));
 
     if (req.method === 'health') {
+        const auth = readAuthState();
         return {
             status: 'ok',
             timestamp: Date.now(),
             uptimeMs: Date.now() - runtime.startedAt,
-            metrics: runtime.getMetricsSnapshot ? runtime.getMetricsSnapshot() : null
+            metrics: runtime.getMetricsSnapshot ? runtime.getMetricsSnapshot() : null,
+            auth: {
+                authenticated: auth.authenticated,
+                email: auth.email,
+                tenantId: auth.tenantId,
+                tokenExpired: auth.tokenExpired
+            }
         };
     }
 
@@ -134,14 +142,15 @@ export function handleRequest(
     if (req.method === 'getCapabilities') {
         return {
             apiVersion: '2',
-            features: ['sessions', 'health', 'capabilities', 'audit_logs', 'metrics', 'backup_restore'],
+            features: ['sessions', 'health', 'capabilities', 'audit_logs', 'metrics', 'backup_restore', 'auth'],
             methods: [
                 'listContexts', 'createContext', 'deleteContext', 'switchContext', 'getActiveContext',
                 'addNode', 'getNode', 'updateNode', 'getByKey', 'deleteNode',
                 'addEdge', 'getSubgraph', 'search', 'getGraphData',
                 'saveCheckpoint', 'rewind', 'listCheckpoints',
                 'createSession', 'refreshSession', 'health', 'getCapabilities', 'metricsSnapshot',
-                'listAuditEvents', 'createBackup', 'listBackups', 'restoreBackup'
+                'listAuditEvents', 'createBackup', 'listBackups', 'restoreBackup',
+                'auth/status'
             ]
         };
     }
@@ -166,6 +175,10 @@ export function handleRequest(
         }
 
         return refreshed;
+    }
+
+    if (req.method === 'auth/status') {
+        return readAuthState();
     }
 
     if (req.method === 'listContexts') {

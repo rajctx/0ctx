@@ -192,14 +192,14 @@ Exit criteria:
 | SVC-01 | CLI/Daemon | Add Windows service lifecycle commands and health checks | `packages/cli/src/index.ts`, service scripts | Daemon auto-starts and is manageable after reboot on Windows | PKG-01 | Done | Platform | Phase B |
 | SVC-02 | CLI/Daemon | Add macOS launchd lifecycle commands | CLI + `scripts/service/macos/*` | Daemon auto-starts and is manageable after reboot on macOS | PKG-01 | Done | Platform | Phase B |
 | SVC-03 | CLI/Daemon | Add Linux systemd lifecycle commands | CLI + `scripts/service/linux/*` | Daemon auto-starts and is manageable after reboot on Linux | PKG-01 | Done | Platform | Phase B |
-| AUTH-01 | CLI | Device code login/logout and token refresh support | `packages/cli/src/index.ts` + auth module | `0ctx auth login/logout/status` works reliably | PKG-01 | Planned | Platform | Phase C |
-| AUTH-02 | Daemon | Secure session/token persistence and tenant binding | `packages/daemon/src/*` | Daemon reports tenant/auth state with secure token handling | AUTH-01 | Planned | Platform | Phase C |
-| AUTH-03 | UI | Auth/setup/connect flows in UI | `packages/ui/src/app/*`, `packages/ui/src/components/*` | User can complete auth and tenant binding from UI | AUTH-01, AUTH-02 | Planned | UI | Phase C |
+| AUTH-01 | CLI | Device code login/logout and token refresh support | `packages/cli/src/index.ts` + auth module | `0ctx auth login/logout/status` works reliably | PKG-01 | Done | Platform | Phase C |
+| AUTH-02 | Daemon | Secure session/token persistence and tenant binding | `packages/daemon/src/*` | Daemon reports tenant/auth state with secure token handling | AUTH-01 | Done | Platform | Phase C |
+| AUTH-03 | UI | Auth/setup/connect flows in UI | `packages/ui/src/app/*`, `packages/ui/src/components/*` | User can complete auth and tenant binding from UI | AUTH-01, AUTH-02 | Done | UI | Phase C |
 | SYNC-01 | Daemon | Encrypted sync envelope, queue, retry/backoff | `packages/daemon/src/*` | Sync succeeds with encryption and retry semantics | AUTH-02 | Planned | Platform | Phase D |
 | SYNC-02 | UI/CLI | Sync status and manual sync controls | UI routes/components + CLI command | User can inspect sync health and trigger sync | SYNC-01 | Planned | Platform + UI | Phase D |
 | MCP-01 | MCP | Add runtime capability/status exposure for connected/degraded modes | `packages/mcp/src/*`, `packages/daemon/src/*` | MCP clients can query runtime connection posture | AUTH-02, SYNC-01 | Planned | Platform | Phase D |
-| UI-01 | UI | Remove or wire non-functional sidebar/support/extension actions | `packages/ui/src/components/dashboard/dashboard-shell.tsx` | No dead-end primary UI actions remain | None | Planned | UI | Phase E |
-| UI-02 | UI | Wire landing page secondary CTAs to real destinations | `packages/ui/src/app/page.tsx` | All visible CTAs have meaningful navigation | None | Planned | UI | Phase E |
+| UI-01 | UI | Remove or wire non-functional sidebar/support/extension actions | `packages/ui/src/components/dashboard/dashboard-shell.tsx` | No dead-end primary UI actions remain | None | Done | UI | Phase E |
+| UI-02 | UI | Wire landing page secondary CTAs to real destinations | `packages/ui/src/app/page.tsx` | All visible CTAs have meaningful navigation | None | Done | UI | Phase E |
 | UI-03 | UI Docs | Expand UI flow documentation | `docs/UI_INFORMATION_ARCHITECTURE.md`, `docs/UI_USER_FLOWS.md` | Docs map route-by-route user journey and controls | UI-01, UI-02 | Planned | Product Docs | Phase E |
 | GOV-01 | Governance | Apply branch protection and label baseline | GitHub settings + scripts | Branch rules and labels enforced in target repos | None | In Progress | Repo Admin | Phase E |
 | GOV-02 | Governance | Re-enable workflows after explicit approval | `.github/workflows-disabled/*` and runbook | CI/governance/release workflows operational | GOV-01 | Planned | Repo Admin | Phase E |
@@ -214,14 +214,14 @@ Exit criteria:
 | SVC-01 | Phase B | Windows service lifecycle | Platform | Done | 2026-02-22 | — | — |
 | SVC-02 | Phase B | macOS launchd lifecycle | Platform | Done | 2026-02-22 | — | — |
 | SVC-03 | Phase B | Linux systemd lifecycle | Platform | Done | 2026-02-22 | — | — |
-| AUTH-01 | Phase C | CLI device code auth | Platform | Planned | TBD | PKG-01 | TBD |
-| AUTH-02 | Phase C | Daemon secure auth session state | Platform | Planned | TBD | AUTH-01 | TBD |
-| AUTH-03 | Phase C | UI auth/connect setup flow | UI | Planned | TBD | AUTH-01, AUTH-02 | TBD |
+| AUTH-01 | Phase C | CLI device code auth | Platform | Done | 2026-02-22 | — | — |
+| AUTH-02 | Phase C | Daemon secure auth session state | Platform | Done | 2026-02-22 | — | — |
+| AUTH-03 | Phase C | UI auth/connect setup flow | UI | Done | 2026-02-22 | — | — |
 | SYNC-01 | Phase D | Encrypted sync pipeline | Platform | Planned | TBD | AUTH-02 | TBD |
 | SYNC-02 | Phase D | Sync observability in UI/CLI | Platform + UI | Planned | TBD | SYNC-01 | TBD |
 | MCP-01 | Phase D | MCP capability/degraded mode exposure | Platform | Planned | TBD | AUTH-02, SYNC-01 | TBD |
-| UI-01 | Phase E | Sidebar placeholder cleanup | UI | Planned | TBD | None | TBD |
-| UI-02 | Phase E | Landing CTA wiring | UI | Planned | TBD | None | TBD |
+| UI-01 | Phase E | Sidebar placeholder cleanup | UI | Done | 2026-02-22 | — | — |
+| UI-02 | Phase E | Landing CTA wiring | UI | Done | 2026-02-22 | — | — |
 | UI-03 | Phase E | UI user-flow docs | Product Docs | Planned | TBD | UI-01, UI-02 | TBD |
 | GOV-01 | Phase E | Branch protection + labels apply | Repo Admin | In Progress | TBD | Repo settings access | TBD |
 | GOV-02 | Phase E | Workflow re-enable rollout | Repo Admin | Planned | TBD | Approval gate | TBD |
@@ -281,3 +281,7 @@ Exit criteria:
 - 2026-02-22: PKG-03 completed — rewrote `docs/INSTALL.md` and `docs/QUICKSTART.md` to make npm global install the primary end-user path; separated developer/contributor steps; updated `docs/ONBOARDING.md` with full release script reference. Phase A complete.
 - 2026-02-22: SVC-01 completed — added `0ctx daemon service install/enable/disable/uninstall/status/start/stop/restart` subcommands (Windows); new `packages/cli/src/service-windows.ts` module using WinSW + sc.exe; WinSW XML service config at `scripts/service/windows/0ctx-daemon.xml`; winsw optional dep in CLI; fixed MCP exports subpath types (TS2307); fixed CLI implicit-any lint errors.
 - 2026-02-22: SVC-02 + SVC-03 completed — added macOS launchd (`service-macos.ts`, `scripts/service/macos/com.0ctx.daemon.plist`) and Linux systemd user-level (`service-linux.ts`, `scripts/service/linux/0ctx-daemon.service`) service modules; CLI dispatcher routes to correct platform module at runtime. Phase B complete.
+- 2026-02-22: AUTH-01 completed — added `packages/cli/src/auth.ts` (RFC 8628 device-code flow, `~/.0ctx/auth.json` token store at 0o600, `commandAuthLogin/Logout/Status`); wired `0ctx auth login/logout/status` subcommands into CLI; `CTX_AUTH_SERVER` env override; graceful failure when no server reachable.
+- 2026-02-22: AUTH-02 completed — added `packages/daemon/src/auth.ts` (read-only token store reader, `AuthState` type); extended `health` IPC response with `auth` field; added `auth/status` IPC method; updated `getCapabilities` features + methods list.
+- 2026-02-22: AUTH-03 completed — new `/dashboard/settings` UI route (auth state panel, CLI reference, daemon health passthrough); `getAuthStatus()` server action; Settings nav item in sidebar; dead-end Docs/Help support buttons wired to GitHub links. Phase C complete.
+- 2026-02-22: UI-01 + UI-02 completed — Extensions sidebar items wired to `/dashboard/operations?client=<name>`; landing page "See architecture" and "Data model" CTAs wired to GitHub README/docs. Phase E (partial) complete.

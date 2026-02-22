@@ -35,6 +35,7 @@ import {
     stopService as stopServiceLinux,
     restartService as restartServiceLinux,
 } from './service-linux';
+import { commandAuthLogin, commandAuthLogout, commandAuthStatus } from './auth';
 
 type SupportedClient = 'claude' | 'cursor' | 'windsurf';
 type CheckStatus = 'pass' | 'warn' | 'fail';
@@ -88,7 +89,7 @@ function parseArgs(argv: string[]): ParsedArgs {
         flags[key] = true;
     }
 
-    const hasSubcommand = command === 'daemon';
+    const hasSubcommand = command === 'daemon' || command === 'auth';
     const sub = hasSubcommand ? maybeSubcommand : undefined;
     // 3-level: daemon service <action>
     const serviceAction = (sub === 'service' && rest[0] && !rest[0].startsWith('--'))
@@ -325,8 +326,14 @@ Usage:
   0ctx repair [--clients=...]
   0ctx daemon start
 
-Windows service management (requires Administrator):
-  0ctx daemon service install    Register daemon as a Windows service
+Authentication:
+  0ctx auth login    Start device-code login flow
+  0ctx auth logout   Clear stored credentials
+  0ctx auth status   Show current auth state
+  0ctx auth status --json
+
+Windows/macOS/Linux service management (requires Admin on Windows):
+  0ctx daemon service install    Register daemon as a service
   0ctx daemon service enable     Set service start type to Automatic
   0ctx daemon service disable    Set service start type to Manual
   0ctx daemon service start      Start the service
@@ -420,6 +427,14 @@ async function main(): Promise<number> {
             return commandStatus();
         case 'repair':
             return commandRepair(parsed.flags);
+        case 'auth': {
+            const sub = parsed.subcommand;
+            if (sub === 'login') return commandAuthLogin(parsed.flags);
+            if (sub === 'logout') return Promise.resolve(commandAuthLogout());
+            if (sub === 'status') return Promise.resolve(commandAuthStatus(parsed.flags));
+            printHelp();
+            return 1;
+        }
         case 'daemon':
             if (parsed.subcommand === 'start') {
                 try {

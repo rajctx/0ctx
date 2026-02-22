@@ -15,6 +15,7 @@ import {
   Plus,
   RefreshCw,
   ServerCog,
+  Settings2,
   ShieldCheck
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
@@ -51,18 +52,25 @@ const ROUTE_ITEMS = [
     label: 'Backups',
     subtitle: 'Backup Inventory',
     icon: ShieldCheck
+  },
+  {
+    href: '/dashboard/settings',
+    id: 'settings',
+    label: 'Settings',
+    subtitle: 'Auth + Config',
+    icon: Settings2
   }
 ] as const;
 
 const SUPPORT_ITEMS = [
-  { id: 'docs', label: 'Documentation', icon: BookOpen },
-  { id: 'help', label: 'Help Center', icon: HelpCircle }
+  { id: 'docs', label: 'Documentation', icon: BookOpen, href: 'https://github.com/0ctx-com/0ctx' },
+  { id: 'help', label: 'Help Center', icon: HelpCircle, href: 'https://github.com/0ctx-com/0ctx/issues' }
 ] as const;
 
 const EXTENSIONS = [
-  { id: 'claude', label: 'Claude' },
-  { id: 'cursor', label: 'Cursor' },
-  { id: 'windsurf', label: 'Windsurf' }
+  { id: 'claude', label: 'Claude', client: 'claude' },
+  { id: 'cursor', label: 'Cursor', client: 'cursor' },
+  { id: 'windsurf', label: 'Windsurf', client: 'windsurf' }
 ] as const;
 
 export function DashboardShell({ children }: { children: ReactNode }) {
@@ -215,14 +223,16 @@ export function DashboardShell({ children }: { children: ReactNode }) {
               <p className="px-2 text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">Support</p>
               <div className="mt-2 space-y-1">
                 {SUPPORT_ITEMS.map(item => (
-                  <button
+                  <a
                     key={item.id}
-                    type="button"
+                    href={item.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)]"
                   >
                     <item.icon className="h-4 w-4" />
                     {item.label}
-                  </button>
+                  </a>
                 ))}
               </div>
             </section>
@@ -231,14 +241,14 @@ export function DashboardShell({ children }: { children: ReactNode }) {
               <p className="px-2 text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">Extensions</p>
               <div className="mt-2 space-y-1">
                 {EXTENSIONS.map(extension => (
-                  <button
+                  <Link
                     key={extension.id}
-                    type="button"
+                    href={`/dashboard/operations?client=${extension.client}`}
                     className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)]"
                   >
                     <Bot className="h-4 w-4" />
                     {extension.label}
-                  </button>
+                  </Link>
                 ))}
               </div>
             </section>

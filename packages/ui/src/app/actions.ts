@@ -366,6 +366,23 @@ export async function getCapabilities(): Promise<CapabilitiesSnapshot | null> {
   }
 }
 
+export interface AuthStatusSnapshot {
+  authenticated: boolean;
+  email: string | null;
+  tenantId: string | null;
+  expiresAt: number | null;
+  tokenExpired: boolean;
+}
+
+export async function getAuthStatus(): Promise<AuthStatusSnapshot | null> {
+  try {
+    return await sendToDaemon<AuthStatusSnapshot>('auth/status');
+  } catch (e) {
+    console.error('Failed to fetch auth status', e);
+    return null;
+  }
+}
+
 export async function runInstallWorkflow(options: WorkflowOptions = {}): Promise<CliRunResult> {
   const normalizedClients = normalizeClients(options.clients);
   return await runCli(['install', `--clients=${clientsArg(normalizedClients)}`]);
