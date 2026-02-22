@@ -55,7 +55,6 @@ npm run cli -- install --clients=all
 - `docs/QUICKSTART.md`: first-run workflow.
 - `docs/GITHUB_REPO_MANAGEMENT.md`: repo governance and branch protection.
 - `docs/GITHUB_ENABLEMENT_RUNBOOK.md`: workflow re-enable procedure and rollback.
-- `docs/TRACKING_90_DAYS.md`: execution tracking plan.
 - `docs/PLAN_STATUS.md`: completed/in-progress/planned status.
 - `docs/RELEASE.md`: release checklist and tagging.
 - `docs/ONBOARDING.md`: maintainer/contributor onboarding.
