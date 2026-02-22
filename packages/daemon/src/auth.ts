@@ -36,6 +36,18 @@ export function readAuthState(): AuthState {
         tokenExpired: false
     };
 
+    // SEC-01: Check CTX_AUTH_TOKEN env var first (CI/CD headless use)
+    const envToken = process.env.CTX_AUTH_TOKEN;
+    if (envToken) {
+        return {
+            authenticated: true,
+            email: 'env:CTX_AUTH_TOKEN',
+            tenantId: process.env.CTX_TENANT_ID ?? null,
+            expiresAt: null,
+            tokenExpired: false
+        };
+    }
+
     try {
         if (!fs.existsSync(TOKEN_FILE)) return absent;
         const raw = JSON.parse(fs.readFileSync(TOKEN_FILE, 'utf8')) as RawTokenStore;

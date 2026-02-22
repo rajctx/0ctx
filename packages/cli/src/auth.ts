@@ -14,11 +14,13 @@ import os from 'os';
 import path from 'path';
 import https from 'https';
 import http from 'http';
+import { execSync } from 'child_process';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const DEFAULT_AUTH_SERVER = 'https://auth.0ctx.com';
 const CLIENT_ID = '0ctx-cli';
+const DEFAULT_SCOPE = 'profile sync';
 const TOKEN_FILE = path.join(os.homedir(), '.0ctx', 'auth.json');
 
 function getAuthServer(): string {
@@ -84,6 +86,62 @@ export function isTokenExpired(store: TokenStore): boolean {
     return Date.now() >= store.expiresAt;
 }
 
+// ─── Env var token bypass (SEC-01) ────────────────────────────────────────────
+
+/**
+ * Check CTX_AUTH_TOKEN or CTX_AUTH_TOKEN_FILE env vars for CI/CD headless use.
+ * Returns a synthetic TokenStore if found, null otherwise.
+ */
+export function getEnvToken(): TokenStore | null {
+    const direct = process.env.CTX_AUTH_TOKEN;
+    if (direct) {
+        return {
+            accessToken: direct,
+            refreshToken: '',
+            expiresAt: Number.MAX_SAFE_INTEGER,
+            email: 'env:CTX_AUTH_TOKEN',
+            tenantId: process.env.CTX_TENANT_ID ?? ''
+        };
+    }
+
+    const filePath = process.env.CTX_AUTH_TOKEN_FILE;
+    if (filePath) {
+        try {
+            const raw = fs.readFileSync(filePath, 'utf8');
+            const parsed = JSON.parse(raw) as TokenStore;
+            if (parsed.accessToken) return parsed;
+        } catch {
+            // fall through
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Resolve the effective token: env var > disk token store.
+ */
+export function resolveToken(): TokenStore | null {
+    return getEnvToken() ?? readTokenStore();
+}
+
+// ─── Browser opener (SEC-03) ──────────────────────────────────────────────────
+
+function openBrowser(url: string): void {
+    try {
+        const platform = os.platform();
+        if (platform === 'win32') {
+            execSync(`start "" "${url}"`, { stdio: 'ignore' });
+        } else if (platform === 'darwin') {
+            execSync(`open "${url}"`, { stdio: 'ignore' });
+        } else {
+            execSync(`xdg-open "${url}"`, { stdio: 'ignore' });
+        }
+    } catch {
+        // Silently fail — user still has the URL printed to console
+    }
+}
+
 // ─── HTTP helpers ─────────────────────────────────────────────────────────────
 
 function httpPost(url: string, body: string, timeoutMs = 10_000): Promise<string> {
@@ -132,7 +190,7 @@ function sleep(ms: number): Promise<void> {
 // ─── Device code flow (RFC 8628) ─────────────────────────────────────────────
 
 async function requestDeviceCode(authServer: string): Promise<DeviceCodeResponse> {
-    const body = urlEncode({ client_id: CLIENT_ID });
+    const body = urlEncode({ client_id: CLIENT_ID, scope: DEFAULT_SCOPE });
     let raw: string;
     try {
         raw = await httpPost(`${authServer}/device/code`, body);
@@ -175,7 +233,14 @@ async function pollForToken(
         }
 
         const parsed = JSON.parse(raw) as TokenResponse | TokenErrorResponse;
-        if ('access_token' in parsed) return parsed as TokenResponse;
+        if ('access_token' in parsed) {
+            const tokenResp = parsed as TokenResponse;
+            // SEC-04: Validate token_type per RFC 6749 §5.1
+            if (tokenResp.token_type && tokenResp.token_type.toLowerCase() !== 'bearer') {
+                throw new Error(`Unexpected token_type: ${tokenResp.token_type}`);
+            }
+            return tokenResp;
+        }
 
         const errParsed = parsed as TokenErrorResponse;
         if (errParsed.error === 'authorization_pending') continue;
@@ -220,6 +285,14 @@ export async function refreshAccessToken(store: TokenStore): Promise<TokenStore>
     }
 
     const resp = parsed as TokenResponse;
+    // SEC-04: Validate token_type
+    if (resp.token_type && resp.token_type.toLowerCase() !== 'bearer') {
+        throw new Error(`Unexpected token_type from refresh: ${resp.token_type}`);
+    }
+    // SEC-04: Warn when server does not rotate refresh token
+    if (!resp.refresh_token) {
+        console.warn('Warning: auth server did not rotate refresh token (RFC 9700 §4.14 recommends rotation)');
+    }
     const updated: TokenStore = {
         accessToken: resp.access_token,
         refreshToken: resp.refresh_token || store.refreshToken,
@@ -233,8 +306,17 @@ export async function refreshAccessToken(store: TokenStore): Promise<TokenStore>
 
 // ─── CLI commands ─────────────────────────────────────────────────────────────
 
-export async function commandAuthLogin(_flags: Record<string, string | boolean>): Promise<number> {
+export async function commandAuthLogin(flags: Record<string, string | boolean>): Promise<number> {
+    // SEC-01: Check for env var token first
+    const envToken = getEnvToken();
+    if (envToken) {
+        console.log('Already authenticated via CTX_AUTH_TOKEN environment variable.');
+        console.log(`Email: ${envToken.email}`);
+        return 0;
+    }
+
     const authServer = getAuthServer();
+    const noBrowser = Boolean(flags['no-browser']);
     console.log(`Connecting to auth server: ${authServer}`);
 
     let deviceCodeResp: DeviceCodeResponse;
@@ -254,6 +336,13 @@ export async function commandAuthLogin(_flags: Record<string, string | boolean>)
         console.log(`Enter this code when prompted:  ${deviceCodeResp.user_code}`);
         console.log('');
     }
+
+    // SEC-03: Auto-open browser unless --no-browser
+    if (!noBrowser) {
+        const uri = deviceCodeResp.verification_uri_complete ?? deviceCodeResp.verification_uri;
+        openBrowser(uri);
+    }
+
     console.log(`Waiting for authorization... (expires in ${deviceCodeResp.expires_in}s)`);
 
     let tokenResp: TokenResponse;
@@ -298,7 +387,9 @@ export function commandAuthLogout(): number {
 
 export function commandAuthStatus(flags: Record<string, string | boolean>): number {
     const asJson = Boolean(flags.json);
-    const store = readTokenStore();
+    // SEC-01: Check env token first, then disk
+    const store = resolveToken();
+    const isEnv = Boolean(getEnvToken());
 
     if (!store) {
         if (asJson) {
@@ -311,22 +402,25 @@ export function commandAuthStatus(flags: Record<string, string | boolean>): numb
     }
 
     const expired = isTokenExpired(store);
-    const expiresDate = new Date(store.expiresAt).toISOString();
+    const neverExpires = store.expiresAt >= Number.MAX_SAFE_INTEGER;
+    const expiresDate = neverExpires ? 'never' : new Date(store.expiresAt).toISOString();
 
     if (asJson) {
         console.log(JSON.stringify({
             status: expired ? 'expired' : 'logged_in',
+            source: isEnv ? 'environment' : 'token_file',
             email: store.email,
             tenantId: store.tenantId,
             expiresAt: expiresDate
         }));
     } else {
         console.log(`Status:    ${expired ? 'token expired' : 'logged in'}`);
+        if (isEnv) console.log('Source:    CTX_AUTH_TOKEN environment variable');
         console.log(`Email:     ${store.email}`);
         if (store.tenantId) console.log(`Tenant:    ${store.tenantId}`);
         console.log(`Expires:   ${expiresDate}`);
-        console.log(`File:      ${TOKEN_FILE}`);
-        if (expired) {
+        if (!isEnv) console.log(`File:      ${TOKEN_FILE}`);
+        if (expired && !isEnv) {
             console.log('');
             console.log('Token expired. Run: 0ctx auth login');
         }
