@@ -142,6 +142,53 @@ server.setRequestHandler(CallToolRequestSchema, async (req: any) => {
                     }
                 };
             }
+            case 'ctx_runtime_status': {
+                const health = await callDaemon('health', {}) as {
+                    auth?: { authenticated?: boolean; tokenExpired?: boolean; email?: string; tenantId?: string };
+                    sync?: {
+                        enabled?: boolean; running?: boolean; lastPushAt?: number | null; lastPullAt?: number | null; lastError?: string | null;
+                        queue?: { pending?: number; inFlight?: number; failed?: number; done?: number }
+                    } | null;
+                };
+
+                const auth = health.auth ?? {};
+                const sync = health.sync ?? {};
+
+                // Compute runtime posture
+                let posture: 'connected' | 'degraded' | 'offline' = 'offline';
+                if (auth.authenticated && !auth.tokenExpired) {
+                    posture = (sync.enabled && sync.running) ? 'connected' : 'degraded';
+                } else if (auth.authenticated && auth.tokenExpired) {
+                    posture = 'degraded';
+                }
+
+                const capabilities = [
+                    'graph', 'search', 'checkpoints', 'audit', 'backups',
+                    ...(auth.authenticated ? ['auth'] : []),
+                    ...(sync.enabled ? ['sync'] : []),
+                ];
+
+                const status = {
+                    posture,
+                    capabilities,
+                    auth: {
+                        authenticated: auth.authenticated ?? false,
+                        email: auth.email ?? null,
+                        tenantId: auth.tenantId ?? null,
+                        tokenExpired: auth.tokenExpired ?? false,
+                    },
+                    sync: {
+                        enabled: sync.enabled ?? false,
+                        running: sync.running ?? false,
+                        lastPushAt: sync.lastPushAt ?? null,
+                        lastPullAt: sync.lastPullAt ?? null,
+                        lastError: sync.lastError ?? null,
+                        queue: sync.queue ?? { pending: 0, inFlight: 0, failed: 0, done: 0 },
+                    },
+                };
+
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(status, null, 2) }] } };
+            }
             default:
                 throw new Error(`Unknown tool: ${name}`);
         }

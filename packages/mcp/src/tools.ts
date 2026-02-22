@@ -184,5 +184,14 @@ export const tools = [
             },
             required: ['fileName'],
         },
+    },
+    {
+        name: 'ctx_runtime_status',
+        description: 'Get the runtime posture of the 0ctx daemon. Returns connected/degraded/offline status, auth state, sync health, and available capabilities. Use this to adapt behavior based on whether the daemon is fully operational.',
+        inputSchema: {
+            type: 'object',
+            properties: {},
+            required: [],
+        },
     }
 ];
