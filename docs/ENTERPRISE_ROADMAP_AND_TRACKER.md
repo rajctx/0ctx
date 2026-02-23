@@ -206,12 +206,13 @@ Exit criteria:
 | UI-01 | UI | Remove or wire non-functional sidebar/support/extension actions | `packages/ui/src/components/dashboard/dashboard-shell.tsx` | No dead-end primary UI actions remain | None | Done | UI | Phase E |
 | UI-02 | UI | Wire landing page secondary CTAs to real destinations | `packages/ui/src/app/page.tsx` | All visible CTAs have meaningful navigation | None | Done | UI | Phase E |
 | UI-03 | UI Docs | Expand UI flow documentation to include session auth, sync observability, and route-by-route human flows | `docs/UI_INFORMATION_ARCHITECTURE.md`, `docs/UI_USER_FLOWS.md` | Docs map route-by-route user journey and controls | UI-01, UI-02 | Done | Product Docs | Phase E |
-<!-- | GOV-01 | Governance | Apply branch protection and label baseline | GitHub settings + scripts | Branch rules and labels enforced in target repos | None | In Progress | Repo Admin | Phase E | -->
-<!-- | GOV-02 | Governance | Re-enable workflows after explicit approval | `.github/workflows-disabled/*` and runbook | CI/governance/release workflows operational | GOV-01 | Planned | Repo Admin | Phase E | -->
 | VIZ-01 | UI | Migrate graph renderer from `react-force-graph-2d` (Canvas) to `reagraph` (WebGL) for better performance, clustering, and 2D/3D support | `packages/ui/src/app/dashboard/ForceGraph.tsx`, `workspace-view.tsx` | Graph renders via WebGL; handles 1K+ nodes without degradation; clustering support available | None | Planned | UI | Phase F |
 | VIZ-02 | UI | Add layout-switching toggle in workspace toolbar: Force / Hierarchical / Clustered views | `packages/ui/src/app/dashboard/ForceGraph.tsx`, `workspace-view.tsx` | Users can switch between force-directed, dagre/hierarchical, and clustered-by-type layouts | VIZ-01 | Planned | UI | Phase F |
 | DX-01 | Platform | Unified NPM Global Install: Make `@0ctx/cli` the single entry point. Bundle/embed the UI and auto-start the daemon. | `packages/cli/*`, `packages/ui/*` | Users run `npm install -g @0ctx/cli` and `0ctx` handles everything | None | Planned | Core | Phase F |
 | DX-02 | Platform | Desktop App: Bundle everything into a standalone local desktop application (Tauri/Electron) | `desktop-app/*` | Users download an installer and get a system tray app serving the UI | DX-01 | Planned | Core | Phase F |
+
+<!-- | GOV-01 | Governance | Apply branch protection and label baseline | GitHub settings + scripts | Branch rules and labels enforced in target repos | None | In Progress | Repo Admin | Phase E | -->
+<!-- | GOV-02 | Governance | Re-enable workflows after explicit approval | `.github/workflows-disabled/*` and runbook | CI/governance/release workflows operational | GOV-01 | Planned | Repo Admin | Phase E | -->
 
 ## 7) Tracker (Working Board in This Same File)
 
@@ -237,12 +238,13 @@ Exit criteria:
 | UI-01 | Phase E | Sidebar placeholder cleanup | UI | Done | 2026-02-22 | — | — |
 | UI-02 | Phase E | Landing CTA wiring | UI | Done | 2026-02-22 | — | — |
 | UI-03 | Phase E | UI user-flow docs | Product Docs | Done | 2026-02-23 | UI-01, UI-02 | — |
-<!-- | GOV-01 | Phase E | Branch protection + labels apply | Repo Admin | In Progress | TBD | Repo settings access | TBD | -->
-<!-- | GOV-02 | Phase E | Workflow re-enable rollout | Repo Admin | Planned | TBD | Approval gate | TBD | -->
 | VIZ-01 | Phase F | Reagraph WebGL migration | UI | Planned | TBD | — | TBD |
 | VIZ-02 | Phase F | Layout-switching (Force/Hierarchical/Clustered) | UI | Planned | TBD | VIZ-01 | TBD |
 | DX-01 | Phase F | Unified NPM Install (`@0ctx/cli`) | Core | Planned | TBD | — | TBD |
 | DX-02 | Phase F | Standalone Desktop App | Core | Planned | TBD | DX-01 | TBD |
+
+<!-- | GOV-01 | Phase E | Branch protection + labels apply | Repo Admin | In Progress | TBD | Repo settings access | TBD | -->
+<!-- | GOV-02 | Phase E | Workflow re-enable rollout | Repo Admin | Planned | TBD | Approval gate | TBD | -->
 
 ## 8) Test Matrix
 
