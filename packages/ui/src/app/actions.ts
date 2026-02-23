@@ -4,7 +4,7 @@ import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { sendToDaemon } from '@/lib/0ctx';
-import type { ContextItem, GraphPayload } from '@/lib/graph';
+import type { ContextItem, GraphNode, GraphPayload } from '@/lib/graph';
 
 const SUPPORTED_CLIENTS = ['claude', 'cursor', 'windsurf'] as const;
 const CLI_TIMEOUT_MS = 120_000;
@@ -335,6 +335,25 @@ export async function deleteNodeAction(contextId: string, id: string): Promise<u
     return await sendToDaemon('deleteNode', { contextId, id });
   } catch (e) {
     console.error('Failed to delete node', e);
+    return null;
+  }
+}
+
+export async function addNodeAction(
+  contextId: string,
+  data: { type: string; content: string; tags?: string[]; key?: string }
+): Promise<GraphNode | null> {
+  try {
+    return await sendToDaemon<GraphNode>('addNode', {
+      contextId,
+      type: data.type,
+      content: data.content,
+      tags: data.tags ?? [],
+      key: data.key || undefined,
+      source: 'dashboard'
+    });
+  } catch (e) {
+    console.error('Failed to add node', e);
     return null;
   }
 }

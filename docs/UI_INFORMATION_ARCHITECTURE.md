@@ -14,9 +14,13 @@ Related tracking:
 
 ## Route Map
 
+- `/`
+  - Public landing page with product messaging and CTAs linking to `/api/auth/login`.
+- `/login`, `/api/auth/*`
+  - Next.js Auth0 universal login routes (session negotiation, callbacks, logout).
 - `/dashboard`
-  - Compatibility entrypoint.
-  - Redirects to `/dashboard/workspace`.
+  - Authenticated session requirement (enforced by middleware).
+  - Compatibility entrypoint; redirects to `/dashboard/workspace`.
 - `/dashboard/workspace`
   - Graph visualization, node inspector, edit/delete actions, and graph controls.
 - `/dashboard/operations`
@@ -28,26 +32,31 @@ Related tracking:
 
 ## Shared Shell Responsibilities
 
-Implemented in dashboard layout/shell:
+Implemented in dashboard layout/shell (`DashboardShell`):
 
+- Global authentication enforcement (redirecting unauthenticated requests).
 - Route navigation for Workspace, Operations, Audit, Backups.
-- Active-context list and context creation.
+- Active-context list and context creation sidebar.
+- User profile dropdown with universal sign-out action.
 - Top status strip:
-  - daemon health state
-  - capability method count
-  - request count
-  - last sync timestamp
-- Refresh action for shared dashboard state.
+  - daemon health state (Connected/Degraded/Offline)
+  - active capability counts
+  - context request metrics
+  - last sync timestamp and queue counts (pending/in-flight)
+- Background polling for shared dashboard state.
 
 ## State Ownership
 
-- Shared dashboard state provider owns:
-  - contexts + active context
+- Shared dashboard context provider owns:
+  - active authenticated user session (`@auth0/nextjs-auth0` useUser)
+  - available workspace contexts + active context selection
   - daemon health/metrics/capabilities snapshots
-  - cross-route refresh tick for sync updates
-- Route pages own local behavior:
-  - workspace graph and inspector state
-  - operations/audit/backups view-local interaction state
+  - continuous background polling for sync queue updates
+- Route-specific pages own local interaction state:
+  - `/dashboard/workspace`: graph layout geometry, active node inspector state, mutation forms
+  - `/dashboard/operations`: streaming terminal output for diagnostics
+  - `/dashboard/audit`: log pagination and filters
+  - `/dashboard/backups`: upload dialogs and action in-progress spinners
 
 ## Design Constraints
 

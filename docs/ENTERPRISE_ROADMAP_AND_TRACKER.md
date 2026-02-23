@@ -205,7 +205,7 @@ Exit criteria:
 | MCP-01 | MCP | Runtime capability/status exposure: `ctx_runtime_status` tool (connected/degraded/offline posture), `sync` feature in capabilities | `packages/mcp/src/tools.ts`, `packages/mcp/src/index.ts`, `packages/daemon/src/handlers.ts` | MCP clients can query runtime connection posture | AUTH-02, SYNC-01 | Done | Platform | Phase D |
 | UI-01 | UI | Remove or wire non-functional sidebar/support/extension actions | `packages/ui/src/components/dashboard/dashboard-shell.tsx` | No dead-end primary UI actions remain | None | Done | UI | Phase E |
 | UI-02 | UI | Wire landing page secondary CTAs to real destinations | `packages/ui/src/app/page.tsx` | All visible CTAs have meaningful navigation | None | Done | UI | Phase E |
-| UI-03 | UI Docs | Expand UI flow documentation | `docs/UI_INFORMATION_ARCHITECTURE.md`, `docs/UI_USER_FLOWS.md` | Docs map route-by-route user journey and controls | UI-01, UI-02 | Planned | Product Docs | Phase E |
+| UI-03 | UI Docs | Expand UI flow documentation to include session auth, sync observability, and route-by-route human flows | `docs/UI_INFORMATION_ARCHITECTURE.md`, `docs/UI_USER_FLOWS.md` | Docs map route-by-route user journey and controls | UI-01, UI-02 | Done | Product Docs | Phase E |
 | GOV-01 | Governance | Apply branch protection and label baseline | GitHub settings + scripts | Branch rules and labels enforced in target repos | None | In Progress | Repo Admin | Phase E |
 | GOV-02 | Governance | Re-enable workflows after explicit approval | `.github/workflows-disabled/*` and runbook | CI/governance/release workflows operational | GOV-01 | Planned | Repo Admin | Phase E |
 
@@ -232,7 +232,7 @@ Exit criteria:
 | MCP-01 | Phase D | MCP runtime posture exposure | Platform | Done | 2026-02-22 | — | — |
 | UI-01 | Phase E | Sidebar placeholder cleanup | UI | Done | 2026-02-22 | — | — |
 | UI-02 | Phase E | Landing CTA wiring | UI | Done | 2026-02-22 | — | — |
-| UI-03 | Phase E | UI user-flow docs | Product Docs | Planned | TBD | UI-01, UI-02 | TBD |
+| UI-03 | Phase E | UI user-flow docs | Product Docs | Done | 2026-02-23 | UI-01, UI-02 | — |
 | GOV-01 | Phase E | Branch protection + labels apply | Repo Admin | In Progress | TBD | Repo settings access | TBD |
 | GOV-02 | Phase E | Workflow re-enable rollout | Repo Admin | Planned | TBD | Approval gate | TBD |
 
@@ -314,3 +314,4 @@ Exit criteria:
 - 2026-02-22: SYNC-01 completed — Encrypted sync pipeline: `sync-queue.ts` (SQLite-backed persistent queue with dedup, retry/backoff, cleanup), `sync-transport.ts` (HTTPS push/pull, zero deps), `sync-engine.ts` (background orchestrator with timer, enqueue-on-mutate). Wired into `server.ts` lifecycle + `handlers.ts` mutation hooks. New `syncStatus` and `syncNow` method handlers. 10 new unit tests. Opt-in via `CTX_SYNC_ENABLED=1`.
 - 2026-02-22: SYNC-02 completed — Global config system: `config.ts` in core (`~/.0ctx/config.json`, env→config→default resolution). CLI `0ctx config list/get/set` + `0ctx sync status`. Auth login auto-sets `sync.enabled`+`sync.endpoint` in config. Daemon reads config for sync enabled/endpoint. Health handler includes sync status. Help text updated.
 - 2026-02-22: MCP-01 completed — Added `ctx_runtime_status` MCP tool: computes posture (connected/degraded/offline) from daemon health (auth + sync state). Exposes capabilities list, auth details, and sync queue status. Added `sync` to daemon `getCapabilities` features. Phase D complete.
+- 2026-02-23: UI-03 completed — Updated `docs/UI_INFORMATION_ARCHITECTURE.md` to reflect Auth0 session ownership and global sync observability within the Dashboard Shell. Created `docs/UI_USER_FLOWS.md` detailing 5 primary journeys: Authentication -> Workspace Interaction -> Sync Observability -> Diagnostics -> Audit.
