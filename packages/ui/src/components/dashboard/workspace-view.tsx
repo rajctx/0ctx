@@ -14,8 +14,10 @@ import {
   Trash2,
   X,
   ZoomIn,
-  ZoomOut
+  ZoomOut,
+  LayoutTemplate
 } from 'lucide-react';
+import type { LayoutTypes } from 'reagraph';
 import {
   addNodeAction,
   deleteContextAction,
@@ -77,6 +79,9 @@ export default function WorkspaceView() {
 
   const [commandOpen, setCommandOpen] = useState(false);
   const [commandQuery, setCommandQuery] = useState('');
+
+  // ── Layout state ──
+  const [layoutMode, setLayoutMode] = useState<'force' | 'hierarchical' | 'clustered'>('force');
 
   // ── Node creation state ──
   const [creatingNode, setCreatingNode] = useState(false);
@@ -480,6 +485,34 @@ export default function WorkspaceView() {
               <Command className="h-4 w-4" />
               Command
             </Button>
+
+            <div className="flex rounded-md shadow-sm ml-2">
+              <Button
+                variant={layoutMode === 'force' ? 'primary' : 'secondary'}
+                size="sm"
+                className="rounded-e-none"
+                onClick={() => setLayoutMode('force')}
+              >
+                Force
+              </Button>
+              <Button
+                variant={layoutMode === 'hierarchical' ? 'primary' : 'secondary'}
+                size="sm"
+                className="rounded-none border-x-0"
+                onClick={() => setLayoutMode('hierarchical')}
+              >
+                Hierarchical
+              </Button>
+              <Button
+                variant={layoutMode === 'clustered' ? 'primary' : 'secondary'}
+                size="sm"
+                className="rounded-s-none"
+                onClick={() => setLayoutMode('clustered')}
+              >
+                Clustered
+              </Button>
+            </div>
+
             <Button
               variant="primary"
               size="sm"
@@ -545,6 +578,8 @@ export default function WorkspaceView() {
             <ForceGraph
               graphData={filteredGraph}
               activeNodeId={activeNodeId}
+              layoutType={layoutMode === 'hierarchical' ? 'treeTd2d' : 'forceDirected2d'}
+              clusterAttribute={layoutMode === 'clustered' ? 'type' : undefined}
               onNodeClick={setActiveNodeId}
               onBackgroundClick={() => setActiveNodeId(null)}
               onGraphReady={controls => {

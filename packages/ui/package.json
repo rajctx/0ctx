@@ -2,19 +2,29 @@
   "name": "@0ctx/ui",
   "version": "1.0.0",
   "private": true,
+  "main": ".next/standalone/packages/ui/server.js",
+  "files": [
+    ".next/standalone"
+  ],
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "postbuild": "node scripts/copy-assets.js",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
     "@auth0/nextjs-auth0": "^4.15.0",
+    "@types/d3-force": "^3.0.10",
+    "@types/dagre": "^0.7.53",
+    "@xyflow/react": "^12.10.1",
+    "d3-force": "^3.0.0",
+    "dagre": "^0.8.5",
     "lucide-react": "^0.575.0",
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "react-force-graph-2d": "^1.29.1"
+    "reagraph": "^4.30.8"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

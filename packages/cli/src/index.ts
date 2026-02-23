@@ -154,6 +154,26 @@ function resolveDaemonEntrypoint(): string {
     throw new Error('Could not resolve daemon entrypoint. Run `npm run build` first.');
 }
 
+function resolveUiEntrypoint(): string {
+    const candidates = [
+        path.resolve(process.cwd(), 'packages', 'ui', '.next', 'standalone', 'packages', 'ui', 'server.js'),
+        path.resolve(__dirname, '..', '..', 'ui', '.next', 'standalone', 'packages', 'ui', 'server.js'),
+        (() => {
+            try {
+                return require.resolve('@0ctx/ui');
+            } catch {
+                return '';
+            }
+        })()
+    ].filter(Boolean);
+
+    for (const candidate of candidates) {
+        if (fs.existsSync(candidate)) return candidate;
+    }
+
+    throw new Error('Could not resolve UI entrypoint. Ensure @0ctx/ui is installed or built.');
+}
+
 function startDaemonDetached(): void {
     const entry = resolveDaemonEntrypoint();
     const child = spawn(process.execPath, [entry], {
@@ -348,6 +368,9 @@ Configuration:
 Sync:
   0ctx sync status   Show sync engine health and queue
 
+Dashboard:
+  0ctx ui            Start the local UI dashboard
+
 Windows/macOS/Linux service management (requires Admin on Windows):
   0ctx daemon service install    Register daemon as a service
   0ctx daemon service enable     Set service start type to Automatic
@@ -442,6 +465,56 @@ async function commandSyncStatus(): Promise<number> {
     } catch (error) {
         console.error('Failed to get sync status:', error instanceof Error ? error.message : String(error));
         console.error('Is the daemon running? Try: 0ctx daemon start');
+        return 1;
+    }
+}
+
+// ─── UI command ──────────────────────────────────────────────────────────────
+
+async function commandUi(): Promise<number> {
+    console.log('Starting 0ctx UI...');
+
+    // Ensure daemon is running
+    const daemon = await isDaemonReachable();
+    if (!daemon.ok) {
+        console.log('daemon: starting background service...');
+        try {
+            startDaemonDetached();
+        } catch (error) {
+            console.error('Failed to start daemon:', error instanceof Error ? error.message : String(error));
+            return 1;
+        }
+
+        const ready = await waitForDaemon();
+        if (!ready) {
+            console.error('daemon_start_timeout: unable to reach daemon health endpoint');
+            return 1;
+        }
+    }
+
+    try {
+        const entry = resolveUiEntrypoint();
+        // We spawn the node process inheriting stdio so the user sees the server logs
+        const child = spawn(process.execPath, [entry], {
+            stdio: 'inherit',
+            env: {
+                ...process.env,
+                PORT: '3000',
+                HOSTNAME: 'localhost'
+            }
+        });
+
+        return new Promise<number>((resolve) => {
+            child.on('close', (code) => {
+                resolve(code ?? 0);
+            });
+            child.on('error', (err) => {
+                console.error('Failed to start UI process:', err.message);
+                resolve(1);
+            });
+        });
+    } catch (error) {
+        console.error(error instanceof Error ? error.message : String(error));
         return 1;
     }
 }
@@ -572,6 +645,9 @@ async function main(): Promise<number> {
             printHelp();
             return 1;
         }
+        case 'ui':
+        case 'dashboard':
+            return commandUi();
     }
 }
 

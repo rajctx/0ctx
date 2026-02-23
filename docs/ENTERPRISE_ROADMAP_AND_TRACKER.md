@@ -208,7 +208,7 @@ Exit criteria:
 | UI-03 | UI Docs | Expand UI flow documentation to include session auth, sync observability, and route-by-route human flows | `docs/UI_INFORMATION_ARCHITECTURE.md`, `docs/UI_USER_FLOWS.md` | Docs map route-by-route user journey and controls | UI-01, UI-02 | Done | Product Docs | Phase E |
 | VIZ-01 | UI | Migrate graph renderer from `react-force-graph-2d` (Canvas) to `reagraph` (WebGL) for better performance, clustering, and 2D/3D support | `packages/ui/src/app/dashboard/ForceGraph.tsx`, `workspace-view.tsx` | Graph renders via WebGL; handles 1K+ nodes without degradation; clustering support available | None | Planned | UI | Phase F |
 | VIZ-02 | UI | Add layout-switching toggle in workspace toolbar: Force / Hierarchical / Clustered views | `packages/ui/src/app/dashboard/ForceGraph.tsx`, `workspace-view.tsx` | Users can switch between force-directed, dagre/hierarchical, and clustered-by-type layouts | VIZ-01 | Planned | UI | Phase F |
-| DX-01 | Platform | Unified NPM Global Install: Make `@0ctx/cli` the single entry point. Bundle/embed the UI and auto-start the daemon. | `packages/cli/*`, `packages/ui/*` | Users run `npm install -g @0ctx/cli` and `0ctx` handles everything | None | Planned | Core | Phase F |
+| DX-01 | Platform | Unified NPM Global Install: Make `@0ctx/cli` the single entry point. Bundle/embed the UI and auto-start the daemon. | `packages/cli/*`, `packages/ui/*` | Users run `npm install -g @0ctx/cli` and `0ctx` handles everything | None | Done | Core | Phase F |
 | DX-02 | Platform | Desktop App: Bundle everything into a standalone local desktop application (Tauri/Electron) | `desktop-app/*` | Users download an installer and get a system tray app serving the UI | DX-01 | Planned | Core | Phase F |
 
 <!-- | GOV-01 | Governance | Apply branch protection and label baseline | GitHub settings + scripts | Branch rules and labels enforced in target repos | None | In Progress | Repo Admin | Phase E | -->
@@ -238,9 +238,9 @@ Exit criteria:
 | UI-01 | Phase E | Sidebar placeholder cleanup | UI | Done | 2026-02-22 | — | — |
 | UI-02 | Phase E | Landing CTA wiring | UI | Done | 2026-02-22 | — | — |
 | UI-03 | Phase E | UI user-flow docs | Product Docs | Done | 2026-02-23 | UI-01, UI-02 | — |
-| VIZ-01 | Phase F | Reagraph WebGL migration | UI | Planned | TBD | — | TBD |
-| VIZ-02 | Phase F | Layout-switching (Force/Hierarchical/Clustered) | UI | Planned | TBD | VIZ-01 | TBD |
-| DX-01 | Phase F | Unified NPM Install (`@0ctx/cli`) | Core | Planned | TBD | — | TBD |
+| VIZ-01 | Phase F | Reagraph WebGL migration | UI | Done | 2026-02-23 | — | — |
+| VIZ-02 | Phase F | Layout-switching (Force/Hierarchical/Clustered) | UI | Done | 2026-02-23 | — | — |
+| DX-01 | Phase F | Unified NPM Install (`@0ctx/cli`) | Core | Done | 2026-02-23 | — | — |
 | DX-02 | Phase F | Standalone Desktop App | Core | Planned | TBD | DX-01 | TBD |
 
 <!-- | GOV-01 | Phase E | Branch protection + labels apply | Repo Admin | In Progress | TBD | Repo settings access | TBD | -->
@@ -325,3 +325,5 @@ Exit criteria:
 - 2026-02-22: SYNC-02 completed — Global config system: `config.ts` in core (`~/.0ctx/config.json`, env→config→default resolution). CLI `0ctx config list/get/set` + `0ctx sync status`. Auth login auto-sets `sync.enabled`+`sync.endpoint` in config. Daemon reads config for sync enabled/endpoint. Health handler includes sync status. Help text updated.
 - 2026-02-22: MCP-01 completed — Added `ctx_runtime_status` MCP tool: computes posture (connected/degraded/offline) from daemon health (auth + sync state). Exposes capabilities list, auth details, and sync queue status. Added `sync` to daemon `getCapabilities` features. Phase D complete.
 - 2026-02-23: UI-03 completed — Updated `docs/UI_INFORMATION_ARCHITECTURE.md` to reflect Auth0 session ownership and global sync observability within the Dashboard Shell. Created `docs/UI_USER_FLOWS.md` detailing 5 primary journeys: Authentication -> Workspace Interaction -> Sync Observability -> Diagnostics -> Audit.
+- 2026-02-23: VIZ-01 completed — Migrated the workspace graph renderer from the 2D Canvas `react-force-graph-2d` to the WebGL-based `reagraph`. Implemented custom theme mapping, updated node selection hooks, and verified browser interaction.
+- 2026-02-23: VIZ-02 completed — Implemented layout switching in the workspace view. Added segmented toggle controls allowing switching between physics-based Force layout, Tree-based Hierarchical layout, and type-grouped Clustered layouts via `reagraph` APIs. Phase F continues.
