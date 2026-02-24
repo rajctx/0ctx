@@ -1,5 +1,5 @@
 import {
-  cpExecCommand,
+  storeExecCommand,
   errorResponse,
   jsonResponse,
   requireSession,
@@ -7,7 +7,7 @@ import {
 } from '@/lib/bff';
 
 export async function POST(request: Request) {
-  const [token, authErr] = await requireSession();
+  const [, authErr] = await requireSession();
   if (authErr) return authErr;
 
   const machineId = resolveMachineId();
@@ -21,7 +21,7 @@ export async function POST(request: Request) {
   const clients = Array.isArray(body.clients) ? body.clients : ['claude', 'cursor', 'windsurf'];
 
   try {
-    const result = await cpExecCommand(token, machineId, 'doctor', {
+    const result = await storeExecCommand(machineId, 'doctor', {
       clients,
       json: true
     });

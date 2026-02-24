@@ -1,14 +1,14 @@
+import { randomUUID } from 'crypto';
 import {
-  cpFetch,
-  cpJson,
   errorResponse,
   jsonResponse,
   requireSession,
   resolveMachineId
 } from '@/lib/bff';
+import { getStore } from '@/lib/store';
 
 export async function POST(request: Request) {
-  const [token, authErr] = await requireSession();
+  const [, authErr] = await requireSession();
   if (authErr) return authErr;
 
   const machineId = resolveMachineId();
@@ -20,32 +20,43 @@ export async function POST(request: Request) {
   }
 
   try {
-    const res = await cpFetch('/v1/connectors/register', {
-      method: 'POST',
-      token,
-      body: {
-        machineId,
-        tenantId: body.tenantId ?? null
-      }
+    const store = getStore();
+    const tenantId = typeof body.tenantId === 'string' ? body.tenantId : null;
+    const existing = await store.getConnector(machineId);
+
+    const connector = existing ?? {
+      machineId,
+      tenantId,
+      registrationId: `reg_${randomUUID()}`,
+      streamUrl: '',
+      capabilities: ['sync', 'blackboard', 'commands'],
+      posture: null,
+      trustLevel: 'unverified',
+      trustVerifiedAt: null,
+      registeredAt: Date.now(),
+      lastHeartbeatAt: null
+    };
+    connector.tenantId = tenantId;
+
+    await store.upsertConnector(connector);
+
+    // Issue trust challenge nonce
+    const nonce = randomUUID();
+    await store.setTrustChallenge(machineId, nonce);
+
+    return jsonResponse({
+      registrationId: connector.registrationId,
+      streamUrl: connector.streamUrl,
+      capabilities: connector.capabilities,
+      tenantId: connector.tenantId,
+      trustChallenge: nonce,
+      trustLevel: connector.trustLevel
     });
-
-    const data = await cpJson<Record<string, unknown>>(res);
-
-    if (!res.ok) {
-      return errorResponse(
-        res.status,
-        'registration_failed',
-        (data as Record<string, unknown>)?.message as string ?? 'Connector registration failed',
-        true
-      );
-    }
-
-    return jsonResponse(data);
   } catch (err) {
     return errorResponse(
       502,
-      'control_plane_unreachable',
-      err instanceof Error ? err.message : 'Control-plane unreachable',
+      'registration_failed',
+      err instanceof Error ? err.message : 'Connector registration failed',
       true
     );
   }

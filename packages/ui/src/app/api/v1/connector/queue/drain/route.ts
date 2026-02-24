@@ -1,5 +1,5 @@
 import {
-  cpExecCommand,
+  storeExecCommand,
   errorResponse,
   jsonResponse,
   requireSession,
@@ -7,7 +7,7 @@ import {
 } from '@/lib/bff';
 
 export async function POST(request: Request) {
-  const [token, authErr] = await requireSession();
+  const [, authErr] = await requireSession();
   if (authErr) return authErr;
 
   const machineId = resolveMachineId();
@@ -21,8 +21,7 @@ export async function POST(request: Request) {
   const timeoutMs = typeof body.timeoutMs === 'number' ? Math.max(1000, body.timeoutMs) : 120_000;
 
   try {
-    const result = await cpExecCommand(
-      token,
+    const result = await storeExecCommand(
       machineId,
       'connectorQueueDrain',
       { wait: true, strict: body.strict === true, timeoutMs },

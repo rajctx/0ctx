@@ -1,46 +1,37 @@
 import {
-  cpFetch,
-  cpJson,
   errorResponse,
   jsonResponse,
   requireSession,
   resolveMachineId
 } from '@/lib/bff';
+import { getStore } from '@/lib/store';
 
 export async function GET() {
-  const [token, authErr] = await requireSession();
+  const [, authErr] = await requireSession();
   if (authErr) return authErr;
 
   const machineId = resolveMachineId();
 
   try {
-    const [healthRes, capRes] = await Promise.all([
-      cpFetch('/v1/health', { token }),
-      cpFetch(`/v1/connectors/capabilities?machineId=${encodeURIComponent(machineId)}`, { token })
-    ]);
+    const store = getStore();
+    const connector = await store.getConnector(machineId);
 
-    const health = await cpJson<Record<string, unknown>>(healthRes);
-    const capabilities = await cpJson<{
-      capabilities?: string[];
-      posture?: string;
-    }>(capRes);
-
-    const posture = capabilities?.posture ?? (capRes.ok ? 'connected' : 'offline');
-    const bridgeHealthy = capRes.ok && !!capabilities;
-    const cloudConnected = healthRes.ok && health?.status === 'ok';
+    const posture = connector?.posture ?? 'offline';
+    const bridgeHealthy = !!connector;
+    const cloudConnected = true; // In-process — always reachable
 
     return jsonResponse({
       posture,
       bridgeHealthy,
       cloudConnected,
-      capabilities: capabilities?.capabilities ?? [],
-      cloud: health ?? null
+      capabilities: connector?.capabilities ?? [],
+      cloud: { status: 'ok' }
     });
   } catch (err) {
     return errorResponse(
       502,
-      'control_plane_unreachable',
-      err instanceof Error ? err.message : 'Control-plane unreachable',
+      'store_error',
+      err instanceof Error ? err.message : 'Store error',
       true
     );
   }

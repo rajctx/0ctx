@@ -1,39 +1,27 @@
 /**
  * OPS-001: GET /api/v1/health — BFF health check.
  *
- * Reports BFF status and optionally pings the control-plane.
+ * CLOUD-002: Now reports in-process store status instead of pinging separate control-plane.
  * No auth required — health endpoints are used by load balancers and monitors.
  */
 import { NextResponse } from 'next/server';
+import { getStore, MemoryStore } from '@/lib/store';
 
-const CONTROL_PLANE_URL =
-    process.env.CTX_CONTROL_PLANE_URL || 'http://127.0.0.1:8787';
 const startedAt = Date.now();
 
 export async function GET() {
     const uptimeMs = Date.now() - startedAt;
+    const store = getStore();
 
-    // Best-effort control-plane ping
-    let controlPlane: { status: string; latencyMs?: number } = { status: 'unknown' };
-    try {
-        const t0 = Date.now();
-        const cpRes = await fetch(`${CONTROL_PLANE_URL}/v1/health`, {
-            signal: AbortSignal.timeout(3000)
-        });
-        const latencyMs = Date.now() - t0;
-        controlPlane = cpRes.ok
-            ? { status: 'ok', latencyMs }
-            : { status: 'degraded', latencyMs };
-    } catch {
-        controlPlane = { status: 'unreachable' };
-    }
-
-    const overall = controlPlane.status === 'ok' ? 'ok' : 'degraded';
+    // In-process store is always reachable
+    const storeStatus = store instanceof MemoryStore
+        ? { backend: 'memory', connectors: store.connectorCount, pendingCommands: store.pendingCommandCount }
+        : { backend: 'postgres' };
 
     return NextResponse.json({
-        status: overall,
+        status: 'ok',
         uptimeMs,
         node: process.version,
-        controlPlane
+        store: storeStatus
     });
 }

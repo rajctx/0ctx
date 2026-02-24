@@ -1,5 +1,5 @@
 import {
-  cpExecCommand,
+  storeExecCommand,
   errorResponse,
   jsonResponse,
   requireSession,
@@ -13,7 +13,7 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ contextId: string }> }
 ) {
-  const [token, authErr] = await requireSession();
+  const [, authErr] = await requireSession();
   if (authErr) return authErr;
 
   const { contextId } = await params;
@@ -24,7 +24,7 @@ export async function GET(
   const machineId = resolveMachineId();
 
   try {
-    const result = await cpExecCommand(token, machineId, 'getSyncPolicy', { contextId }, { contextId });
+    const result = await storeExecCommand(machineId, 'getSyncPolicy', { contextId }, { contextId });
 
     if (!result.ok) {
       return errorResponse(502, 'get_sync_policy_failed', result.error ?? 'Failed to get sync policy', true);
@@ -45,7 +45,7 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ contextId: string }> }
 ) {
-  const [token, authErr] = await requireSession();
+  const [, authErr] = await requireSession();
   if (authErr) return authErr;
 
   const { contextId } = await params;
@@ -68,8 +68,7 @@ export async function PUT(
   const machineId = resolveMachineId();
 
   try {
-    const result = await cpExecCommand(
-      token,
+    const result = await storeExecCommand(
       machineId,
       'setSyncPolicy',
       { contextId, syncPolicy },

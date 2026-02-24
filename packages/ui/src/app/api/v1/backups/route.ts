@@ -1,5 +1,5 @@
 import {
-  cpExecCommand,
+  storeExecCommand,
   errorResponse,
   jsonResponse,
   requireSession,
@@ -7,13 +7,13 @@ import {
 } from '@/lib/bff';
 
 export async function GET() {
-  const [token, authErr] = await requireSession();
+  const [, authErr] = await requireSession();
   if (authErr) return authErr;
 
   const machineId = resolveMachineId();
 
   try {
-    const result = await cpExecCommand(token, machineId, 'listBackups', {});
+    const result = await storeExecCommand(machineId, 'listBackups', {});
 
     if (!result.ok) {
       return errorResponse(502, 'backups_list_failed', result.error ?? 'Failed to list backups', true);
@@ -31,7 +31,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const [token, authErr] = await requireSession();
+  const [, authErr] = await requireSession();
   if (authErr) return authErr;
 
   const machineId = resolveMachineId();
@@ -48,8 +48,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await cpExecCommand(
-      token,
+    const result = await storeExecCommand(
       machineId,
       'createBackup',
       {

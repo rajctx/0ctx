@@ -1,5 +1,6 @@
 import { randomUUID, createHmac } from 'crypto';
 import { auth0 } from '@/lib/auth0';
+import { getStore } from '@/lib/store';
 
 const CONTROL_PLANE_URL =
   process.env.CTX_CONTROL_PLANE_URL || 'http://127.0.0.1:8787';
@@ -271,6 +272,54 @@ export async function cpExecCommand(
     ok: data.ok !== false && data.status !== 'failed',
     result: data.result ?? data,
     error: data.error
+  };
+}
+
+/**
+ * Execute a command on a connector via the in-process store (CLOUD-002).
+ * Replaces the old cpExecCommand which made an HTTP hop to the control-plane.
+ * Enqueues the command and polls the store until ack or timeout.
+ */
+export async function storeExecCommand(
+  machineId: string,
+  method: string,
+  params: Record<string, unknown> = {},
+  options: { contextId?: string; timeoutMs?: number; tenantId?: string } = {}
+): Promise<{ ok: boolean; result: unknown; error?: string }> {
+  const store = getStore();
+  const connector = await store.getConnector(machineId);
+  if (!connector) {
+    return { ok: false, result: null, error: 'Connector not registered' };
+  }
+
+  const command = await store.enqueueCommand(
+    machineId,
+    options.tenantId ?? connector.tenantId,
+    method,
+    params,
+    options.contextId ?? null
+  );
+
+  const pollTimeoutMs = Math.min(options.timeoutMs ?? 15_000, 120_000);
+  const pollIntervalMs = 250;
+  const deadline = Date.now() + pollTimeoutMs;
+
+  while (Date.now() < deadline) {
+    const current = await store.getCommand(command.commandId);
+    if (current && current.status !== 'pending') {
+      return {
+        ok: current.status === 'applied',
+        result: current.result ?? null,
+        error: current.error
+      };
+    }
+    await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+  }
+
+  return {
+    ok: false,
+    result: null,
+    error: `Command not acknowledged within ${pollTimeoutMs}ms`
   };
 }
 

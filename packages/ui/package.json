@@ -11,7 +11,8 @@
     "build": "next build",
     "postbuild": "node scripts/copy-assets.js",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:migrate": "node -e \"const{Pool}=require('pg');const fs=require('fs');const p=new Pool({connectionString:process.env.DATABASE_URL});p.query(fs.readFileSync('./prisma/migrations/001_control_plane.sql','utf8')).then(()=>{console.log('Migration complete');p.end()}).catch(e=>{console.error(e);process.exit(1)})\""
   },
   "dependencies": {
     "@auth0/nextjs-auth0": "^4.15.0",

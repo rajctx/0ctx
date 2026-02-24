@@ -1,0 +1,23 @@
+{
+  "version": "0.1.0",
+  "notes": "Initial release of 0ctx Desktop companion.",
+  "pub_date": "2026-02-24T00:00:00Z",
+  "platforms": {
+    "windows-x86_64": {
+      "url": "https://releases.0ctx.com/0ctx-desktop_0.1.0_x64-setup.nsis.zip",
+      "signature": ""
+    },
+    "darwin-x86_64": {
+      "url": "https://releases.0ctx.com/0ctx-desktop_0.1.0_x64.app.tar.gz",
+      "signature": ""
+    },
+    "darwin-aarch64": {
+      "url": "https://releases.0ctx.com/0ctx-desktop_0.1.0_aarch64.app.tar.gz",
+      "signature": ""
+    },
+    "linux-x86_64": {
+      "url": "https://releases.0ctx.com/0ctx-desktop_0.1.0_amd64.AppImage.tar.gz",
+      "signature": ""
+    }
+  }
+}

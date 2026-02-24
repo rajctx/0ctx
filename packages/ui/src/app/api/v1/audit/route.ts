@@ -1,5 +1,5 @@
 import {
-  cpExecCommand,
+  storeExecCommand,
   errorResponse,
   jsonResponse,
   requireSession,
@@ -7,7 +7,7 @@ import {
 } from '@/lib/bff';
 
 export async function GET(request: Request) {
-  const [token, authErr] = await requireSession();
+  const [, authErr] = await requireSession();
   if (authErr) return authErr;
 
   const machineId = resolveMachineId();
@@ -16,7 +16,7 @@ export async function GET(request: Request) {
   const limit = Math.min(Number(url.searchParams.get('limit')) || 50, 200);
 
   try {
-    const result = await cpExecCommand(token, machineId, 'listAuditEvents', {
+    const result = await storeExecCommand(machineId, 'listAuditEvents', {
       contextId,
       limit
     });
