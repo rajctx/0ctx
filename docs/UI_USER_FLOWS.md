@@ -8,15 +8,9 @@ This document defines route-level user journeys for the hosted dashboard and onb
 
 Primary route: `/install`
 
-1. User arrives from CLI handoff (`0ctx setup`) or direct navigation.
-2. UI loads onboarding checklist steps.
-3. User resolves blocked steps in order:
-   - authenticate
-   - connector registration
-   - bridge health
-   - MCP detection
-4. User creates/selects initial context.
-5. UI marks onboarding complete and routes to `/dashboard/workspace`.
+See `docs/HOSTED_UI_ONBOARDING_SPEC.md` for the full onboarding spec, step definitions, state contract, and acceptance criteria.
+
+Summary: user arrives from CLI handoff or direct navigation, resolves onboarding steps (auth, connector, bridge, MCP, first context), and is routed to `/dashboard/workspace` on completion.
 
 ## 2) Authentication Flow
 

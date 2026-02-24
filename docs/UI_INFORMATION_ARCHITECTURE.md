@@ -73,7 +73,4 @@ Implemented by dashboard shell/layout:
 
 ## Design Constraints
 
-- Enterprise readability over decorative visuals.
-- Isometric visuals limited to hero/empty states.
-- No floating controls that hide operational context.
-- Full keyboard access for primary actions.
+See `docs/HOSTED_UI_PRODUCT_ARCHITECTURE.md` §5, §8, §9 for UX constraints, design system direction, and performance/accessibility budgets.

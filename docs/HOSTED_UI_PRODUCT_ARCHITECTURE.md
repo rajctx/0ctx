@@ -37,18 +37,7 @@ Required closure:
 
 ## 4) Information Architecture
 
-Public:
-- `/` landing
-- `/install` onboarding and readiness flow
-- `/docs` docs index route
-
-Authenticated:
-- `/dashboard/workspace`
-- `/dashboard/operations`
-- `/dashboard/integrations`
-- `/dashboard/audit`
-- `/dashboard/backups`
-- `/dashboard/settings`
+See `docs/UI_INFORMATION_ARCHITECTURE.md` for the full route map and dashboard ownership model.
 
 ## 5) UX Constraints
 

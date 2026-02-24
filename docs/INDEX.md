@@ -31,6 +31,8 @@ This is the canonical entrypoint for product and platform documentation.
 ## Contributor/Maintainer
 
 - `docs/ONBOARDING.md` - maintainer onboarding and repo operating model.
+- `docs/DISTRIBUTION_STRATEGY.md` - packaging, distribution channels, and first-run model.
+- `docs/PLAN_STATUS.md` - execution status, completed and planned workstreams.
 
 ## Governance (Hidden from Product Navigation)
 

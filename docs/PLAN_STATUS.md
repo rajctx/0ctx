@@ -43,9 +43,10 @@ Updated: 2026-02-24
 
 - Release automation phase 2 (GitHub workflow-backed publish and release publication).
 - `SEC-001`: Tenant security and key management hardening.
-- `OPS-001`: SLO, observability, and incident runbooks for hybrid runtime.
 
 ## Recently Landed
+
+- `OPS-001`: SLO and observability baseline documented (`docs/OPS_SLO_AND_OBSERVABILITY.md`).
 
 - Hybrid architecture plan and canonical documents were added for execution kickoff:
   - `docs/SEMANTIC_BLACKBOARD_ARCHITECTURE.md`

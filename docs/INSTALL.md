@@ -63,18 +63,7 @@ still works as an advanced path for daemon + MCP bootstrap only.
 
 ## Environment Variables
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `CTX_DB_PATH` | `~/.0ctx/0ctx.db` | Override SQLite database path |
-| `CTX_SOCKET_PATH` | `~/.0ctx/0ctx.sock` (Unix) / `\\.\pipe\0ctx.sock` (Windows) | Override IPC socket path |
-| `CTX_MASTER_KEY` | _(reads `~/.0ctx/master.key`)_ | Encryption key for backup payload encryption |
-| `CTX_CONNECTOR_STATE_PATH` | `~/.0ctx/connector.json` | Override connector registration state file path |
-| `CTX_CONNECTOR_QUEUE_PATH` | `~/.0ctx/connector-event-queue.json` | Override connector event bridge persistent queue path |
-| `CTX_CONNECTOR_QUEUE_MAX_ITEMS` | `20000` | Max queued connector events retained on disk before oldest are pruned |
-| `CTX_CONNECTOR_QUEUE_MAX_AGE_HOURS` | `168` | Max age (hours) for queued events before pruning |
-| `CTX_CLI_OPS_LOG_PATH` | `~/.0ctx/ops.log` | Override local CLI operations audit log path (queue drain/purge actions) |
-| `CTX_CONTROL_PLANE_URL` | _(derived from `sync.endpoint`)_ | Override cloud control-plane base URL for connector APIs |
-| `CTX_CONTROL_PLANE_TIMEOUT_MS` | `10000` | Connector cloud API timeout in milliseconds |
+See `docs/ENVIRONMENT_VARIABLES.md` for the canonical env-var contract covering hosted UI, BFF, and local runtime.
 
 ## Validate Installation
 

@@ -54,6 +54,4 @@ Owner: UI Platform + SRE
 
 ## Operational Ownership
 
-- UI on-call: route availability, auth flow, rendering/runtime errors.
-- Platform on-call: connector bridge posture and control-plane integration.
-- Security on-call: auth/session anomalies and policy violations.
+See `docs/OPS_SLO_AND_OBSERVABILITY.md` for canonical on-call ownership, SLO targets, and incident model.

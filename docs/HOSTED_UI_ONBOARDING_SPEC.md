@@ -35,8 +35,7 @@ This route is the canonical onboarding surface after CLI setup handoff (`0ctx se
 
 ## State Contract
 
-- `OnboardingStepStatus = 'todo' | 'in_progress' | 'blocked' | 'done'`
-- `RuntimePosture = 'connected' | 'degraded' | 'offline'`
+Shared types (`OnboardingStepStatus`, `RuntimePosture`) are defined in `docs/UI_BFF_API_CONTRACT.md`.
 
 Each step must include:
 - `status`
