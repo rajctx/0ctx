@@ -1,5 +1,7 @@
 # Quickstart
 
+Updated: 2026-02-24
+
 Get 0ctx running in under 5 minutes.
 
 ## 1) Install the CLI

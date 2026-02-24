@@ -1,5 +1,7 @@
 # Installation Guide
 
+Updated: 2026-02-24
+
 ## Prerequisites
 
 - Node.js 22+

@@ -1,5 +1,7 @@
 # Alerting Runbook
 
+Updated: 2026-02-24
+
 Operational alert definitions, thresholds, and escalation procedures for 0ctx.
 
 ## Health Check Endpoints

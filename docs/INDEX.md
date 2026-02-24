@@ -18,6 +18,7 @@ This is the canonical entrypoint for product and platform documentation.
 - `docs/ENVIRONMENT_VARIABLES.md` - canonical runtime env var contract.
 - `docs/UI_BFF_API_CONTRACT.md` - hosted UI BFF endpoint contracts and error envelopes.
 - `docs/OPS_SLO_AND_OBSERVABILITY.md` - SLO targets, telemetry, alerts, and incident model.
+- `docs/ALERTING_RUNBOOK.md` - operational alert definitions, thresholds, and escalation procedures.
 - `docs/RELEASE.md` - release preparation and package publish flow.
 
 ## Architecture
@@ -32,13 +33,3 @@ This is the canonical entrypoint for product and platform documentation.
 
 - `docs/ONBOARDING.md` - maintainer onboarding and repo operating model.
 - `docs/DISTRIBUTION_STRATEGY.md` - packaging, distribution channels, and first-run model.
-- `docs/PLAN_STATUS.md` - execution status, completed and planned workstreams.
-
-## Governance (Hidden from Product Navigation)
-
-These documents are retained for repo administration and are intentionally not primary product docs:
-
-- `docs/GITHUB_REPO_MANAGEMENT.md`
-- `docs/GITHUB_ENABLEMENT_RUNBOOK.md`
-- `docs/GITHUB_SETTINGS_CHECKLIST.md`
-- `docs/GIT_COMMIT_SEQUENCE.md`

@@ -1,5 +1,7 @@
 # Release Guide
 
+Updated: 2026-02-24
+
 ## Current automation state
 
 - GitHub workflows are enabled under `.github/workflows/`.

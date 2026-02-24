@@ -1,5 +1,7 @@
 # Maintainer Onboarding
 
+Updated: 2026-02-24
+
 Primary planning/tracking source:
 
 - `docs/ENTERPRISE_ROADMAP_AND_TRACKER.md`

@@ -1,6 +1,6 @@
 # 0ctx Enterprise Productization Roadmap + Tracker
 
-Last updated: 2026-02-24  
+Updated: 2026-02-24  
 Document owner: Platform + Product
 
 Status legend:
