@@ -448,7 +448,7 @@ export class EventRuntime {
         const recentBlockingEvents = this.eventStream
             .filter(event =>
                 (!contextId || event.contextId === contextId)
-                && event.timestamp >= stabilizationWindowStartedAt
+                && event.timestamp > stabilizationWindowStartedAt
                 && BLOCKING_EVENT_TYPES.has(event.type)
             )
             .slice(-100)
