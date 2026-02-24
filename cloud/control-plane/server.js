@@ -236,7 +236,55 @@ const server = http.createServer(async (req, res) => {
 
       target.status = body.status === 'failed' ? 'failed' : 'applied';
       target.error = typeof body.error === 'string' ? body.error : undefined;
+      target.result = body.result !== undefined ? body.result : null;
       sendJson(res, 200, { accepted: true });
+      return;
+    }
+
+    // Synchronous command execution: enqueue + poll-until-ack.
+    if (path === '/v1/connectors/commands/exec' && method === 'POST') {
+      if (!requireAuth(req, res)) return;
+      const body = await readJsonBody(req);
+      const machineId = typeof body.machineId === 'string' ? body.machineId : null;
+      const methodName = typeof body.method === 'string' ? body.method : null;
+      if (!machineId || !methodName || !connectors.has(machineId)) {
+        sendJson(res, 400, { error: 'invalid_request', message: 'machineId and method are required, and connector must be registered' });
+        return;
+      }
+      const command = enqueueCommand(
+        machineId,
+        typeof body.tenantId === 'string' ? body.tenantId : null,
+        methodName,
+        typeof body.params === 'object' && body.params ? body.params : {},
+        typeof body.contextId === 'string' ? body.contextId : null
+      );
+      const pollTimeoutMs = typeof body.timeoutMs === 'number' ? Math.min(body.timeoutMs, 120000) : 15000;
+      const pollIntervalMs = 250;
+      const deadline = Date.now() + pollTimeoutMs;
+      const poll = () => {
+        if (command.status !== 'pending') {
+          sendJson(res, 200, {
+            ok: command.status === 'applied',
+            commandId: command.commandId,
+            status: command.status,
+            result: command.result || null,
+            error: command.error || null
+          });
+          return;
+        }
+        if (Date.now() >= deadline) {
+          sendJson(res, 200, {
+            ok: false,
+            commandId: command.commandId,
+            status: 'timeout',
+            result: null,
+            error: `Command not acknowledged within ${pollTimeoutMs}ms`
+          });
+          return;
+        }
+        setTimeout(poll, pollIntervalMs);
+      };
+      poll();
       return;
     }
 

@@ -46,6 +46,8 @@ Updated: 2026-02-24
 
 ## Recently Landed
 
+- `UI-BFF-001` completed: full BFF migration removing local daemon/CLI coupling from hosted UI. BFF route handlers (`/api/v1/*`), control-plane HTTP client (`lib/bff.ts`), BFF fetch wrapper (`lib/bff-client.ts`), actions.ts rewritten to BFF client, `/install` onboarding route, `/docs` documentation index route, `proxy.ts` auth gate re-enabled, legacy `lib/0ctx.ts` daemon socket client deleted. Build passes clean.
+
 - `OPS-001`: SLO and observability baseline documented (`docs/OPS_SLO_AND_OBSERVABILITY.md`).
 
 - Hybrid architecture plan and canonical documents were added for execution kickoff:

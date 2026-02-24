@@ -42,9 +42,11 @@ export default function HomePage() {
           </Link>
           <div className="flex items-center gap-2">
             <ThemeToggle compact />
-            <Button variant="secondary" size="sm" className="hidden sm:inline-flex">
-              Docs
-            </Button>
+            <Link href="/docs">
+              <Button variant="secondary" size="sm" className="hidden sm:inline-flex">
+                Docs
+              </Button>
+            </Link>
             <Link href="/dashboard">
               <Button variant="primary" size="sm">
                 Open Dashboard
