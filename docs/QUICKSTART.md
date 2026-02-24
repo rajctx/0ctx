@@ -43,6 +43,18 @@ After bootstrap, restart your AI client (Claude Desktop, Cursor, or Windsurf). C
 # Open hosted dashboard URL
 0ctx dashboard
 
+# Check connector posture
+0ctx connector status --json
+
+# Optional: enforce cloud control-plane registration
+0ctx connector register --require-cloud
+
+# Optional: run one connector runtime tick (health + cloud heartbeat)
+0ctx connector run --once
+
+# Check managed connector service state
+0ctx connector service status
+
 # Re-run bootstrap for a specific client
 0ctx bootstrap --clients=claude
 

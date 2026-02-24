@@ -10,6 +10,7 @@ import { clearConnectionContext } from './resolver';
 import type { DaemonRequest, DaemonResponse } from './protocol';
 import { RequestMetrics } from './metrics';
 import { log } from './logger';
+import { EventRuntime } from './events';
 
 const IS_WIN = os.platform() === 'win32';
 const DEFAULT_SOCKET_PATH = IS_WIN ? '\\\\.\\pipe\\0ctx.sock' : path.join(os.homedir(), '.0ctx', '0ctx.sock');
@@ -232,6 +233,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Sta
     const startedAt = Date.now();
     const metrics = new RequestMetrics();
     const syncEngine = new SyncEngine(graph, db);
+    const eventRuntime = new EventRuntime();
 
     const server = net.createServer(socket => {
         // Unique ID for this client connection to track active context
@@ -256,7 +258,8 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Sta
                     const result = handleRequest(graph, connectionId, req, {
                         startedAt,
                         getMetricsSnapshot: () => metrics.snapshot(),
-                        syncEngine
+                        syncEngine,
+                        eventRuntime
                     });
                     const durationMs = Date.now() - requestStart;
                     metrics.record(req.method, true, durationMs);

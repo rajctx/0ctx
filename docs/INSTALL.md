@@ -16,9 +16,19 @@ Then run first-time setup:
 
 ```bash
 0ctx setup --clients=all
+0ctx connector service status
+0ctx connector register --require-cloud
+0ctx connector status --json
+0ctx connector run --once
 0ctx doctor --json
 0ctx status
 ```
+
+Service command note:
+
+- Preferred: `0ctx connector service <install|enable|start|stop|restart|status|disable|uninstall>`
+- Legacy-compatible: `0ctx daemon service <...>`
+- Both command paths target the same underlying managed OS service.
 
 `0ctx setup` runs the canonical onboarding flow: auth check/login, managed runtime startup, MCP bootstrap for supported AI clients, runtime verification, and hosted dashboard handoff.
 
@@ -37,6 +47,9 @@ still works as an advanced path for daemon + MCP bootstrap only.
 | `CTX_DB_PATH` | `~/.0ctx/0ctx.db` | Override SQLite database path |
 | `CTX_SOCKET_PATH` | `~/.0ctx/0ctx.sock` (Unix) / `\\.\pipe\0ctx.sock` (Windows) | Override IPC socket path |
 | `CTX_MASTER_KEY` | _(reads `~/.0ctx/master.key`)_ | Encryption key for backup payload encryption |
+| `CTX_CONNECTOR_STATE_PATH` | `~/.0ctx/connector.json` | Override connector registration state file path |
+| `CTX_CONTROL_PLANE_URL` | _(derived from `sync.endpoint`)_ | Override cloud control-plane base URL for connector APIs |
+| `CTX_CONTROL_PLANE_TIMEOUT_MS` | `10000` | Connector cloud API timeout in milliseconds |
 
 ## Validate Installation
 

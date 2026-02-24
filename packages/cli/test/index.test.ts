@@ -12,5 +12,11 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("case 'doctor'");
         expect(source).toContain("case 'status'");
         expect(source).toContain("case 'repair'");
+        expect(source).toContain("case 'connector'");
+        expect(source).toContain("connector register");
+        expect(source).toContain("connector verify");
+        expect(source).toContain("connector run");
+        expect(source).toContain("0ctx connector service install|enable|disable|uninstall|status|start|stop|restart");
+        expect(source).toContain("parsed.subcommand === 'service'");
     });
 });

@@ -16,18 +16,19 @@ function resolveNodePath(): string {
     return process.execPath;
 }
 
-function resolveDaemonEntry(): string {
+function resolveCliEntry(): string {
     const candidates = [
-        (() => { try { return require.resolve('@0ctx/daemon/dist/index.js'); } catch { return ''; } })(),
-        path.resolve(__dirname, '..', '..', 'daemon', 'dist', 'index.js'),
-        path.resolve(process.cwd(), 'packages', 'daemon', 'dist', 'index.js'),
+        (() => { try { return require.resolve('@0ctx/cli/dist/index.js'); } catch { return ''; } })(),
+        path.resolve(__dirname, 'index.js'),
+        path.resolve(__dirname, '..', '..', 'cli', 'dist', 'index.js'),
+        path.resolve(process.cwd(), 'packages', 'cli', 'dist', 'index.js'),
     ].filter(Boolean);
 
     for (const c of candidates) {
         if (fs.existsSync(c)) return c;
     }
     throw new Error(
-        'Cannot resolve daemon entry point. Run `npm run build` or install @0ctx/daemon.'
+        'Cannot resolve CLI entry point. Run `npm run build` or install @0ctx/cli.'
     );
 }
 
@@ -49,12 +50,12 @@ export function installService(): void {
     }
 
     const nodePath = resolveNodePath();
-    const daemonEntry = resolveDaemonEntry();
+    const cliEntry = resolveCliEntry();
     const logDir = ensureLogDir();
 
     let plist = fs.readFileSync(PLIST_TEMPLATE_PATH, 'utf8');
     plist = plist.replace(/%NODE_PATH%/g, nodePath);
-    plist = plist.replace(/%DAEMON_ENTRY%/g, daemonEntry);
+    plist = plist.replace(/%CLI_ENTRY%/g, cliEntry);
     plist = plist.replace(/%LOG_DIR%/g, logDir);
 
     fs.writeFileSync(INSTALLED_PLIST, plist, 'utf8');
@@ -62,7 +63,7 @@ export function installService(): void {
 
     console.log(`Service '${SERVICE_LABEL}' installed and loaded.`);
     console.log(`Node:   ${nodePath}`);
-    console.log(`Entry:  ${daemonEntry}`);
+    console.log(`Entry:  ${cliEntry}`);
     console.log(`Plist:  ${INSTALLED_PLIST}`);
     console.log(`Logs:   ${logDir}`);
 }

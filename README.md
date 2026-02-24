@@ -49,6 +49,20 @@ npm run cli -- setup --clients=all --no-open
 # Open hosted dashboard URL
 0ctx dashboard
 
+# Check connector posture
+0ctx connector status --json
+
+# Register connector with cloud control plane (fails if cloud unreachable)
+0ctx connector register --require-cloud
+
+# Run connector control loop in foreground (service target mode)
+0ctx connector run --interval-ms=30000
+
+# Install managed connector runtime service (preferred)
+0ctx connector service install
+0ctx connector service enable
+0ctx connector service start
+
 # Repair local install
 0ctx repair --clients=all
 ```

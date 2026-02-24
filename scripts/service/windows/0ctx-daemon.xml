@@ -1,14 +1,14 @@
 <service>
-  <!-- Windows Service definition for the 0ctx daemon -->
+  <!-- Windows Service definition for the 0ctx connector runtime -->
   <!-- This file is copied to ~/.0ctx/service/ at install time -->
-  <!-- The CLI replaces %NODE_PATH% and %DAEMON_ENTRY% before writing -->
+  <!-- The CLI replaces %NODE_PATH% and %CLI_ENTRY% before writing -->
 
   <id>0ctx-daemon</id>
-  <name>0ctx Daemon</name>
-  <description>0ctx persistent local context engine — graph storage and IPC service</description>
+  <name>0ctx Connector Runtime</name>
+  <description>0ctx connector runtime — cloud bridge and managed local daemon lifecycle</description>
 
   <executable>%NODE_PATH%</executable>
-  <arguments>%DAEMON_ENTRY%</arguments>
+  <arguments>"%CLI_ENTRY%" connector run --quiet</arguments>
 
   <startmode>Automatic</startmode>
   <delayedAutoStart>false</delayedAutoStart>
@@ -19,7 +19,7 @@
   <onfailure action="restart" delay="30 sec"/>
   <resetfailure>1 hour</resetfailure>
 
-  <!-- Log output from the daemon process -->
+  <!-- Log output from the connector runtime process -->
   <logpath>%USERPROFILE%\.0ctx\logs</logpath>
   <log mode="roll-by-size">
     <sizeThreshold>10240</sizeThreshold>

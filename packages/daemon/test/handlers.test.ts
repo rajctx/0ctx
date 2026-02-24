@@ -4,6 +4,7 @@ import path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Graph, openDb } from '@0ctx/core';
 import { handleRequest } from '../src/handlers';
+import { EventRuntime } from '../src/events';
 import { resetResolverStateForTests } from '../src/resolver';
 import type { HandlerRuntimeContext } from '../src/handlers';
 
@@ -103,6 +104,93 @@ describe('daemon request handling', () => {
             expect(events.some(event => event.action === 'create_context')).toBe(true);
             expect(events.some(event => event.action === 'add_node')).toBe(true);
             expect(events.every(event => event.sessionToken === session.sessionToken)).toBe(true);
+        } finally {
+            db.close();
+        }
+    });
+
+    it('records and polls blackboard events via subscriptions', () => {
+        const { db, graph } = createGraph();
+        const events = new EventRuntime();
+        const ctxRuntime: HandlerRuntimeContext = {
+            ...runtime(),
+            eventRuntime: events
+        };
+
+        try {
+            const session = handleRequest(graph, 'conn-a', { method: 'createSession' }, ctxRuntime) as { sessionToken: string };
+            const context = handleRequest(graph, 'conn-a', {
+                method: 'createContext',
+                sessionToken: session.sessionToken,
+                params: { name: 'blackboard-context' }
+            }, ctxRuntime) as { id: string };
+
+            const subscription = handleRequest(graph, 'conn-a', {
+                method: 'subscribeEvents',
+                sessionToken: session.sessionToken,
+                params: { contextId: context.id, types: ['NodeAdded'] }
+            }, ctxRuntime) as { subscriptionId: string };
+
+            handleRequest(graph, 'conn-a', {
+                method: 'addNode',
+                sessionToken: session.sessionToken,
+                params: { type: 'goal', content: 'Track blackboard events' }
+            }, ctxRuntime);
+
+            const polled = handleRequest(graph, 'conn-a', {
+                method: 'pollEvents',
+                sessionToken: session.sessionToken,
+                params: { subscriptionId: subscription.subscriptionId }
+            }, ctxRuntime) as { events: Array<{ type: string; contextId: string | null; sequence: number }> };
+
+            expect(polled.events.length).toBeGreaterThan(0);
+            expect(polled.events.some(event => event.type === 'NodeAdded')).toBe(true);
+            expect(polled.events.every(event => event.contextId === context.id)).toBe(true);
+        } finally {
+            db.close();
+        }
+    });
+
+    it('enforces task lease ownership semantics', () => {
+        const { db, graph } = createGraph();
+        const events = new EventRuntime();
+        const ctxRuntime: HandlerRuntimeContext = {
+            ...runtime(),
+            eventRuntime: events
+        };
+
+        try {
+            const sessionA = handleRequest(graph, 'conn-a', { method: 'createSession' }, ctxRuntime) as { sessionToken: string };
+            const sessionB = handleRequest(graph, 'conn-b', { method: 'createSession' }, ctxRuntime) as { sessionToken: string };
+
+            const claimA = handleRequest(graph, 'conn-a', {
+                method: 'claimTask',
+                sessionToken: sessionA.sessionToken,
+                params: { taskId: 'task-1', leaseMs: 30000 }
+            }, ctxRuntime) as { claimed: boolean };
+
+            const claimBWhileHeld = handleRequest(graph, 'conn-b', {
+                method: 'claimTask',
+                sessionToken: sessionB.sessionToken,
+                params: { taskId: 'task-1', leaseMs: 30000 }
+            }, ctxRuntime) as { claimed: boolean };
+
+            const releaseA = handleRequest(graph, 'conn-a', {
+                method: 'releaseTask',
+                sessionToken: sessionA.sessionToken,
+                params: { taskId: 'task-1' }
+            }, ctxRuntime) as { released: boolean };
+
+            const claimBAfterRelease = handleRequest(graph, 'conn-b', {
+                method: 'claimTask',
+                sessionToken: sessionB.sessionToken,
+                params: { taskId: 'task-1', leaseMs: 30000 }
+            }, ctxRuntime) as { claimed: boolean };
+
+            expect(claimA.claimed).toBe(true);
+            expect(claimBWhileHeld.claimed).toBe(false);
+            expect(releaseA.released).toBe(true);
+            expect(claimBAfterRelease.claimed).toBe(true);
         } finally {
             db.close();
         }

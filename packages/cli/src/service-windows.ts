@@ -21,22 +21,24 @@ function resolveNodePath(): string {
     return process.execPath;
 }
 
-function resolveDaemonEntry(): string {
+function resolveCliEntry(): string {
     const candidates = [
-        // published install path: daemon is a dependency of cli
+        // published install path: cli package owns connector runtime entry
         (() => {
-            try { return require.resolve('@0ctx/daemon/dist/index.js'); } catch { return ''; }
+            try { return require.resolve('@0ctx/cli/dist/index.js'); } catch { return ''; }
         })(),
+        // local dist sibling in this package
+        path.resolve(__dirname, 'index.js'),
         // monorepo fallback
-        path.resolve(__dirname, '..', '..', 'daemon', 'dist', 'index.js'),
-        path.resolve(process.cwd(), 'packages', 'daemon', 'dist', 'index.js'),
+        path.resolve(__dirname, '..', '..', 'cli', 'dist', 'index.js'),
+        path.resolve(process.cwd(), 'packages', 'cli', 'dist', 'index.js'),
     ].filter(Boolean);
 
     for (const c of candidates) {
         if (fs.existsSync(c)) return c;
     }
     throw new Error(
-        'Cannot resolve daemon entry point. Run `npm run build` or install @0ctx/daemon.'
+        'Cannot resolve CLI entry point. Run `npm run build` or install @0ctx/cli.'
     );
 }
 
@@ -100,7 +102,7 @@ export function installService(): void {
     ensureServiceDir();
 
     const nodePath = resolveNodePath();
-    const daemonEntry = resolveDaemonEntry();
+    const cliEntry = resolveCliEntry();
     const winswPath = resolveWinSW();
 
     // Copy winsw exe
@@ -109,7 +111,7 @@ export function installService(): void {
     // Write substituted XML
     let xml = fs.readFileSync(XML_TEMPLATE_PATH, 'utf8');
     xml = xml.replace(/%NODE_PATH%/g, nodePath.replace(/\\/g, '\\\\'));
-    xml = xml.replace(/%DAEMON_ENTRY%/g, daemonEntry.replace(/\\/g, '\\\\'));
+    xml = xml.replace(/%CLI_ENTRY%/g, cliEntry.replace(/\\/g, '\\\\'));
     fs.writeFileSync(INSTALLED_XML_PATH, xml, 'utf8');
 
     // Ensure log dir exists
@@ -119,7 +121,7 @@ export function installService(): void {
     runWinSW(INSTALLED_EXE_PATH, ['install']);
     console.log(`Service '${SERVICE_ID}' installed.`);
     console.log(`Node: ${nodePath}`);
-    console.log(`Daemon entry: ${daemonEntry}`);
+    console.log(`CLI entry: ${cliEntry}`);
     console.log(`Service dir: ${SERVICE_DIR}`);
     console.log('Run: 0ctx daemon service enable  →  to set auto-start');
     console.log('Run: 0ctx daemon service start   →  to start immediately');

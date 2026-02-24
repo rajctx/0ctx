@@ -28,6 +28,9 @@ Updated: 2026-02-24
 
 - Branch protection and label policy rollout in GitHub settings.
 - GitHub workflow enablement rollout remains pending (workflows stay disabled for now).
+- `ARCH-001` foundation implementation is underway (daemon blackboard subscriptions, task leases, gate APIs, and MCP tool surface added).
+- `CONN-001` implementation is underway (CLI connector registration state, `connector status/verify`, setup integration, `connector run` runtime loop, service templates switched to launch connector runtime process, preferred `connector service` command path wired, and daemon blackboard event-bridge polling/ack state scaffolding added).
+- `CLOUD-001` foundation implementation is underway (CLI cloud control-plane client scaffolding for connector register/heartbeat/capabilities with local fallback).
 
 ## Planned
 

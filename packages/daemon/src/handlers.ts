@@ -13,6 +13,7 @@ import { listBackups, readContextBackup, writeContextBackup } from './backup';
 import { readAuthState } from './auth';
 import type { MetricsSnapshot } from './metrics';
 import type { SyncEngine } from './sync-engine';
+import type { EventRuntime } from './events';
 
 const CONTEXT_REQUIRED_METHODS = new Set([
     'addNode',
@@ -30,6 +31,7 @@ export interface HandlerRuntimeContext {
     startedAt: number;
     getMetricsSnapshot?: () => MetricsSnapshot;
     syncEngine?: SyncEngine;
+    eventRuntime?: EventRuntime;
 }
 
 const MUTATING_ACTIONS: Record<string, AuditAction> = {
@@ -109,6 +111,37 @@ function recordMutationAudit(
     });
 }
 
+function toEventSource(connectionId: string, req: DaemonRequest): string {
+    return req.sessionToken ? `session:${req.sessionToken}` : `connection:${connectionId}`;
+}
+
+function toEventPayload(params: RequestParams, result: unknown): Record<string, unknown> {
+    const sanitizedParams = { ...params };
+    delete sanitizedParams.content;
+    return {
+        params: sanitizedParams,
+        result: result && typeof result === 'object'
+            ? (result as Record<string, unknown>)
+            : { value: result ?? null }
+    };
+}
+
+function recordMutationEvent(
+    runtime: HandlerRuntimeContext,
+    connectionId: string,
+    req: DaemonRequest,
+    contextId: string | null,
+    params: RequestParams,
+    result: unknown
+): void {
+    runtime.eventRuntime?.emitMutation({
+        method: req.method,
+        contextId,
+        source: toEventSource(connectionId, req),
+        payload: toEventPayload(params, result)
+    });
+}
+
 export function handleRequest(
     graph: Graph,
     connectionId: string,
@@ -145,7 +178,7 @@ export function handleRequest(
     if (req.method === 'getCapabilities') {
         return {
             apiVersion: '2',
-            features: ['sessions', 'health', 'capabilities', 'audit_logs', 'metrics', 'backup_restore', 'auth', 'sync'],
+            features: ['sessions', 'health', 'capabilities', 'audit_logs', 'metrics', 'backup_restore', 'auth', 'sync', 'blackboard_events', 'task_leases', 'quality_gates'],
             methods: [
                 'listContexts', 'createContext', 'deleteContext', 'switchContext', 'getActiveContext',
                 'addNode', 'getNode', 'updateNode', 'getByKey', 'deleteNode',
@@ -153,9 +186,158 @@ export function handleRequest(
                 'saveCheckpoint', 'rewind', 'listCheckpoints',
                 'createSession', 'refreshSession', 'health', 'getCapabilities', 'metricsSnapshot',
                 'listAuditEvents', 'createBackup', 'listBackups', 'restoreBackup',
-                'auth/status', 'syncStatus', 'syncNow'
+                'auth/status', 'syncStatus', 'syncNow',
+                'subscribeEvents', 'unsubscribeEvents', 'listSubscriptions', 'pollEvents', 'ackEvent',
+                'getBlackboardState', 'claimTask', 'releaseTask', 'resolveGate'
             ]
         };
+    }
+
+    if (req.method === 'subscribeEvents') {
+        if (!runtime.eventRuntime) {
+            throw new Error('Event runtime not available');
+        }
+
+        const subscription = runtime.eventRuntime.subscribe({
+            contextId: typeof params.contextId === 'string' && params.contextId.length > 0 ? params.contextId : resolveContextId(connectionId, params, sessionContextId) ?? undefined,
+            types: params.types,
+            afterSequence: typeof params.afterSequence === 'number' ? params.afterSequence : undefined
+        }, {
+            connectionId,
+            sessionToken: req.sessionToken
+        });
+        return subscription;
+    }
+
+    if (req.method === 'listSubscriptions') {
+        if (!runtime.eventRuntime) {
+            throw new Error('Event runtime not available');
+        }
+
+        return runtime.eventRuntime.listSubscriptions({
+            connectionId,
+            sessionToken: req.sessionToken
+        });
+    }
+
+    if (req.method === 'unsubscribeEvents') {
+        if (!runtime.eventRuntime) {
+            throw new Error('Event runtime not available');
+        }
+
+        const subscriptionId = typeof params.subscriptionId === 'string' ? params.subscriptionId : null;
+        if (!subscriptionId) {
+            throw new Error("Missing required 'subscriptionId' for unsubscribeEvents.");
+        }
+
+        return runtime.eventRuntime.unsubscribe(subscriptionId, {
+            connectionId,
+            sessionToken: req.sessionToken
+        });
+    }
+
+    if (req.method === 'pollEvents') {
+        if (!runtime.eventRuntime) {
+            throw new Error('Event runtime not available');
+        }
+
+        const subscriptionId = typeof params.subscriptionId === 'string' ? params.subscriptionId : null;
+        if (!subscriptionId) {
+            throw new Error("Missing required 'subscriptionId' for pollEvents.");
+        }
+
+        return runtime.eventRuntime.poll({
+            subscriptionId,
+            afterSequence: typeof params.afterSequence === 'number' ? params.afterSequence : undefined,
+            limit: typeof params.limit === 'number' ? params.limit : undefined
+        }, {
+            connectionId,
+            sessionToken: req.sessionToken
+        });
+    }
+
+    if (req.method === 'ackEvent') {
+        if (!runtime.eventRuntime) {
+            throw new Error('Event runtime not available');
+        }
+
+        const subscriptionId = typeof params.subscriptionId === 'string' ? params.subscriptionId : null;
+        if (!subscriptionId) {
+            throw new Error("Missing required 'subscriptionId' for ackEvent.");
+        }
+
+        return runtime.eventRuntime.ack({
+            subscriptionId,
+            eventId: typeof params.eventId === 'string' ? params.eventId : undefined,
+            sequence: typeof params.sequence === 'number' ? params.sequence : undefined
+        }, {
+            connectionId,
+            sessionToken: req.sessionToken
+        });
+    }
+
+    if (req.method === 'getBlackboardState') {
+        if (!runtime.eventRuntime) {
+            throw new Error('Event runtime not available');
+        }
+        return runtime.eventRuntime.getBlackboardState({
+            contextId: typeof params.contextId === 'string' ? params.contextId : undefined,
+            limit: typeof params.limit === 'number' ? params.limit : undefined
+        });
+    }
+
+    if (req.method === 'claimTask') {
+        if (!runtime.eventRuntime) {
+            throw new Error('Event runtime not available');
+        }
+        const taskId = typeof params.taskId === 'string' ? params.taskId : null;
+        if (!taskId) {
+            throw new Error("Missing required 'taskId' for claimTask.");
+        }
+        const resolvedContextId = resolveContextId(connectionId, params, sessionContextId) ?? undefined;
+        return runtime.eventRuntime.claimTask({
+            taskId,
+            contextId: resolvedContextId,
+            leaseMs: typeof params.leaseMs === 'number' ? params.leaseMs : undefined
+        }, {
+            connectionId,
+            sessionToken: req.sessionToken
+        });
+    }
+
+    if (req.method === 'releaseTask') {
+        if (!runtime.eventRuntime) {
+            throw new Error('Event runtime not available');
+        }
+        const taskId = typeof params.taskId === 'string' ? params.taskId : null;
+        if (!taskId) {
+            throw new Error("Missing required 'taskId' for releaseTask.");
+        }
+        return runtime.eventRuntime.releaseTask({ taskId }, {
+            connectionId,
+            sessionToken: req.sessionToken
+        });
+    }
+
+    if (req.method === 'resolveGate') {
+        if (!runtime.eventRuntime) {
+            throw new Error('Event runtime not available');
+        }
+        const gateId = typeof params.gateId === 'string' ? params.gateId : null;
+        if (!gateId) {
+            throw new Error("Missing required 'gateId' for resolveGate.");
+        }
+        const resolvedContextId = resolveContextId(connectionId, params, sessionContextId) ?? undefined;
+        return runtime.eventRuntime.resolveGate({
+            gateId,
+            contextId: resolvedContextId,
+            severity: typeof params.severity === 'string' ? params.severity : undefined,
+            status: params.status === 'open' ? 'open' : 'resolved',
+            message: typeof params.message === 'string' ? params.message : undefined
+        }, {
+            connectionId,
+            sessionToken: req.sessionToken
+        });
     }
 
     if (req.method === 'syncStatus') {
@@ -233,6 +415,7 @@ export function handleRequest(
             syncActiveContext(connectionId, req.sessionToken, ctx.id);
 
             recordMutationAudit(graph, req, 'create_context', ctx.id, params, { contextId: ctx.id }, auditMetadata);
+            recordMutationEvent(runtime, connectionId, req, ctx.id, params, { contextId: ctx.id });
             return ctx;
         }
         case 'deleteContext': {
@@ -251,6 +434,7 @@ export function handleRequest(
 
             const result = { success: true };
             recordMutationAudit(graph, req, 'delete_context', id, params, result, auditMetadata);
+            recordMutationEvent(runtime, connectionId, req, id, params, result);
             return result;
         }
         case 'switchContext': {
@@ -262,11 +446,13 @@ export function handleRequest(
 
             syncActiveContext(connectionId, req.sessionToken, ctx.id);
             recordMutationAudit(graph, req, 'switch_context', ctx.id, params, { contextId: ctx.id }, auditMetadata);
+            recordMutationEvent(runtime, connectionId, req, ctx.id, params, { contextId: ctx.id });
             return ctx;
         }
         case 'addNode': {
             const result = graph.addNode({ ...params, contextId: contextId! } as Parameters<Graph['addNode']>[0]);
             recordMutationAudit(graph, req, 'add_node', contextId, params, { id: result.id, contextId: result.contextId }, auditMetadata);
+            recordMutationEvent(runtime, connectionId, req, contextId, params, { id: result.id, contextId: result.contextId });
             runtime.syncEngine?.enqueue(contextId!);
             return result;
         }
@@ -275,6 +461,7 @@ export function handleRequest(
         case 'updateNode': {
             const result = graph.updateNode(params.id as string, params.updates as Parameters<Graph['updateNode']>[1]);
             recordMutationAudit(graph, req, 'update_node', contextId, params, { id: params.id as string, updated: Boolean(result) }, auditMetadata);
+            recordMutationEvent(runtime, connectionId, req, contextId, params, { id: params.id as string, updated: Boolean(result) });
             if (contextId) runtime.syncEngine?.enqueue(contextId);
             return result;
         }
@@ -284,12 +471,14 @@ export function handleRequest(
             graph.deleteNode(params.id as string);
             const result = { success: true };
             recordMutationAudit(graph, req, 'delete_node', contextId, params, result, auditMetadata);
+            recordMutationEvent(runtime, connectionId, req, contextId, params, result);
             if (contextId) runtime.syncEngine?.enqueue(contextId);
             return result;
         }
         case 'addEdge': {
             const result = graph.addEdge(params.fromId as string, params.toId as string, params.relation as Parameters<Graph['addEdge']>[2]);
             recordMutationAudit(graph, req, 'add_edge', contextId, params, { id: result.id }, auditMetadata);
+            recordMutationEvent(runtime, connectionId, req, contextId, params, { id: result.id });
             if (contextId) runtime.syncEngine?.enqueue(contextId);
             return result;
         }
@@ -302,6 +491,7 @@ export function handleRequest(
         case 'saveCheckpoint': {
             const result = graph.saveCheckpoint(contextId!, params.name as string);
             recordMutationAudit(graph, req, 'save_checkpoint', contextId, params, { id: result.id }, auditMetadata);
+            recordMutationEvent(runtime, connectionId, req, contextId, params, { id: result.id });
             runtime.syncEngine?.enqueue(contextId!);
             return result;
         }
@@ -309,6 +499,7 @@ export function handleRequest(
             graph.rewind(params.checkpointId as string);
             const result = { success: true };
             recordMutationAudit(graph, req, 'rewind', contextId, params, result, auditMetadata);
+            recordMutationEvent(runtime, connectionId, req, contextId, params, result);
             if (contextId) runtime.syncEngine?.enqueue(contextId);
             return result;
         }
@@ -322,6 +513,7 @@ export function handleRequest(
                 encrypted: typeof params.encrypted === 'boolean' ? params.encrypted : true
             });
             recordMutationAudit(graph, req, 'create_backup', contextId, params, { fileName: backup.fileName }, auditMetadata);
+            recordMutationEvent(runtime, connectionId, req, contextId, params, { fileName: backup.fileName });
             return backup;
         }
         case 'restoreBackup': {
@@ -335,6 +527,7 @@ export function handleRequest(
                 name: typeof params.name === 'string' ? params.name : undefined
             });
             recordMutationAudit(graph, req, 'restore_backup', restoredContext.id, params, { contextId: restoredContext.id }, auditMetadata);
+            recordMutationEvent(runtime, connectionId, req, restoredContext.id, params, { contextId: restoredContext.id });
             return restoredContext;
         }
         default:

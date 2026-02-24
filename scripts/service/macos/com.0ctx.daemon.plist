@@ -2,9 +2,9 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
   "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  launchd plist for the 0ctx daemon.
+  launchd plist for the 0ctx connector runtime.
   Installed to ~/Library/LaunchAgents/ by `0ctx daemon service install`.
-  Placeholders %NODE_PATH% and %DAEMON_ENTRY% are substituted by the CLI.
+  Placeholders %NODE_PATH% and %CLI_ENTRY% are substituted by the CLI.
 -->
 <plist version="1.0">
 <dict>
@@ -14,7 +14,10 @@
   <key>ProgramArguments</key>
   <array>
     <string>%NODE_PATH%</string>
-    <string>%DAEMON_ENTRY%</string>
+    <string>%CLI_ENTRY%</string>
+    <string>connector</string>
+    <string>run</string>
+    <string>--quiet</string>
   </array>
 
   <!-- Run at login -->
@@ -34,9 +37,9 @@
 
   <!-- Log stdout/stderr to ~/.0ctx/logs/ -->
   <key>StandardOutPath</key>
-  <string>%LOG_DIR%/daemon.out.log</string>
+  <string>%LOG_DIR%/connector.out.log</string>
   <key>StandardErrorPath</key>
-  <string>%LOG_DIR%/daemon.err.log</string>
+  <string>%LOG_DIR%/connector.err.log</string>
 
   <key>EnvironmentVariables</key>
   <dict>

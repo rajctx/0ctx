@@ -38,6 +38,9 @@ import {
     restartService as restartServiceLinux,
 } from './service-linux';
 import { commandAuthLogin, commandAuthLogout, commandAuthStatus, resolveToken } from './auth';
+import { getConnectorStatePath, readConnectorState, registerConnector, writeConnectorState } from './connector';
+import { fetchConnectorCapabilities, registerConnectorInCloud, sendConnectorHeartbeat } from './cloud';
+import { runConnectorRuntime } from './connector-runtime';
 
 type SupportedClient = 'claude' | 'cursor' | 'windsurf';
 type CheckStatus = 'pass' | 'warn' | 'fail';
@@ -97,7 +100,7 @@ function parseArgs(argv: string[]): ParsedArgs {
     }
 
     const sub = hasSubcommand ? maybeSubcommand : undefined;
-    // 3-level: daemon service <action>
+    // 3-level: daemon|connector service <action>
     const serviceAction = (sub === 'service' && tokens[0] && !tokens[0].startsWith('--'))
         ? tokens[0]
         : undefined;
@@ -362,22 +365,334 @@ async function commandDashboard(flags: Record<string, string | boolean>): Promis
 }
 
 async function commandConnector(action: string | undefined, flags: Record<string, string | boolean>): Promise<number> {
-    const validActions = ['install', 'enable', 'disable', 'uninstall', 'status', 'start', 'stop', 'restart', 'verify', 'register', 'logs'];
+    const validActions = ['install', 'enable', 'disable', 'uninstall', 'status', 'start', 'stop', 'restart', 'verify', 'register', 'run', 'logs'];
     if (!action || !validActions.includes(action)) {
         console.error(`Unknown connector action: '${action ?? ''}'`);
         console.error(`Valid actions: ${validActions.join(', ')}`);
         return 1;
     }
 
+    if (action === 'run') {
+        const intervalRaw = flags['interval-ms'];
+        const intervalMs = typeof intervalRaw === 'string' ? Number(intervalRaw) : undefined;
+        return runConnectorRuntime({
+            once: Boolean(flags.once),
+            quiet: Boolean(flags.quiet),
+            autoStartDaemon: !Boolean(flags['no-daemon-autostart']),
+            intervalMs: Number.isFinite(intervalMs) ? intervalMs : undefined
+        });
+    }
+
     if (action === 'verify') {
-        const statusCode = await commandStatus();
-        const syncCode = await commandSyncStatus();
-        return statusCode !== 0 || syncCode !== 0 ? 1 : 0;
+        const daemon = await isDaemonReachable();
+        const registration = readConnectorState();
+        const token = resolveToken();
+        const requireCloud = Boolean(flags.cloud) || Boolean(flags['require-cloud']);
+        let cloudOk = !requireCloud;
+        let cloudError: string | null = null;
+
+        if (requireCloud && token && registration) {
+            const cloudCapabilities = await fetchConnectorCapabilities(token.accessToken, registration.machineId);
+            cloudOk = cloudCapabilities.ok;
+            cloudError = cloudCapabilities.ok ? null : (cloudCapabilities.error ?? 'cloud_capabilities_check_failed');
+        } else if (requireCloud && (!token || !registration)) {
+            cloudOk = false;
+            cloudError = 'cloud_verification_requires_auth_and_registration';
+        }
+
+        const checks = {
+            daemon: daemon.ok,
+            registration: Boolean(registration),
+            auth: Boolean(token),
+            cloud: cloudOk
+        };
+
+        const ok = checks.daemon && checks.registration && checks.auth && checks.cloud;
+
+        if (!Boolean(flags.quiet)) {
+            console.log('\nConnector Verify\n');
+            console.log(`  daemon:       ${checks.daemon ? 'ok' : 'missing'}`);
+            console.log(`  registration: ${checks.registration ? 'ok' : 'missing'}`);
+            console.log(`  auth:         ${checks.auth ? 'ok' : 'missing'}`);
+            if (requireCloud) {
+                console.log(`  cloud:        ${checks.cloud ? 'ok' : 'missing'}`);
+            }
+            if (registration) {
+                console.log(`  machine_id:   ${registration.machineId}`);
+            }
+            if (!daemon.ok && daemon.error) {
+                console.log(`  daemon_error: ${daemon.error}`);
+            }
+            if (requireCloud && cloudError) {
+                console.log(`  cloud_error:  ${cloudError}`);
+            }
+            console.log('');
+        }
+
+        return ok ? 0 : 1;
     }
 
     if (action === 'register') {
-        console.log('connector register is planned under CLOUD-001/CONN-001 and not yet available in this release.');
+        const token = resolveToken();
+        if (!token) {
+            console.error('connector_register_requires_auth: run `0ctx auth login` first.');
+            return 1;
+        }
+
+        const force = Boolean(flags.force);
+        const localOnly = Boolean(flags['local-only']);
+        const requireCloud = Boolean(flags['require-cloud']);
+        const dashboardUrl = getHostedDashboardUrl();
+        const { state: localState, created } = registerConnector({
+            tenantId: token.tenantId || null,
+            uiUrl: dashboardUrl,
+            force
+        });
+        let state = localState;
+        let cloudError: string | null = null;
+        let cloudRegistrationStatus: 'skipped' | 'connected' | 'local_fallback' = 'skipped';
+
+        if (!localOnly) {
+            const cloudResult = await registerConnectorInCloud(token.accessToken, {
+                machineId: localState.machineId,
+                tenantId: token.tenantId || null,
+                uiUrl: dashboardUrl,
+                platform: os.platform()
+            });
+
+            if (cloudResult.ok) {
+                cloudRegistrationStatus = 'connected';
+                state = {
+                    ...localState,
+                    tenantId: cloudResult.data?.tenantId ?? localState.tenantId,
+                    updatedAt: Date.now(),
+                    registrationMode: 'cloud',
+                    cloud: {
+                        registrationId: cloudResult.data?.registrationId ?? localState.cloud.registrationId,
+                        streamUrl: cloudResult.data?.streamUrl ?? localState.cloud.streamUrl,
+                        capabilities: cloudResult.data?.capabilities ?? localState.cloud.capabilities,
+                        lastHeartbeatAt: localState.cloud.lastHeartbeatAt,
+                        lastError: null
+                    }
+                };
+            } else {
+                cloudRegistrationStatus = 'local_fallback';
+                cloudError = cloudResult.error ?? 'cloud_registration_failed';
+                state = {
+                    ...localState,
+                    updatedAt: Date.now(),
+                    registrationMode: 'local',
+                    cloud: {
+                        ...localState.cloud,
+                        lastError: cloudError
+                    }
+                };
+            }
+
+            writeConnectorState(state);
+        }
+
+        if (!Boolean(flags.quiet)) {
+            console.log(`connector_registration: ${created ? 'created' : 'existing'}`);
+            console.log(`machine_id: ${state.machineId}`);
+            console.log(`tenant_id: ${state.tenantId ?? 'n/a'}`);
+            console.log(`dashboard_url: ${state.uiUrl}`);
+            console.log(`registration_mode: ${state.registrationMode}`);
+            console.log(`cloud_registration: ${cloudRegistrationStatus}`);
+            if (state.cloud.registrationId) {
+                console.log(`cloud_registration_id: ${state.cloud.registrationId}`);
+            }
+            if (state.cloud.streamUrl) {
+                console.log(`cloud_stream_url: ${state.cloud.streamUrl}`);
+            }
+            if (cloudError) {
+                console.log(`cloud_error: ${cloudError}`);
+            }
+            console.log(`state_path: ${getConnectorStatePath()}`);
+        }
+
+        if (requireCloud && state.registrationMode !== 'cloud') {
+            console.error('connector_register_cloud_required: unable to register with cloud control plane');
+            return 1;
+        }
+
         return 0;
+    }
+
+    if (action === 'status') {
+        const daemon = await isDaemonReachable();
+        const registration = readConnectorState();
+        const token = resolveToken();
+        const cloudRequired = registration?.registrationMode === 'cloud';
+        const cloudProbeRequested = Boolean(flags.cloud) || cloudRequired;
+        let sync: {
+            enabled: boolean;
+            running: boolean;
+            lastError: string | null;
+            queue?: { pending: number; inFlight: number; failed: number; done: number };
+        } | null = null;
+
+        if (daemon.ok) {
+            try {
+                sync = await sendToDaemon('syncStatus', {});
+            } catch {
+                sync = null;
+            }
+        }
+
+        let cloud = {
+            connected: false,
+            required: cloudRequired,
+            registrationId: registration?.cloud.registrationId ?? null,
+            streamUrl: registration?.cloud.streamUrl ?? null,
+            capabilities: registration?.cloud.capabilities ?? [],
+            lastError: registration?.cloud.lastError ?? null,
+            lastHeartbeatAt: registration?.cloud.lastHeartbeatAt ?? null
+        };
+
+        if (cloudProbeRequested && token && registration) {
+            const capabilitiesResult = await fetchConnectorCapabilities(token.accessToken, registration.machineId);
+            if (capabilitiesResult.ok) {
+                cloud.capabilities = capabilitiesResult.data?.capabilities
+                    ?? capabilitiesResult.data?.features
+                    ?? cloud.capabilities;
+                cloud.connected = true;
+                cloud.lastError = null;
+            } else {
+                cloud.connected = false;
+                cloud.lastError = capabilitiesResult.error ?? 'cloud_capabilities_failed';
+            }
+
+            const heartbeatPayload = {
+                machineId: registration.machineId,
+                tenantId: registration.tenantId,
+                posture: daemon.ok ? 'connected' : 'offline',
+                daemonRunning: daemon.ok,
+                syncEnabled: Boolean(sync?.enabled),
+                syncRunning: Boolean(sync?.running),
+                queue: sync?.queue
+            } as const;
+            const heartbeatResult = await sendConnectorHeartbeat(token.accessToken, heartbeatPayload);
+            if (heartbeatResult.ok) {
+                cloud.lastHeartbeatAt = Date.now();
+                if (!capabilitiesResult.ok) {
+                    cloud.connected = true;
+                    cloud.lastError = null;
+                }
+            } else {
+                cloud.lastError = heartbeatResult.error ?? cloud.lastError ?? 'cloud_heartbeat_failed';
+                if (cloudRequired) {
+                    cloud.connected = false;
+                }
+            }
+
+            const updatedState = {
+                ...registration,
+                updatedAt: Date.now(),
+                cloud: {
+                    ...registration.cloud,
+                    capabilities: cloud.capabilities,
+                    lastHeartbeatAt: cloud.lastHeartbeatAt,
+                    lastError: cloud.lastError
+                }
+            };
+            writeConnectorState(updatedState);
+        }
+
+        const posture = !daemon.ok
+            ? 'offline'
+            : (!token || !registration)
+                ? 'degraded'
+                : (cloudRequired && !cloud.connected)
+                    ? 'degraded'
+                : (sync?.enabled && sync?.running ? 'connected' : 'degraded');
+
+        const payload = {
+            posture,
+            daemon: {
+                running: daemon.ok,
+                error: daemon.ok ? null : (daemon.error ?? 'unknown')
+            },
+            registration: registration ? {
+                registered: true,
+                machineId: registration.machineId,
+                tenantId: registration.tenantId,
+                statePath: getConnectorStatePath(),
+                updatedAt: new Date(registration.updatedAt).toISOString(),
+                runtime: {
+                    eventBridgeSupported: registration.runtime.eventBridgeSupported,
+                    eventBridgeError: registration.runtime.eventBridgeError,
+                    lastEventSequence: registration.runtime.lastEventSequence,
+                    lastEventSyncAt: registration.runtime.lastEventSyncAt
+                        ? new Date(registration.runtime.lastEventSyncAt).toISOString()
+                        : null
+                }
+            } : {
+                registered: false,
+                machineId: null,
+                tenantId: null,
+                statePath: getConnectorStatePath(),
+                updatedAt: null,
+                runtime: null
+            },
+            auth: {
+                authenticated: Boolean(token),
+                tenantId: token?.tenantId ?? null
+            },
+            cloud,
+            sync: sync ?? {
+                enabled: false,
+                running: false,
+                lastError: daemon.ok ? 'sync_status_unavailable' : 'daemon_unreachable',
+                queue: { pending: 0, inFlight: 0, failed: 0, done: 0 }
+            },
+            dashboardUrl: getHostedDashboardUrl()
+        };
+
+        if (Boolean(flags.json)) {
+            console.log(JSON.stringify(payload, null, 2));
+            return posture === 'connected' ? 0 : 1;
+        }
+
+        console.log('\nConnector Status\n');
+        console.log(`  posture:      ${payload.posture}`);
+        console.log(`  daemon:       ${payload.daemon.running ? 'running' : 'not running'}`);
+        console.log(`  registration: ${payload.registration.registered ? 'registered' : 'not registered'}`);
+        console.log(`  auth:         ${payload.auth.authenticated ? 'authenticated' : 'not authenticated'}`);
+        console.log(`  cloud:        ${payload.cloud.connected ? 'connected' : (payload.cloud.required ? 'not connected' : 'optional')}`);
+        console.log(`  dashboard:    ${payload.dashboardUrl}`);
+        if (payload.registration.registered) {
+            console.log(`  machine_id:   ${payload.registration.machineId}`);
+            if (payload.registration.runtime) {
+                console.log(
+                    `  event_bridge: supported=${payload.registration.runtime.eventBridgeSupported}` +
+                    ` sequence=${payload.registration.runtime.lastEventSequence}`
+                );
+                if (payload.registration.runtime.lastEventSyncAt) {
+                    console.log(`  event_sync:   ${payload.registration.runtime.lastEventSyncAt}`);
+                }
+                if (payload.registration.runtime.eventBridgeError) {
+                    console.log(`  event_error:  ${payload.registration.runtime.eventBridgeError}`);
+                }
+            }
+        }
+        if (payload.cloud.registrationId) {
+            console.log(`  cloud_reg_id: ${payload.cloud.registrationId}`);
+        }
+        if (payload.cloud.lastError) {
+            console.log(`  cloud_error:  ${payload.cloud.lastError}`);
+        }
+        if (payload.sync) {
+            console.log(`  sync:         enabled=${payload.sync.enabled} running=${payload.sync.running}`);
+            if (payload.sync.lastError) {
+                console.log(`  sync_error:   ${payload.sync.lastError}`);
+            }
+        }
+        if (!payload.daemon.running && payload.daemon.error) {
+            console.log(`  daemon_error: ${payload.daemon.error}`);
+        }
+        console.log('');
+        return posture === 'connected' ? 0 : 1;
     }
 
     if (action === 'logs') {
@@ -394,7 +709,7 @@ async function commandConnector(action: string | undefined, flags: Record<string
         return 0;
     }
 
-    console.log(`connector ${action}: delegating to daemon service lifecycle until dedicated connector runtime is shipped.`);
+    console.log(`connector ${action}: delegating to managed service lifecycle commands.`);
     return commandDaemonService(action);
 }
 
@@ -419,6 +734,12 @@ async function commandSetup(flags: Record<string, string | boolean>): Promise<nu
 
     const installCode = await commandInstall(flags);
     if (installCode !== 0) return installCode;
+
+    const registerCode = await commandConnector('register', { ...flags, quiet: true });
+    if (registerCode !== 0) {
+        console.error('setup_register_failed: unable to register connector metadata');
+        return registerCode;
+    }
 
     const verifyCode = await commandConnector('verify', flags);
     if (verifyCode !== 0) {
@@ -459,12 +780,20 @@ Sync:
   0ctx sync status   Show sync engine health and queue
 
 Connector:
+  0ctx connector service install|enable|disable|uninstall|status|start|stop|restart
   0ctx connector install|enable|disable|uninstall|status|start|stop|restart
-  0ctx connector verify
-  0ctx connector register
+  0ctx connector status [--json] [--cloud]
+  0ctx connector verify [--require-cloud]
+  0ctx connector register [--force] [--local-only] [--require-cloud]
+  0ctx connector run [--once] [--interval-ms=30000] [--no-daemon-autostart]
   0ctx connector logs
 
-Windows/macOS/Linux service management (requires Admin on Windows):
+Service management compatibility (requires Admin on Windows):
+  Both command paths manage the same underlying OS service.
+  Preferred: 0ctx connector service <action>
+  Legacy:    0ctx daemon service <action>
+
+Legacy daemon service commands:
   0ctx daemon service install    Register daemon as a service
   0ctx daemon service enable     Set service start type to Automatic
   0ctx daemon service disable    Set service start type to Manual
@@ -691,6 +1020,9 @@ async function main(): Promise<number> {
             return 1;
         }
         case 'connector':
+            if (parsed.subcommand === 'service') {
+                return commandConnector(parsed.serviceAction, parsed.flags);
+            }
             return commandConnector(parsed.subcommand, parsed.flags);
         case 'dashboard':
             return commandDashboard(parsed.flags);

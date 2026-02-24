@@ -189,6 +189,65 @@ server.setRequestHandler(CallToolRequestSchema, async (req: any) => {
 
                 return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(status, null, 2) }] } };
             }
+            case 'ctx_blackboard_subscribe': {
+                const contextId = pickContextId(args);
+                const subscription = await callDaemon('subscribeEvents', {
+                    contextId,
+                    types: args.types,
+                    afterSequence: args.afterSequence
+                });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(subscription, null, 2) }] } };
+            }
+            case 'ctx_blackboard_poll': {
+                const result = await callDaemon('pollEvents', {
+                    subscriptionId: args.subscriptionId,
+                    afterSequence: args.afterSequence,
+                    limit: args.limit
+                });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] } };
+            }
+            case 'ctx_blackboard_ack': {
+                const result = await callDaemon('ackEvent', {
+                    subscriptionId: args.subscriptionId,
+                    eventId: args.eventId,
+                    sequence: args.sequence
+                });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] } };
+            }
+            case 'ctx_blackboard_state': {
+                const contextId = pickContextId(args);
+                const state = await callDaemon('getBlackboardState', {
+                    contextId,
+                    limit: args.limit
+                });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(state, null, 2) }] } };
+            }
+            case 'ctx_task_claim': {
+                const contextId = pickContextId(args);
+                const claim = await callDaemon('claimTask', {
+                    taskId: args.taskId,
+                    contextId,
+                    leaseMs: args.leaseMs
+                });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(claim, null, 2) }] } };
+            }
+            case 'ctx_task_release': {
+                const released = await callDaemon('releaseTask', {
+                    taskId: args.taskId
+                });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(released, null, 2) }] } };
+            }
+            case 'ctx_gate_resolve': {
+                const contextId = pickContextId(args);
+                const gate = await callDaemon('resolveGate', {
+                    gateId: args.gateId,
+                    contextId,
+                    severity: args.severity,
+                    status: args.status,
+                    message: args.message
+                });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(gate, null, 2) }] } };
+            }
             default:
                 throw new Error(`Unknown tool: ${name}`);
         }

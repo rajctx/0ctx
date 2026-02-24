@@ -1,11 +1,11 @@
 [Unit]
-Description=0ctx Daemon — persistent local context engine
+Description=0ctx Connector Runtime — cloud bridge + managed daemon lifecycle
 Documentation=https://github.com/0ctx-com/0ctx
 After=network.target
 
 [Service]
 Type=simple
-ExecStart=%NODE_PATH% %DAEMON_ENTRY%
+ExecStart=%NODE_PATH% %CLI_ENTRY% connector run --quiet
 Restart=on-failure
 RestartSec=5s
 # Escalating restart delays
@@ -16,7 +16,7 @@ StartLimitIntervalSec=60
 # Environment
 Environment=NODE_ENV=production
 
-# Logging goes to journald automatically (use: journalctl -u 0ctx-daemon)
+# Logging goes to journald automatically (use: journalctl --user -u 0ctx-daemon)
 
 [Install]
 WantedBy=default.target
