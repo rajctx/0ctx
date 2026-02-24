@@ -39,8 +39,19 @@ import {
 } from './service-linux';
 import { commandAuthLogin, commandAuthLogout, commandAuthStatus, resolveToken } from './auth';
 import { getConnectorStatePath, readConnectorState, registerConnector, writeConnectorState } from './connector';
-import { fetchConnectorCapabilities, registerConnectorInCloud, sendConnectorHeartbeat } from './cloud';
+import { fetchConnectorCapabilities, registerConnectorInCloud, sendConnectorEvents, sendConnectorHeartbeat } from './cloud';
 import { runConnectorRuntime } from './connector-runtime';
+import {
+    getConnectorQueuePath,
+    getConnectorQueueStats,
+    getReadyConnectorEvents,
+    listQueuedConnectorEvents,
+    markConnectorEventsDelivered,
+    markConnectorEventsFailed,
+    purgeConnectorQueue
+} from './connector-queue';
+import { appendCliOpsLogEntry, clearCliOpsLog, getCliOpsLogPath, readCliOpsLog } from './ops-log';
+import { drainConnectorQueue } from './connector-queue-drain';
 
 type SupportedClient = 'claude' | 'cursor' | 'windsurf';
 type CheckStatus = 'pass' | 'warn' | 'fail';
@@ -303,6 +314,27 @@ async function commandDoctor(flags: Record<string, string | boolean>): Promise<n
         details: { env: Boolean(process.env.CTX_MASTER_KEY), file: KEY_PATH }
     });
 
+    const opsLogPath = getCliOpsLogPath();
+    let opsLogWritable = true;
+    let opsLogError: string | null = null;
+    try {
+        const dir = path.dirname(opsLogPath);
+        fs.mkdirSync(dir, { recursive: true });
+        fs.accessSync(dir, fs.constants.W_OK);
+        if (fs.existsSync(opsLogPath)) {
+            fs.accessSync(opsLogPath, fs.constants.W_OK);
+        }
+    } catch (error) {
+        opsLogWritable = false;
+        opsLogError = error instanceof Error ? error.message : String(error);
+    }
+    checks.push({
+        id: 'ops_log_writable',
+        status: opsLogWritable ? 'pass' : 'warn',
+        message: opsLogWritable ? 'CLI operations log path is writable.' : 'CLI operations log path is not writable.',
+        details: { path: opsLogPath, error: opsLogError }
+    });
+
     const dryRunResults = runBootstrap(parseClients(flags.clients), true);
     const failedBootstrap = dryRunResults.some((result: BootstrapResult) => result.status === 'failed');
     checks.push({
@@ -364,12 +396,366 @@ async function commandDashboard(flags: Record<string, string | boolean>): Promis
     return 0;
 }
 
+function parsePositiveNumberFlag(value: string | boolean | undefined, fallback: number): number {
+    if (typeof value !== 'string') return fallback;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+    return parsed;
+}
+
+function parsePositiveIntegerFlag(value: string | boolean | undefined, fallback: number): number {
+    return Math.max(1, Math.floor(parsePositiveNumberFlag(value, fallback)));
+}
+
+async function commandConnectorQueue(action: string | undefined, flags: Record<string, string | boolean>): Promise<number> {
+    const validActions = ['status', 'drain', 'purge', 'logs'];
+    const safeAction = action || 'status';
+
+    if (!validActions.includes(safeAction)) {
+        console.error(`Unknown connector queue action: '${action ?? ''}'`);
+        console.error(`Valid actions: ${validActions.join(', ')}`);
+        return 1;
+    }
+
+    if (safeAction === 'status') {
+        const stats = getConnectorQueueStats(Date.now());
+        const sample = listQueuedConnectorEvents().slice(0, 5).map(item => ({
+            queueId: item.queueId,
+            eventId: item.eventId,
+            sequence: item.sequence,
+            attempts: item.attempts,
+            nextAttemptAt: new Date(item.nextAttemptAt).toISOString(),
+            lastError: item.lastError
+        }));
+
+        const payload = {
+            path: getConnectorQueuePath(),
+            stats: {
+                ...stats,
+                oldestEnqueuedAt: stats.oldestEnqueuedAt ? new Date(stats.oldestEnqueuedAt).toISOString() : null
+            },
+            sample
+        };
+
+        if (Boolean(flags.json)) {
+            console.log(JSON.stringify(payload, null, 2));
+            return 0;
+        }
+
+        console.log('\nConnector Queue\n');
+        console.log(`  path:         ${payload.path}`);
+        console.log(`  pending:      ${payload.stats.pending}`);
+        console.log(`  ready:        ${payload.stats.ready}`);
+        console.log(`  backoff:      ${payload.stats.backoff}`);
+        console.log(`  max_attempts: ${payload.stats.maxAttempts}`);
+        if (payload.stats.oldestEnqueuedAt) {
+            console.log(`  oldest:       ${payload.stats.oldestEnqueuedAt}`);
+        }
+        if (payload.sample.length > 0) {
+            console.log('\n  sample:');
+            for (const row of payload.sample) {
+                console.log(
+                    `    seq=${row.sequence} attempts=${row.attempts} next=${row.nextAttemptAt}` +
+                    `${row.lastError ? ` error=${row.lastError}` : ''}`
+                );
+            }
+        }
+        console.log('');
+        return 0;
+    }
+
+    if (safeAction === 'logs') {
+        const limit = parsePositiveIntegerFlag(flags.limit, 50);
+        const clear = Boolean(flags.clear);
+        const dryRun = Boolean(flags['dry-run']);
+        const confirm = Boolean(flags.confirm);
+        const currentEntries = readCliOpsLog(limit).map((entry) => ({
+            ...entry,
+            isoTime: new Date(entry.timestamp).toISOString()
+        }));
+        const filePath = getCliOpsLogPath();
+
+        if (clear) {
+            if (!dryRun && !confirm) {
+                console.error('connector_queue_logs_clear_requires_confirm: pass --confirm (or use --dry-run).');
+                return 1;
+            }
+
+            if (dryRun) {
+                const payload = { dryRun: true, path: filePath, removableEntries: currentEntries.length };
+                if (Boolean(flags.json)) {
+                    console.log(JSON.stringify(payload, null, 2));
+                } else {
+                    console.log(`connector_queue_logs_clear_dry_run: path=${filePath} removable_entries=${currentEntries.length}`);
+                }
+            } else {
+                const result = clearCliOpsLog();
+                const payload = { dryRun: false, ...result };
+                if (Boolean(flags.json)) {
+                    console.log(JSON.stringify(payload, null, 2));
+                } else {
+                    console.log(`connector_queue_logs_clear: cleared=${result.cleared} path=${result.path}`);
+                }
+            }
+            return 0;
+        }
+
+        const payload = {
+            path: filePath,
+            count: currentEntries.length,
+            entries: currentEntries
+        };
+
+        if (Boolean(flags.json)) {
+            console.log(JSON.stringify(payload, null, 2));
+            return 0;
+        }
+
+        console.log('\nConnector Queue Ops Log\n');
+        console.log(`  path:  ${payload.path}`);
+        console.log(`  count: ${payload.count}`);
+        if (currentEntries.length > 0) {
+            console.log('');
+            for (const entry of currentEntries) {
+                const details = entry.details ? ` details=${JSON.stringify(entry.details)}` : '';
+                console.log(`  ${entry.isoTime} ${entry.status} ${entry.operation}${details}`);
+            }
+        }
+        console.log('');
+        return 0;
+    }
+
+    if (safeAction === 'purge') {
+        const dryRun = Boolean(flags['dry-run']);
+        const confirm = Boolean(flags.confirm);
+        const all = Boolean(flags.all);
+        const olderThanHours = parsePositiveNumberFlag(flags['older-than-hours'], 0);
+        const minAttempts = parsePositiveNumberFlag(flags['min-attempts'], 0);
+        const queuePath = getConnectorQueuePath();
+
+        if (!dryRun && !confirm) {
+            console.error('connector_queue_purge_requires_confirm: pass --confirm (or use --dry-run).');
+            appendCliOpsLogEntry({
+                operation: 'connector.queue.purge',
+                status: 'error',
+                details: { reason: 'missing_confirm', dryRun, all, olderThanHours, minAttempts, queuePath }
+            });
+            return 1;
+        }
+
+        if (!all && olderThanHours <= 0 && minAttempts <= 0) {
+            console.error('connector_queue_purge_requires_filter: use --all or --older-than-hours or --min-attempts.');
+            appendCliOpsLogEntry({
+                operation: 'connector.queue.purge',
+                status: 'error',
+                details: { reason: 'missing_filter', dryRun, all, olderThanHours, minAttempts, queuePath }
+            });
+            return 1;
+        }
+
+        if (dryRun) {
+            const now = Date.now();
+            const candidates = listQueuedConnectorEvents();
+            const removable = candidates.filter(item => {
+                if (all) return true;
+                const olderMatch = olderThanHours > 0 ? (now - item.enqueuedAt) >= olderThanHours * 60 * 60 * 1000 : false;
+                const attemptsMatch = minAttempts > 0 ? item.attempts >= minAttempts : false;
+                return olderMatch || attemptsMatch;
+            }).length;
+
+            const payload = { dryRun: true, removable, total: candidates.length };
+            appendCliOpsLogEntry({
+                operation: 'connector.queue.purge',
+                status: 'dry_run',
+                details: {
+                    all,
+                    olderThanHours,
+                    minAttempts,
+                    removable,
+                    total: candidates.length,
+                    queuePath
+                }
+            });
+            if (Boolean(flags.json)) {
+                console.log(JSON.stringify(payload, null, 2));
+            } else {
+                console.log(`connector_queue_purge_dry_run: removable=${removable} total=${candidates.length}`);
+            }
+            return 0;
+        }
+        const result = purgeConnectorQueue({
+            all,
+            olderThanHours: olderThanHours > 0 ? olderThanHours : undefined,
+            minAttempts: minAttempts > 0 ? minAttempts : undefined
+        });
+
+        const payload = { removed: result.removed, remaining: result.remaining };
+        appendCliOpsLogEntry({
+            operation: 'connector.queue.purge',
+            status: 'success',
+            details: {
+                all,
+                olderThanHours: olderThanHours > 0 ? olderThanHours : null,
+                minAttempts: minAttempts > 0 ? minAttempts : null,
+                removed: result.removed,
+                remaining: result.remaining,
+                queuePath
+            }
+        });
+        if (Boolean(flags.json)) {
+            console.log(JSON.stringify(payload, null, 2));
+        } else {
+            console.log(`connector_queue_purge: removed=${result.removed} remaining=${result.remaining}`);
+        }
+        return 0;
+    }
+
+    // drain
+    const token = resolveToken();
+    if (!token) {
+        console.error('connector_queue_drain_requires_auth: run `0ctx auth login` first.');
+        appendCliOpsLogEntry({
+            operation: 'connector.queue.drain',
+            status: 'error',
+            details: { reason: 'missing_auth', queuePath: getConnectorQueuePath() }
+        });
+        return 1;
+    }
+
+    const registration = readConnectorState();
+    if (!registration) {
+        console.error('connector_queue_drain_requires_registration: run `0ctx connector register` first.');
+        appendCliOpsLogEntry({
+            operation: 'connector.queue.drain',
+            status: 'error',
+            details: { reason: 'missing_registration', queuePath: getConnectorQueuePath() }
+        });
+        return 1;
+    }
+
+    const maxBatches = parsePositiveIntegerFlag(flags['max-batches'], 10);
+    const batchSize = Math.min(500, parsePositiveIntegerFlag(flags['batch-size'], 200));
+    const wait = Boolean(flags.wait);
+    const strict = Boolean(flags.strict) || Boolean(flags['fail-on-retry']);
+    const timeoutMs = parsePositiveIntegerFlag(flags['timeout-ms'], 120_000);
+    const pollMs = Math.max(200, parsePositiveIntegerFlag(flags['poll-ms'], 1_000));
+    const queuePath = getConnectorQueuePath();
+    const drained = await drainConnectorQueue({
+        machineId: registration.machineId,
+        tenantId: registration.tenantId,
+        accessToken: token.accessToken,
+        maxBatches,
+        batchSize,
+        wait,
+        timeoutMs,
+        pollMs
+    }, {
+        now: () => Date.now(),
+        sleep: (ms: number) => new Promise(resolve => setTimeout(resolve, ms)),
+        getReadyEvents: getReadyConnectorEvents,
+        sendEvents: sendConnectorEvents,
+        markEventsDelivered: markConnectorEventsDelivered,
+        markEventsFailed: markConnectorEventsFailed,
+        getQueueStats: getConnectorQueueStats,
+        onBridgeUnsupported: () => {
+            registration.runtime.eventBridgeSupported = false;
+            registration.runtime.eventBridgeError = null;
+            registration.updatedAt = Date.now();
+            writeConnectorState(registration);
+        }
+    });
+
+    registration.runtime.eventQueuePending = drained.queue.pending;
+    registration.runtime.eventQueueReady = drained.queue.ready;
+    registration.runtime.eventQueueBackoff = drained.queue.backoff;
+    registration.runtime.eventBridgeError = drained.lastError;
+    registration.updatedAt = Date.now();
+    writeConnectorState(registration);
+
+    const response = {
+        sent: drained.sent,
+        failed: drained.failed,
+        batches: drained.batches,
+        queue: drained.queue,
+        wait: {
+            enabled: wait,
+            strict,
+            timeoutMs: drained.wait.timeoutMs,
+            pollMs: drained.wait.pollMs,
+            elapsedMs: drained.wait.elapsedMs,
+            timedOut: drained.wait.timedOut,
+            hitMaxBatches: drained.wait.hitMaxBatches,
+            reason: drained.wait.reason
+        },
+        lastError: drained.lastError
+    };
+
+    const status = wait
+        ? (drained.queue.pending === 0 && (!strict || drained.failed === 0) ? 'success' : 'partial')
+        : (drained.failed > 0 ? 'partial' : 'success');
+    appendCliOpsLogEntry({
+        operation: 'connector.queue.drain',
+        status,
+        details: {
+            queuePath,
+            maxBatches,
+            batchSize,
+            wait,
+            strict,
+            timeoutMs: wait ? timeoutMs : null,
+            pollMs: wait ? pollMs : null,
+            sent: drained.sent,
+            failed: drained.failed,
+            batches: drained.batches,
+            pending: drained.queue.pending,
+            ready: drained.queue.ready,
+            backoff: drained.queue.backoff,
+            reason: drained.wait.reason,
+            lastError: drained.lastError
+        }
+    });
+
+    if (Boolean(flags.json)) {
+        console.log(JSON.stringify(response, null, 2));
+    } else {
+        console.log('\nConnector Queue Drain\n');
+        console.log(`  sent:         ${drained.sent}`);
+        console.log(`  failed:       ${drained.failed}`);
+        console.log(`  batches:      ${drained.batches}`);
+        console.log(`  pending:      ${drained.queue.pending}`);
+        console.log(`  ready:        ${drained.queue.ready}`);
+        console.log(`  backoff:      ${drained.queue.backoff}`);
+        if (wait) {
+            console.log(`  wait:         true`);
+            console.log(`  strict:       ${strict}`);
+            console.log(`  timeout_ms:   ${drained.wait.timeoutMs}`);
+            console.log(`  elapsed_ms:   ${drained.wait.elapsedMs}`);
+            console.log(`  reason:       ${drained.wait.reason}`);
+        }
+        if (drained.lastError) {
+            console.log(`  error:        ${drained.lastError}`);
+        }
+        console.log('');
+    }
+
+    if (wait) {
+        if (drained.queue.pending > 0) return 1;
+        return strict && drained.failed > 0 ? 1 : 0;
+    }
+    if (strict && drained.failed > 0) return 1;
+    return drained.failed > 0 ? 1 : 0;
+}
+
 async function commandConnector(action: string | undefined, flags: Record<string, string | boolean>): Promise<number> {
-    const validActions = ['install', 'enable', 'disable', 'uninstall', 'status', 'start', 'stop', 'restart', 'verify', 'register', 'run', 'logs'];
+    const validActions = ['install', 'enable', 'disable', 'uninstall', 'status', 'start', 'stop', 'restart', 'verify', 'register', 'run', 'queue', 'logs'];
     if (!action || !validActions.includes(action)) {
         console.error(`Unknown connector action: '${action ?? ''}'`);
         console.error(`Valid actions: ${validActions.join(', ')}`);
         return 1;
+    }
+
+    if (action === 'queue') {
+        return commandConnectorQueue(undefined, flags);
     }
 
     if (action === 'run') {
@@ -605,6 +991,8 @@ async function commandConnector(action: string | undefined, flags: Record<string
                 ? 'degraded'
                 : (cloudRequired && !cloud.connected)
                     ? 'degraded'
+                : Boolean(registration.runtime.eventBridgeError)
+                    ? 'degraded'
                 : (sync?.enabled && sync?.running ? 'connected' : 'degraded');
 
         const payload = {
@@ -625,7 +1013,12 @@ async function commandConnector(action: string | undefined, flags: Record<string
                     lastEventSequence: registration.runtime.lastEventSequence,
                     lastEventSyncAt: registration.runtime.lastEventSyncAt
                         ? new Date(registration.runtime.lastEventSyncAt).toISOString()
-                        : null
+                        : null,
+                    queue: {
+                        pending: registration.runtime.eventQueuePending,
+                        ready: registration.runtime.eventQueueReady,
+                        backoff: registration.runtime.eventQueueBackoff
+                    }
                 }
             } : {
                 registered: false,
@@ -667,6 +1060,11 @@ async function commandConnector(action: string | undefined, flags: Record<string
                 console.log(
                     `  event_bridge: supported=${payload.registration.runtime.eventBridgeSupported}` +
                     ` sequence=${payload.registration.runtime.lastEventSequence}`
+                );
+                console.log(
+                    `  event_queue:  pending=${payload.registration.runtime.queue.pending}` +
+                    ` ready=${payload.registration.runtime.queue.ready}` +
+                    ` backoff=${payload.registration.runtime.queue.backoff}`
                 );
                 if (payload.registration.runtime.lastEventSyncAt) {
                     console.log(`  event_sync:   ${payload.registration.runtime.lastEventSyncAt}`);
@@ -786,6 +1184,10 @@ Connector:
   0ctx connector verify [--require-cloud]
   0ctx connector register [--force] [--local-only] [--require-cloud]
   0ctx connector run [--once] [--interval-ms=30000] [--no-daemon-autostart]
+  0ctx connector queue status [--json]
+  0ctx connector queue drain [--max-batches=10] [--batch-size=200] [--wait] [--strict|--fail-on-retry] [--timeout-ms=120000] [--poll-ms=1000] [--json]
+  0ctx connector queue purge [--all|--older-than-hours=N|--min-attempts=N] [--dry-run|--confirm] [--json]
+  0ctx connector queue logs [--limit=50] [--json] [--clear --confirm|--dry-run]
   0ctx connector logs
 
 Service management compatibility (requires Admin on Windows):
@@ -1022,6 +1424,9 @@ async function main(): Promise<number> {
         case 'connector':
             if (parsed.subcommand === 'service') {
                 return commandConnector(parsed.serviceAction, parsed.flags);
+            }
+            if (parsed.subcommand === 'queue') {
+                return commandConnectorQueue(parsed.positionalArgs[0], parsed.flags);
             }
             return commandConnector(parsed.subcommand, parsed.flags);
         case 'dashboard':

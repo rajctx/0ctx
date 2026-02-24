@@ -215,6 +215,9 @@ Local state under `~/.0ctx/`:
 - `0ctx.db` - SQLite database (WAL mode, foreign keys enabled)
 - `0ctx.sock` - Unix domain socket (or `\\.\pipe\0ctx.sock` on Windows)
 - `master.key` - local encryption key fallback (when `CTX_MASTER_KEY` is not provided)
+- `connector.json` - connector registration + runtime bridge state
+- `connector-event-queue.json` - persistent connector event replay queue (override: `CTX_CONNECTOR_QUEUE_PATH`)
+- `ops.log` - local CLI operations audit log for connector queue actions (override: `CTX_CLI_OPS_LOG_PATH`)
 - `backups/` - encrypted backup files (`.enc`) and optional plaintext dumps (`.json`)
 
 ## Testing and CI

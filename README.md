@@ -63,6 +63,13 @@ npm run cli -- setup --clients=all --no-open
 0ctx connector service enable
 0ctx connector service start
 
+# Inspect/drain/purge connector event queue
+0ctx connector queue status --json
+0ctx connector queue drain --max-batches=10 --wait --strict --timeout-ms=120000
+0ctx connector queue purge --older-than-hours=168 --dry-run
+0ctx connector queue logs --limit=50
+0ctx connector queue logs --clear --dry-run
+
 # Repair local install
 0ctx repair --clients=all
 ```

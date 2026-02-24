@@ -43,6 +43,9 @@ describe('connector state storage', () => {
         expect(stored?.runtime.eventSubscriptionId).toBeNull();
         expect(stored?.runtime.lastEventSequence).toBe(0);
         expect(stored?.runtime.eventBridgeSupported).toBe(true);
+        expect(stored?.runtime.eventQueuePending).toBe(0);
+        expect(stored?.runtime.eventQueueReady).toBe(0);
+        expect(stored?.runtime.eventQueueBackoff).toBe(0);
     });
 
     it('returns existing registration unless force is provided', () => {
@@ -92,7 +95,10 @@ describe('connector state storage', () => {
                 eventSubscriptionId: 'sub-old',
                 eventBridgeSupported: false,
                 eventBridgeError: 'unsupported',
-                lastEventSequence: 42
+                lastEventSequence: 42,
+                eventQueuePending: 10,
+                eventQueueReady: 3,
+                eventQueueBackoff: 7
             }
         });
 
@@ -107,5 +113,8 @@ describe('connector state storage', () => {
         expect(forced.state.runtime.daemonSessionToken).toBeNull();
         expect(forced.state.runtime.eventSubscriptionId).toBeNull();
         expect(forced.state.runtime.lastEventSequence).toBe(42);
+        expect(forced.state.runtime.eventQueuePending).toBe(10);
+        expect(forced.state.runtime.eventQueueReady).toBe(3);
+        expect(forced.state.runtime.eventQueueBackoff).toBe(7);
     });
 });

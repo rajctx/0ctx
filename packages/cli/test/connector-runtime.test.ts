@@ -4,6 +4,20 @@ import type { ConnectorState } from '../src/connector';
 import type { TokenStore } from '../src/auth';
 import type { ConnectorEventPayload } from '../src/cloud';
 
+function baseRuntimeState() {
+    return {
+        daemonSessionToken: null,
+        eventSubscriptionId: null,
+        lastEventSequence: 0,
+        lastEventSyncAt: null,
+        eventBridgeSupported: true,
+        eventBridgeError: null,
+        eventQueuePending: 0,
+        eventQueueReady: 0,
+        eventQueueBackoff: 0
+    };
+}
+
 function createBaseDeps(overrides: Partial<ConnectorRuntimeDependencies>): ConnectorRuntimeDependencies {
     const token: TokenStore = {
         accessToken: 'token',
@@ -26,14 +40,7 @@ function createBaseDeps(overrides: Partial<ConnectorRuntimeDependencies>): Conne
             lastHeartbeatAt: null,
             lastError: null
         },
-        runtime: {
-            daemonSessionToken: null,
-            eventSubscriptionId: null,
-            lastEventSequence: 0,
-            lastEventSyncAt: null,
-            eventBridgeSupported: true,
-            eventBridgeError: null
-        }
+        runtime: baseRuntimeState()
     };
 
     return {
@@ -74,6 +81,15 @@ function createBaseDeps(overrides: Partial<ConnectorRuntimeDependencies>): Conne
         pollEvents: async () => ({ cursor: 0, events: [] as ConnectorEventPayload[] }),
         ackEvents: async () => ({ lastAckedSequence: 0 }),
         sendConnectorEvents: async () => ({ ok: true, statusCode: 200 }),
+        enqueueEvents: (_subscriptionId, events) => ({
+            enqueued: events.length,
+            lastSequence: events.length > 0 ? events[events.length - 1].sequence : null
+        }),
+        getReadyEvents: () => [],
+        markEventsDelivered: () => undefined,
+        markEventsFailed: () => undefined,
+        getQueueStats: () => ({ pending: 0, ready: 0, backoff: 0, maxAttempts: 0, oldestEnqueuedAt: null }),
+        pruneQueue: () => ({ removed: 0, remaining: 0 }),
         ...overrides
     };
 }
@@ -96,14 +112,7 @@ describe('connector runtime cycle', () => {
                     lastHeartbeatAt: null,
                     lastError: null
                 },
-                runtime: {
-                    daemonSessionToken: null,
-                    eventSubscriptionId: null,
-                    lastEventSequence: 0,
-                    lastEventSyncAt: null,
-                    eventBridgeSupported: true,
-                    eventBridgeError: null
-                }
+                runtime: baseRuntimeState()
             }),
             writeConnectorState: (state) => {
                 stored = state;
@@ -120,6 +129,7 @@ describe('connector runtime cycle', () => {
         expect(stored?.cloud.lastHeartbeatAt).toBe(1_700_000_000_000);
         expect(stored?.runtime.daemonSessionToken).toBe('sess-1');
         expect(stored?.runtime.eventSubscriptionId).toBe('sub-1');
+        expect(stored?.runtime.eventQueuePending).toBe(0);
     });
 
     it('reports offline posture when daemon is unreachable and autostart is disabled', async () => {
@@ -176,14 +186,7 @@ describe('connector runtime cycle', () => {
                     lastHeartbeatAt: null,
                     lastError: null
                 },
-                runtime: {
-                    daemonSessionToken: null,
-                    eventSubscriptionId: null,
-                    lastEventSequence: 0,
-                    lastEventSyncAt: null,
-                    eventBridgeSupported: true,
-                    eventBridgeError: null
-                }
+                runtime: baseRuntimeState()
             }),
             fetchConnectorCapabilities: async () => ({ ok: false, error: 'caps_failed' }),
             sendConnectorHeartbeat: async () => ({ ok: false, error: 'heartbeat_failed' }),
@@ -219,12 +222,10 @@ describe('connector runtime cycle', () => {
                     lastError: null
                 },
                 runtime: {
+                    ...baseRuntimeState(),
                     daemonSessionToken: 'sess-1',
                     eventSubscriptionId: 'sub-1',
                     lastEventSequence: 10,
-                    lastEventSyncAt: null,
-                    eventBridgeSupported: true,
-                    eventBridgeError: null
                 }
             }),
             pollEvents: async () => ({
@@ -250,6 +251,34 @@ describe('connector runtime cycle', () => {
                     }
                 ]
             }),
+            enqueueEvents: (_subscriptionId, events) => ({
+                enqueued: events.length,
+                lastSequence: events.length > 0 ? events[events.length - 1].sequence : null
+            }),
+            getReadyEvents: () => [
+                {
+                    queueId: 'q-11',
+                    eventId: 'evt-11',
+                    subscriptionId: 'sub-1',
+                    sequence: 11,
+                    contextId: 'ctx-1',
+                    type: 'NodeAdded',
+                    timestamp: 1_700_000_000_001,
+                    source: 'session:s-1',
+                    payload: { method: 'addNode' }
+                },
+                {
+                    queueId: 'q-12',
+                    eventId: 'evt-12',
+                    subscriptionId: 'sub-1',
+                    sequence: 12,
+                    contextId: 'ctx-1',
+                    type: 'NodeUpdated',
+                    timestamp: 1_700_000_000_002,
+                    source: 'session:s-1',
+                    payload: { method: 'updateNode' }
+                }
+            ],
             sendConnectorEvents: async (_token, payload) => {
                 sentEvents = payload.events.length;
                 return { ok: true, statusCode: 200 };
@@ -258,6 +287,8 @@ describe('connector runtime cycle', () => {
                 ackedSequence = sequence;
                 return { lastAckedSequence: sequence };
             },
+            markEventsDelivered: () => undefined,
+            getQueueStats: () => ({ pending: 0, ready: 0, backoff: 0, maxAttempts: 0, oldestEnqueuedAt: null }),
             writeConnectorState: (state) => {
                 stored = state;
             }
@@ -290,29 +321,32 @@ describe('connector runtime cycle', () => {
                     lastError: null
                 },
                 runtime: {
+                    ...baseRuntimeState(),
                     daemonSessionToken: 'sess-1',
                     eventSubscriptionId: 'sub-1',
                     lastEventSequence: 10,
-                    lastEventSyncAt: null,
-                    eventBridgeSupported: true,
-                    eventBridgeError: null
                 }
             }),
-            pollEvents: async () => ({
-                cursor: 11,
-                events: [
-                    {
-                        eventId: 'evt-11',
-                        sequence: 11,
-                        contextId: 'ctx-1',
-                        type: 'NodeAdded',
-                        timestamp: 1_700_000_000_001,
-                        source: 'session:s-1',
-                        payload: { method: 'addNode' }
-                    }
-                ]
+            pollEvents: async () => ({ cursor: 11, events: [] }),
+            enqueueEvents: (_subscriptionId, events) => ({
+                enqueued: events.length,
+                lastSequence: events.length > 0 ? events[events.length - 1].sequence : null
             }),
+            getReadyEvents: () => [
+                {
+                    queueId: 'q-11',
+                    eventId: 'evt-11',
+                    subscriptionId: 'sub-1',
+                    sequence: 11,
+                    contextId: 'ctx-1',
+                    type: 'NodeAdded',
+                    timestamp: 1_700_000_000_001,
+                    source: 'session:s-1',
+                    payload: { method: 'addNode' }
+                }
+            ],
             sendConnectorEvents: async () => ({ ok: false, statusCode: 404, error: 'not_found' }),
+            markEventsFailed: () => undefined,
             writeConnectorState: (state) => {
                 stored = state;
             }
@@ -322,5 +356,56 @@ describe('connector runtime cycle', () => {
         expect(summary.posture).toBe('connected');
         expect(stored?.runtime.eventBridgeSupported).toBe(false);
         expect(stored?.runtime.eventBridgeError).toBeNull();
+    });
+
+    it('marks queued events failed and keeps bridge enabled on transient ingest failure', async () => {
+        let failedIds: string[] = [];
+        let failedError = '';
+        const deps = createBaseDeps({
+            readConnectorState: () => ({
+                machineId: 'm-1',
+                tenantId: 'tenant-a',
+                uiUrl: 'https://app.0ctx.com',
+                registeredAt: 1,
+                updatedAt: 1,
+                registrationMode: 'cloud',
+                cloud: {
+                    registrationId: 'reg-1',
+                    streamUrl: 'wss://stream',
+                    capabilities: ['sync'],
+                    lastHeartbeatAt: null,
+                    lastError: null
+                },
+                runtime: {
+                    ...baseRuntimeState(),
+                    daemonSessionToken: 'sess-1',
+                    eventSubscriptionId: 'sub-1'
+                }
+            }),
+            pollEvents: async () => ({ cursor: 0, events: [] }),
+            getReadyEvents: () => [
+                {
+                    queueId: 'q-1',
+                    eventId: 'evt-1',
+                    subscriptionId: 'sub-1',
+                    sequence: 1,
+                    contextId: 'ctx-1',
+                    type: 'NodeAdded',
+                    timestamp: 1_700_000_000_001,
+                    source: 'session:s-1',
+                    payload: { method: 'addNode' }
+                }
+            ],
+            sendConnectorEvents: async () => ({ ok: false, statusCode: 500, error: 'server_error' }),
+            markEventsFailed: (queueIds, errorText) => {
+                failedIds = queueIds;
+                failedError = errorText;
+            }
+        });
+
+        const summary = await runConnectorRuntimeCycle({}, deps);
+        expect(summary.posture).toBe('degraded');
+        expect(failedIds).toEqual(['q-1']);
+        expect(failedError).toBe('server_error');
     });
 });

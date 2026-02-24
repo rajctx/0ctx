@@ -18,6 +18,9 @@ export interface ConnectorRuntimeState {
     lastEventSyncAt: number | null;
     eventBridgeSupported: boolean;
     eventBridgeError: string | null;
+    eventQueuePending: number;
+    eventQueueReady: number;
+    eventQueueBackoff: number;
 }
 
 export interface ConnectorState {
@@ -74,7 +77,10 @@ export function readConnectorState(): ConnectorState | null {
                 lastEventSequence: typeof parsed.runtime?.lastEventSequence === 'number' ? parsed.runtime.lastEventSequence : 0,
                 lastEventSyncAt: parsed.runtime?.lastEventSyncAt ?? null,
                 eventBridgeSupported: parsed.runtime?.eventBridgeSupported !== false,
-                eventBridgeError: parsed.runtime?.eventBridgeError ?? null
+                eventBridgeError: parsed.runtime?.eventBridgeError ?? null,
+                eventQueuePending: typeof parsed.runtime?.eventQueuePending === 'number' ? parsed.runtime.eventQueuePending : 0,
+                eventQueueReady: typeof parsed.runtime?.eventQueueReady === 'number' ? parsed.runtime.eventQueueReady : 0,
+                eventQueueBackoff: typeof parsed.runtime?.eventQueueBackoff === 'number' ? parsed.runtime.eventQueueBackoff : 0
             }
         };
     } catch {
@@ -103,7 +109,10 @@ export function registerConnector(options: RegisterConnectorOptions): { state: C
             lastEventSequence: existing?.runtime.lastEventSequence ?? 0,
             lastEventSyncAt: existing?.runtime.lastEventSyncAt ?? null,
             eventBridgeSupported: true,
-            eventBridgeError: null
+            eventBridgeError: null,
+            eventQueuePending: existing?.runtime.eventQueuePending ?? 0,
+            eventQueueReady: existing?.runtime.eventQueueReady ?? 0,
+            eventQueueBackoff: existing?.runtime.eventQueueBackoff ?? 0
         }
         : {
             daemonSessionToken: existing?.runtime.daemonSessionToken ?? null,
@@ -111,7 +120,10 @@ export function registerConnector(options: RegisterConnectorOptions): { state: C
             lastEventSequence: existing?.runtime.lastEventSequence ?? 0,
             lastEventSyncAt: existing?.runtime.lastEventSyncAt ?? null,
             eventBridgeSupported: existing?.runtime.eventBridgeSupported ?? true,
-            eventBridgeError: existing?.runtime.eventBridgeError ?? null
+            eventBridgeError: existing?.runtime.eventBridgeError ?? null,
+            eventQueuePending: existing?.runtime.eventQueuePending ?? 0,
+            eventQueueReady: existing?.runtime.eventQueueReady ?? 0,
+            eventQueueBackoff: existing?.runtime.eventQueueBackoff ?? 0
         };
 
     const state: ConnectorState = {
@@ -134,7 +146,10 @@ export function registerConnector(options: RegisterConnectorOptions): { state: C
             lastEventSequence: options.runtime?.lastEventSequence ?? baseRuntime.lastEventSequence,
             lastEventSyncAt: options.runtime?.lastEventSyncAt ?? baseRuntime.lastEventSyncAt,
             eventBridgeSupported: options.runtime?.eventBridgeSupported ?? baseRuntime.eventBridgeSupported,
-            eventBridgeError: options.runtime?.eventBridgeError ?? baseRuntime.eventBridgeError
+            eventBridgeError: options.runtime?.eventBridgeError ?? baseRuntime.eventBridgeError,
+            eventQueuePending: options.runtime?.eventQueuePending ?? baseRuntime.eventQueuePending,
+            eventQueueReady: options.runtime?.eventQueueReady ?? baseRuntime.eventQueueReady,
+            eventQueueBackoff: options.runtime?.eventQueueBackoff ?? baseRuntime.eventQueueBackoff
         }
     };
 

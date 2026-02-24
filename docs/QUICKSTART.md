@@ -55,6 +55,27 @@ After bootstrap, restart your AI client (Claude Desktop, Cursor, or Windsurf). C
 # Check managed connector service state
 0ctx connector service status
 
+# Inspect queued event replay state
+0ctx connector queue status --json
+
+# Optional: drain queue until empty or timeout
+0ctx connector queue drain --wait --strict --timeout-ms=120000
+
+# Optional: inspect local connector queue ops log
+0ctx connector queue logs --limit=50
+
+# Optional: clear local queue ops log (safe flow)
+0ctx connector queue logs --clear --dry-run
+0ctx connector queue logs --clear --confirm
+
+# Notes for drain --wait JSON output:
+# wait.reason values:
+# - drained: queue reached zero pending events
+# - timeout: deadline reached before queue drained
+# - max_batches: max batch limit reached for this run
+# - bridge_unsupported: cloud ingest endpoint not supported (404 fallback)
+# - single_pass: non-wait mode completed one pass
+
 # Re-run bootstrap for a specific client
 0ctx bootstrap --clients=claude
 

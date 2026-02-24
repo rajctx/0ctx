@@ -18,6 +18,14 @@ import {
     sendConnectorHeartbeat,
     sendConnectorEvents
 } from './cloud';
+import {
+    enqueueConnectorEvents,
+    getConnectorQueueStats,
+    pruneConnectorQueue,
+    getReadyConnectorEvents,
+    markConnectorEventsDelivered,
+    markConnectorEventsFailed
+} from './connector-queue';
 
 export interface ConnectorRuntimeSyncStatus {
     enabled: boolean;
@@ -127,6 +135,32 @@ export interface ConnectorRuntimeDependencies {
             events: ConnectorEventPayload[];
         }
     ): Promise<{ ok: boolean; error?: string; statusCode: number }>;
+    enqueueEvents(
+        subscriptionId: string,
+        events: ConnectorEventPayload[],
+        now: number
+    ): { enqueued: number; lastSequence: number | null };
+    getReadyEvents(limit: number, now: number): Array<{
+        queueId: string;
+        eventId: string;
+        subscriptionId: string;
+        sequence: number;
+        contextId: string | null;
+        type: string;
+        timestamp: number;
+        source: string;
+        payload: Record<string, unknown>;
+    }>;
+    markEventsDelivered(queueIds: string[]): void;
+    markEventsFailed(queueIds: string[], error: string, now: number): void;
+    getQueueStats(now: number): {
+        pending: number;
+        ready: number;
+        backoff: number;
+        maxAttempts: number;
+        oldestEnqueuedAt: number | null;
+    };
+    pruneQueue(now: number): { removed: number; remaining: number };
 }
 
 const DEFAULT_INTERVAL_MS = 30_000;
@@ -288,7 +322,13 @@ function getRuntimeDependencies(): ConnectorRuntimeDependencies {
         subscribeEvents,
         pollEvents,
         ackEvents,
-        sendConnectorEvents
+        sendConnectorEvents,
+        enqueueEvents: (subscriptionId, events, now) => enqueueConnectorEvents(subscriptionId, events, now),
+        getReadyEvents: (limit, now) => getReadyConnectorEvents(limit, now),
+        markEventsDelivered: (queueIds) => markConnectorEventsDelivered(queueIds),
+        markEventsFailed: (queueIds, error, now) => markConnectorEventsFailed(queueIds, error, now),
+        getQueueStats: (now) => getConnectorQueueStats(now),
+        pruneQueue: (now) => pruneConnectorQueue({ now })
     };
 }
 
@@ -330,6 +370,8 @@ export async function runConnectorRuntimeCycle(
 
     let cloudConnected = false;
     if (registration && token) {
+        deps.pruneQueue(deps.now());
+
         if (registration.registrationMode !== 'cloud') {
             const cloudRegistration = await deps.registerConnectorInCloud(token.accessToken, {
                 machineId: registration.machineId,
@@ -435,26 +477,48 @@ export async function runConnectorRuntimeCycle(
                     );
 
                     if (polled.events.length > 0) {
+                        const enqueueResult = deps.enqueueEvents(subscriptionId, polled.events, deps.now());
+                        const ackSequence = enqueueResult.lastSequence ?? polled.cursor;
+                        if (typeof ackSequence === 'number' && ackSequence > registration.runtime.lastEventSequence) {
+                            await deps.ackEvents(daemonSessionToken, subscriptionId, ackSequence);
+                            registration.runtime.lastEventSequence = ackSequence;
+                        }
+                    }
+
+                    const readyEvents = deps.getReadyEvents(200, deps.now());
+                    if (readyEvents.length > 0) {
+                        const cursor = readyEvents.reduce((max, item) => Math.max(max, item.sequence), 0);
                         const ingestResult = await deps.sendConnectorEvents(token.accessToken, {
                             machineId: registration.machineId,
                             tenantId: registration.tenantId,
-                            subscriptionId,
-                            cursor: polled.cursor,
-                            events: polled.events
+                            subscriptionId: readyEvents[0].subscriptionId,
+                            cursor,
+                            events: readyEvents.map(item => ({
+                                eventId: item.eventId,
+                                sequence: item.sequence,
+                                contextId: item.contextId,
+                                type: item.type,
+                                timestamp: item.timestamp,
+                                source: item.source,
+                                payload: item.payload
+                            }))
                         });
 
+                        const queueIds = readyEvents.map(item => item.queueId);
                         if (ingestResult.ok) {
-                            await deps.ackEvents(daemonSessionToken, subscriptionId, polled.cursor);
-                            registration.runtime.lastEventSequence = polled.cursor;
+                            deps.markEventsDelivered(queueIds);
                             registration.runtime.lastEventSyncAt = deps.now();
                             registration.runtime.eventBridgeError = null;
                         } else if (ingestResult.statusCode === 404) {
-                            // Control plane may not have event ingest yet; stop retrying until re-registration.
+                            // Control plane may not have event ingest yet; stop retrying until explicit re-enable.
                             registration.runtime.eventBridgeSupported = false;
                             registration.runtime.eventBridgeError = null;
+                            deps.markEventsFailed(queueIds, 'event_ingest_unavailable', deps.now());
                         } else {
-                            registration.runtime.eventBridgeError = ingestResult.error ?? 'event_ingest_failed';
-                            lastError = registration.runtime.eventBridgeError;
+                            const errorText = ingestResult.error ?? 'event_ingest_failed';
+                            deps.markEventsFailed(queueIds, errorText, deps.now());
+                            registration.runtime.eventBridgeError = errorText;
+                            lastError = errorText;
                         }
                     } else {
                         registration.runtime.eventBridgeError = null;
@@ -473,12 +537,22 @@ export async function runConnectorRuntimeCycle(
                     lastError = message;
                 }
             }
+
+            const queueStats = deps.getQueueStats(deps.now());
+            registration.runtime.eventQueuePending = queueStats.pending;
+            registration.runtime.eventQueueReady = queueStats.ready;
+            registration.runtime.eventQueueBackoff = queueStats.backoff;
         }
 
         registration.updatedAt = deps.now();
         registration.cloud.lastError = lastError;
         deps.writeConnectorState(registration);
     } else if (registration && !token) {
+        deps.pruneQueue(deps.now());
+        const queueStats = deps.getQueueStats(deps.now());
+        registration.runtime.eventQueuePending = queueStats.pending;
+        registration.runtime.eventQueueReady = queueStats.ready;
+        registration.runtime.eventQueueBackoff = queueStats.backoff;
         registration.updatedAt = deps.now();
         registration.cloud.lastError = 'auth_required';
         deps.writeConnectorState(registration);
@@ -489,7 +563,7 @@ export async function runConnectorRuntimeCycle(
         ? 'offline'
         : (!token || !registration)
             ? 'degraded'
-            : (registration.registrationMode === 'cloud' && !cloudConnected)
+            : (registration.registrationMode === 'cloud' && (!cloudConnected || Boolean(registration.runtime.eventBridgeError)))
                 ? 'degraded'
                 : (sync?.enabled && sync?.running ? 'connected' : 'degraded');
 
