@@ -2,64 +2,72 @@
 
 Updated: 2026-02-24
 
-This document describes the route-level user journeys for the hosted dashboard UI.
+This document defines route-level user journeys for the hosted dashboard and onboarding surfaces.
 
-## 1. Authentication Flow
+## 1) First-time Onboarding Flow
 
-Scenario: user opens the product for the first time.
-Primary route: `/` -> `/api/auth/login` -> `/dashboard/workspace`
+Primary route: `/install`
 
-1. User opens `/` and selects sign-in.
-2. Auth middleware/session routes complete login callback.
-3. User lands in `/dashboard/workspace` with active shell navigation and context list.
+1. User arrives from CLI handoff (`0ctx setup`) or direct navigation.
+2. UI loads onboarding checklist steps.
+3. User resolves blocked steps in order:
+   - authenticate
+   - connector registration
+   - bridge health
+   - MCP detection
+4. User creates/selects initial context.
+5. UI marks onboarding complete and routes to `/dashboard/workspace`.
 
-## 2. Workspace Graph Flow
+## 2) Authentication Flow
 
-Scenario: user explores and edits context graph data.
+Primary route: `/` -> `/auth/login` -> `/dashboard/workspace`
+
+1. User selects sign-in.
+2. Auth0 login and callback complete.
+3. Protected routes load with active session.
+
+## 3) Workspace Graph Flow
+
 Primary route: `/dashboard/workspace`
 
-1. User selects active context from sidebar.
-2. Workspace loads graph via `getGraphData`.
-3. User edits node content/tags or creates a new node.
-4. Changes persist through daemon APIs and appear in graph + inspector.
+1. User selects active context.
+2. UI loads graph projection for context.
+3. User performs graph operations.
+4. UI reflects updated state and audit projections.
 
-## 3. Operations Runbook Flow
+## 4) Operations Runbook Flow
 
-Scenario: user validates and repairs local runtime health.
 Primary route: `/dashboard/operations`
 
-1. User runs install/status/doctor/bootstrap/repair workflows from runbook actions.
-2. UI executes CLI-backed workflows and shows structured output/state.
-3. User opens diagnostics runtime controls to inspect connector posture and queue lag.
-4. User drains queue, previews purge impact, and reviews queue logs without opening terminal.
+1. User runs diagnostics or repair workflow via hosted actions.
+2. UI shows structured command/status output.
+3. User inspects connector posture and queue health.
+4. User performs drain/purge-preview controls when available.
 
-## 4. Integrations + Connector Flow
+## 5) Integrations and Policy Flow
 
-Scenario: user configures AI client integrations and connector bridge health.
 Primary route: `/dashboard/integrations`
 
-1. User selects target clients (`claude`, `cursor`, `windsurf`).
-2. User runs bootstrap detect/apply and connector verify/register flows.
-3. User checks connector posture and queue status cards.
-4. User sets integration policy boundaries (`integration.chatgpt.enabled`, `integration.chatgpt.requireApproval`, `integration.autoBootstrap`).
-5. User drains queue when needed and confirms operational result.
+1. User selects target AI clients.
+2. User runs bootstrap detect/apply and connector verify/register.
+3. User reviews queue and bridge status.
+4. User updates integration policy toggles.
+5. UI confirms saved policy state.
 
-## 5. Audit + Backup Flow
+## 6) Audit and Backup Flow
 
-Scenario: user reviews change history and recovery points.
 Primary routes: `/dashboard/audit`, `/dashboard/backups`
 
-1. Audit route shows scoped audit events (active context or all contexts).
-2. Backups route creates encrypted backups and lists existing artifacts.
-3. User restores backup into a context and verifies refresh/audit updates.
+1. User reviews scoped audit events.
+2. User creates encrypted backups.
+3. User restores selected backup into a context.
+4. UI refreshes audit/backup state and shows operation result.
 
-## 6. Policy + Completion Flow
+## 7) Settings and Governance Flow
 
-Scenario: user governs sync and completion readiness for the active context.
 Primary route: `/dashboard/settings`
 
-1. User reviews auth/tenant state.
-2. UI evaluates blackboard completion (`evaluateCompletion`) for active context.
-3. User reads blocking reasons (gates/leases/events) if incomplete.
-4. User sets sync policy (`local_only`, `metadata_only`, `full_sync`) and saves.
-5. User validates connector posture in header badges before moving back to operations/integrations.
+1. User reviews auth/tenant/session state.
+2. User evaluates completion readiness for active context.
+3. User updates sync policy.
+4. User validates resulting runtime posture.

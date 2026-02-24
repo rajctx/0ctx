@@ -2,69 +2,78 @@
 
 Updated: 2026-02-24
 
-Related tracking:
-
+Related:
+- `docs/HOSTED_UI_PRODUCT_ARCHITECTURE.md`
+- `docs/HOSTED_UI_ONBOARDING_SPEC.md`
+- `docs/UI_BFF_API_CONTRACT.md`
 - `docs/ENTERPRISE_ROADMAP_AND_TRACKER.md`
 
 ## Goals
 
-- Keep each dashboard route focused on one operational concern.
-- Preserve a consistent enterprise shell (navigation, context switching, health/status) across all views.
-- Avoid mixing graph editing, diagnostics, audit, and backup workflows on one page.
+- Keep each route focused on one operational concern.
+- Maintain a consistent enterprise shell across authenticated routes.
+- Keep onboarding explicit and verifiable.
+- Avoid mixed concerns (graph editing + ops + backup in one surface).
 
 ## Route Map
 
+## Public
+
 - `/`
-  - Public landing page with product messaging and CTAs linking to `/api/auth/login`.
-- `/login`, `/api/auth/*`
-  - Next.js Auth0 universal login routes (session negotiation, callbacks, logout).
+  - landing with product narrative and CTA into onboarding/dashboard.
+- `/install`
+  - guided onboarding checklist and runtime readiness.
+- `/docs`
+  - documentation index and runbook pointers.
+- `/login`, `/auth/*`
+  - Auth0 login/logout/callback/session flow.
+
+## Authenticated
+
 - `/dashboard`
-  - Authenticated session requirement (enforced by middleware).
-  - Compatibility entrypoint; redirects to `/dashboard/workspace`.
+  - compatibility entrypoint; redirects to `/dashboard/workspace`.
 - `/dashboard/workspace`
-  - Graph visualization, node inspector, edit/delete actions, and graph controls.
+  - graph exploration and context editing.
 - `/dashboard/operations`
-  - Runbook/diagnostics workflows (`install`, `status`, `doctor`, `bootstrap`, `repair`) plus connector runtime controls (status, queue lag, drain/purge preview, queue logs).
+  - runtime diagnostics and remediation controls.
 - `/dashboard/integrations`
-  - Integration manager workflows (MCP bootstrap detect/apply, connector status/verify/register, queue status/drain, ChatGPT policy controls, auto-bootstrap policy).
+  - AI integration setup and policy controls.
 - `/dashboard/audit`
-  - Audit event visibility and scope filtering.
+  - audit event visibility and filtering.
 - `/dashboard/backups`
-  - Backup create/list/restore workflows.
+  - backup create/list/restore workflows.
 - `/dashboard/settings`
-  - Auth state, context completion evaluator, and per-context sync policy controls.
+  - auth/session state, completion evaluation, sync policy controls.
+
+## Authentication and Guarding
+
+- `/dashboard/*` and `/api/v1/*` require authenticated session.
+- Session enforcement is owned by active `proxy.ts`.
+- Unauthenticated access redirects to login with return path preserved.
 
 ## Shared Shell Responsibilities
 
-Implemented in dashboard layout/shell (`DashboardShell`):
-
-- Global authentication enforcement (redirecting unauthenticated requests).
-- Route navigation for Workspace, Operations, Integrations, Audit, Backups, Settings.
-- Active-context list and context creation sidebar.
-- Sign-out action.
-- Top status strip:
-  - daemon health state (Connected/Degraded/Offline)
-  - active capability counts
-  - context request metrics
-  - connector posture/bridge/cloud state for capability-gated navigation hints.
-- Background polling for shared dashboard state.
+Implemented by dashboard shell/layout:
+- global nav and route context
+- active context selector
+- runtime posture indicators
+- connector/cloud posture badges
+- refresh/reload controls
 
 ## State Ownership
 
-- Shared dashboard context provider owns:
-  - available workspace contexts + active context selection
-  - daemon health/metrics/capabilities snapshots
-  - continuous background polling for runtime status.
-- Route-specific pages own local interaction state:
-  - `/dashboard/workspace`: graph layout geometry, active node inspector state, mutation forms
-  - `/dashboard/operations`: runbook, diagnostics, and connector reliability control state
-  - `/dashboard/integrations`: connector integration execution state, queue operational controls, and integration policy state
-  - `/dashboard/audit`: log pagination and filters
-  - `/dashboard/backups`: upload dialogs and action in-progress spinners
-  - `/dashboard/settings`: auth/status snapshots, completion evaluation, and sync policy editing state.
+- Shared provider:
+  - active context
+  - posture snapshots
+  - capability state
+- Route-local state:
+  - page-specific form/workflow state
+  - operation result panels
+  - filters, pagination, transient feedback
 
 ## Design Constraints
 
-- Keep enterprise visual language consistent with existing dark shell.
-- Minimize floating overlays outside focused task areas.
-- Preserve keyboard access patterns where applicable.
+- Enterprise readability over decorative visuals.
+- Isometric visuals limited to hero/empty states.
+- No floating controls that hide operational context.
+- Full keyboard access for primary actions.
