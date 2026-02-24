@@ -21,6 +21,10 @@ export interface ConnectorRuntimeState {
     eventQueuePending: number;
     eventQueueReady: number;
     eventQueueBackoff: number;
+    lastCommandCursor: number;
+    lastCommandSyncAt: number | null;
+    commandBridgeSupported: boolean;
+    commandBridgeError: string | null;
 }
 
 export interface ConnectorState {
@@ -80,7 +84,11 @@ export function readConnectorState(): ConnectorState | null {
                 eventBridgeError: parsed.runtime?.eventBridgeError ?? null,
                 eventQueuePending: typeof parsed.runtime?.eventQueuePending === 'number' ? parsed.runtime.eventQueuePending : 0,
                 eventQueueReady: typeof parsed.runtime?.eventQueueReady === 'number' ? parsed.runtime.eventQueueReady : 0,
-                eventQueueBackoff: typeof parsed.runtime?.eventQueueBackoff === 'number' ? parsed.runtime.eventQueueBackoff : 0
+                eventQueueBackoff: typeof parsed.runtime?.eventQueueBackoff === 'number' ? parsed.runtime.eventQueueBackoff : 0,
+                lastCommandCursor: typeof parsed.runtime?.lastCommandCursor === 'number' ? parsed.runtime.lastCommandCursor : 0,
+                lastCommandSyncAt: parsed.runtime?.lastCommandSyncAt ?? null,
+                commandBridgeSupported: parsed.runtime?.commandBridgeSupported !== false,
+                commandBridgeError: parsed.runtime?.commandBridgeError ?? null
             }
         };
     } catch {
@@ -112,7 +120,11 @@ export function registerConnector(options: RegisterConnectorOptions): { state: C
             eventBridgeError: null,
             eventQueuePending: existing?.runtime.eventQueuePending ?? 0,
             eventQueueReady: existing?.runtime.eventQueueReady ?? 0,
-            eventQueueBackoff: existing?.runtime.eventQueueBackoff ?? 0
+            eventQueueBackoff: existing?.runtime.eventQueueBackoff ?? 0,
+            lastCommandCursor: existing?.runtime.lastCommandCursor ?? 0,
+            lastCommandSyncAt: existing?.runtime.lastCommandSyncAt ?? null,
+            commandBridgeSupported: true,
+            commandBridgeError: null
         }
         : {
             daemonSessionToken: existing?.runtime.daemonSessionToken ?? null,
@@ -123,7 +135,11 @@ export function registerConnector(options: RegisterConnectorOptions): { state: C
             eventBridgeError: existing?.runtime.eventBridgeError ?? null,
             eventQueuePending: existing?.runtime.eventQueuePending ?? 0,
             eventQueueReady: existing?.runtime.eventQueueReady ?? 0,
-            eventQueueBackoff: existing?.runtime.eventQueueBackoff ?? 0
+            eventQueueBackoff: existing?.runtime.eventQueueBackoff ?? 0,
+            lastCommandCursor: existing?.runtime.lastCommandCursor ?? 0,
+            lastCommandSyncAt: existing?.runtime.lastCommandSyncAt ?? null,
+            commandBridgeSupported: existing?.runtime.commandBridgeSupported ?? true,
+            commandBridgeError: existing?.runtime.commandBridgeError ?? null
         };
 
     const state: ConnectorState = {
@@ -149,7 +165,11 @@ export function registerConnector(options: RegisterConnectorOptions): { state: C
             eventBridgeError: options.runtime?.eventBridgeError ?? baseRuntime.eventBridgeError,
             eventQueuePending: options.runtime?.eventQueuePending ?? baseRuntime.eventQueuePending,
             eventQueueReady: options.runtime?.eventQueueReady ?? baseRuntime.eventQueueReady,
-            eventQueueBackoff: options.runtime?.eventQueueBackoff ?? baseRuntime.eventQueueBackoff
+            eventQueueBackoff: options.runtime?.eventQueueBackoff ?? baseRuntime.eventQueueBackoff,
+            lastCommandCursor: options.runtime?.lastCommandCursor ?? baseRuntime.lastCommandCursor,
+            lastCommandSyncAt: options.runtime?.lastCommandSyncAt ?? baseRuntime.lastCommandSyncAt,
+            commandBridgeSupported: options.runtime?.commandBridgeSupported ?? baseRuntime.commandBridgeSupported,
+            commandBridgeError: options.runtime?.commandBridgeError ?? baseRuntime.commandBridgeError
         }
     };
 

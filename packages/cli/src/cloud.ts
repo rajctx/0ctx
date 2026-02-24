@@ -83,6 +83,33 @@ export interface ConnectorEventsIngestResponse {
     processed?: number;
 }
 
+export interface ConnectorCommand {
+    commandId: string;
+    cursor: number;
+    contextId: string | null;
+    method: string;
+    params: Record<string, unknown>;
+    createdAt?: number;
+}
+
+export interface ConnectorCommandsResponse {
+    cursor?: number;
+    commands?: ConnectorCommand[];
+}
+
+export interface ConnectorCommandAckPayload {
+    machineId: string;
+    tenantId: string | null;
+    commandId: string;
+    cursor: number;
+    status: 'applied' | 'failed';
+    error?: string;
+}
+
+export interface ConnectorCommandAckResponse {
+    accepted?: boolean;
+}
+
 function parseTimeoutMs(): number {
     const raw = process.env.CTX_CONTROL_PLANE_TIMEOUT_MS;
     if (!raw) return DEFAULT_TIMEOUT_MS;
@@ -218,6 +245,8 @@ const REGISTER_PATHS = ['connectors/register', 'connector/register'];
 const HEARTBEAT_PATHS = ['connectors/heartbeat', 'connector/heartbeat'];
 const CAPABILITIES_PATHS = ['connectors/capabilities', 'connector/capabilities'];
 const EVENTS_INGEST_PATHS = ['connectors/events', 'connector/events'];
+const COMMANDS_PATHS = ['connectors/commands', 'connector/commands'];
+const COMMAND_ACK_PATHS = ['connectors/commands/ack', 'connector/commands/ack'];
 
 export function registerConnectorInCloud(
     token: string,
@@ -272,5 +301,34 @@ export function sendConnectorEvents(
             body: payload
         },
         EVENTS_INGEST_PATHS
+    );
+}
+
+export function fetchConnectorCommands(
+    token: string,
+    machineId: string,
+    cursor = 0
+): Promise<CloudApiResult<ConnectorCommandsResponse>> {
+    return requestWithFallback<ConnectorCommandsResponse>(
+        {
+            method: 'GET',
+            token,
+            query: { machineId, cursor }
+        },
+        COMMANDS_PATHS
+    );
+}
+
+export function ackConnectorCommand(
+    token: string,
+    payload: ConnectorCommandAckPayload
+): Promise<CloudApiResult<ConnectorCommandAckResponse>> {
+    return requestWithFallback<ConnectorCommandAckResponse>(
+        {
+            method: 'POST',
+            token,
+            body: payload
+        },
+        COMMAND_ACK_PATHS
     );
 }

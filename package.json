@@ -10,6 +10,7 @@
     "dev": "npm run dev --workspace=packages/daemon",
     "dev:cli": "npm run dev --workspace=@0ctx/cli",
     "dev:ui": "npm run dev --workspace=@0ctx/ui",
+    "dev:control-plane": "node cloud/control-plane/server.js",
     "start:ui": "npm run start --workspace=@0ctx/ui",
     "start:mcp": "node packages/mcp/dist/index.js",
     "dev:mcp": "node packages/mcp/dist/index.js",

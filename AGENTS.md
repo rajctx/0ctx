@@ -207,6 +207,7 @@ Enterprise/ops:
 - `getSyncPolicy`
 - `setSyncPolicy`
 - `getCapabilities`
+- `evaluateCompletion`
 - `listAuditEvents`
 - `createBackup`
 - `listBackups`

@@ -14,10 +14,8 @@ import {
   Trash2,
   X,
   ZoomIn,
-  ZoomOut,
-  LayoutTemplate
+  ZoomOut
 } from 'lucide-react';
-import type { LayoutTypes } from 'reagraph';
 import {
   addNodeAction,
   deleteContextAction,

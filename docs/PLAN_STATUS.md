@@ -23,28 +23,24 @@ Updated: 2026-02-24
 - UI route split delivery completed for app flows and operations views.
 - UI information architecture documentation published (`docs/UI_INFORMATION_ARCHITECTURE.md`).
 - Release automation phase 1 delivered (validate/changelog/tag dry-run scripts + release doc sequence).
+- `ARCH-001` completed (blackboard subscriptions, leases/gates, and deterministic completion evaluator surfaced via daemon + MCP).
+- `CONN-001` completed for local runtime scope (always-on connector lifecycle, event replay bridge, command bridge, queue controls, and service-managed runtime).
+- `CLOUD-001` completed for repository scope (control-plane client + local dev reference control-plane APIs for registration/heartbeat/capabilities/events/commands).
+- `SYNC-001` completed for local + connector egress scope (policy enforcement for `local_only`/`metadata_only`/`full_sync` across daemon sync and connector bridge paths).
+- `DX-03` completed (hosted-UI-only packaging path is canonical; no local UI runtime in end-user CLI flow).
+- `DX-04` completed (`0ctx setup` is the canonical one-command onboarding path with strict posture controls and hosted handoff).
+- UI route split expanded with dedicated Integrations route and connector operations surface (`/dashboard/integrations`).
+- Settings route expanded with active-context completion evaluation and sync policy management controls.
 
 ## In Progress
 
-- Branch protection and label policy rollout in GitHub settings.
-- GitHub workflow enablement rollout remains pending (workflows stay disabled for now).
-- `ARCH-001` foundation implementation is underway (daemon blackboard subscriptions, task leases, gate APIs, and MCP tool surface added).
-- `CONN-001` implementation is underway (CLI connector registration state, `connector status/verify`, setup integration, `connector run` runtime loop, service templates switched to launch connector runtime process, preferred `connector service` command path wired, daemon blackboard event-bridge polling/ack state scaffolding added, persistent event queue replay/backoff implemented, connector queue ops commands with wait-mode + strict drain controls, local CLI queue-ops audit logging with log tail/clear support, dedicated drain-path unit coverage, doctor-time ops-log writability diagnostics, machine-readable JSON outputs for setup/bootstrap/install/register/verify automation flows, strict setup cloud-readiness/context-creation controls, bridge-health enforcement flagging (`status --require-bridge`), and setup skip/handoff controls (`--skip-service`, `--skip-bootstrap`, `--dashboard-query`)).
-- `CLOUD-001` foundation implementation is underway (CLI cloud control-plane client scaffolding for connector register/heartbeat/capabilities with local fallback).
-- `SYNC-001` implementation is underway (context sync policy primitives in core/daemon, sync-engine policy enforcement for `local_only`/`metadata_only`/`full_sync`, MCP sync-policy tools, and CLI `sync policy get/set` controls).
+- `UI-ENT-002`: Hosted enterprise UI architecture rollout (in progress).
+- `UI-OPS-001`: Hosted operations/integrations runtime controls hardening (in progress).
+- `INT-001`: AI integration manager + policy controls (in progress).
 
 ## Planned
 
-- Publish pipeline for package-based distribution.
 - Release automation phase 2 (GitHub workflow-backed publish and release publication).
-- `ARCH-001`: Semantic Blackboard runtime (events, subscriptions, gate evaluator).
-- `CONN-001`: Always-on local connector service (Windows/macOS/Linux).
-- `CLOUD-001`: Hosted control plane APIs and connector stream gateway.
-- `UI-ENT-002`: Hosted enterprise UI architecture rollout.
-- `UI-OPS-001`: Hosted operations route with connector health, queue lag, and diagnostics controls.
-- `DX-03`: Hosted-UI-only CLI packaging model (no embedded local UI runtime for end users).
-- `DX-04`: Canonical `0ctx setup` first-run workflow.
-- `INT-001`: AI integration manager and ChatGPT-path support policy controls.
 - `SEC-001`: Tenant security and key management hardening.
 - `OPS-001`: SLO, observability, and incident runbooks for hybrid runtime.
 

@@ -27,6 +27,8 @@ Then run first-time setup:
 0ctx connector status --json
 0ctx connector status --json --require-bridge
 0ctx connector run --once
+# (dev) local reference control-plane service
+npm run dev:control-plane
 0ctx connector queue status --json
 0ctx sync policy get --context-id=<contextId>
 0ctx sync policy set metadata_only --context-id=<contextId>

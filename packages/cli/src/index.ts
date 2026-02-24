@@ -1089,7 +1089,7 @@ async function commandConnector(action: string | undefined, flags: Record<string
                 ? 'degraded'
                 : (cloudRequired && !cloud.connected)
                     ? 'degraded'
-                : Boolean(registration.runtime.eventBridgeError)
+                : (Boolean(registration.runtime.eventBridgeError) || Boolean(registration.runtime.commandBridgeError))
                     ? 'degraded'
                 : (sync?.enabled && sync?.running ? 'connected' : 'degraded');
 
@@ -1111,6 +1111,12 @@ async function commandConnector(action: string | undefined, flags: Record<string
                     lastEventSequence: registration.runtime.lastEventSequence,
                     lastEventSyncAt: registration.runtime.lastEventSyncAt
                         ? new Date(registration.runtime.lastEventSyncAt).toISOString()
+                        : null,
+                    commandBridgeSupported: registration.runtime.commandBridgeSupported,
+                    commandBridgeError: registration.runtime.commandBridgeError,
+                    lastCommandCursor: registration.runtime.lastCommandCursor,
+                    lastCommandSyncAt: registration.runtime.lastCommandSyncAt
+                        ? new Date(registration.runtime.lastCommandSyncAt).toISOString()
                         : null,
                     queue: {
                         pending: registration.runtime.eventQueuePending,
@@ -1150,6 +1156,12 @@ async function commandConnector(action: string | undefined, flags: Record<string
             if (payload.registration.runtime.eventBridgeError) {
                 bridgeReasons.push('bridge_error');
             }
+            if (!payload.registration.runtime.commandBridgeSupported) {
+                bridgeReasons.push('command_bridge_not_supported');
+            }
+            if (payload.registration.runtime.commandBridgeError) {
+                bridgeReasons.push('command_bridge_error');
+            }
             if (payload.registration.runtime.queue.backoff > 0) {
                 bridgeReasons.push('queue_backoff');
             }
@@ -1183,6 +1195,10 @@ async function commandConnector(action: string | undefined, flags: Record<string
                     ` sequence=${payload.registration.runtime.lastEventSequence}`
                 );
                 console.log(
+                    `  command_bridge: supported=${payload.registration.runtime.commandBridgeSupported}` +
+                    ` cursor=${payload.registration.runtime.lastCommandCursor}`
+                );
+                console.log(
                     `  event_queue:  pending=${payload.registration.runtime.queue.pending}` +
                     ` ready=${payload.registration.runtime.queue.ready}` +
                     ` backoff=${payload.registration.runtime.queue.backoff}`
@@ -1192,6 +1208,12 @@ async function commandConnector(action: string | undefined, flags: Record<string
                 }
                 if (payload.registration.runtime.eventBridgeError) {
                     console.log(`  event_error:  ${payload.registration.runtime.eventBridgeError}`);
+                }
+                if (payload.registration.runtime.lastCommandSyncAt) {
+                    console.log(`  command_sync: ${payload.registration.runtime.lastCommandSyncAt}`);
+                }
+                if (payload.registration.runtime.commandBridgeError) {
+                    console.log(`  command_error: ${payload.registration.runtime.commandBridgeError}`);
                 }
             }
         }

@@ -66,6 +66,9 @@ npm run cli -- setup --clients=all --no-open
 # Run connector control loop in foreground (service target mode)
 0ctx connector run --interval-ms=30000
 
+# (Dev) Run local reference control-plane APIs
+npm run dev:control-plane
+
 # Install managed connector runtime service (preferred)
 0ctx connector service install
 0ctx connector service enable

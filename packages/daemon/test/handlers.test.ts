@@ -232,4 +232,64 @@ describe('daemon request handling', () => {
             db.close();
         }
     });
+
+    it('evaluates blackboard completion deterministically', () => {
+        const { db, graph } = createGraph();
+        const events = new EventRuntime();
+        const ctxRuntime: HandlerRuntimeContext = {
+            ...runtime(),
+            eventRuntime: events
+        };
+
+        try {
+            const session = handleRequest(graph, 'conn-a', { method: 'createSession' }, ctxRuntime) as { sessionToken: string };
+            const context = handleRequest(graph, 'conn-a', {
+                method: 'createContext',
+                sessionToken: session.sessionToken,
+                params: { name: 'completion-context' }
+            }, ctxRuntime) as { id: string };
+
+            handleRequest(graph, 'conn-a', {
+                method: 'claimTask',
+                sessionToken: session.sessionToken,
+                params: { contextId: context.id, taskId: 'task-1', leaseMs: 60_000 }
+            }, ctxRuntime);
+            handleRequest(graph, 'conn-a', {
+                method: 'resolveGate',
+                sessionToken: session.sessionToken,
+                params: { contextId: context.id, gateId: 'typecheck', status: 'open', severity: 'high' }
+            }, ctxRuntime);
+
+            const blocked = handleRequest(graph, 'conn-a', {
+                method: 'evaluateCompletion',
+                sessionToken: session.sessionToken,
+                params: { contextId: context.id, cooldownMs: 0, requiredGates: ['typecheck'] }
+            }, ctxRuntime) as { complete: boolean; reasons: string[] };
+
+            handleRequest(graph, 'conn-a', {
+                method: 'releaseTask',
+                sessionToken: session.sessionToken,
+                params: { taskId: 'task-1' }
+            }, ctxRuntime);
+            handleRequest(graph, 'conn-a', {
+                method: 'resolveGate',
+                sessionToken: session.sessionToken,
+                params: { contextId: context.id, gateId: 'typecheck', status: 'resolved' }
+            }, ctxRuntime);
+
+            const complete = handleRequest(graph, 'conn-a', {
+                method: 'evaluateCompletion',
+                sessionToken: session.sessionToken,
+                params: { contextId: context.id, cooldownMs: 0, requiredGates: ['typecheck'] }
+            }, ctxRuntime) as { complete: boolean; reasons: string[] };
+
+            expect(blocked.complete).toBe(false);
+            expect(blocked.reasons).toContain('open_gates');
+            expect(blocked.reasons).toContain('active_leases');
+            expect(complete.complete).toBe(true);
+            expect(complete.reasons).toHaveLength(0);
+        } finally {
+            db.close();
+        }
+    });
 });

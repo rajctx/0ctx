@@ -235,6 +235,15 @@ server.setRequestHandler(CallToolRequestSchema, async (req: any) => {
                 });
                 return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(state, null, 2) }] } };
             }
+            case 'ctx_blackboard_completion': {
+                const contextId = pickContextId(args);
+                const completion = await callDaemon('evaluateCompletion', {
+                    contextId,
+                    cooldownMs: args.cooldownMs,
+                    requiredGates: args.requiredGates
+                });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(completion, null, 2) }] } };
+            }
             case 'ctx_task_claim': {
                 const contextId = pickContextId(args);
                 const claim = await callDaemon('claimTask', {

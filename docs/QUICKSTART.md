@@ -39,6 +39,7 @@ After bootstrap, restart your AI client (Claude Desktop, Cursor, or Windsurf). C
 - `ctx_set`, `ctx_get`, `ctx_query`, `ctx_search`
 - `ctx_checkpoint`, `ctx_rewind`
 - `ctx_health`, `ctx_metrics`, `ctx_audit_recent`
+- `ctx_blackboard_state`, `ctx_blackboard_completion`
 - `ctx_sync_policy_get`, `ctx_sync_policy_set`
 - `ctx_backup_create`, `ctx_backup_list`, `ctx_backup_restore`
 
@@ -59,6 +60,9 @@ After bootstrap, restart your AI client (Claude Desktop, Cursor, or Windsurf). C
 
 # Optional: run one connector runtime tick (health + cloud heartbeat)
 0ctx connector run --once
+
+# Optional: run local reference control-plane APIs (dev)
+npm run dev:control-plane
 
 # Get/set per-context sync policy
 0ctx sync policy get --context-id=<contextId>

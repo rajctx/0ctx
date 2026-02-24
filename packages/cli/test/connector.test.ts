@@ -46,6 +46,10 @@ describe('connector state storage', () => {
         expect(stored?.runtime.eventQueuePending).toBe(0);
         expect(stored?.runtime.eventQueueReady).toBe(0);
         expect(stored?.runtime.eventQueueBackoff).toBe(0);
+        expect(stored?.runtime.lastCommandCursor).toBe(0);
+        expect(stored?.runtime.lastCommandSyncAt).toBeNull();
+        expect(stored?.runtime.commandBridgeSupported).toBe(true);
+        expect(stored?.runtime.commandBridgeError).toBeNull();
     });
 
     it('returns existing registration unless force is provided', () => {
@@ -98,7 +102,11 @@ describe('connector state storage', () => {
                 lastEventSequence: 42,
                 eventQueuePending: 10,
                 eventQueueReady: 3,
-                eventQueueBackoff: 7
+                eventQueueBackoff: 7,
+                lastCommandCursor: 21,
+                lastCommandSyncAt: 1000,
+                commandBridgeSupported: false,
+                commandBridgeError: 'disabled'
             }
         });
 
@@ -116,5 +124,9 @@ describe('connector state storage', () => {
         expect(forced.state.runtime.eventQueuePending).toBe(10);
         expect(forced.state.runtime.eventQueueReady).toBe(3);
         expect(forced.state.runtime.eventQueueBackoff).toBe(7);
+        expect(forced.state.runtime.lastCommandCursor).toBe(21);
+        expect(forced.state.runtime.lastCommandSyncAt).toBe(1000);
+        expect(forced.state.runtime.commandBridgeSupported).toBe(true);
+        expect(forced.state.runtime.commandBridgeError).toBeNull();
     });
 });

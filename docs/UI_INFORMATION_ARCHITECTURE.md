@@ -1,6 +1,6 @@
 # UI Information Architecture
 
-Updated: 2026-02-22
+Updated: 2026-02-24
 
 Related tracking:
 
@@ -25,38 +25,42 @@ Related tracking:
   - Graph visualization, node inspector, edit/delete actions, and graph controls.
 - `/dashboard/operations`
   - Runbook/diagnostics workflows (`install`, `status`, `doctor`, `bootstrap`, `repair`).
+- `/dashboard/integrations`
+  - Integration manager workflows (MCP bootstrap detect/apply, connector status/verify/register, queue status/drain).
 - `/dashboard/audit`
   - Audit event visibility and scope filtering.
 - `/dashboard/backups`
   - Backup create/list/restore workflows.
+- `/dashboard/settings`
+  - Auth state, context completion evaluator, and per-context sync policy controls.
 
 ## Shared Shell Responsibilities
 
 Implemented in dashboard layout/shell (`DashboardShell`):
 
 - Global authentication enforcement (redirecting unauthenticated requests).
-- Route navigation for Workspace, Operations, Audit, Backups.
+- Route navigation for Workspace, Operations, Integrations, Audit, Backups, Settings.
 - Active-context list and context creation sidebar.
-- User profile dropdown with universal sign-out action.
+- Sign-out action.
 - Top status strip:
   - daemon health state (Connected/Degraded/Offline)
   - active capability counts
-  - context request metrics
-  - last sync timestamp and queue counts (pending/in-flight)
+  - context request metrics.
 - Background polling for shared dashboard state.
 
 ## State Ownership
 
 - Shared dashboard context provider owns:
-  - active authenticated user session (`@auth0/nextjs-auth0` useUser)
   - available workspace contexts + active context selection
   - daemon health/metrics/capabilities snapshots
-  - continuous background polling for sync queue updates
+  - continuous background polling for runtime status.
 - Route-specific pages own local interaction state:
   - `/dashboard/workspace`: graph layout geometry, active node inspector state, mutation forms
-  - `/dashboard/operations`: streaming terminal output for diagnostics
+  - `/dashboard/operations`: runbook and diagnostics command execution state
+  - `/dashboard/integrations`: connector integration execution state and queue operational controls
   - `/dashboard/audit`: log pagination and filters
   - `/dashboard/backups`: upload dialogs and action in-progress spinners
+  - `/dashboard/settings`: auth/status snapshots, completion evaluation, and sync policy editing state.
 
 ## Design Constraints
 

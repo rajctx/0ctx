@@ -197,7 +197,7 @@ export function handleRequest(
                 'listAuditEvents', 'createBackup', 'listBackups', 'restoreBackup',
                 'auth/status', 'syncStatus', 'syncNow', 'getSyncPolicy', 'setSyncPolicy',
                 'subscribeEvents', 'unsubscribeEvents', 'listSubscriptions', 'pollEvents', 'ackEvent',
-                'getBlackboardState', 'claimTask', 'releaseTask', 'resolveGate'
+                'getBlackboardState', 'evaluateCompletion', 'claimTask', 'releaseTask', 'resolveGate'
             ]
         };
     }
@@ -292,6 +292,17 @@ export function handleRequest(
         return runtime.eventRuntime.getBlackboardState({
             contextId: typeof params.contextId === 'string' ? params.contextId : undefined,
             limit: typeof params.limit === 'number' ? params.limit : undefined
+        });
+    }
+
+    if (req.method === 'evaluateCompletion') {
+        if (!runtime.eventRuntime) {
+            throw new Error('Event runtime not available');
+        }
+        return runtime.eventRuntime.evaluateCompletion({
+            contextId: typeof params.contextId === 'string' ? params.contextId : undefined,
+            cooldownMs: typeof params.cooldownMs === 'number' ? params.cooldownMs : undefined,
+            requiredGates: params.requiredGates
         });
     }
 

@@ -63,12 +63,54 @@ export interface BootstrapWorkflowResult extends CliRunResult {
   results: BootstrapResultEntry[];
 }
 
+export interface BootstrapJsonPayload {
+  dryRun: boolean;
+  clients: SupportedClient[];
+  results: BootstrapResultEntry[];
+}
+
+export interface BootstrapJsonWorkflowResult extends CliRunResult {
+  payload: BootstrapJsonPayload | null;
+}
+
 export interface StatusWorkflowResult extends CliRunResult {
   summary: Record<string, string>;
 }
 
 export interface DoctorWorkflowResult extends CliRunResult {
   checks: DoctorCheck[];
+}
+
+export interface ConnectorStatusWorkflowResult extends CliRunResult {
+  payload: Record<string, unknown> | null;
+}
+
+export interface ConnectorQueueStatusWorkflowResult extends CliRunResult {
+  payload: Record<string, unknown> | null;
+}
+
+export interface ConnectorQueueDrainWorkflowResult extends CliRunResult {
+  payload: Record<string, unknown> | null;
+}
+
+export interface CompletionEvaluation {
+  contextId: string | null;
+  complete: boolean;
+  evaluatedAt: number;
+  stabilizationCooldownMs: number;
+  stabilizationWindowStartedAt: number;
+  openGates: Array<{ gateId: string; severity: string | null; message: string | null }>;
+  unresolvedRequiredGates: string[];
+  activeLeases: Array<{ taskId: string; holder: string; expiresAt: number }>;
+  recentBlockingEvents: Array<{ eventId: string; type: string; sequence: number; timestamp: number }>;
+  reasons: string[];
+}
+
+export type SyncPolicy = 'local_only' | 'metadata_only' | 'full_sync';
+
+export interface SyncPolicySnapshot {
+  contextId: string;
+  syncPolicy: SyncPolicy;
 }
 
 export interface WorkflowOptions {
@@ -287,6 +329,24 @@ function parseBootstrapResults(stdout: string): BootstrapResultEntry[] {
   return results;
 }
 
+function parseJsonOutput<T>(stdout: string): T | null {
+  const trimmed = stdout.trim();
+  if (!trimmed) return null;
+
+  try {
+    return JSON.parse(trimmed) as T;
+  } catch {
+    const start = trimmed.indexOf('{');
+    const end = trimmed.lastIndexOf('}');
+    if (start === -1 || end === -1 || end <= start) return null;
+    try {
+      return JSON.parse(trimmed.slice(start, end + 1)) as T;
+    } catch {
+      return null;
+    }
+  }
+}
+
 export async function getContexts(): Promise<ContextItem[]> {
   return await sendToDaemon<ContextItem[]>('listContexts');
 }
@@ -440,9 +500,86 @@ export async function runBootstrapWorkflow(
   };
 }
 
+export async function runBootstrapJsonWorkflow(
+  options: BootstrapWorkflowOptions = {}
+): Promise<BootstrapJsonWorkflowResult> {
+  const normalizedClients = normalizeClients(options.clients);
+  const args = ['bootstrap', '--json', `--clients=${clientsArg(normalizedClients)}`];
+  if (options.dryRun) args.push('--dry-run');
+  const result = await runCli(args);
+  return {
+    ...result,
+    payload: parseJsonOutput<BootstrapJsonPayload>(result.stdout)
+  };
+}
+
 export async function runRepairWorkflow(options: WorkflowOptions = {}): Promise<CliRunResult> {
   const normalizedClients = normalizeClients(options.clients);
   return await runCli(['repair', `--clients=${clientsArg(normalizedClients)}`]);
+}
+
+export async function runConnectorStatusWorkflow(options: {
+  requireBridge?: boolean;
+  cloud?: boolean;
+} = {}): Promise<ConnectorStatusWorkflowResult> {
+  const args = ['connector', 'status', '--json'];
+  if (options.cloud) args.push('--cloud');
+  if (options.requireBridge) args.push('--require-bridge');
+  const result = await runCli(args);
+  return {
+    ...result,
+    payload: parseJsonOutput<Record<string, unknown>>(result.stdout)
+  };
+}
+
+export async function runConnectorVerifyWorkflow(options: {
+  requireCloud?: boolean;
+} = {}): Promise<ConnectorStatusWorkflowResult> {
+  const args = ['connector', 'verify', '--json'];
+  if (options.requireCloud) args.push('--require-cloud');
+  const result = await runCli(args);
+  return {
+    ...result,
+    payload: parseJsonOutput<Record<string, unknown>>(result.stdout)
+  };
+}
+
+export async function runConnectorRegisterWorkflow(options: {
+  requireCloud?: boolean;
+  force?: boolean;
+} = {}): Promise<ConnectorStatusWorkflowResult> {
+  const args = ['connector', 'register', '--json'];
+  if (options.requireCloud) args.push('--require-cloud');
+  if (options.force) args.push('--force');
+  const result = await runCli(args);
+  return {
+    ...result,
+    payload: parseJsonOutput<Record<string, unknown>>(result.stdout)
+  };
+}
+
+export async function runConnectorQueueStatusWorkflow(): Promise<ConnectorQueueStatusWorkflowResult> {
+  const result = await runCli(['connector', 'queue', 'status', '--json']);
+  return {
+    ...result,
+    payload: parseJsonOutput<Record<string, unknown>>(result.stdout)
+  };
+}
+
+export async function runConnectorQueueDrainWorkflow(options: {
+  timeoutMs?: number;
+  strict?: boolean;
+  failOnRetry?: boolean;
+} = {}): Promise<ConnectorQueueDrainWorkflowResult> {
+  const timeoutMs = Number.isFinite(options.timeoutMs) ? Math.max(1_000, Math.floor(options.timeoutMs!)) : 120_000;
+  const args = ['connector', 'queue', 'drain', '--wait', `--timeout-ms=${timeoutMs}`, '--json'];
+  if (options.strict) args.push('--strict');
+  if (options.failOnRetry) args.push('--fail-on-retry');
+  const result = await runCli(args);
+  return {
+    ...result,
+    payload: parseJsonOutput<Record<string, unknown>>(result.stdout)
+  };
 }
 
 export async function listAuditEventsAction(
@@ -465,6 +602,46 @@ export async function listBackupsAction(): Promise<BackupManifestEntry[]> {
   } catch (e) {
     console.error('Failed to list backups', e);
     return [];
+  }
+}
+
+export async function evaluateCompletionAction(
+  contextId: string,
+  options: { cooldownMs?: number; requiredGates?: string[] } = {}
+): Promise<CompletionEvaluation | null> {
+  if (!contextId) return null;
+  try {
+    return await sendToDaemon<CompletionEvaluation>('evaluateCompletion', {
+      contextId,
+      cooldownMs: options.cooldownMs,
+      requiredGates: options.requiredGates
+    });
+  } catch (e) {
+    console.error('Failed to evaluate completion', e);
+    return null;
+  }
+}
+
+export async function getSyncPolicyAction(contextId: string): Promise<SyncPolicySnapshot | null> {
+  if (!contextId) return null;
+  try {
+    return await sendToDaemon<SyncPolicySnapshot>('getSyncPolicy', { contextId });
+  } catch (e) {
+    console.error('Failed to fetch sync policy', e);
+    return null;
+  }
+}
+
+export async function setSyncPolicyAction(
+  contextId: string,
+  syncPolicy: SyncPolicy
+): Promise<SyncPolicySnapshot | null> {
+  if (!contextId) return null;
+  try {
+    return await sendToDaemon<SyncPolicySnapshot>('setSyncPolicy', { contextId, syncPolicy });
+  } catch (e) {
+    console.error('Failed to set sync policy', e);
+    return null;
   }
 }
 

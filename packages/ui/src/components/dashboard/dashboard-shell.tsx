@@ -14,6 +14,7 @@ import {
   Loader2,
   LogOut,
   Plus,
+  PlugZap,
   RefreshCw,
   ServerCog,
   Settings2,
@@ -39,6 +40,13 @@ const ROUTE_ITEMS = [
     label: 'Operations',
     subtitle: 'Runbook + Diagnostics',
     icon: ServerCog
+  },
+  {
+    href: '/dashboard/integrations',
+    id: 'integrations',
+    label: 'Integrations',
+    subtitle: 'MCP + Connector',
+    icon: PlugZap
   },
   {
     href: '/dashboard/audit',
@@ -244,7 +252,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                 {EXTENSIONS.map(extension => (
                   <Link
                     key={extension.id}
-                    href={`/dashboard/operations?client=${extension.client}`}
+                    href={`/dashboard/integrations?client=${extension.client}`}
                     className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)]"
                   >
                     <Bot className="h-4 w-4" />

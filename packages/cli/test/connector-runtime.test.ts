@@ -14,7 +14,11 @@ function baseRuntimeState() {
         eventBridgeError: null,
         eventQueuePending: 0,
         eventQueueReady: 0,
-        eventQueueBackoff: 0
+        eventQueueBackoff: 0,
+        lastCommandCursor: 0,
+        lastCommandSyncAt: null,
+        commandBridgeSupported: true,
+        commandBridgeError: null
     };
 }
 
@@ -81,6 +85,10 @@ function createBaseDeps(overrides: Partial<ConnectorRuntimeDependencies>): Conne
         pollEvents: async () => ({ cursor: 0, events: [] as ConnectorEventPayload[] }),
         ackEvents: async () => ({ lastAckedSequence: 0 }),
         sendConnectorEvents: async () => ({ ok: true, statusCode: 200 }),
+        fetchConnectorCommands: async () => ({ ok: true, statusCode: 200, data: { cursor: 0, commands: [] } }),
+        ackConnectorCommand: async () => ({ ok: true, statusCode: 200 }),
+        applyDaemonCommand: async () => ({}),
+        getContextSyncPolicy: async () => 'full_sync',
         enqueueEvents: (_subscriptionId, events) => ({
             enqueued: events.length,
             lastSequence: events.length > 0 ? events[events.length - 1].sequence : null
@@ -130,6 +138,8 @@ describe('connector runtime cycle', () => {
         expect(stored?.runtime.daemonSessionToken).toBe('sess-1');
         expect(stored?.runtime.eventSubscriptionId).toBe('sub-1');
         expect(stored?.runtime.eventQueuePending).toBe(0);
+        expect(stored?.runtime.lastCommandCursor).toBe(0);
+        expect(stored?.runtime.commandBridgeError).toBeNull();
     });
 
     it('reports offline posture when daemon is unreachable and autostart is disabled', async () => {
@@ -358,6 +368,79 @@ describe('connector runtime cycle', () => {
         expect(stored?.runtime.eventBridgeError).toBeNull();
     });
 
+    it('fetches and applies cloud commands, then advances command cursor', async () => {
+        let appliedMethods: string[] = [];
+        let acked: Array<{ commandId: string; status: string }> = [];
+        let stored: ConnectorState | null = null;
+        const deps = createBaseDeps({
+            readConnectorState: () => ({
+                machineId: 'm-1',
+                tenantId: 'tenant-a',
+                uiUrl: 'https://app.0ctx.com',
+                registeredAt: 1,
+                updatedAt: 1,
+                registrationMode: 'cloud',
+                cloud: {
+                    registrationId: 'reg-1',
+                    streamUrl: 'wss://stream',
+                    capabilities: ['sync'],
+                    lastHeartbeatAt: null,
+                    lastError: null
+                },
+                runtime: {
+                    ...baseRuntimeState(),
+                    daemonSessionToken: 'sess-1',
+                    eventSubscriptionId: 'sub-1',
+                    lastCommandCursor: 3
+                }
+            }),
+            fetchConnectorCommands: async () => ({
+                ok: true,
+                statusCode: 200,
+                data: {
+                    cursor: 5,
+                    commands: [
+                        {
+                            commandId: 'cmd-4',
+                            cursor: 4,
+                            contextId: 'ctx-1',
+                            method: 'addNode',
+                            params: { contextId: 'ctx-1', type: 'goal', content: 'x' }
+                        },
+                        {
+                            commandId: 'cmd-5',
+                            cursor: 5,
+                            contextId: 'ctx-1',
+                            method: 'setSyncPolicy',
+                            params: { contextId: 'ctx-1', syncPolicy: 'metadata_only' }
+                        }
+                    ]
+                }
+            }),
+            applyDaemonCommand: async (_session, method) => {
+                appliedMethods.push(method);
+                return { ok: true };
+            },
+            ackConnectorCommand: async (_token, payload) => {
+                acked.push({ commandId: payload.commandId, status: payload.status });
+                return { ok: true, statusCode: 200 };
+            },
+            writeConnectorState: (state) => {
+                stored = state;
+            }
+        });
+
+        const summary = await runConnectorRuntimeCycle({}, deps);
+        expect(summary.posture).toBe('connected');
+        expect(appliedMethods).toEqual(['addNode', 'setSyncPolicy']);
+        expect(acked).toEqual([
+            { commandId: 'cmd-4', status: 'applied' },
+            { commandId: 'cmd-5', status: 'applied' }
+        ]);
+        expect(stored?.runtime.lastCommandCursor).toBe(5);
+        expect(stored?.runtime.commandBridgeError).toBeNull();
+    });
+
     it('marks queued events failed and keeps bridge enabled on transient ingest failure', async () => {
         let failedIds: string[] = [];
         let failedError = '';
@@ -407,5 +490,62 @@ describe('connector runtime cycle', () => {
         expect(summary.posture).toBe('degraded');
         expect(failedIds).toEqual(['q-1']);
         expect(failedError).toBe('server_error');
+    });
+
+    it('drops local_only events before enqueue and still advances daemon cursor', async () => {
+        let enqueued = 0;
+        let ackedSequence = 0;
+        const deps = createBaseDeps({
+            readConnectorState: () => ({
+                machineId: 'm-1',
+                tenantId: 'tenant-a',
+                uiUrl: 'https://app.0ctx.com',
+                registeredAt: 1,
+                updatedAt: 1,
+                registrationMode: 'cloud',
+                cloud: {
+                    registrationId: 'reg-1',
+                    streamUrl: 'wss://stream',
+                    capabilities: ['sync'],
+                    lastHeartbeatAt: null,
+                    lastError: null
+                },
+                runtime: {
+                    ...baseRuntimeState(),
+                    daemonSessionToken: 'sess-1',
+                    eventSubscriptionId: 'sub-1',
+                    lastEventSequence: 10
+                }
+            }),
+            pollEvents: async () => ({
+                cursor: 11,
+                events: [
+                    {
+                        eventId: 'evt-11',
+                        sequence: 11,
+                        contextId: 'ctx-1',
+                        type: 'NodeAdded',
+                        timestamp: 1_700_000_000_001,
+                        source: 'session:s-1',
+                        payload: { method: 'addNode', content: 'secret' }
+                    }
+                ]
+            }),
+            getContextSyncPolicy: async () => 'local_only',
+            enqueueEvents: (_subscriptionId, events) => {
+                enqueued += events.length;
+                return { enqueued: events.length, lastSequence: events.length > 0 ? events[events.length - 1].sequence : null };
+            },
+            ackEvents: async (_sessionToken, _subscriptionId, sequence) => {
+                ackedSequence = sequence;
+                return { lastAckedSequence: sequence };
+            },
+            getReadyEvents: () => []
+        });
+
+        const summary = await runConnectorRuntimeCycle({}, deps);
+        expect(summary.posture).toBe('connected');
+        expect(enqueued).toBe(0);
+        expect(ackedSequence).toBe(11);
     });
 });

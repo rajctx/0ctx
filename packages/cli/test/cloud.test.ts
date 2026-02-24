@@ -1,6 +1,8 @@
 import http from 'http';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+    ackConnectorCommand,
+    fetchConnectorCommands,
     fetchConnectorCapabilities,
     getControlPlaneBaseUrl,
     registerConnectorInCloud,
@@ -72,6 +74,27 @@ describe('cloud connector client', () => {
                 res.end(JSON.stringify({ accepted: true, processed: 1 }));
                 return;
             }
+            if (req.url?.startsWith('/v1/connectors/commands') && req.method === 'GET') {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    cursor: 5,
+                    commands: [
+                        {
+                            commandId: 'cmd-1',
+                            cursor: 5,
+                            contextId: 'ctx-1',
+                            method: 'addNode',
+                            params: { type: 'goal', content: 'x' }
+                        }
+                    ]
+                }));
+                return;
+            }
+            if (req.url === '/v1/connectors/commands/ack' && req.method === 'POST') {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ accepted: true }));
+                return;
+            }
 
             res.writeHead(404, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'not_found' }));
@@ -124,6 +147,20 @@ describe('cloud connector client', () => {
         });
         expect(events.ok).toBe(true);
         expect(events.data?.accepted).toBe(true);
+
+        const commands = await fetchConnectorCommands(token, 'm-1', 0);
+        expect(commands.ok).toBe(true);
+        expect(commands.data?.commands?.[0]?.commandId).toBe('cmd-1');
+
+        const ack = await ackConnectorCommand(token, {
+            machineId: 'm-1',
+            tenantId: 't-1',
+            commandId: 'cmd-1',
+            cursor: 5,
+            status: 'applied'
+        });
+        expect(ack.ok).toBe(true);
+        expect(ack.data?.accepted).toBe(true);
 
         await closeServer(server);
     });

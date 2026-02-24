@@ -269,6 +269,19 @@ export const tools = [
         },
     },
     {
+        name: 'ctx_blackboard_completion',
+        description: 'Evaluate whether a context has stabilized for completion (gates, leases, and cooldown window).',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                contextId: { type: 'string', description: 'Optional explicit context scope.' },
+                cooldownMs: { type: 'number', description: 'Optional stabilization cooldown window in milliseconds (default 30000).' },
+                requiredGates: { type: 'array', items: { type: 'string' }, description: 'Optional required gate IDs (default: typecheck,test,lint,security).' }
+            },
+            required: [],
+        },
+    },
+    {
         name: 'ctx_task_claim',
         description: 'Attempt to claim a blackboard task lease for this session.',
         inputSchema: {
