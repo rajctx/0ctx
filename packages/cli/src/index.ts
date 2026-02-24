@@ -1524,7 +1524,8 @@ Configuration:
   0ctx config get <key>         Get a specific setting
   0ctx config set <key> <value> Set a specific setting
 
-  Config keys: auth.server, sync.enabled, sync.endpoint, ui.url
+  Config keys: auth.server, sync.enabled, sync.endpoint, ui.url,
+               integration.chatgpt.enabled, integration.chatgpt.requireApproval, integration.autoBootstrap
 
 Sync:
   0ctx sync status   Show sync engine health and queue
@@ -1599,9 +1600,16 @@ function commandConfigSet(key: string | undefined, value: string | undefined): n
         return 1;
     }
 
-    // Parse boolean for sync.enabled
+    const booleanKeys = new Set<keyof AppConfig>([
+        'sync.enabled',
+        'integration.chatgpt.enabled',
+        'integration.chatgpt.requireApproval',
+        'integration.autoBootstrap'
+    ]);
+
+    // Parse booleans for boolean-backed config keys.
     let parsed: unknown = value;
-    if (key === 'sync.enabled') {
+    if (booleanKeys.has(key)) {
         parsed = value === 'true' || value === '1';
     }
 

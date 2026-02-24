@@ -5,6 +5,7 @@ import {
   Activity,
   AlertTriangle,
   ClipboardCheck,
+  DownloadCloud,
   History,
   Loader2,
   PlayCircle,
@@ -23,6 +24,11 @@ import {
   DoctorWorkflowResult,
   listAuditEventsAction,
   listBackupsAction,
+  runConnectorQueueDrainWorkflow,
+  runConnectorQueueLogsWorkflow,
+  runConnectorQueuePurgeWorkflow,
+  runConnectorQueueStatusWorkflow,
+  runConnectorStatusWorkflow,
   restoreBackupAction,
   runBootstrapWorkflow,
   runDoctorWorkflow,
@@ -69,6 +75,19 @@ function formatDuration(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function asNumber(value: unknown, fallback = 0): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function asString(value: unknown, fallback = '-'): string {
+  return typeof value === 'string' && value.trim() ? value : fallback;
+}
+
 export default function EnterpriseOperationsPanel({
   activeContextId,
   activeContextName,
@@ -102,6 +121,15 @@ export default function EnterpriseOperationsPanel({
   const [doctorRun, setDoctorRun] = useState<DoctorWorkflowResult | null>(null);
   const [bootstrapRun, setBootstrapRun] = useState<BootstrapWorkflowResult | null>(null);
   const [workflowError, setWorkflowError] = useState<string | null>(null);
+  const [runtimeLoading, setRuntimeLoading] = useState(false);
+  const [runtimeBusy, setRuntimeBusy] = useState<string | null>(null);
+  const [runtimeError, setRuntimeError] = useState<string | null>(null);
+  const [runtimeInfo, setRuntimeInfo] = useState<string | null>(null);
+  const [connectorStatus, setConnectorStatus] = useState<Record<string, unknown> | null>(null);
+  const [queueStatus, setQueueStatus] = useState<Record<string, unknown> | null>(null);
+  const [queueDrain, setQueueDrain] = useState<Record<string, unknown> | null>(null);
+  const [queuePurgeDryRun, setQueuePurgeDryRun] = useState<Record<string, unknown> | null>(null);
+  const [queueLogs, setQueueLogs] = useState<Record<string, unknown> | null>(null);
 
   const [auditScope, setAuditScope] = useState<'active' | 'all'>('active');
   const [auditEvents, setAuditEvents] = useState<AuditEventEntry[]>([]);
@@ -176,6 +204,10 @@ export default function EnterpriseOperationsPanel({
     () => availableTabs.some(tab => tab.id === 'backups'),
     [availableTabs]
   );
+  const shouldLoadRuntime = useMemo(
+    () => availableTabs.some(tab => tab.id === 'runbook' || tab.id === 'diagnostics'),
+    [availableTabs]
+  );
 
   useEffect(() => {
     if (!shouldLoadAudit) {
@@ -193,6 +225,38 @@ export default function EnterpriseOperationsPanel({
     void refreshBackups();
   }, [refreshBackups, shouldLoadBackups]);
 
+  const refreshRuntimeControls = useCallback(async () => {
+    setRuntimeLoading(true);
+    setRuntimeError(null);
+    try {
+      const [statusResult, queueResult, logsResult] = await Promise.all([
+        runConnectorStatusWorkflow({ cloud: true }),
+        runConnectorQueueStatusWorkflow(),
+        runConnectorQueueLogsWorkflow({ limit: 20 })
+      ]);
+      setConnectorStatus(statusResult.payload);
+      setQueueStatus(queueResult.payload);
+      setQueueLogs(logsResult.payload);
+      if (!statusResult.ok || !queueResult.ok || !logsResult.ok) {
+        setRuntimeError(statusResult.stderr || queueResult.stderr || logsResult.stderr || 'Failed to refresh runtime controls.');
+      }
+    } finally {
+      setRuntimeLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!shouldLoadRuntime) {
+      setConnectorStatus(null);
+      setQueueStatus(null);
+      setQueueDrain(null);
+      setQueuePurgeDryRun(null);
+      setQueueLogs(null);
+      return;
+    }
+    void refreshRuntimeControls();
+  }, [refreshRuntimeControls, shouldLoadRuntime]);
+
   const doctorStatusSummary = useMemo(() => {
     if (!doctorRun || doctorRun.checks.length === 0) return null;
     const fail = doctorRun.checks.filter(check => check.status === 'fail').length;
@@ -200,6 +264,14 @@ export default function EnterpriseOperationsPanel({
     const pass = doctorRun.checks.filter(check => check.status === 'pass').length;
     return { pass, warn, fail };
   }, [doctorRun]);
+
+  const connectorRegistration = asRecord(connectorStatus?.registration);
+  const connectorBridge = asRecord(connectorStatus?.bridge);
+  const queueStats = asRecord(queueStatus?.stats);
+  const connectorRegistered = connectorRegistration?.registered === true;
+  const bridgeHealthy = connectorBridge?.healthy === true;
+  const queueControlsEnabled = connectorRegistered && bridgeHealthy;
+  const logsEntries = Array.isArray(queueLogs?.entries) ? (queueLogs?.entries as Array<Record<string, unknown>>) : [];
 
   useEffect(() => {
     if (availableTabs.some(tab => tab.id === activeTab)) return;
@@ -453,7 +525,186 @@ export default function EnterpriseOperationsPanel({
                 <ClipboardCheck className="h-4 w-4" />
                 Run doctor
               </Button>
+              <Button variant="secondary" size="sm" disabled={runtimeLoading} onClick={refreshRuntimeControls}>
+                {runtimeLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                Runtime controls
+              </Button>
             </div>
+
+            <Panel className="space-y-3 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[11px] uppercase tracking-[0.13em] text-[var(--text-muted)]">Connector Runtime Controls</p>
+                <Badge muted={!queueControlsEnabled}>
+                  {queueControlsEnabled ? 'Queue controls enabled' : 'Capability-gated'}
+                </Badge>
+              </div>
+
+              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+                <RuntimeCell label="Posture" value={asString(connectorStatus?.posture)} />
+                <RuntimeCell label="Cloud" value={asRecord(connectorStatus?.cloud)?.connected ? 'connected' : 'degraded'} />
+                <RuntimeCell label="Queue Pending" value={String(asNumber(queueStats?.pending))} />
+                <RuntimeCell label="Queue Backoff" value={String(asNumber(queueStats?.backoff))} />
+              </div>
+
+              {!queueControlsEnabled && (
+                <div className="rounded-lg border border-[var(--border-muted)] bg-[var(--surface-subtle)] px-3 py-2 text-xs text-[var(--text-muted)]">
+                  Queue drain and purge actions require connector registration and healthy bridge state.
+                </div>
+              )}
+
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={!queueControlsEnabled || runtimeBusy !== null}
+                  onClick={async () => {
+                    setRuntimeBusy('drain');
+                    setRuntimeError(null);
+                    setRuntimeInfo(null);
+                    try {
+                      const result = await runConnectorQueueDrainWorkflow({ timeoutMs: 90_000 });
+                      setQueueDrain(result.payload);
+                      if (!result.ok) {
+                        setRuntimeError(result.stderr || 'Queue drain failed.');
+                      } else {
+                        setRuntimeInfo('Queue drain completed.');
+                      }
+                      await refreshRuntimeControls();
+                    } finally {
+                      setRuntimeBusy(null);
+                    }
+                  }}
+                >
+                  {runtimeBusy === 'drain' ? <Loader2 className="h-4 w-4 animate-spin" /> : <DownloadCloud className="h-4 w-4" />}
+                  Drain queue
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={!queueControlsEnabled || runtimeBusy !== null}
+                  onClick={async () => {
+                    setRuntimeBusy('purge-dry');
+                    setRuntimeError(null);
+                    try {
+                      const result = await runConnectorQueuePurgeWorkflow({ all: true, dryRun: true });
+                      setQueuePurgeDryRun(result.payload);
+                      if (!result.ok) {
+                        setRuntimeError(result.stderr || 'Queue purge dry-run failed.');
+                      }
+                    } finally {
+                      setRuntimeBusy(null);
+                    }
+                  }}
+                >
+                  {runtimeBusy === 'purge-dry' ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertTriangle className="h-4 w-4" />}
+                  Purge preview
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  disabled={!queueControlsEnabled || runtimeBusy !== null}
+                  onClick={async () => {
+                    const confirmed = window.confirm('Purge all queue entries now?');
+                    if (!confirmed) return;
+                    setRuntimeBusy('purge');
+                    setRuntimeError(null);
+                    setRuntimeInfo(null);
+                    try {
+                      const result = await runConnectorQueuePurgeWorkflow({ all: true, dryRun: false });
+                      if (!result.ok) {
+                        setRuntimeError(result.stderr || 'Queue purge failed.');
+                      } else {
+                        setRuntimeInfo('Queue purge completed.');
+                      }
+                      await refreshRuntimeControls();
+                    } finally {
+                      setRuntimeBusy(null);
+                    }
+                  }}
+                >
+                  {runtimeBusy === 'purge' ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+                  Purge queue
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={runtimeBusy !== null}
+                  onClick={async () => {
+                    setRuntimeBusy('logs');
+                    setRuntimeError(null);
+                    try {
+                      const result = await runConnectorQueueLogsWorkflow({ limit: 20 });
+                      setQueueLogs(result.payload);
+                      if (!result.ok) {
+                        setRuntimeError(result.stderr || 'Queue logs refresh failed.');
+                      }
+                    } finally {
+                      setRuntimeBusy(null);
+                    }
+                  }}
+                >
+                  {runtimeBusy === 'logs' ? <Loader2 className="h-4 w-4 animate-spin" /> : <History className="h-4 w-4" />}
+                  Queue logs
+                </Button>
+              </div>
+
+              {(runtimeError || runtimeInfo) && (
+                <div
+                  className={cn(
+                    'rounded-lg border px-3 py-2 text-xs',
+                    runtimeError
+                      ? 'border-[var(--danger-border)] bg-[var(--danger-bg)] text-[var(--danger-fg)]'
+                      : 'border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--accent-text)]'
+                  )}
+                >
+                  {runtimeError ?? runtimeInfo}
+                </div>
+              )}
+
+              <div className="grid gap-2 xl:grid-cols-3">
+                <Panel className="space-y-1 p-2">
+                  <p className="text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]">Last Drain</p>
+                  {queueDrain ? (
+                    <>
+                      <p className="text-xs text-[var(--text-secondary)]">
+                        sent {asNumber(queueDrain.sent)} | failed {asNumber(queueDrain.failed)}
+                      </p>
+                      <p className="text-xs text-[var(--text-secondary)]">
+                        reason {asString(asRecord(queueDrain.wait)?.reason)}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-xs text-[var(--text-muted)]">No drain activity yet.</p>
+                  )}
+                </Panel>
+
+                <Panel className="space-y-1 p-2">
+                  <p className="text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]">Purge Preview</p>
+                  {queuePurgeDryRun ? (
+                    <>
+                      <p className="text-xs text-[var(--text-secondary)]">
+                        removable {asNumber(queuePurgeDryRun.removable)} of {asNumber(queuePurgeDryRun.total)}
+                      </p>
+                      <p className="text-xs text-[var(--text-secondary)]">mode dry-run</p>
+                    </>
+                  ) : (
+                    <p className="text-xs text-[var(--text-muted)]">Run purge preview for impact.</p>
+                  )}
+                </Panel>
+
+                <Panel className="space-y-1 p-2">
+                  <p className="text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]">Queue Logs</p>
+                  <p className="text-xs text-[var(--text-secondary)]">entries {logsEntries.length}</p>
+                  {logsEntries.length > 0 ? (
+                    <p className="truncate text-xs text-[var(--text-muted)]">
+                      latest: {asString(logsEntries[0]?.operation, 'operation n/a')}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-[var(--text-muted)]">No log entries loaded.</p>
+                  )}
+                </Panel>
+              </div>
+            </Panel>
 
             {statusRun && (
               <Panel className="space-y-2 p-3">
@@ -705,5 +956,14 @@ export default function EnterpriseOperationsPanel({
         )}
       </div>
     </Panel>
+  );
+}
+
+function RuntimeCell({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-[var(--border-muted)] bg-[var(--surface-subtle)] px-3 py-2">
+      <p className="text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-[var(--text-primary)]">{value}</p>
+    </div>
   );
 }

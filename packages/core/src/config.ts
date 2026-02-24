@@ -20,21 +20,41 @@ export interface AppConfig {
     'sync.enabled': boolean;
     'sync.endpoint': string;
     'ui.url': string;
+    'integration.chatgpt.enabled': boolean;
+    'integration.chatgpt.requireApproval': boolean;
+    'integration.autoBootstrap': boolean;
 }
 
 const DEFAULTS: AppConfig = {
     'auth.server': 'https://auth.0ctx.com',
     'sync.enabled': true,
     'sync.endpoint': 'https://api.0ctx.com/v1/sync',
-    'ui.url': 'https://app.0ctx.com'
+    'ui.url': 'https://app.0ctx.com',
+    'integration.chatgpt.enabled': false,
+    'integration.chatgpt.requireApproval': true,
+    'integration.autoBootstrap': true
 };
 
 /** Map of config keys to env var overrides */
 const ENV_OVERRIDES: Partial<Record<keyof AppConfig, string>> = {
     'auth.server': 'CTX_AUTH_SERVER',
     'sync.enabled': 'CTX_SYNC_ENABLED',
-    'sync.endpoint': 'CTX_SYNC_ENDPOINT'
+    'sync.endpoint': 'CTX_SYNC_ENDPOINT',
+    'integration.chatgpt.enabled': 'CTX_INTEGRATION_CHATGPT_ENABLED',
+    'integration.chatgpt.requireApproval': 'CTX_INTEGRATION_CHATGPT_REQUIRE_APPROVAL',
+    'integration.autoBootstrap': 'CTX_INTEGRATION_AUTO_BOOTSTRAP'
 };
+
+const BOOLEAN_KEYS = new Set<keyof AppConfig>([
+    'sync.enabled',
+    'integration.chatgpt.enabled',
+    'integration.chatgpt.requireApproval',
+    'integration.autoBootstrap'
+]);
+
+function parseBooleanValue(value: string): boolean {
+    return value === '1' || value.toLowerCase() === 'true';
+}
 
 // ─── Load / Save ─────────────────────────────────────────────────────────────
 
@@ -82,9 +102,8 @@ export function getConfigValue<K extends keyof AppConfig>(key: K): AppConfig[K] 
     if (envKey) {
         const envVal = process.env[envKey];
         if (envVal !== undefined && envVal !== '') {
-            // Parse boolean for sync.enabled
-            if (key === 'sync.enabled') {
-                return (envVal === '1' || envVal.toLowerCase() === 'true') as AppConfig[K];
+            if (BOOLEAN_KEYS.has(key)) {
+                return parseBooleanValue(envVal) as AppConfig[K];
             }
             return envVal as AppConfig[K];
         }
@@ -126,8 +145,8 @@ export function listConfig(): Array<{
 
         if (envVal !== undefined && envVal !== '') {
             let value: unknown = envVal;
-            if (key === 'sync.enabled') {
-                value = envVal === '1' || envVal.toLowerCase() === 'true';
+            if (BOOLEAN_KEYS.has(key)) {
+                value = parseBooleanValue(envVal);
             }
             return { key, value, source: 'env' as const };
         }

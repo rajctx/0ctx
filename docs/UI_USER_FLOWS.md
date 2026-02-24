@@ -30,7 +30,8 @@ Primary route: `/dashboard/operations`
 
 1. User runs install/status/doctor/bootstrap/repair workflows from runbook actions.
 2. UI executes CLI-backed workflows and shows structured output/state.
-3. User confirms remediation outcomes in diagnostics.
+3. User opens diagnostics runtime controls to inspect connector posture and queue lag.
+4. User drains queue, previews purge impact, and reviews queue logs without opening terminal.
 
 ## 4. Integrations + Connector Flow
 
@@ -40,7 +41,8 @@ Primary route: `/dashboard/integrations`
 1. User selects target clients (`claude`, `cursor`, `windsurf`).
 2. User runs bootstrap detect/apply and connector verify/register flows.
 3. User checks connector posture and queue status cards.
-4. User drains queue when needed and confirms operational result.
+4. User sets integration policy boundaries (`integration.chatgpt.enabled`, `integration.chatgpt.requireApproval`, `integration.autoBootstrap`).
+5. User drains queue when needed and confirms operational result.
 
 ## 5. Audit + Backup Flow
 
@@ -60,3 +62,4 @@ Primary route: `/dashboard/settings`
 2. UI evaluates blackboard completion (`evaluateCompletion`) for active context.
 3. User reads blocking reasons (gates/leases/events) if incomplete.
 4. User sets sync policy (`local_only`, `metadata_only`, `full_sync`) and saves.
+5. User validates connector posture in header badges before moving back to operations/integrations.

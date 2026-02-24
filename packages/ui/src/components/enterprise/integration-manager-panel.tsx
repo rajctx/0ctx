@@ -13,12 +13,14 @@ import {
 } from 'lucide-react';
 import {
   BootstrapJsonWorkflowResult,
+  getIntegrationPolicyConfigAction,
   runBootstrapJsonWorkflow,
   runConnectorQueueDrainWorkflow,
   runConnectorQueueStatusWorkflow,
   runConnectorRegisterWorkflow,
   runConnectorStatusWorkflow,
   runConnectorVerifyWorkflow,
+  setIntegrationPolicyConfigAction,
   SupportedClient
 } from '@/app/actions';
 import { Badge } from '@/components/ui/badge';
@@ -35,7 +37,8 @@ type JobId =
   | 'connector-verify'
   | 'connector-register'
   | 'queue-status'
-  | 'queue-drain';
+  | 'queue-drain'
+  | 'policy-save';
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -70,6 +73,19 @@ export default function IntegrationManagerPanel() {
   const [registerResult, setRegisterResult] = useState<Record<string, unknown> | null>(null);
   const [queueStatusResult, setQueueStatusResult] = useState<Record<string, unknown> | null>(null);
   const [queueDrainResult, setQueueDrainResult] = useState<Record<string, unknown> | null>(null);
+  const [policyLoading, setPolicyLoading] = useState(false);
+  const [policySaving, setPolicySaving] = useState(false);
+  const [policyError, setPolicyError] = useState<string | null>(null);
+  const [policyInfo, setPolicyInfo] = useState<string | null>(null);
+  const [policyValues, setPolicyValues] = useState<{
+    chatgptEnabled: boolean;
+    chatgptRequireApproval: boolean;
+    autoBootstrap: boolean;
+  }>({
+    chatgptEnabled: false,
+    chatgptRequireApproval: true,
+    autoBootstrap: true
+  });
   const [error, setError] = useState<string | null>(null);
 
   const hasSelection = selectedClients.length > 0;
@@ -84,6 +100,9 @@ export default function IntegrationManagerPanel() {
   const registrationQueue = asRecord(registrationRuntime?.queue);
   const queueStats = asRecord(queueStatusResult?.stats);
   const queueDrainWait = asRecord(queueDrainResult?.wait);
+  const registrationRegistered = registration?.registered === true;
+  const bridgeHealthy = asRecord(statusResult?.bridge)?.healthy === true;
+  const queueActionsEnabled = registrationRegistered && bridgeHealthy;
 
   useEffect(() => {
     const search = typeof window !== 'undefined' ? window.location.search : '';
@@ -97,16 +116,25 @@ export default function IntegrationManagerPanel() {
   useEffect(() => {
     let cancelled = false;
     async function initialLoad() {
-      const [status, queue] = await Promise.all([
+      setPolicyLoading(true);
+      const [status, queue, policy] = await Promise.all([
         runConnectorStatusWorkflow({ cloud: true }),
-        runConnectorQueueStatusWorkflow()
+        runConnectorQueueStatusWorkflow(),
+        getIntegrationPolicyConfigAction()
       ]);
       if (cancelled) return;
       setStatusResult(status.payload);
       setQueueStatusResult(queue.payload);
+      setPolicyValues({
+        chatgptEnabled: policy.values['integration.chatgpt.enabled'],
+        chatgptRequireApproval: policy.values['integration.chatgpt.requireApproval'],
+        autoBootstrap: policy.values['integration.autoBootstrap']
+      });
+      setPolicyError(policy.ok ? null : 'Integration policy config has unresolved read errors.');
       if (!status.ok || !queue.ok) {
         setError(status.stderr || queue.stderr || 'Unable to fetch initial connector status.');
       }
+      setPolicyLoading(false);
     }
     void initialLoad();
     return () => {
@@ -176,7 +204,7 @@ export default function IntegrationManagerPanel() {
         <Button
           variant="secondary"
           size="sm"
-          disabled={running !== null || !hasSelection}
+          disabled={running !== null || !hasSelection || !policyValues.autoBootstrap}
           onClick={async () => {
             setRunning('bootstrap-dry');
             setError(null);
@@ -195,7 +223,7 @@ export default function IntegrationManagerPanel() {
         <Button
           variant="primary"
           size="sm"
-          disabled={running !== null || !hasSelection}
+          disabled={running !== null || !hasSelection || !policyValues.autoBootstrap}
           onClick={async () => {
             setRunning('bootstrap-apply');
             setError(null);
@@ -252,7 +280,7 @@ export default function IntegrationManagerPanel() {
         <Button
           variant="secondary"
           size="sm"
-          disabled={running !== null}
+          disabled={running !== null || !queueActionsEnabled}
           onClick={async () => {
             setRunning('queue-status');
             setError(null);
@@ -271,7 +299,7 @@ export default function IntegrationManagerPanel() {
         <Button
           variant="secondary"
           size="sm"
-          disabled={running !== null}
+          disabled={running !== null || !queueActionsEnabled}
           onClick={async () => {
             setRunning('queue-drain');
             setError(null);
@@ -298,9 +326,19 @@ export default function IntegrationManagerPanel() {
       </div>
 
       {!hasSelection && <p className="text-xs text-amber-300">Select at least one AI client target.</p>}
+      {!policyValues.autoBootstrap && (
+        <p className="text-xs text-amber-300">
+          MCP auto-bootstrap policy is disabled. Enable it below to run detect/apply workflows.
+        </p>
+      )}
       {error && (
         <div className="rounded-lg border border-[var(--danger-border)] bg-[var(--danger-bg)] px-3 py-2 text-xs text-[var(--danger-fg)]">
           {error}
+        </div>
+      )}
+      {!queueActionsEnabled && (
+        <div className="rounded-lg border border-[var(--border-muted)] bg-[var(--surface-subtle)] px-3 py-2 text-xs text-[var(--text-muted)]">
+          Queue controls are capability-gated. Register connector and ensure bridge health before queue drain operations.
         </div>
       )}
 
@@ -351,6 +389,100 @@ export default function IntegrationManagerPanel() {
           )}
         </Panel>
       </div>
+
+      <Panel className="space-y-3 p-3">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[11px] uppercase tracking-[0.13em] text-[var(--text-muted)]">Integration Policy</p>
+          <Badge muted={!policyValues.chatgptEnabled}>
+            ChatGPT path {policyValues.chatgptEnabled ? 'enabled' : 'blocked'}
+          </Badge>
+        </div>
+        <div className="grid gap-2 md:grid-cols-3">
+          <ToggleField
+            label="Enable ChatGPT Path"
+            description="Allow ChatGPT onboarding and verification controls."
+            checked={policyValues.chatgptEnabled}
+            disabled={policyLoading || policySaving}
+            onChange={checked => {
+              setPolicyValues(current => ({
+                ...current,
+                chatgptEnabled: checked
+              }));
+            }}
+          />
+          <ToggleField
+            label="Require ChatGPT Approval"
+            description="Require explicit approval gate before ChatGPT integration changes."
+            checked={policyValues.chatgptRequireApproval}
+            disabled={policyLoading || policySaving || !policyValues.chatgptEnabled}
+            onChange={checked => {
+              setPolicyValues(current => ({
+                ...current,
+                chatgptRequireApproval: checked
+              }));
+            }}
+          />
+          <ToggleField
+            label="Auto-Bootstrap MCP"
+            description="Automatically register MCP clients during install/setup workflows."
+            checked={policyValues.autoBootstrap}
+            disabled={policyLoading || policySaving}
+            onChange={checked => {
+              setPolicyValues(current => ({
+                ...current,
+                autoBootstrap: checked
+              }));
+            }}
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="primary"
+            size="sm"
+            disabled={policyLoading || policySaving}
+            onClick={async () => {
+              setRunning('policy-save');
+              setPolicySaving(true);
+              setPolicyError(null);
+              setPolicyInfo(null);
+              try {
+                const result = await setIntegrationPolicyConfigAction({
+                  'integration.chatgpt.enabled': policyValues.chatgptEnabled,
+                  'integration.chatgpt.requireApproval': policyValues.chatgptRequireApproval,
+                  'integration.autoBootstrap': policyValues.autoBootstrap
+                });
+                if (!result.ok) {
+                  setPolicyError('One or more policy values failed to save.');
+                } else {
+                  setPolicyInfo('Integration policy saved.');
+                }
+                setPolicyValues({
+                  chatgptEnabled: result.values['integration.chatgpt.enabled'],
+                  chatgptRequireApproval: result.values['integration.chatgpt.requireApproval'],
+                  autoBootstrap: result.values['integration.autoBootstrap']
+                });
+              } finally {
+                setPolicySaving(false);
+                setRunning(null);
+              }
+            }}
+          >
+            {running === 'policy-save' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wrench className="h-4 w-4" />}
+            Save Policy
+          </Button>
+          {policyLoading && <span className="text-xs text-[var(--text-muted)]">Loading policy...</span>}
+        </div>
+        {policyError && (
+          <div className="rounded-lg border border-[var(--danger-border)] bg-[var(--danger-bg)] px-3 py-2 text-xs text-[var(--danger-fg)]">
+            {policyError}
+          </div>
+        )}
+        {policyInfo && (
+          <div className="rounded-lg border border-[var(--accent-border)] bg-[var(--accent-soft)] px-3 py-2 text-xs text-[var(--accent-text)]">
+            {policyInfo}
+          </div>
+        )}
+      </Panel>
 
       {bootstrapResult?.payload && (
         <Panel className="space-y-2 p-3">
@@ -445,6 +577,36 @@ function InfoCell({ label, value }: { label: string; value: string }) {
     <div className="rounded-lg border border-[var(--border-muted)] bg-[var(--surface-subtle)] px-3 py-2">
       <p className="text-[11px] uppercase tracking-[0.12em] text-[var(--text-muted)]">{label}</p>
       <p className="mt-1 truncate text-sm font-semibold text-[var(--text-primary)]">{value}</p>
+    </div>
+  );
+}
+
+function ToggleField({
+  label,
+  description,
+  checked,
+  disabled,
+  onChange
+}: {
+  label: string;
+  description: string;
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <div className="rounded-lg border border-[var(--border-muted)] bg-[var(--surface-subtle)] px-3 py-2">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold text-[var(--text-primary)]">{label}</p>
+        <input
+          type="checkbox"
+          checked={checked}
+          disabled={disabled}
+          onChange={event => onChange(event.target.checked)}
+          className="h-4 w-4 rounded border-[var(--border-strong)] bg-transparent"
+        />
+      </div>
+      <p className="mt-1 text-xs text-[var(--text-muted)]">{description}</p>
     </div>
   );
 }

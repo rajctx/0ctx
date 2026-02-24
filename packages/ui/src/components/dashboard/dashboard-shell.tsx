@@ -92,6 +92,10 @@ export function DashboardShell({ children }: { children: ReactNode }) {
     daemonOnline,
     methodCount,
     requestCount,
+    connectorPosture,
+    connectorRegistered,
+    connectorBridgeHealthy,
+    connectorCloudConnected,
     lastHealthCheckAt,
     refreshDashboardData,
     createNewContext
@@ -155,6 +159,8 @@ export function DashboardShell({ children }: { children: ReactNode }) {
               <nav className="mt-2 space-y-1">
                 {ROUTE_ITEMS.map(item => {
                   const selected = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                  const gated = item.id === 'integrations' && !connectorRegistered;
+                  const degraded = item.id === 'operations' && !connectorBridgeHealthy;
                   return (
                     <Link
                       key={item.id}
@@ -163,13 +169,18 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                         'flex items-start gap-2 rounded-lg px-2.5 py-2 transition-colors',
                         selected
                           ? 'bg-[var(--surface-subtle)] text-[var(--text-primary)]'
-                          : 'text-[var(--text-muted)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)]'
+                          : 'text-[var(--text-muted)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)]',
+                        degraded ? 'border border-amber-400/20' : '',
+                        gated ? 'opacity-80' : ''
                       )}
                     >
                       <item.icon className="mt-0.5 h-4 w-4" />
                       <span className="min-w-0">
                         <span className="block text-sm font-medium">{item.label}</span>
-                        <span className="block truncate text-[11px] text-[var(--text-muted)]">{item.subtitle}</span>
+                        <span className="block truncate text-[11px] text-[var(--text-muted)]">
+                          {item.subtitle}
+                          {gated ? ' · setup required' : degraded ? ' · degraded' : ''}
+                        </span>
                       </span>
                     </Link>
                   );
@@ -305,6 +316,19 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                 <Badge muted>
                   <Activity className="mr-1.5 h-3.5 w-3.5" />
                   {requestCount ?? '-'} requests
+                </Badge>
+                <Badge muted={!connectorBridgeHealthy}>
+                  <PlugZap className="mr-1.5 h-3.5 w-3.5" />
+                  {connectorPosture}
+                </Badge>
+                <Badge muted={!connectorCloudConnected}>
+                  <span
+                    className={cn(
+                      'mr-1.5 inline-block h-2 w-2 rounded-full',
+                      connectorCloudConnected ? 'bg-emerald-400' : 'bg-amber-400'
+                    )}
+                  />
+                  {connectorCloudConnected ? 'Cloud connected' : 'Cloud optional/degraded'}
                 </Badge>
                 <Button
                   variant="secondary"

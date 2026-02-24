@@ -24,9 +24,9 @@ Related tracking:
 - `/dashboard/workspace`
   - Graph visualization, node inspector, edit/delete actions, and graph controls.
 - `/dashboard/operations`
-  - Runbook/diagnostics workflows (`install`, `status`, `doctor`, `bootstrap`, `repair`).
+  - Runbook/diagnostics workflows (`install`, `status`, `doctor`, `bootstrap`, `repair`) plus connector runtime controls (status, queue lag, drain/purge preview, queue logs).
 - `/dashboard/integrations`
-  - Integration manager workflows (MCP bootstrap detect/apply, connector status/verify/register, queue status/drain).
+  - Integration manager workflows (MCP bootstrap detect/apply, connector status/verify/register, queue status/drain, ChatGPT policy controls, auto-bootstrap policy).
 - `/dashboard/audit`
   - Audit event visibility and scope filtering.
 - `/dashboard/backups`
@@ -45,7 +45,8 @@ Implemented in dashboard layout/shell (`DashboardShell`):
 - Top status strip:
   - daemon health state (Connected/Degraded/Offline)
   - active capability counts
-  - context request metrics.
+  - context request metrics
+  - connector posture/bridge/cloud state for capability-gated navigation hints.
 - Background polling for shared dashboard state.
 
 ## State Ownership
@@ -56,8 +57,8 @@ Implemented in dashboard layout/shell (`DashboardShell`):
   - continuous background polling for runtime status.
 - Route-specific pages own local interaction state:
   - `/dashboard/workspace`: graph layout geometry, active node inspector state, mutation forms
-  - `/dashboard/operations`: runbook and diagnostics command execution state
-  - `/dashboard/integrations`: connector integration execution state and queue operational controls
+  - `/dashboard/operations`: runbook, diagnostics, and connector reliability control state
+  - `/dashboard/integrations`: connector integration execution state, queue operational controls, and integration policy state
   - `/dashboard/audit`: log pagination and filters
   - `/dashboard/backups`: upload dialogs and action in-progress spinners
   - `/dashboard/settings`: auth/status snapshots, completion evaluation, and sync policy editing state.

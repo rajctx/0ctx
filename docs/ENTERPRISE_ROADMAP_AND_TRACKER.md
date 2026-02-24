@@ -138,7 +138,7 @@ Primary update areas:
 
 - Event pub/sub, task leases/gates, and completion evaluation are implemented in daemon/MCP for local runtime.
 - Connector command/event bridge is implemented for local/runtime-dev control-plane flows (replay queue, policy filtering, command apply/ack).
-- Hosted UI capability wiring is in progress (operations/integrations/settings controls now wired to connector and policy APIs; tenant policy admin remains pending).
+- Hosted UI capability wiring is complete for local/runtime-dev control-plane scope (operations/integrations/settings controls wired to connector + policy APIs); tenant policy admin remains pending.
 - Sync policy modes (`local_only`, `metadata_only`, `full_sync`) are enforced across daemon sync and connector bridge egress paths.
 - Tenant-level hosted policy administration and production cloud hardening remain pending.
 
@@ -317,9 +317,9 @@ Exit criteria:
 | CONN-001 | Connector | Build always-on local connector service with register/heartbeat/stream bridge and replay queue | `packages/connector/*` (or `packages/cli/src/connector/*`), service scripts | Connector auto-starts, reconnects, and replays safely after offline periods | ARCH-001 | Done | Platform | Phase H |
 | CLOUD-001 | Cloud | Implement control-plane APIs for connector management, capabilities, and stream gateway | `cloud/*` (new), API contracts docs | Hosted APIs support connector registration, stream commands, capability queries, and tenant scoping | CONN-001 | Done | Platform + Cloud | Phase I |
 | SYNC-001 | Sync | Add per-context sync policy enforcement (`local_only`, `metadata_only`, `full_sync`) end-to-end | daemon sync modules + connector + cloud APIs | Context data movement always matches configured policy with auditability | CLOUD-001 | Done | Platform + Cloud | Phase I |
-| UI-ENT-002 | UI | Build hosted enterprise UI architecture with capability-gated IA and connector-aware operations views | `packages/ui/src/app/*`, `packages/ui/src/components/*` | Hosted UI routes are fully functional, policy-aware, and free of dead-end actions | CLOUD-001, CONN-001 | In Progress | UI | Phase J |
-| UI-OPS-001 | UI | Implement hosted operations surfaces for connector health, queue lag, diagnostics, and reliability controls | `packages/ui/src/app/operations/*`, operations components, cloud capabilities client | Operations route provides actionable runbook flows and live runtime posture without local shell dependency | UI-ENT-002, CLOUD-001 | In Progress | UI + Platform | Phase J |
-| INT-001 | Integrations | Add AI integration manager (MCP client setup/verification including ChatGPT-path policy controls) | `packages/ui/src/app/settings/*`, CLI/bootstrap modules | Tenant admins can configure and verify integrations with explicit policy boundaries | UI-ENT-002 | In Progress | Platform + UI | Phase J |
+| UI-ENT-002 | UI | Build hosted enterprise UI architecture with capability-gated IA and connector-aware operations views | `packages/ui/src/app/*`, `packages/ui/src/components/*` | Hosted UI routes are fully functional, policy-aware, and free of dead-end actions | CLOUD-001, CONN-001 | Done | UI | Phase J |
+| UI-OPS-001 | UI | Implement hosted operations surfaces for connector health, queue lag, diagnostics, and reliability controls | `packages/ui/src/app/operations/*`, operations components, cloud capabilities client | Operations route provides actionable runbook flows and live runtime posture without local shell dependency | UI-ENT-002, CLOUD-001 | Done | UI + Platform | Phase J |
+| INT-001 | Integrations | Add AI integration manager (MCP client setup/verification including ChatGPT-path policy controls) | `packages/ui/src/app/settings/*`, CLI/bootstrap modules | Tenant admins can configure and verify integrations with explicit policy boundaries | UI-ENT-002 | Done | Platform + UI | Phase J |
 | SEC-001 | Security | Tenant security hardening for hybrid runtime (key rotation, connector trust, audit immutability checks) | daemon auth modules, connector auth, cloud auth/policy modules | Security controls are enforced and verifiable in audit and runtime posture | CLOUD-001 | Planned | Security + Platform | Phase K |
 | OPS-001 | Operations | Define SLOs, telemetry pipelines, and incident runbooks for connector/cloud/runtime | `docs/*`, telemetry modules, operations scripts | SLO dashboards and runbooks exist and are used in canary/incident workflows | CONN-001, CLOUD-001 | Planned | Platform + SRE | Phase K |
 
@@ -360,9 +360,9 @@ Exit criteria:
 | CONN-001 | Phase H | Always-on connector service lifecycle and stream bridge | Platform | Done | 2026-02-24 | ARCH-001 | — |
 | CLOUD-001 | Phase I | Hosted control plane connector APIs + stream gateway | Platform + Cloud | Done | 2026-02-24 | CONN-001 | — |
 | SYNC-001 | Phase I | Sync mode enforcement (`local_only`/`metadata_only`/`full_sync`) | Platform + Cloud | Done | 2026-02-24 | CLOUD-001 | — |
-| UI-ENT-002 | Phase J | Hosted enterprise UI architecture rollout | UI | In Progress | TBD | CLOUD-001, CONN-001 | TBD |
-| UI-OPS-001 | Phase J | Hosted operations route and reliability controls | UI + Platform | In Progress | TBD | UI-ENT-002, CLOUD-001 | TBD |
-| INT-001 | Phase J | AI integration manager + ChatGPT-path controls | Platform + UI | In Progress | TBD | UI-ENT-002 | TBD |
+| UI-ENT-002 | Phase J | Hosted enterprise UI architecture rollout | UI | Done | 2026-02-24 | CLOUD-001, CONN-001 | — |
+| UI-OPS-001 | Phase J | Hosted operations route and reliability controls | UI + Platform | Done | 2026-02-24 | UI-ENT-002, CLOUD-001 | — |
+| INT-001 | Phase J | AI integration manager + ChatGPT-path controls | Platform + UI | Done | 2026-02-24 | UI-ENT-002 | — |
 | SEC-001 | Phase K | Hybrid runtime security hardening | Security + Platform | Planned | TBD | CLOUD-001 | TBD |
 | OPS-001 | Phase K | SLO/telemetry/runbook rollout | Platform + SRE | Planned | TBD | CONN-001, CLOUD-001 | TBD |
 
@@ -446,6 +446,7 @@ Exit criteria:
 
 ## 11) Change Log (Append-Only)
 
+- 2026-02-24: UI-ENT-002/UI-OPS-001/INT-001 completed for hosted/local-control-plane scope — delivered capability-gated enterprise IA, dedicated integrations route, operations runtime controls (connector posture, queue lag, drain/purge preview, queue logs), and persisted integration policy boundaries for ChatGPT-path + auto-bootstrap controls.
 - 2026-02-24: Phase J UI rollout moved to in-progress with concrete route delivery: added dedicated `/dashboard/integrations` route and integration manager wiring, expanded connector runtime controls in UI (status/verify/register, queue status/drain), and upgraded settings with active-context completion evaluation + sync policy management. Updated UI IA and user-flow docs to match route behavior.
 - 2026-02-24: ARCH-001/CONN-001/CLOUD-001/SYNC-001/DX-03/DX-04 completed for repository scope — added deterministic blackboard completion evaluation (`evaluateCompletion` daemon IPC + MCP `ctx_blackboard_completion`), expanded connector bridge with cloud command fetch/apply/ack cycle and command-bridge status/error reporting, enforced sync-policy filtering in connector event egress (`local_only` drop, `metadata_only` redaction), extended cloud client with commands APIs, and added runnable dev reference control-plane service (`cloud/control-plane/server.js`) covering register/heartbeat/capabilities/events/commands flows. Updated docs/tracker states accordingly.
 - 2026-02-24: SYNC-001 (partial) implemented — added per-context sync policy model and migration (`contexts.syncPolicy`, default `metadata_only`), daemon `getSyncPolicy`/`setSyncPolicy` handlers with audit event `set_sync_policy`, sync-engine policy enforcement (`local_only` queue/push skip, `metadata_only` redacted encrypted metadata payload, `full_sync` full encrypted context dump), MCP tools (`ctx_sync_policy_get`, `ctx_sync_policy_set`), and CLI controls (`0ctx sync policy get/set`). Added daemon tests for sync-engine policy behavior and handler-level sync-policy audit coverage.

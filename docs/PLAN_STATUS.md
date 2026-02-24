@@ -31,12 +31,13 @@ Updated: 2026-02-24
 - `DX-04` completed (`0ctx setup` is the canonical one-command onboarding path with strict posture controls and hosted handoff).
 - UI route split expanded with dedicated Integrations route and connector operations surface (`/dashboard/integrations`).
 - Settings route expanded with active-context completion evaluation and sync policy management controls.
+- `UI-ENT-002` completed for hosted/local-control-plane scope (capability-gated IA, dedicated integrations route, and no dead-end enterprise paths).
+- `UI-OPS-001` completed for hosted/local-control-plane scope (operations diagnostics include connector posture, queue lag, drain/purge preview, and queue logs).
+- `INT-001` completed for hosted/local-control-plane scope (integration manager includes ChatGPT-path and auto-bootstrap policy controls with persisted config boundaries).
 
 ## In Progress
 
-- `UI-ENT-002`: Hosted enterprise UI architecture rollout (in progress).
-- `UI-OPS-001`: Hosted operations/integrations runtime controls hardening (in progress).
-- `INT-001`: AI integration manager + policy controls (in progress).
+- No non-governance engineering workstreams currently in progress.
 
 ## Planned
 
