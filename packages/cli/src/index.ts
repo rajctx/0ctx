@@ -2,7 +2,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import { bootstrapMcpRegistration } from '@0ctx/mcp/dist/bootstrap';
 import { sendToDaemon } from '@0ctx/mcp/dist/client';
 import { listConfig, getConfigValue, setConfigValue, isValidConfigKey, getConfigPath } from '@0ctx/core';
@@ -37,7 +37,7 @@ import {
     stopService as stopServiceLinux,
     restartService as restartServiceLinux,
 } from './service-linux';
-import { commandAuthLogin, commandAuthLogout, commandAuthStatus } from './auth';
+import { commandAuthLogin, commandAuthLogout, commandAuthStatus, resolveToken } from './auth';
 
 type SupportedClient = 'claude' | 'cursor' | 'windsurf';
 type CheckStatus = 'pass' | 'warn' | 'fail';
@@ -68,10 +68,14 @@ const SUPPORTED_CLIENTS: SupportedClient[] = ['claude', 'cursor', 'windsurf'];
 
 function parseArgs(argv: string[]): ParsedArgs {
     const [command = 'help', maybeSubcommand, ...rest] = argv;
+    const hasSubcommand = command === 'daemon' || command === 'auth' || command === 'config' || command === 'sync' || command === 'connector';
+    const tokens = hasSubcommand
+        ? rest
+        : [maybeSubcommand, ...rest].filter((token): token is string => Boolean(token));
     const flags: Record<string, string | boolean> = {};
 
-    for (let i = 0; i < rest.length; i += 1) {
-        const token = rest[i];
+    for (let i = 0; i < tokens.length; i += 1) {
+        const token = tokens[i];
         if (!token.startsWith('--')) continue;
 
         const [rawKey, rawValue] = token.split('=');
@@ -82,7 +86,7 @@ function parseArgs(argv: string[]): ParsedArgs {
             continue;
         }
 
-        const next = rest[i + 1];
+        const next = tokens[i + 1];
         if (next && !next.startsWith('--')) {
             flags[key] = next;
             i += 1;
@@ -92,14 +96,13 @@ function parseArgs(argv: string[]): ParsedArgs {
         flags[key] = true;
     }
 
-    const hasSubcommand = command === 'daemon' || command === 'auth' || command === 'config' || command === 'sync';
     const sub = hasSubcommand ? maybeSubcommand : undefined;
     // 3-level: daemon service <action>
-    const serviceAction = (sub === 'service' && rest[0] && !rest[0].startsWith('--'))
-        ? rest[0]
+    const serviceAction = (sub === 'service' && tokens[0] && !tokens[0].startsWith('--'))
+        ? tokens[0]
         : undefined;
     // Collect non-flag positional args (for config get/set key value)
-    const positionalArgs = rest.filter(arg => !arg.startsWith('--'));
+    const positionalArgs = tokens.filter(arg => !arg.startsWith('--'));
     return {
         command,
         subcommand: sub,
@@ -154,24 +157,27 @@ function resolveDaemonEntrypoint(): string {
     throw new Error('Could not resolve daemon entrypoint. Run `npm run build` first.');
 }
 
-function resolveUiEntrypoint(): string {
-    const candidates = [
-        path.resolve(process.cwd(), 'packages', 'ui', '.next', 'standalone', 'packages', 'ui', 'server.js'),
-        path.resolve(__dirname, '..', '..', 'ui', '.next', 'standalone', 'packages', 'ui', 'server.js'),
-        (() => {
-            try {
-                return require.resolve('@0ctx/ui');
-            } catch {
-                return '';
-            }
-        })()
-    ].filter(Boolean);
-
-    for (const candidate of candidates) {
-        if (fs.existsSync(candidate)) return candidate;
+function getHostedDashboardUrl(): string {
+    const configured = getConfigValue('ui.url');
+    if (typeof configured === 'string' && configured.trim().length > 0) {
+        return configured.trim();
     }
+    return 'https://app.0ctx.com';
+}
 
-    throw new Error('Could not resolve UI entrypoint. Ensure @0ctx/ui is installed or built.');
+function openUrl(url: string): void {
+    try {
+        const platform = os.platform();
+        if (platform === 'win32') {
+            execSync(`start "" "${url}"`, { stdio: 'ignore' });
+        } else if (platform === 'darwin') {
+            execSync(`open "${url}"`, { stdio: 'ignore' });
+        } else {
+            execSync(`xdg-open "${url}"`, { stdio: 'ignore' });
+        }
+    } catch {
+        // Best-effort open only. User can copy URL.
+    }
 }
 
 function startDaemonDetached(): void {
@@ -341,15 +347,99 @@ async function commandRepair(flags: Record<string, string | boolean>): Promise<n
     return commandDoctor({ ...flags, json: false });
 }
 
+async function commandDashboard(flags: Record<string, string | boolean>): Promise<number> {
+    const url = getHostedDashboardUrl();
+    console.log(`dashboard_url: ${url}`);
+
+    if (Boolean(flags['no-open'])) {
+        console.log('Open the URL above in your browser.');
+        return 0;
+    }
+
+    openUrl(url);
+    console.log('Opened dashboard URL in your default browser (best effort).');
+    return 0;
+}
+
+async function commandConnector(action: string | undefined, flags: Record<string, string | boolean>): Promise<number> {
+    const validActions = ['install', 'enable', 'disable', 'uninstall', 'status', 'start', 'stop', 'restart', 'verify', 'register', 'logs'];
+    if (!action || !validActions.includes(action)) {
+        console.error(`Unknown connector action: '${action ?? ''}'`);
+        console.error(`Valid actions: ${validActions.join(', ')}`);
+        return 1;
+    }
+
+    if (action === 'verify') {
+        const statusCode = await commandStatus();
+        const syncCode = await commandSyncStatus();
+        return statusCode !== 0 || syncCode !== 0 ? 1 : 0;
+    }
+
+    if (action === 'register') {
+        console.log('connector register is planned under CLOUD-001/CONN-001 and not yet available in this release.');
+        return 0;
+    }
+
+    if (action === 'logs') {
+        const platform = os.platform();
+        if (platform === 'win32') {
+            console.log('Use Windows Event Viewer (Application logs) for service diagnostics.');
+        } else if (platform === 'darwin') {
+            console.log('Use: log stream --process 0ctx-daemon');
+        } else if (platform === 'linux') {
+            console.log('Use: systemctl --user status 0ctx-daemon && journalctl --user -u 0ctx-daemon -f');
+        } else {
+            console.log('No log helper available for this platform.');
+        }
+        return 0;
+    }
+
+    console.log(`connector ${action}: delegating to daemon service lifecycle until dedicated connector runtime is shipped.`);
+    return commandDaemonService(action);
+}
+
+async function commandSetup(flags: Record<string, string | boolean>): Promise<number> {
+    console.log('Running setup workflow...');
+
+    if (!resolveToken()) {
+        console.log('auth: no active session found. Starting login...');
+        const authCode = await commandAuthLogin(flags);
+        if (authCode !== 0) return authCode;
+    } else {
+        console.log('auth: already logged in');
+    }
+
+    // Best effort: install/enable/start managed service.
+    for (const action of ['install', 'enable', 'start'] as const) {
+        const code = await commandConnector(action, flags);
+        if (code !== 0) {
+            console.log(`connector ${action}: warning (continuing with local runtime flow)`);
+        }
+    }
+
+    const installCode = await commandInstall(flags);
+    if (installCode !== 0) return installCode;
+
+    const verifyCode = await commandConnector('verify', flags);
+    if (verifyCode !== 0) {
+        console.error('setup_verify_failed: connector/runtime verification failed');
+        return verifyCode;
+    }
+
+    return commandDashboard(flags);
+}
+
 function printHelp(): void {
     console.log(`0ctx CLI
 
 Usage:
+  0ctx setup [--clients=all|claude,cursor,windsurf] [--no-open]
   0ctx install [--clients=all|claude,cursor,windsurf]
   0ctx bootstrap [--dry-run] [--clients=...]
   0ctx doctor [--json] [--clients=...]
   0ctx status
   0ctx repair [--clients=...]
+  0ctx dashboard [--no-open]
   0ctx daemon start
 
 Authentication:
@@ -368,8 +458,11 @@ Configuration:
 Sync:
   0ctx sync status   Show sync engine health and queue
 
-Dashboard:
-  0ctx ui            Start the local UI dashboard
+Connector:
+  0ctx connector install|enable|disable|uninstall|status|start|stop|restart
+  0ctx connector verify
+  0ctx connector register
+  0ctx connector logs
 
 Windows/macOS/Linux service management (requires Admin on Windows):
   0ctx daemon service install    Register daemon as a service
@@ -469,56 +562,6 @@ async function commandSyncStatus(): Promise<number> {
     }
 }
 
-// ─── UI command ──────────────────────────────────────────────────────────────
-
-async function commandUi(): Promise<number> {
-    console.log('Starting 0ctx UI...');
-
-    // Ensure daemon is running
-    const daemon = await isDaemonReachable();
-    if (!daemon.ok) {
-        console.log('daemon: starting background service...');
-        try {
-            startDaemonDetached();
-        } catch (error) {
-            console.error('Failed to start daemon:', error instanceof Error ? error.message : String(error));
-            return 1;
-        }
-
-        const ready = await waitForDaemon();
-        if (!ready) {
-            console.error('daemon_start_timeout: unable to reach daemon health endpoint');
-            return 1;
-        }
-    }
-
-    try {
-        const entry = resolveUiEntrypoint();
-        // We spawn the node process inheriting stdio so the user sees the server logs
-        const child = spawn(process.execPath, [entry], {
-            stdio: 'inherit',
-            env: {
-                ...process.env,
-                PORT: '3000',
-                HOSTNAME: 'localhost'
-            }
-        });
-
-        return new Promise<number>((resolve) => {
-            child.on('close', (code) => {
-                resolve(code ?? 0);
-            });
-            child.on('error', (err) => {
-                console.error('Failed to start UI process:', err.message);
-                resolve(1);
-            });
-        });
-    } catch (error) {
-        console.error(error instanceof Error ? error.message : String(error));
-        return 1;
-    }
-}
-
 async function commandDaemonService(action: string | undefined): Promise<number> {
     const platform = os.platform();
 
@@ -592,6 +635,8 @@ async function main(): Promise<number> {
     const parsed = parseArgs(process.argv.slice(2));
 
     switch (parsed.command) {
+        case 'setup':
+            return commandSetup(parsed.flags);
         case 'install':
             return commandInstall(parsed.flags);
         case 'bootstrap':
@@ -645,9 +690,14 @@ async function main(): Promise<number> {
             printHelp();
             return 1;
         }
-        case 'ui':
+        case 'connector':
+            return commandConnector(parsed.subcommand, parsed.flags);
         case 'dashboard':
-            return commandUi();
+            return commandDashboard(parsed.flags);
+        case 'ui':
+            console.error('`0ctx ui` has been removed from the end-user flow.');
+            console.error('Use `0ctx setup` and then open the hosted dashboard URL (or run `0ctx dashboard`).');
+            return 1;
     }
 }
 

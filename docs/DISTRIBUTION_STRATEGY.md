@@ -1,48 +1,63 @@
-# 0ctx Distribution Strategy & DX
+# 0ctx Distribution Strategy and DevX
 
-Updated: 2026-02-23
+Updated: 2026-02-24
 
-## The Problem
-Currently, 0ctx consists of five distinct pieces (`core`, `daemon`, `mcp`, `cli`, `ui`) that users must manually wire together. Running the stack requires starting a background daemon process, configuring an MCP bridge, and launching a Next.js UI separately. This architectural fragmentation causes severe friction in the developer experience (DX).
+## Goal
 
-Industry benchmarks for modern developer tools (e.g., GitHub CLI, Docker Desktop, Supabase CLI, Cursor) mandate a **"single install, single command"** experience. 
+Deliver a no-clone, low-friction user experience where a single CLI install sets up the local runtime and connects users to the hosted 0ctx UI.
 
-## Strategy Overview
-We will consolidate the disparate packages into two distinct delivery channels:
-1. **Developer Distribution**: A unified CLI package as the single source of truth.
-2. **Enterprise/Non-Technical Distribution**: A bundled desktop application.
+## Canonical Runtime Model
 
----
+- End-user runtime package: `@0ctx/cli`
+- Hosted UI: `https://app.0ctx.com` (or configured `ui.url`)
+- Local runtime: daemon + connector/service + MCP bootstrap
+- Contributor UI code remains in `packages/ui`, but is not bundled into end-user CLI runtime
 
-## Phase 1: Unified CLI (DX-01)
-**Goal:** Make `@0ctx/cli` the ONLY thing a developer needs to install. 
+## First-Run Experience
 
 ```bash
-# Global NPM install is the easiest path to market for JS devs
 npm install -g @0ctx/cli
-
-# Now '0ctx' acts as the god-command
+0ctx setup --clients=all
 ```
 
-### Architecture Constraints
-- The `@0ctx/cli` package will take strict dependencies on `@0ctx/daemon`, `@0ctx/mcp`, and `@0ctx/ui`.
-- **Auto-start**: When the user types `0ctx auth login` or an editor pings the MCP bridge, the CLI will look for the daemon. If it's not running, the CLI will transparently fork/spawn the daemon process in the background.
-- **Embedded UI**: The Next.js dashboard will be built and statically exported into the CLI package bundle. The local daemon will serve these static files directly, removing the need for a separate `npm run dev:ui` process.
-- **Bootstrapping**: `0ctx bootstrap` will continue to automatically configure IDEs (VS Code, Cursor, Windsurf) by injecting the single global `0ctx start-mcp` command into their settings.
+`0ctx setup` performs:
+1. Auth check/login
+2. Managed local runtime startup
+3. MCP bootstrap for supported clients
+4. Runtime verification (`status` + `sync status`)
+5. Hosted dashboard handoff
 
-### User Experience
-The user installs one package, types `0ctx auth login`, and their editor immediately has context-aware intelligence. They don't know the daemon exists until they type `0ctx doctor`.
+## Command Surface
 
----
+- `0ctx setup` (recommended onboarding path)
+- `0ctx dashboard` (open hosted dashboard URL)
+- `0ctx connector <action>` (service + verification surface)
+- Advanced compatibility commands remain:
+  - `0ctx install`
+  - `0ctx bootstrap`
+  - `0ctx doctor`
+  - `0ctx status`
+  - `0ctx repair`
 
-## Phase 2: Standalone Desktop App (DX-02)
-**Goal:** Reach product managers, architects, and designers who don't have Node.js installed or don't use the terminal.
+## Packaging Constraints
 
-### Architecture Constraints
-- Build a lightweight Electron or Tauri wrapper (Tauri preferred for lower memory footprint).
-- **Embedded Binaries**: The desktop app bundles Node.js (or uses `pkg`/`bun compile` to create single executable binaries of the daemon/MCP) so the user does not need an external runtime.
-- **System Tray**: The app lives in the macOS menu bar / Windows system tray, showing daemon health and sync status (Connected/Degraded/Offline).
-- **Webview UI**: The tray icon opens a webview serving the same unified dashboard built in Phase 1. 
+- Do not package `@0ctx/ui` runtime assets in CLI release artifacts.
+- Keep CLI focused on local runtime lifecycle, onboarding, and diagnostics.
+- Keep hosted UI deployment and versioning independent from CLI publish cadence.
 
-### User Experience
-The user downloads a `.dmg` or `.exe`, drags it to Applications, and logs in via the browser. The system tray app automatically starts on boot and handles all background graph synchronization and MCP tooling endpoints.
+## Distribution Channels
+
+1. **CLI channel (primary)**
+- npm global install of `@0ctx/cli`
+- best for developers and technical operators
+
+2. **Desktop channel (future)**
+- optional desktop app for non-terminal workflows
+- reuses hosted UI and local connector/service runtime
+
+## Acceptance Criteria
+
+- End users do not need to run a local Next.js UI server.
+- `0ctx setup` is sufficient to onboard a new machine.
+- Hosted UI connectivity and runtime posture are visible in CLI diagnostics.
+- Docs and tracker do not claim embedded local UI packaging in CLI path.

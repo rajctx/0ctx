@@ -15,12 +15,20 @@ npm install -g @0ctx/cli
 Then run first-time setup:
 
 ```bash
-0ctx install --clients=all
+0ctx setup --clients=all
 0ctx doctor --json
 0ctx status
 ```
 
-`0ctx install` starts the daemon (if not already running), registers the MCP server with all supported AI clients (Claude, Cursor, Windsurf), and prints a status summary.
+`0ctx setup` runs the canonical onboarding flow: auth check/login, managed runtime startup, MCP bootstrap for supported AI clients, runtime verification, and hosted dashboard handoff.
+
+Compatibility note:
+
+```bash
+0ctx install --clients=all
+```
+
+still works as an advanced path for daemon + MCP bootstrap only.
 
 ## Environment Variables
 
@@ -67,7 +75,7 @@ git clone https://github.com/0ctx-com/0ctx.git
 cd 0ctx
 npm install
 npm run build
-node packages/cli/dist/index.js install --clients=all
+node packages/cli/dist/index.js setup --clients=all --no-open
 ```
 
 See `AGENTS.md` for build commands and monorepo architecture.

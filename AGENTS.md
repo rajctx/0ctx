@@ -39,7 +39,7 @@ npm run bootstrap:mcp
 # Preview MCP registration changes without writing files
 npm run bootstrap:mcp:dry
 
-# Run local UI
+# Run local UI (contributor/dev only; end-user runtime uses hosted UI)
 npm run dev:ui
 
 # Lint packages
@@ -131,7 +131,7 @@ Product-facing command-line surface for install and support workflows.
 
 ### `packages/ui` (`@0ctx/ui`)
 
-Next.js local UI that interacts with the daemon.
+Next.js hosted UI codebase (dev/contributor surface). End-user runtime is hosted UI plus local connector/daemon.
 
 ## Key Design Constraints
 
@@ -235,6 +235,10 @@ Local state under `~/.0ctx/`:
   - `scripts/repo/adopt-ui-monorepo.ps1` (or npm scripts above)
 - Governance references:
   - `docs/ENTERPRISE_ROADMAP_AND_TRACKER.md`
+  - `docs/SEMANTIC_BLACKBOARD_ARCHITECTURE.md`
+  - `docs/HYBRID_STORAGE_AND_SYNC_MODEL.md`
+  - `docs/CONNECTOR_SERVICE_ARCHITECTURE.md`
+  - `docs/HOSTED_UI_PRODUCT_ARCHITECTURE.md`
   - `docs/GITHUB_REPO_MANAGEMENT.md`
   - `docs/GITHUB_ENABLEMENT_RUNBOOK.md`
   - `docs/RELEASE.md`

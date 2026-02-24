@@ -13,8 +13,8 @@
 - `@0ctx/core`: Graph model, SQLite schema/migrations, query logic.
 - `@0ctx/daemon`: Local socket service that owns graph state.
 - `@0ctx/mcp`: MCP server that bridges tools to the daemon.
-- `@0ctx/cli`: Product CLI (`0ctx`) for install/bootstrap/doctor/repair.
-- `@0ctx/ui`: Next.js app for graph visualization and edits.
+- `@0ctx/cli`: Product CLI (`0ctx`) for setup/install/bootstrap/doctor/repair.
+- `@0ctx/ui`: Hosted UI codebase (contributor/dev surface, not packaged in end-user runtime).
 
 ## Installation Models
 
@@ -22,7 +22,7 @@ Enterprise packaged install (target no-clone path on npm):
 
 ```bash
 npm install -g @0ctx/cli
-0ctx install --clients=all
+0ctx setup --clients=all
 0ctx doctor --json
 ```
 
@@ -31,17 +31,23 @@ Monorepo development/install (current reliable source workflow):
 ```bash
 npm install
 npm run build
-npm run cli -- install --clients=all
+npm run cli -- setup --clients=all --no-open
 ```
 
 ## Quick Commands
 
 ```bash
+# Canonical first-run
+0ctx setup --clients=all
+
 # Daemon health and capability status
 0ctx status
 
 # Bootstrap MCP registrations for supported clients
 0ctx bootstrap --clients=claude,cursor,windsurf
+
+# Open hosted dashboard URL
+0ctx dashboard
 
 # Repair local install
 0ctx repair --clients=all
@@ -51,6 +57,10 @@ npm run cli -- install --clients=all
 
 - `AGENTS.md`: implementation guidance and architecture.
 - `docs/ENTERPRISE_ROADMAP_AND_TRACKER.md`: single source of truth for enterprise roadmap + execution tracker.
+- `docs/SEMANTIC_BLACKBOARD_ARCHITECTURE.md`: hybrid blackboard runtime architecture.
+- `docs/HYBRID_STORAGE_AND_SYNC_MODEL.md`: local/cloud storage contract and sync modes.
+- `docs/CONNECTOR_SERVICE_ARCHITECTURE.md`: always-on local connector service design.
+- `docs/HOSTED_UI_PRODUCT_ARCHITECTURE.md`: hosted UI architecture, IA, and UX constraints.
 - `docs/INSTALL.md`: install and environment setup.
 - `docs/QUICKSTART.md`: first-run workflow.
 - `docs/GITHUB_REPO_MANAGEMENT.md`: repo governance and branch protection.

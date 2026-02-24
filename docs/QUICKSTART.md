@@ -10,13 +10,13 @@ npm install -g @0ctx/cli
 
 > **Developer install (source checkout):** If you are working on the 0ctx source, run `npm install && npm run build` from the repo root and use `node packages/cli/dist/index.js` in place of `0ctx`. See `docs/INSTALL.md` for details.
 
-## 2) Install and bootstrap
+## 2) Run setup
 
 ```bash
-0ctx install --clients=all
+0ctx setup --clients=all
 ```
 
-This starts the daemon (if needed), registers the MCP server with all supported AI clients (Claude, Cursor, Windsurf), and prints a status summary.
+This checks auth, starts/validates the managed local runtime, bootstraps MCP clients (Claude, Cursor, Windsurf), verifies health, and opens the hosted dashboard URL.
 
 ## 3) Verify health
 
@@ -40,6 +40,9 @@ After bootstrap, restart your AI client (Claude Desktop, Cursor, or Windsurf). C
 ## 5) Common operations
 
 ```bash
+# Open hosted dashboard URL
+0ctx dashboard
+
 # Re-run bootstrap for a specific client
 0ctx bootstrap --clients=claude
 
@@ -52,15 +55,3 @@ After bootstrap, restart your AI client (Claude Desktop, Cursor, or Windsurf). C
 # Start daemon manually (if not auto-started)
 0ctx daemon start
 ```
-
----
-
-## Developer: Local UI
-
-When running from a source checkout, a local graph visualization UI is available:
-
-```bash
-npm run dev:ui
-```
-
-Open `http://localhost:3000`. Routes: `/dashboard/workspace`, `/dashboard/operations`, `/dashboard/audit`, `/dashboard/backups`.

@@ -18,7 +18,7 @@ npm run test
 - `packages/daemon`: runtime/service boundary.
 - `packages/mcp`: MCP adapter surface.
 - `packages/cli`: product entrypoint for installation and diagnostics.
-- `packages/ui`: local visual interaction layer.
+- `packages/ui`: hosted UI codebase (contributor/dev surface; not packaged in end-user CLI runtime).
 
 ## 3) Verify runtime
 
