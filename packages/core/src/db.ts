@@ -4,7 +4,7 @@ import path from 'path';
 import os from 'os';
 
 const DB_PATH = path.join(os.homedir(), '.0ctx', '0ctx.db');
-export const CURRENT_SCHEMA_VERSION = 3;
+export const CURRENT_SCHEMA_VERSION = 4;
 
 export interface OpenDbOptions {
     dbPath?: string;
@@ -47,6 +47,11 @@ function migrate(db: Database.Database) {
     if (version < 3) {
         migrateToV3(db);
         setSchemaVersion(db, 3);
+    }
+
+    if (version < 4) {
+        migrateToV4(db);
+        setSchemaVersion(db, 4);
     }
 }
 
@@ -124,6 +129,16 @@ function migrateToV2(db: Database.Database) {
 function hasColumn(db: Database.Database, tableName: string, columnName: string): boolean {
     const rows = db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>;
     return rows.some((row) => row.name === columnName);
+}
+
+// SEC-001: Audit log HMAC chain columns
+function migrateToV4(db: Database.Database) {
+    if (!hasColumn(db, 'audit_logs', 'entryHash')) {
+        db.exec(`ALTER TABLE audit_logs ADD COLUMN entryHash TEXT`);
+    }
+    if (!hasColumn(db, 'audit_logs', 'prevHash')) {
+        db.exec(`ALTER TABLE audit_logs ADD COLUMN prevHash TEXT`);
+    }
 }
 
 function migrateToV3(db: Database.Database) {

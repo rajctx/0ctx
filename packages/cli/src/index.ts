@@ -37,7 +37,7 @@ import {
     stopService as stopServiceLinux,
     restartService as restartServiceLinux,
 } from './service-linux';
-import { commandAuthLogin, commandAuthLogout, commandAuthStatus, resolveToken } from './auth';
+import { commandAuthLogin, commandAuthLogout, commandAuthStatus, commandAuthRotate, checkTokenExpiryWarning, resolveToken } from './auth';
 import { getConnectorStatePath, readConnectorState, registerConnector, writeConnectorState } from './connector';
 import { fetchConnectorCapabilities, registerConnectorInCloud, sendConnectorEvents, sendConnectorHeartbeat } from './cloud';
 import { runConnectorRuntime } from './connector-runtime';
@@ -1873,6 +1873,7 @@ async function main(): Promise<number> {
             if (sub === 'login') return commandAuthLogin(parsed.flags);
             if (sub === 'logout') return Promise.resolve(commandAuthLogout());
             if (sub === 'status') return Promise.resolve(commandAuthStatus(parsed.flags));
+            if (sub === 'rotate') return commandAuthRotate(parsed.flags);
             printHelp();
             return 1;
         }

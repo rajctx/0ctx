@@ -1,9 +1,91 @@
-import { randomUUID } from 'crypto';
+import { randomUUID, createHmac } from 'crypto';
 import { auth0 } from '@/lib/auth0';
 
 const CONTROL_PLANE_URL =
   process.env.CTX_CONTROL_PLANE_URL || 'http://127.0.0.1:8787';
 const BFF_TIMEOUT_MS = Number(process.env.CTX_BFF_TIMEOUT_MS) || 30_000;
+const BFF_RATE_LIMIT_RPM = Number(process.env.CTX_BFF_RATE_LIMIT_RPM) || 300;
+const CP_SIGNING_SECRET = process.env.CTX_CP_SIGNING_SECRET || '';
+
+// ─── SEC-001: Rate limiting (in-memory sliding window) ────────────────────────
+
+const rateLimitBuckets = new Map<string, number[]>();
+
+/**
+ * Check if a request should be rate-limited.
+ * Uses a per-IP sliding window of RPM.
+ */
+export function checkRateLimit(clientIp: string): boolean {
+  const now = Date.now();
+  const windowMs = 60_000;
+  let bucket = rateLimitBuckets.get(clientIp);
+  if (!bucket) {
+    bucket = [];
+    rateLimitBuckets.set(clientIp, bucket);
+  }
+  // Prune expired entries
+  while (bucket.length > 0 && bucket[0] < now - windowMs) bucket.shift();
+  if (bucket.length >= BFF_RATE_LIMIT_RPM) return false; // rate limited
+  bucket.push(now);
+  return true;
+}
+
+// ─── SEC-001: CSRF validation ─────────────────────────────────────────────────
+
+/**
+ * Validate CSRF for state-mutating BFF requests.
+ * Checks that Origin or Referer matches the app host.
+ * Returns true if request is safe, false if CSRF suspected.
+ */
+export function validateCsrf(request: Request): boolean {
+  const method = request.method.toUpperCase();
+  if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return true;
+
+  const origin = request.headers.get('origin');
+  const referer = request.headers.get('referer');
+  const host = request.headers.get('host');
+
+  if (!host) return true; // Can't validate without host
+
+  if (origin) {
+    try {
+      const originHost = new URL(origin).host;
+      return originHost === host;
+    } catch {
+      return false;
+    }
+  }
+
+  if (referer) {
+    try {
+      const refererHost = new URL(referer).host;
+      return refererHost === host;
+    } catch {
+      return false;
+    }
+  }
+
+  // No Origin or Referer — allow for same-origin server actions
+  return true;
+}
+
+// ─── SEC-001: Request signing for control-plane calls ─────────────────────────
+
+/**
+ * Sign a request body with HMAC-SHA256 for control-plane verification.
+ * Returns headers to attach. No-op if CTX_CP_SIGNING_SECRET is not set.
+ */
+export function signRequest(body: string): Record<string, string> {
+  if (!CP_SIGNING_SECRET) return {};
+  const timestamp = Date.now().toString();
+  const signature = createHmac('sha256', CP_SIGNING_SECRET)
+    .update(`${timestamp}.${body}`)
+    .digest('hex');
+  return {
+    'X-CTX-Timestamp': timestamp,
+    'X-CTX-Signature': signature
+  };
+}
 
 export type RuntimePosture = 'connected' | 'degraded' | 'offline';
 export type SyncPolicy = 'local_only' | 'metadata_only' | 'full_sync';
@@ -38,11 +120,10 @@ export function errorEnvelope(
   };
 }
 
-export function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json' }
-  });
+export function jsonResponse(body: unknown, status = 200, requestId?: string): Response {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (requestId) headers['X-Request-Id'] = requestId;
+  return new Response(JSON.stringify(body), { status, headers });
 }
 
 export function errorResponse(
@@ -101,6 +182,7 @@ export async function cpFetch(
     token: string;
     body?: unknown;
     timeoutMs?: number;
+    requestId?: string;
   }
 ): Promise<Response> {
   const url = `${CONTROL_PLANE_URL}${path}`;
@@ -111,9 +193,14 @@ export async function cpFetch(
   );
 
   try {
+    const bodyStr = options.body !== undefined ? JSON.stringify(options.body) : undefined;
+    const reqId = options.requestId ?? correlationId();
+
     const headers: Record<string, string> = {
       Authorization: `Bearer ${options.token}`,
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      'X-Request-Id': reqId,
+      ...signRequest(bodyStr ?? '')
     };
 
     const fetchOptions: RequestInit = {
@@ -122,8 +209,8 @@ export async function cpFetch(
       signal: controller.signal
     };
 
-    if (options.body !== undefined) {
-      fetchOptions.body = JSON.stringify(options.body);
+    if (bodyStr !== undefined) {
+      fetchOptions.body = bodyStr;
     }
 
     return await fetch(url, fetchOptions);

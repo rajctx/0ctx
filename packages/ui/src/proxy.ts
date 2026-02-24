@@ -14,8 +14,33 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { auth0 } from '@/lib/auth0';
+import { validateCsrf, checkRateLimit } from '@/lib/bff';
 
 export async function proxy(request: NextRequest) {
+    // SEC-001: Rate limiting on BFF API routes
+    if (request.nextUrl.pathname.startsWith('/api/')) {
+        const clientIp =
+            request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+            request.headers.get('x-real-ip') ||
+            '127.0.0.1';
+        if (!checkRateLimit(clientIp)) {
+            return NextResponse.json(
+                { error: 'Too many requests' },
+                { status: 429, headers: { 'Retry-After': '60' } }
+            );
+        }
+    }
+
+    // SEC-001: CSRF validation for state-mutating BFF requests
+    if (request.nextUrl.pathname.startsWith('/api/')) {
+        if (!validateCsrf(request as unknown as Request)) {
+            return NextResponse.json(
+                { error: 'CSRF validation failed' },
+                { status: 403 }
+            );
+        }
+    }
+
     // Let Auth0 handle its own routes (/auth/login, /auth/callback, etc.)
     const authResponse = await auth0.middleware(request);
 

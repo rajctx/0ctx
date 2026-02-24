@@ -332,3 +332,31 @@ export function ackConnectorCommand(
         COMMAND_ACK_PATHS
     );
 }
+
+// SEC-001: Connector trust challenge verification
+
+export interface TrustVerifyPayload {
+    machineId: string;
+    challengeResponse: string;
+}
+
+export interface TrustVerifyResponse {
+    accepted?: boolean;
+    trustLevel?: string;
+}
+
+const TRUST_VERIFY_PATHS = ['connectors/trust/verify', 'connector/trust/verify'];
+
+export function verifyConnectorTrust(
+    token: string,
+    payload: TrustVerifyPayload
+): Promise<CloudApiResult<TrustVerifyResponse>> {
+    return requestWithFallback<TrustVerifyResponse>(
+        {
+            method: 'POST',
+            token,
+            body: payload
+        },
+        TRUST_VERIFY_PATHS
+    );
+}

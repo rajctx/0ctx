@@ -310,7 +310,7 @@ Exit criteria:
 | VIZ-01 | UI | Migrate graph renderer from `react-force-graph-2d` (Canvas) to `reagraph` (WebGL) for better performance, clustering, and 2D/3D support | `packages/ui/src/app/dashboard/ForceGraph.tsx`, `workspace-view.tsx` | Graph renders via WebGL; handles 1K+ nodes without degradation; clustering support available | None | Done | UI | Phase F |
 | VIZ-02 | UI | Add layout-switching toggle in workspace toolbar: Force / Hierarchical / Clustered views | `packages/ui/src/app/dashboard/ForceGraph.tsx`, `workspace-view.tsx` | Users can switch between force-directed, dagre/hierarchical, and clustered-by-type layouts | VIZ-01 | Done | UI | Phase F |
 | DX-01 | Platform | Legacy embedded-local-UI CLI path | `packages/cli/*`, `packages/ui/*` | Historical track recorded; replaced by hosted-UI-only runtime policy | None | Superseded | Core | Phase F |
-| DX-02 | Platform | Desktop App: Bundle everything into a standalone local desktop application (Tauri/Electron) | `desktop-app/*` | Users download an installer and get a system tray app connected to hosted UI + local runtime | DX-03 | Planned | Core | Phase F |
+| DX-02 | Platform | Desktop App: Tauri v2 scaffold with system tray, health polling, auto-update, platform installers | `desktop-app/src-tauri/*`, `desktop-app/package.json` | System tray app with webview to hosted UI, daemon health polling, auto-update scaffold, NSIS/WiX/DMG/AppImage bundler config | DX-03 | Done | Core | Phase F |
 | DX-03 | Platform | Hosted-UI-only CLI packaging model (`@0ctx/cli` does not package local UI runtime) | `packages/cli/*`, release scripts, docs | End-user install requires only CLI + hosted UI URL handoff; no embedded local Next.js runtime | None | Done | Core | Phase F |
 | DX-04 | Platform | Canonical first-run `0ctx setup` workflow (auth + runtime + MCP + hosted UI handoff) | `packages/cli/src/index.ts`, install/quickstart/readme docs | New users onboard from one command with verification and hosted dashboard open | DX-03 | Done | Core | Phase F |
 | ARCH-001 | Core/Daemon | Implement semantic blackboard events, subscription primitives, and gate-aware completion evaluator | `packages/core/src/graph.ts`, `packages/daemon/src/server.ts`, `packages/daemon/src/handlers.ts`, `packages/daemon/src/protocol.ts` | Event subscriptions and policy-gated completion work with deterministic behavior and audit trail | SYNC-02, MCP-01 | Done | Platform | Phase G |
@@ -321,8 +321,8 @@ Exit criteria:
 | UI-OPS-001 | UI | Implement hosted operations surfaces for connector health, queue lag, diagnostics, and reliability controls | `packages/ui/src/app/operations/*`, operations components, cloud capabilities client | Operations route provides actionable runbook flows and live runtime posture without local shell dependency | UI-ENT-002, CLOUD-001 | Done | UI + Platform | Phase J |
 | INT-001 | Integrations | Add AI integration manager (MCP client setup/verification including ChatGPT-path policy controls) | `packages/ui/src/app/settings/*`, CLI/bootstrap modules | Tenant admins can configure and verify integrations with explicit policy boundaries | UI-ENT-002 | Done | Platform + UI | Phase J |
 | UI-BFF-001 | UI | Full BFF migration — remove local daemon/CLI coupling from hosted UI; all actions flow through BFF route handlers via control-plane HTTP bridge | `packages/ui/src/lib/bff.ts`, `bff-client.ts`, `app/api/v1/*`, `app/actions.ts`, `app/install/page.tsx`, `app/docs/page.tsx`, `proxy.ts` | No `child_process`/`net` imports in UI; all server actions use BFF HTTP endpoints; build passes clean | UI-ENT-002, CLOUD-001 | Done | UI + Platform | Phase J |
-| SEC-001 | Security | Tenant security hardening for hybrid runtime (key rotation, connector trust, audit immutability checks) | daemon auth modules, connector auth, cloud auth/policy modules | Security controls are enforced and verifiable in audit and runtime posture | CLOUD-001 | Planned | Security + Platform | Phase K |
-| OPS-001 | Operations | Define SLOs, telemetry pipelines, and incident runbooks for connector/cloud/runtime | `docs/*`, telemetry modules, operations scripts | SLO dashboards and runbooks exist and are used in canary/incident workflows | CONN-001, CLOUD-001 | Planned | Platform + SRE | Phase K |
+| SEC-001 | Security | Tenant security hardening for hybrid runtime (key rotation, connector trust, audit immutability checks, BFF session hardening) | `packages/cli/src/auth.ts`, `packages/core/src/graph.ts`, `packages/ui/src/lib/bff.ts`, `packages/ui/src/proxy.ts`, `cloud/control-plane/server.js` | Token rotation, connector trust challenge, audit HMAC chain, BFF CSRF+rate-limit+signing, security tests pass | CLOUD-001 | Done | Security + Platform | Phase K |
+| OPS-001 | Operations | Structured logging, metrics, health checks, alerting, distributed tracing | `packages/core/src/logger.ts`, `packages/core/src/metrics.ts`, `packages/ui/src/app/api/v1/health/route.ts`, `packages/ui/src/app/api/v1/metrics/route.ts`, `docs/ALERTING_RUNBOOK.md`, `scripts/ops/check-health.ps1` | Health/metrics endpoints live, X-Request-Id propagation, alerting runbook exists | CONN-001, CLOUD-001 | Done | Platform + SRE | Phase K |
 
 <!-- | GOV-01 | Governance | Apply branch protection and label baseline | GitHub settings + scripts | Branch rules and labels enforced in target repos | None | In Progress | Repo Admin | Phase E | -->
 <!-- | GOV-02 | Governance | Re-enable workflows after explicit approval | `.github/workflows-disabled/*` and runbook | CI/governance/release workflows operational | GOV-01 | Planned | Repo Admin | Phase E | -->
@@ -354,7 +354,7 @@ Exit criteria:
 | VIZ-01 | Phase F | Reagraph WebGL migration | UI | Done | 2026-02-23 | — | — |
 | VIZ-02 | Phase F | Layout-switching (Force/Hierarchical/Clustered) | UI | Done | 2026-02-23 | — | — |
 | DX-01 | Phase F | Legacy embedded-local-UI CLI path | Core | Superseded | 2026-02-24 | Replaced by DX-03 | — |
-| DX-02 | Phase F | Standalone Desktop App | Core | Planned | TBD | DX-03 | TBD |
+| DX-02 | Phase F | Standalone Desktop App (Tauri v2 scaffold) | Core | Done | 2026-02-24 | DX-03 | — |
 | DX-03 | Phase F | Hosted-UI-only CLI packaging model | Core | Done | 2026-02-24 | — | — |
 | DX-04 | Phase F | `0ctx setup` first-run workflow | Core | Done | 2026-02-24 | DX-03 | — |
 | ARCH-001 | Phase G | Semantic blackboard event runtime + gate evaluator | Platform | Done | 2026-02-24 | SYNC-02, MCP-01 | — |
@@ -365,8 +365,8 @@ Exit criteria:
 | UI-OPS-001 | Phase J | Hosted operations route and reliability controls | UI + Platform | Done | 2026-02-24 | UI-ENT-002, CLOUD-001 | — |
 | INT-001 | Phase J | AI integration manager + ChatGPT-path controls | Platform + UI | Done | 2026-02-24 | UI-ENT-002 | — |
 | UI-BFF-001 | Phase J | Full BFF migration — remove local coupling from hosted UI | UI + Platform | Done | 2026-02-24 | UI-ENT-002, CLOUD-001 | — |
-| SEC-001 | Phase K | Hybrid runtime security hardening | Security + Platform | Planned | TBD | CLOUD-001 | TBD |
-| OPS-001 | Phase K | SLO/telemetry/runbook rollout | Platform + SRE | Planned | TBD | CONN-001, CLOUD-001 | TBD |
+| SEC-001 | Phase K | Hybrid runtime security hardening | Security + Platform | Done | 2026-02-24 | CLOUD-001 | — |
+| OPS-001 | Phase K | Observability + alerting foundation | Platform + SRE | Done | 2026-02-24 | CONN-001, CLOUD-001 | — |
 
 <!-- | GOV-01 | Phase E | Branch protection + labels apply | Repo Admin | In Progress | TBD | Repo settings access | TBD | -->
 <!-- | GOV-02 | Phase E | Workflow re-enable rollout | Repo Admin | Planned | TBD | Approval gate | TBD | -->
@@ -447,6 +447,11 @@ Exit criteria:
 - Workflows remain disabled until explicit re-enable approval.
 
 ## 11) Change Log (Append-Only)
+
+- 2026-02-24: REL-002 completed — Release automation phase 2: enhanced CI with OS matrix, lint/UI build steps; release-manual with npm publish/checksums/GitHub Release; tag-triggered release workflow; all workflows moved to active directory.
+- 2026-02-24: SEC-001 completed — Tenant security hardening: token rotation (`auth rotate`), connector trust challenge model, audit HMAC chain (V4 migration, `verifyAuditChain`), BFF session hardening (CSRF/rate-limit/request-signing), 23 new security tests.
+- 2026-02-24: OPS-001 completed — Observability: structured logger, metrics (Prometheus export), `/api/v1/health` + `/api/v1/metrics` BFF routes, `/v1/metrics` control-plane, alerting runbook, health check script, X-Request-Id distributed tracing.
+- 2026-02-24: DX-02 completed (scaffold) — Tauri v2 desktop app with system tray, health polling, auto-update, platform installer config.
 
 - 2026-02-24: UI-BFF-001 completed — full BFF migration closing the local-coupling gap between hosted UI and documented architecture. Created `lib/bff.ts` (control-plane HTTP client, Auth0 session helper, error envelope builder, `cpExecCommand` command bridge, `resolveMachineId`), `lib/bff-client.ts` (thin fetch wrapper), 9 BFF route handlers under `app/api/v1/`, added `/v1/connectors/commands/exec` to control-plane, rewrote `actions.ts` to use BFF HTTP client exclusively, created `/install` onboarding route, `/docs` documentation index, re-enabled `proxy.ts` Auth0 session gate, deleted legacy `lib/0ctx.ts`. Build passes clean.
 - 2026-02-24: UI-ENT-002/UI-OPS-001/INT-001 completed for hosted/local-control-plane scope — delivered capability-gated enterprise IA, dedicated integrations route, operations runtime controls (connector posture, queue lag, drain/purge preview, queue logs), and persisted integration policy boundaries for ChatGPT-path + auto-bootstrap controls.

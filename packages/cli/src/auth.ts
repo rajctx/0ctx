@@ -448,6 +448,97 @@ export async function commandAuthLogout(): Promise<number> {
     return 0;
 }
 
+// ─── Token rotation (SEC-001) ─────────────────────────────────────────────────
+
+/**
+ * SEC-001: Rotate token — request a new access token using the existing
+ * refresh token and revoke the old refresh token if the server supports it.
+ */
+export async function commandAuthRotate(flags: Record<string, string | boolean>): Promise<number> {
+    const envToken = getEnvToken();
+    if (envToken) {
+        console.error('Cannot rotate token: authenticated via CTX_AUTH_TOKEN environment variable.');
+        return 1;
+    }
+
+    const { store, source } = await readTokenStoreSecure();
+    if (!store) {
+        console.error('Not logged in. Run: 0ctx auth login');
+        return 1;
+    }
+
+    if (!store.refreshToken) {
+        console.error('No refresh token available — cannot rotate. Run: 0ctx auth login');
+        return 1;
+    }
+
+    const authServer = getAuthServer();
+    const oldRefreshToken = store.refreshToken;
+
+    console.log(`Rotating token for ${store.email}...`);
+
+    let updated: TokenStore;
+    try {
+        updated = await refreshAccessToken(store);
+    } catch (e: unknown) {
+        console.error(`Rotation failed: ${e instanceof Error ? e.message : String(e)}`);
+        return 1;
+    }
+
+    // Attempt to revoke the old refresh token (best-effort)
+    if (oldRefreshToken !== updated.refreshToken) {
+        try {
+            const body = urlEncode({
+                client_id: CLIENT_ID,
+                token: oldRefreshToken,
+                token_type_hint: 'refresh_token'
+            });
+            await httpPost(`${authServer}/revoke`, body, 5_000);
+            console.log('Old refresh token revoked.');
+        } catch {
+            console.warn('Warning: could not revoke old refresh token (server may not support revocation).');
+        }
+    }
+
+    const insecure = Boolean(flags['insecure-storage']);
+    const storageDest = await writeTokenStoreSecure(updated, insecure);
+
+    const expiresIn = updated.expiresAt - Date.now();
+    const expiresInHuman = expiresIn > 86400_000
+        ? `${Math.round(expiresIn / 86400_000)}d`
+        : `${Math.round(expiresIn / 3600_000)}h`;
+
+    console.log(`Token rotated successfully.`);
+    console.log(`  Email:     ${updated.email}`);
+    console.log(`  Expires:   ${new Date(updated.expiresAt).toISOString()} (${expiresInHuman})`);
+    console.log(`  Stored in: ${storageDest === 'keyring' ? 'OS credential store' : TOKEN_FILE}`);
+    return 0;
+}
+
+/**
+ * SEC-001: Check if token is close to expiry and warn.
+ * Returns the number of ms remaining, or null if no token / env token.
+ */
+export function checkTokenExpiryWarning(): { expiresInMs: number | null; shouldWarn: boolean } {
+    const envToken = getEnvToken();
+    if (envToken) return { expiresInMs: null, shouldWarn: false };
+
+    const store = readTokenStore();
+    if (!store || store.expiresAt >= Number.MAX_SAFE_INTEGER) {
+        return { expiresInMs: null, shouldWarn: false };
+    }
+
+    const remaining = store.expiresAt - Date.now();
+    const total = store.expiresAt - (store.expiresAt - (store.expiresAt > 0 ? store.expiresAt : 0));
+
+    // Warn when within configurable threshold (default 7 days)
+    const warnDays = Number(process.env.CTX_AUTH_TOKEN_ROTATION_WARN_DAYS ?? '7');
+    const warnMs = warnDays * 86400_000;
+    const shouldWarn = remaining > 0 && remaining < warnMs;
+
+    return { expiresInMs: remaining > 0 ? remaining : 0, shouldWarn };
+}
+
 export function commandAuthStatus(flags: Record<string, string | boolean>): number {
     const asJson = Boolean(flags.json);
     // SEC-01: Check env token first, then disk

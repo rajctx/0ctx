@@ -244,19 +244,76 @@ export class Graph {
             createdAt: Date.now()
         };
 
+        // SEC-001: Compute HMAC chain — each entry's hash includes the previous entry's hash
+        const prevHash = this.getLastAuditHash();
+        const hmacData = `${prevHash}|${entry.id}|${entry.action}|${entry.createdAt}`;
+        const { createHmac } = require('crypto');
+        const auditSecret = process.env.CTX_AUDIT_HMAC_SECRET || 'default-audit-key';
+        const entryHash = createHmac('sha256', auditSecret).update(hmacData).digest('hex');
+
         this.db.prepare(`
       INSERT INTO audit_logs (
-        id, action, contextId, payload, result, actor, source, sessionToken, connectionId, requestId, createdAt
+        id, action, contextId, payload, result, actor, source, sessionToken, connectionId, requestId, createdAt, entryHash, prevHash
       ) VALUES (
-        @id, @action, @contextId, @payload, @result, @actor, @source, @sessionToken, @connectionId, @requestId, @createdAt
+        @id, @action, @contextId, @payload, @result, @actor, @source, @sessionToken, @connectionId, @requestId, @createdAt, @entryHash, @prevHash
       )
     `).run({
             ...entry,
             payload: JSON.stringify(entry.payload),
-            result: entry.result ? JSON.stringify(entry.result) : null
+            result: entry.result ? JSON.stringify(entry.result) : null,
+            entryHash,
+            prevHash
         });
 
-        return entry;
+        return { ...entry, entryHash, prevHash } as AuditEntry;
+    }
+
+    /** SEC-001: Get the hash of the most recent audit entry for HMAC chain continuity. */
+    private getLastAuditHash(): string {
+        try {
+            const row = this.db.prepare(
+                'SELECT entryHash FROM audit_logs ORDER BY rowid DESC LIMIT 1'
+            ).get() as { entryHash?: string } | undefined;
+            return row?.entryHash ?? 'genesis';
+        } catch {
+            // Column may not exist yet in older DBs — return genesis
+            return 'genesis';
+        }
+    }
+
+    /** SEC-001: Verify the HMAC chain integrity of audit logs. */
+    verifyAuditChain(limit = 1000): { valid: boolean; checked: number; brokenAt?: string } {
+        const { createHmac } = require('crypto');
+        const auditSecret = process.env.CTX_AUDIT_HMAC_SECRET || 'default-audit-key';
+
+        let rows: Array<{ id: string; action: string; createdAt: number; entryHash: string; prevHash: string }>;
+        try {
+            rows = this.db.prepare(
+                'SELECT id, action, createdAt, entryHash, prevHash FROM audit_logs ORDER BY rowid ASC LIMIT ?'
+            ).all(limit) as any[];
+        } catch {
+            return { valid: false, checked: 0, brokenAt: 'schema_missing_hash_columns' };
+        }
+
+        if (rows.length === 0) return { valid: true, checked: 0 };
+
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            if (!row.entryHash) continue; // Pre-SEC-001 entries without hashes are skipped
+
+            const expectedPrev = i === 0 ? 'genesis' : (rows[i - 1].entryHash ?? 'genesis');
+            if (row.prevHash !== expectedPrev) {
+                return { valid: false, checked: i + 1, brokenAt: row.id };
+            }
+
+            const hmacData = `${row.prevHash}|${row.id}|${row.action}|${row.createdAt}`;
+            const computed = createHmac('sha256', auditSecret).update(hmacData).digest('hex');
+            if (computed !== row.entryHash) {
+                return { valid: false, checked: i + 1, brokenAt: row.id };
+            }
+        }
+
+        return { valid: true, checked: rows.length };
     }
 
     listAuditEvents(contextId?: string, limit = 50): AuditEntry[] {

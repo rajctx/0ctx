@@ -41,14 +41,21 @@ Updated: 2026-02-24
 
 ## Planned
 
-- Release automation phase 2 (GitHub workflow-backed publish and release publication).
-- `SEC-001`: Tenant security and key management hardening.
+- No remaining planned items — all roadmap workstreams through Phase K are delivered.
 
 ## Recently Landed
 
-- `UI-BFF-001` completed: full BFF migration removing local daemon/CLI coupling from hosted UI. BFF route handlers (`/api/v1/*`), control-plane HTTP client (`lib/bff.ts`), BFF fetch wrapper (`lib/bff-client.ts`), actions.ts rewritten to BFF client, `/install` onboarding route, `/docs` documentation index route, `proxy.ts` auth gate re-enabled, legacy `lib/0ctx.ts` daemon socket client deleted. Build passes clean.
+- `REL-002` completed: Release automation phase 2 — enhanced CI with OS matrix/lint/UI build, release-manual with npm publish/checksums/GitHub Release, tag-triggered release workflow, all workflows moved to active directory.
 
-- `OPS-001`: SLO and observability baseline documented (`docs/OPS_SLO_AND_OBSERVABILITY.md`).
+- `SEC-001` completed: Tenant security hardening — token rotation (`auth rotate`), connector trust challenge model, audit HMAC chain with `verifyAuditChain()`, BFF CSRF/rate-limiting/request-signing, V4 migration for `entryHash`/`prevHash` columns, security tests across cli/core/ui packages.
+
+- `OPS-001` completed: Observability foundation — structured JSON logger (`core/logger.ts`), metrics collection (`core/metrics.ts`) with Prometheus export, `/api/v1/metrics` and `/v1/metrics` endpoints, `/api/v1/health` BFF route, enhanced `/v1/health` with uptime/memory, alerting runbook + health check script, `X-Request-Id` distributed tracing through BFF → control-plane.
+
+- `DX-02` completed (scaffold): Tauri v2 desktop app — `desktop-app/` with system tray (Open/Status/Updates/Quit menu), health polling against local daemon, webview to hosted UI, auto-update via Tauri updater plugin, platform installer config (NSIS/WiX/DMG/AppImage).
+
+- `UI-BFF-001` completed: full BFF migration removing local daemon/CLI coupling from hosted UI.
+
+- `OPS-001` (docs): SLO and observability baseline documented (`docs/OPS_SLO_AND_OBSERVABILITY.md`).
 
 - Hybrid architecture plan and canonical documents were added for execution kickoff:
   - `docs/SEMANTIC_BLACKBOARD_ARCHITECTURE.md`

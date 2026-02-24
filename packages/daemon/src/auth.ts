@@ -17,6 +17,8 @@ export interface AuthState {
     tenantId: string | null;
     expiresAt: number | null;   // Unix ms
     tokenExpired: boolean;
+    /** SEC-001: milliseconds until access token expires, null for env tokens or missing state */
+    tokenExpiresIn: number | null;
 }
 
 interface RawTokenStore {
@@ -33,7 +35,8 @@ export function readAuthState(): AuthState {
         email: null,
         tenantId: null,
         expiresAt: null,
-        tokenExpired: false
+        tokenExpired: false,
+        tokenExpiresIn: null
     };
 
     // SEC-01: Check CTX_AUTH_TOKEN env var first (CI/CD headless use)
@@ -44,7 +47,8 @@ export function readAuthState(): AuthState {
             email: 'env:CTX_AUTH_TOKEN',
             tenantId: process.env.CTX_TENANT_ID ?? null,
             expiresAt: null,
-            tokenExpired: false
+            tokenExpired: false,
+            tokenExpiresIn: null
         };
     }
 
@@ -57,12 +61,15 @@ export function readAuthState(): AuthState {
         const expiresAt = typeof raw.expiresAt === 'number' ? raw.expiresAt : null;
         const tokenExpired = expiresAt !== null && Date.now() >= expiresAt;
 
+        const tokenExpiresIn = expiresAt !== null ? Math.max(0, expiresAt - Date.now()) : null;
+
         return {
             authenticated: !tokenExpired,
             email: raw.email ?? null,
             tenantId: raw.tenantId ?? null,
             expiresAt,
-            tokenExpired
+            tokenExpired,
+            tokenExpiresIn
         };
     } catch {
         return absent;

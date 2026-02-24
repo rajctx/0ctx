@@ -187,7 +187,7 @@ export function handleRequest(
     if (req.method === 'getCapabilities') {
         return {
             apiVersion: '2',
-            features: ['sessions', 'health', 'capabilities', 'audit_logs', 'metrics', 'backup_restore', 'auth', 'sync', 'sync_policies', 'blackboard_events', 'task_leases', 'quality_gates'],
+            features: ['sessions', 'health', 'capabilities', 'audit_logs', 'audit_verify', 'metrics', 'backup_restore', 'auth', 'sync', 'sync_policies', 'blackboard_events', 'task_leases', 'quality_gates'],
             methods: [
                 'listContexts', 'createContext', 'deleteContext', 'switchContext', 'getActiveContext',
                 'addNode', 'getNode', 'updateNode', 'getByKey', 'deleteNode',
@@ -417,6 +417,12 @@ export function handleRequest(
         const explicitContextId = getContextIdFromParams(params);
         const limit = typeof params.limit === 'number' ? params.limit : undefined;
         return graph.listAuditEvents(explicitContextId ?? undefined, limit);
+    }
+
+    // SEC-001: Audit chain integrity verification
+    if (req.method === 'auditVerify') {
+        const limit = typeof params.limit === 'number' ? params.limit : 1000;
+        return graph.verifyAuditChain(limit);
     }
 
     if (req.method === 'listBackups') {

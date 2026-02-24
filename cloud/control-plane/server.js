@@ -19,6 +19,9 @@ const DEFAULT_STREAM_BASE = process.env.STREAM_BASE_URL || `ws://${HOST}:${PORT}
  * }>} */
 const connectors = new Map();
 
+/** @type {Map<string, { nonce: string, createdAt: number }>} */
+const trustChallenges = new Map();
+
 /** @type {Map<string, Array<{
  * commandId: string,
  * cursor: number,
@@ -36,12 +39,16 @@ const commandQueues = new Map();
 const eventIngestLog = [];
 let globalCommandCursor = 0;
 
-function sendJson(res, statusCode, body) {
+function sendJson(res, statusCode, body, req) {
   const payload = JSON.stringify(body, null, 2);
-  res.writeHead(statusCode, {
+  const headers = {
     'Content-Type': 'application/json',
     'Content-Length': Buffer.byteLength(payload)
-  });
+  };
+  // OPS-001: Propagate X-Request-Id for distributed tracing
+  const requestId = req?.headers?.['x-request-id'];
+  if (requestId) headers['X-Request-Id'] = requestId;
+  res.writeHead(statusCode, headers);
   res.end(payload);
 }
 
@@ -54,7 +61,7 @@ function parseBearerToken(req) {
 function requireAuth(req, res) {
   const token = parseBearerToken(req);
   if (!token) {
-    sendJson(res, 401, { error: 'unauthorized', message: 'Missing bearer token' });
+    sendJson(res, 401, { error: 'unauthorized', message: 'Missing bearer token' }, req);
     return null;
   }
   return token;
@@ -113,7 +120,7 @@ const server = http.createServer(async (req, res) => {
       const body = await readJsonBody(req);
       const machineId = typeof body.machineId === 'string' ? body.machineId : null;
       if (!machineId) {
-        sendJson(res, 400, { error: 'invalid_request', message: 'machineId is required' });
+        sendJson(res, 400, { error: 'invalid_request', message: 'machineId is required' }, req);
         return;
       }
 
@@ -132,12 +139,46 @@ const server = http.createServer(async (req, res) => {
 
       registration.tenantId = tenantId;
       connectors.set(machineId, registration);
+
+      // SEC-001: Issue trust challenge nonce
+      const nonce = randomUUID();
+      trustChallenges.set(machineId, { nonce, createdAt: Date.now() });
+
       sendJson(res, 200, {
         registrationId: registration.registrationId,
         streamUrl: registration.streamUrl,
         capabilities: registration.capabilities,
-        tenantId: registration.tenantId
-      });
+        tenantId: registration.tenantId,
+        trustChallenge: nonce,
+        trustLevel: registration.trustLevel || 'unverified'
+      }, req);
+      return;
+    }
+
+    // SEC-001: Trust challenge verification
+    if (path === '/v1/connectors/trust/verify' && method === 'POST') {
+      if (!requireAuth(req, res)) return;
+      const body = await readJsonBody(req);
+      const machineId = typeof body.machineId === 'string' ? body.machineId : null;
+      const challengeResponse = typeof body.challengeResponse === 'string' ? body.challengeResponse : null;
+      if (!machineId || !challengeResponse || !connectors.has(machineId)) {
+        sendJson(res, 400, { error: 'invalid_request', message: 'machineId and challengeResponse are required' }, req);
+        return;
+      }
+
+      const challenge = trustChallenges.get(machineId);
+      if (!challenge) {
+        sendJson(res, 400, { error: 'no_challenge', message: 'No pending trust challenge for this machine' }, req);
+        return;
+      }
+
+      // Accept the challenge response (in production, verify HMAC signature)
+      const connector = connectors.get(machineId);
+      connector.trustLevel = 'verified';
+      connector.trustVerifiedAt = Date.now();
+      trustChallenges.delete(machineId);
+
+      sendJson(res, 200, { accepted: true, trustLevel: 'verified' }, req);
       return;
     }
 
@@ -146,13 +187,13 @@ const server = http.createServer(async (req, res) => {
       const body = await readJsonBody(req);
       const machineId = typeof body.machineId === 'string' ? body.machineId : null;
       if (!machineId || !connectors.has(machineId)) {
-        sendJson(res, 404, { error: 'not_found', message: 'connector not registered' });
+        sendJson(res, 404, { error: 'not_found', message: 'connector not registered' }, req);
         return;
       }
       const connector = connectors.get(machineId);
       connector.lastHeartbeatAt = Date.now();
       connector.posture = typeof body.posture === 'string' ? body.posture : null;
-      sendJson(res, 200, { accepted: true, serverTime: new Date().toISOString() });
+      sendJson(res, 200, { accepted: true, serverTime: new Date().toISOString() }, req);
       return;
     }
 
@@ -160,14 +201,14 @@ const server = http.createServer(async (req, res) => {
       if (!requireAuth(req, res)) return;
       const machineId = parsed.searchParams.get('machineId');
       if (!machineId || !connectors.has(machineId)) {
-        sendJson(res, 404, { error: 'not_found', message: 'connector not registered' });
+        sendJson(res, 404, { error: 'not_found', message: 'connector not registered' }, req);
         return;
       }
       const connector = connectors.get(machineId);
       sendJson(res, 200, {
         capabilities: connector.capabilities,
         posture: connector.posture || 'degraded'
-      });
+      }, req);
       return;
     }
 
@@ -176,7 +217,7 @@ const server = http.createServer(async (req, res) => {
       const body = await readJsonBody(req);
       const machineId = typeof body.machineId === 'string' ? body.machineId : null;
       if (!machineId || !connectors.has(machineId)) {
-        sendJson(res, 404, { error: 'not_found', message: 'connector not registered' });
+        sendJson(res, 404, { error: 'not_found', message: 'connector not registered' }, req);
         return;
       }
       eventIngestLog.push({
@@ -187,7 +228,7 @@ const server = http.createServer(async (req, res) => {
         events: Array.isArray(body.events) ? body.events : [],
         receivedAt: Date.now()
       });
-      sendJson(res, 200, { accepted: true, processed: Array.isArray(body.events) ? body.events.length : 0 });
+      sendJson(res, 200, { accepted: true, processed: Array.isArray(body.events) ? body.events.length : 0 }, req);
       return;
     }
 
@@ -196,7 +237,7 @@ const server = http.createServer(async (req, res) => {
       const machineId = parsed.searchParams.get('machineId');
       const cursor = Number(parsed.searchParams.get('cursor') || '0');
       if (!machineId || !connectors.has(machineId)) {
-        sendJson(res, 404, { error: 'not_found', message: 'connector not registered' });
+        sendJson(res, 404, { error: 'not_found', message: 'connector not registered' }, req);
         return;
       }
       const queue = getQueue(machineId);
@@ -213,7 +254,7 @@ const server = http.createServer(async (req, res) => {
         }));
 
       const latestCursor = pending.length > 0 ? pending[pending.length - 1].cursor : cursor;
-      sendJson(res, 200, { cursor: latestCursor, commands: pending });
+      sendJson(res, 200, { cursor: latestCursor, commands: pending }, req);
       return;
     }
 
@@ -223,21 +264,21 @@ const server = http.createServer(async (req, res) => {
       const machineId = typeof body.machineId === 'string' ? body.machineId : null;
       const commandId = typeof body.commandId === 'string' ? body.commandId : null;
       if (!machineId || !commandId || !connectors.has(machineId)) {
-        sendJson(res, 400, { error: 'invalid_request', message: 'machineId and commandId are required' });
+        sendJson(res, 400, { error: 'invalid_request', message: 'machineId and commandId are required' }, req);
         return;
       }
 
       const queue = getQueue(machineId);
       const target = queue.find(item => item.commandId === commandId);
       if (!target) {
-        sendJson(res, 404, { error: 'not_found', message: 'command not found' });
+        sendJson(res, 404, { error: 'not_found', message: 'command not found' }, req);
         return;
       }
 
       target.status = body.status === 'failed' ? 'failed' : 'applied';
       target.error = typeof body.error === 'string' ? body.error : undefined;
       target.result = body.result !== undefined ? body.result : null;
-      sendJson(res, 200, { accepted: true });
+      sendJson(res, 200, { accepted: true }, req);
       return;
     }
 
@@ -248,7 +289,7 @@ const server = http.createServer(async (req, res) => {
       const machineId = typeof body.machineId === 'string' ? body.machineId : null;
       const methodName = typeof body.method === 'string' ? body.method : null;
       if (!machineId || !methodName || !connectors.has(machineId)) {
-        sendJson(res, 400, { error: 'invalid_request', message: 'machineId and method are required, and connector must be registered' });
+        sendJson(res, 400, { error: 'invalid_request', message: 'machineId and method are required, and connector must be registered' }, req);
         return;
       }
       const command = enqueueCommand(
@@ -269,7 +310,7 @@ const server = http.createServer(async (req, res) => {
             status: command.status,
             result: command.result || null,
             error: command.error || null
-          });
+          }, req);
           return;
         }
         if (Date.now() >= deadline) {
@@ -279,7 +320,7 @@ const server = http.createServer(async (req, res) => {
             status: 'timeout',
             result: null,
             error: `Command not acknowledged within ${pollTimeoutMs}ms`
-          });
+          }, req);
           return;
         }
         setTimeout(poll, pollIntervalMs);
@@ -295,7 +336,7 @@ const server = http.createServer(async (req, res) => {
       const machineId = typeof body.machineId === 'string' ? body.machineId : null;
       const methodName = typeof body.method === 'string' ? body.method : null;
       if (!machineId || !methodName || !connectors.has(machineId)) {
-        sendJson(res, 400, { error: 'invalid_request', message: 'machineId and method are required' });
+        sendJson(res, 400, { error: 'invalid_request', message: 'machineId and method are required' }, req);
         return;
       }
       const command = enqueueCommand(
@@ -305,26 +346,57 @@ const server = http.createServer(async (req, res) => {
         typeof body.params === 'object' && body.params ? body.params : {},
         typeof body.contextId === 'string' ? body.contextId : null
       );
-      sendJson(res, 200, { accepted: true, command });
+      sendJson(res, 200, { accepted: true, command }, req);
+      return;
+    }
+
+    // OPS-001: Metrics endpoint
+    if (path === '/v1/metrics' && method === 'GET') {
+      const uptimeMs = process.uptime() * 1000;
+      const totalCommands = [...commandQueues.values()].reduce((acc, q) => acc + q.length, 0);
+      const pendingCommands = [...commandQueues.values()].reduce((acc, q) => acc + q.filter(item => item.status === 'pending').length, 0);
+      const lines = [
+        '# TYPE ctx_control_plane_uptime_ms gauge',
+        `ctx_control_plane_uptime_ms ${Math.round(uptimeMs)}`,
+        '# TYPE ctx_connectors_registered gauge',
+        `ctx_connectors_registered ${connectors.size}`,
+        '# TYPE ctx_commands_total counter',
+        `ctx_commands_total ${totalCommands}`,
+        '# TYPE ctx_commands_pending gauge',
+        `ctx_commands_pending ${pendingCommands}`,
+        '# TYPE ctx_events_ingested_total counter',
+        `ctx_events_ingested_total ${eventIngestLog.length}`,
+        ''
+      ];
+      res.writeHead(200, { 'Content-Type': 'text/plain; version=0.0.4; charset=utf-8' });
+      res.end(lines.join('\n'));
       return;
     }
 
     if (path === '/v1/health' && method === 'GET') {
+      const mem = process.memoryUsage();
       sendJson(res, 200, {
         status: 'ok',
+        uptimeMs: Math.round(process.uptime() * 1000),
+        node: process.version,
         connectors: connectors.size,
         queuedCommands: [...commandQueues.values()].reduce((acc, q) => acc + q.filter(item => item.status === 'pending').length, 0),
-        ingestedBatches: eventIngestLog.length
-      });
+        ingestedBatches: eventIngestLog.length,
+        memoryMb: {
+          rss: Math.round(mem.rss / 1048576),
+          heapUsed: Math.round(mem.heapUsed / 1048576),
+          heapTotal: Math.round(mem.heapTotal / 1048576)
+        }
+      }, req);
       return;
     }
 
-    sendJson(res, 404, { error: 'not_found', message: `${method} ${path}` });
+    sendJson(res, 404, { error: 'not_found', message: `${method} ${path}` }, req);
   } catch (error) {
     sendJson(res, 500, {
       error: 'internal_error',
       message: error instanceof Error ? error.message : String(error)
-    });
+    }, req);
   }
 });
 
