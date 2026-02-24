@@ -30,6 +30,9 @@ npm run dev
 # Run CLI in dev mode
 npm run dev:cli
 
+# CLI release pipeline (single command)
+0ctx release publish --version vX.Y.Z --dry-run
+
 # Start MCP server (build required first)
 npm run start:mcp
 
@@ -124,7 +127,7 @@ MCP stdio server translating tool calls into daemon IPC calls.
 Product-facing command-line surface for install and support workflows.
 
 - `src/index.ts`:
-  - Commands: `install`, `bootstrap`, `doctor`, `status`, `repair`, `daemon start`
+  - Commands: `shell`, `install`, `bootstrap`, `doctor`, `status`, `repair`, `daemon start`, `release publish`
   - Runs daemon health checks and startup flow
   - Uses MCP bootstrap registration for supported clients
   - Provides diagnostics output (human + JSON)
@@ -186,10 +189,12 @@ Context/session:
 CLI/support:
 
 - `0ctx install`
+- `0ctx shell`
 - `0ctx bootstrap`
 - `0ctx doctor`
 - `0ctx status`
 - `0ctx repair`
+- `0ctx release publish`
 
 Graph:
 

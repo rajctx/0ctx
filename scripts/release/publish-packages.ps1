@@ -1,6 +1,7 @@
 param(
     [switch]$DryRun,
     [string]$OTP,
+    [string]$Tag = "latest",
     [switch]$AllowDirty
 )
 
@@ -52,13 +53,14 @@ function Publish-Package {
     param(
         [string]$Workspace,
         [switch]$DryRun,
-        [string]$OTP
+        [string]$OTP,
+        [string]$Tag
     )
 
     if ($DryRun) {
         Write-Output ""
         Write-Output "==> [dry-run] $Workspace"
-        Write-Output "    Would run: npm publish --workspace=$Workspace --access=public$(if ($OTP) { " --otp=<OTP>" })"
+        Write-Output "    Would run: npm publish --workspace=$Workspace --access=public --tag=$Tag$(if ($OTP) { " --otp=<OTP>" })"
         $packArgs = @("pack", "--workspace=$Workspace", "--dry-run")
         & npm @packArgs
         if ($LASTEXITCODE -ne 0) {
@@ -69,7 +71,7 @@ function Publish-Package {
 
     Write-Output ""
     Write-Output "==> Publishing $Workspace"
-    $publishArgs = @("publish", "--workspace=$Workspace", "--access=public")
+    $publishArgs = @("publish", "--workspace=$Workspace", "--access=public", "--tag=$Tag")
     if ($OTP) {
         $publishArgs += "--otp=$OTP"
     }
@@ -90,6 +92,7 @@ try {
     $mode = if ($DryRun) { "DRY RUN (pack only, no registry writes)" } else { "EXECUTE (publishing to npm registry)" }
     Write-Output "0ctx publish pipeline"
     Write-Output "Mode: $mode"
+    Write-Output "Tag: $Tag"
     Write-Output "Repository root: $repoRoot"
     Write-Output ""
 
@@ -117,7 +120,7 @@ try {
     )
 
     foreach ($workspace in $publishOrder) {
-        Publish-Package -Workspace $workspace -DryRun:$DryRun -OTP $OTP
+        Publish-Package -Workspace $workspace -DryRun:$DryRun -OTP $OTP -Tag $Tag
     }
 
     Write-Output ""

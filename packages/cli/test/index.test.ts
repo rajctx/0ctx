@@ -12,10 +12,16 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("case 'doctor'");
         expect(source).toContain("case 'status'");
         expect(source).toContain("case 'repair'");
+        expect(source).toContain("case 'shell'");
+        expect(source).toContain("case 'release'");
         expect(source).toContain("case 'connector'");
+        expect(source).toContain("return commandShell();");
+        expect(source).toContain("return commandReleasePublish(parsed.flags);");
         expect(source).toContain("connector register");
         expect(source).toContain("connector verify");
         expect(source).toContain("connector run");
+        expect(source).toContain("0ctx shell");
+        expect(source).toContain("0ctx release publish --version vX.Y.Z [--tag latest|next] [--otp 123456] [--dry-run] [--json]");
         expect(source).toContain("0ctx setup [--clients=all|claude,cursor,windsurf] [--no-open] [--json]");
         expect(source).toContain("[--skip-service] [--skip-bootstrap]");
         expect(source).toContain("[--dashboard-query[=k=v&...]]");

@@ -52,6 +52,8 @@ import {
 } from './connector-queue';
 import { appendCliOpsLogEntry, clearCliOpsLog, getCliOpsLogPath, readCliOpsLog } from './ops-log';
 import { drainConnectorQueue } from './connector-queue-drain';
+import { runInteractiveShell } from './shell';
+import { runReleasePublish } from './release';
 
 type SupportedClient = 'claude' | 'cursor' | 'windsurf';
 type CheckStatus = 'pass' | 'warn' | 'fail';
@@ -82,7 +84,12 @@ const SUPPORTED_CLIENTS: SupportedClient[] = ['claude', 'cursor', 'windsurf'];
 
 function parseArgs(argv: string[]): ParsedArgs {
     const [command = 'help', maybeSubcommand, ...rest] = argv;
-    const hasSubcommand = command === 'daemon' || command === 'auth' || command === 'config' || command === 'sync' || command === 'connector';
+    const hasSubcommand = command === 'daemon'
+        || command === 'auth'
+        || command === 'config'
+        || command === 'sync'
+        || command === 'connector'
+        || command === 'release';
     const tokens = hasSubcommand
         ? rest
         : [maybeSubcommand, ...rest].filter((token): token is string => Boolean(token));
@@ -169,6 +176,13 @@ function resolveDaemonEntrypoint(): string {
     }
 
     throw new Error('Could not resolve daemon entrypoint. Run `npm run build` first.');
+}
+
+function resolveCliEntrypoint(): string {
+    if (process.argv[1]) {
+        return path.resolve(process.argv[1]);
+    }
+    return __filename;
 }
 
 function getHostedDashboardUrl(): string {
@@ -420,6 +434,49 @@ async function commandDashboard(flags: Record<string, string | boolean>): Promis
     openUrl(url);
     console.log('Opened dashboard URL in your default browser (best effort).');
     return 0;
+}
+
+async function commandShell(): Promise<number> {
+    return runInteractiveShell({
+        cliEntrypoint: resolveCliEntrypoint(),
+        nodeExecArgv: process.execArgv
+    });
+}
+
+async function commandReleasePublish(flags: Record<string, string | boolean>): Promise<number> {
+    const versionRaw = parseOptionalStringFlag(flags.version);
+    if (!versionRaw) {
+        console.error('Missing required --version argument.');
+        console.error('Usage: 0ctx release publish --version vX.Y.Z [--tag latest] [--otp 123456] [--dry-run] [--json]');
+        return 1;
+    }
+
+    const result = await runReleasePublish({
+        version: versionRaw,
+        tag: parseOptionalStringFlag(flags.tag) ?? 'latest',
+        dryRun: Boolean(flags['dry-run']),
+        otp: parseOptionalStringFlag(flags.otp) ?? undefined,
+        skipValidate: Boolean(flags['skip-validate']),
+        skipChangelog: Boolean(flags['skip-changelog']),
+        outputMode: Boolean(flags.json) ? 'capture' : 'inherit'
+    });
+
+    if (Boolean(flags.json)) {
+        console.log(JSON.stringify(result, null, 2));
+    } else {
+        console.log(`release_publish: ${result.ok ? 'success' : 'failed'}`);
+        console.log(`version: ${result.version}`);
+        console.log(`tag: ${result.tag}`);
+        console.log(`dry_run: ${result.dryRun}`);
+        if (!result.ok) {
+            const failedStep = result.steps.find(step => !step.ok);
+            if (failedStep) {
+                console.error(`failed_step: ${failedStep.id} (exit=${failedStep.exitCode ?? 'unknown'})`);
+            }
+        }
+    }
+
+    return result.ok ? 0 : 1;
 }
 
 function parsePositiveNumberFlag(value: string | boolean | undefined, fallback: number): number {
@@ -1500,6 +1557,8 @@ function printHelp(): void {
     console.log(`0ctx CLI
 
 Usage:
+  0ctx
+  0ctx shell
   0ctx setup [--clients=all|claude,cursor,windsurf] [--no-open] [--json]
              [--require-cloud] [--wait-cloud-ready]
              [--cloud-wait-timeout-ms=60000] [--cloud-wait-interval-ms=2000]
@@ -1511,6 +1570,7 @@ Usage:
   0ctx status
   0ctx repair [--clients=...]
   0ctx dashboard [--no-open] [--dashboard-query=k=v&...]
+  0ctx release publish --version vX.Y.Z [--tag latest|next] [--otp 123456] [--dry-run] [--json]
   0ctx daemon start
 
 Authentication:
@@ -1780,7 +1840,20 @@ async function commandDaemonService(action: string | undefined): Promise<number>
 }
 
 async function main(): Promise<number> {
-    const parsed = parseArgs(process.argv.slice(2));
+    const argv = process.argv.slice(2);
+    if (argv.length === 0) {
+        if (process.env.CTX_SHELL_MODE === '1') {
+            printHelp();
+            return 0;
+        }
+        if (process.stdin.isTTY && process.stdout.isTTY) {
+            return commandShell();
+        }
+        printHelp();
+        return 0;
+    }
+
+    const parsed = parseArgs(argv);
 
     switch (parsed.command) {
         case 'setup':
@@ -1820,10 +1893,6 @@ async function main(): Promise<number> {
             }
             printHelp();
             return 1;
-        case 'help':
-        default:
-            printHelp();
-            return 0;
         case 'config': {
             const sub = parsed.subcommand;
             if (sub === 'list' || !sub) return commandConfigList();
@@ -1856,9 +1925,23 @@ async function main(): Promise<number> {
             return commandConnector(parsed.subcommand, parsed.flags);
         case 'dashboard':
             return commandDashboard(parsed.flags);
+        case 'shell':
+            return commandShell();
+        case 'release':
+            if (parsed.subcommand === 'publish') {
+                return commandReleasePublish(parsed.flags);
+            }
+            printHelp();
+            return 1;
         case 'ui':
             console.error('`0ctx ui` has been removed from the end-user flow.');
             console.error('Use `0ctx setup` and then open the hosted dashboard URL (or run `0ctx dashboard`).');
+            return 1;
+        case 'help':
+            printHelp();
+            return 0;
+        default:
+            printHelp();
             return 1;
     }
 }

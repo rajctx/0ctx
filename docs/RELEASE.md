@@ -8,6 +8,26 @@
 
 ## Dry-run-first release sequence
 
+Preferred single-command CLI flow:
+
+```powershell
+# Dry run (recommended first)
+0ctx release publish --version vX.Y.Z --dry-run
+
+# Publish to npm latest dist-tag
+0ctx release publish --version vX.Y.Z
+
+# Publish to npm next dist-tag (pre-release channels)
+0ctx release publish --version vX.Y.Z --tag next
+
+# Publish with 2FA OTP
+0ctx release publish --version vX.Y.Z --otp 123456
+```
+
+The CLI flow runs release validation, changelog prep, tag preview, pack dry-run, and deterministic publish order (`core -> daemon -> mcp -> cli`).
+
+Manual script sequence (full control):
+
 Run this exact sequence from repository root:
 
 ```powershell
@@ -57,6 +77,9 @@ npm run release:publish
 
 # With 2FA (OTP from authenticator app)
 powershell -ExecutionPolicy Bypass -File scripts/release/publish-packages.ps1 -OTP 123456
+
+# Alternate dist-tag (for pre-release channel)
+powershell -ExecutionPolicy Bypass -File scripts/release/publish-packages.ps1 -Tag next
 ```
 
 The script enforces the correct publish order and verifies version consistency across packages before publishing.
