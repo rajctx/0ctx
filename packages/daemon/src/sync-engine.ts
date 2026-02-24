@@ -13,7 +13,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import type Database from 'better-sqlite3';
-import type { Graph, SyncEnvelope } from '@0ctx/core';
+import type { ContextDump, Graph, SyncEnvelope, SyncPolicy } from '@0ctx/core';
 import { encryptJson, getConfigValue } from '@0ctx/core';
 import {
     createSyncQueueTable,
@@ -83,6 +83,11 @@ export interface SyncEngineStatus {
     queue: { pending: number; inFlight: number; failed: number; done: number };
 }
 
+type EnvelopeBuildResult =
+    | { kind: 'send'; envelope: SyncEnvelope }
+    | { kind: 'skip'; reason: string }
+    | { kind: 'missing'; reason: string };
+
 export class SyncEngine {
     private timer: ReturnType<typeof setInterval> | null = null;
     private pushing = false;
@@ -139,6 +144,11 @@ export class SyncEngine {
 
     enqueue(contextId: string): void {
         if (!this.enabled) return;
+        const policy = this.graph.getContextSyncPolicy(contextId);
+        if (policy === 'local_only') {
+            log('debug', 'sync_enqueue_skip', { contextId, reason: 'local_only' });
+            return;
+        }
         enqueueSync(this.db, contextId);
     }
 
@@ -177,14 +187,24 @@ export class SyncEngine {
                 markInFlight(this.db, entry.id);
 
                 try {
-                    const envelope = this.buildEnvelope(entry.contextId, auth.tenantId);
-                    if (!envelope) {
-                        markFailed(this.db, entry.id, 'Context not found');
+                    const built = this.buildEnvelope(entry.contextId, auth.tenantId);
+                    if (built.kind === 'skip') {
+                        markDone(this.db, entry.id);
+                        result.succeeded++;
+                        log('debug', 'sync_push_skip_context', {
+                            contextId: entry.contextId,
+                            reason: built.reason
+                        });
+                        continue;
+                    }
+
+                    if (built.kind === 'missing') {
+                        markFailed(this.db, entry.id, built.reason);
                         result.failed++;
                         continue;
                     }
 
-                    const pushResult = await pushEnvelope(auth.token, envelope);
+                    const pushResult = await pushEnvelope(auth.token, built.envelope);
                     if (pushResult.ok) {
                         markDone(this.db, entry.id);
                         result.succeeded++;
@@ -262,19 +282,71 @@ export class SyncEngine {
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    private buildEnvelope(contextId: string, tenantId: string): SyncEnvelope | null {
+    private buildEnvelope(contextId: string, tenantId: string): EnvelopeBuildResult {
+        const policy = this.graph.getContextSyncPolicy(contextId);
+        if (!policy) {
+            return { kind: 'missing', reason: 'Context not found' };
+        }
+
+        if (policy === 'local_only') {
+            return { kind: 'skip', reason: 'sync policy local_only' };
+        }
+
         try {
             const dump = this.graph.exportContextDump(contextId);
+            const payload = policy === 'full_sync'
+                ? dump
+                : this.buildMetadataOnlyPayload(dump);
+
             return {
-                version: 1,
-                contextId,
-                tenantId,
-                timestamp: Date.now(),
-                encrypted: true,
-                payload: encryptJson(dump)
+                kind: 'send',
+                envelope: {
+                    version: 1,
+                    contextId,
+                    tenantId,
+                    timestamp: Date.now(),
+                    encrypted: true,
+                    syncPolicy: policy,
+                    payload: encryptJson(payload)
+                }
             };
-        } catch {
-            return null;
+        } catch (e: unknown) {
+            const message = e instanceof Error ? e.message : String(e);
+            return { kind: 'missing', reason: message };
         }
+    }
+
+    private buildMetadataOnlyPayload(dump: ContextDump): Record<string, unknown> {
+        const nodeTypeCounts: Record<string, number> = {};
+        for (const node of dump.nodes) {
+            nodeTypeCounts[node.type] = (nodeTypeCounts[node.type] ?? 0) + 1;
+        }
+
+        const latestNode = dump.nodes[dump.nodes.length - 1] ?? null;
+        const latestCheckpoint = dump.checkpoints[dump.checkpoints.length - 1] ?? null;
+
+        return {
+            version: 1,
+            mode: 'metadata_only',
+            exportedAt: dump.exportedAt,
+            context: {
+                id: dump.context.id,
+                name: dump.context.name,
+                createdAt: dump.context.createdAt,
+                syncPolicy: 'metadata_only' as SyncPolicy
+            },
+            graph: {
+                nodeCount: dump.nodes.length,
+                edgeCount: dump.edges.length,
+                checkpointCount: dump.checkpoints.length,
+                nodeTypes: nodeTypeCounts
+            },
+            pointers: {
+                latestNodeId: latestNode?.id ?? null,
+                latestNodeAt: latestNode?.createdAt ?? null,
+                latestCheckpointId: latestCheckpoint?.id ?? null,
+                latestCheckpointAt: latestCheckpoint?.createdAt ?? null
+            }
+        };
     }
 }

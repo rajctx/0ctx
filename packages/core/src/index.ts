@@ -16,6 +16,7 @@ export type {
     AuditAction,
     AuditMetadata,
     ContextDump,
+    SyncPolicy,
     SyncStatus,
     SyncQueueEntry,
     SyncEnvelope

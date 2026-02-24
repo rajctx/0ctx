@@ -16,11 +16,20 @@ Then run first-time setup:
 
 ```bash
 0ctx setup --clients=all
+0ctx setup --clients=all --json
+0ctx setup --clients=all --require-cloud --wait-cloud-ready --create-context="Default Workspace"
+0ctx setup --clients=all --skip-service --skip-bootstrap --no-open
+0ctx setup --clients=all --dashboard-query=source=cli
 0ctx connector service status
 0ctx connector register --require-cloud
+0ctx connector register --require-cloud --json
+0ctx connector verify --require-cloud --json
 0ctx connector status --json
+0ctx connector status --json --require-bridge
 0ctx connector run --once
 0ctx connector queue status --json
+0ctx sync policy get --context-id=<contextId>
+0ctx sync policy set metadata_only --context-id=<contextId>
 0ctx connector queue drain --wait --strict --timeout-ms=120000
 0ctx connector queue logs --limit=50
 0ctx connector queue logs --clear --dry-run

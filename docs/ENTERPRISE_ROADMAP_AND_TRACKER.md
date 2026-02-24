@@ -139,7 +139,7 @@ Primary update areas:
 - Event pub/sub and subscription runtime is not implemented in daemon/MCP.
 - Connector stream gateway and command/event bridge are not implemented.
 - Hosted UI architecture is not yet wired to cloud capability APIs.
-- Sync policy modes (`local_only`, `metadata_only`, `full_sync`) are not implemented end-to-end.
+- Sync policy modes (`local_only`, `metadata_only`, `full_sync`) are partially implemented locally (core/daemon/MCP/CLI); connector-cloud policy reconciliation and hosted policy control APIs remain pending.
 - Tenant-level blackboard policy gates and completion evaluator are not yet implemented.
 
 ## 5) Milestones
@@ -316,7 +316,7 @@ Exit criteria:
 | ARCH-001 | Core/Daemon | Implement semantic blackboard events, subscription primitives, and gate-aware completion evaluator | `packages/core/src/graph.ts`, `packages/daemon/src/server.ts`, `packages/daemon/src/handlers.ts`, `packages/daemon/src/protocol.ts` | Event subscriptions and policy-gated completion work with deterministic behavior and audit trail | SYNC-02, MCP-01 | In Progress | Platform | Phase G |
 | CONN-001 | Connector | Build always-on local connector service with register/heartbeat/stream bridge and replay queue | `packages/connector/*` (or `packages/cli/src/connector/*`), service scripts | Connector auto-starts, reconnects, and replays safely after offline periods | ARCH-001 | In Progress | Platform | Phase H |
 | CLOUD-001 | Cloud | Implement control-plane APIs for connector management, capabilities, and stream gateway | `cloud/*` (new), API contracts docs | Hosted APIs support connector registration, stream commands, capability queries, and tenant scoping | CONN-001 | In Progress | Platform + Cloud | Phase I |
-| SYNC-001 | Sync | Add per-context sync policy enforcement (`local_only`, `metadata_only`, `full_sync`) end-to-end | daemon sync modules + connector + cloud APIs | Context data movement always matches configured policy with auditability | CLOUD-001 | Planned | Platform + Cloud | Phase I |
+| SYNC-001 | Sync | Add per-context sync policy enforcement (`local_only`, `metadata_only`, `full_sync`) end-to-end | daemon sync modules + connector + cloud APIs | Context data movement always matches configured policy with auditability | CLOUD-001 | In Progress | Platform + Cloud | Phase I |
 | UI-ENT-002 | UI | Build hosted enterprise UI architecture with capability-gated IA and connector-aware operations views | `packages/ui/src/app/*`, `packages/ui/src/components/*` | Hosted UI routes are fully functional, policy-aware, and free of dead-end actions | CLOUD-001, CONN-001 | Planned | UI | Phase J |
 | UI-OPS-001 | UI | Implement hosted operations surfaces for connector health, queue lag, diagnostics, and reliability controls | `packages/ui/src/app/operations/*`, operations components, cloud capabilities client | Operations route provides actionable runbook flows and live runtime posture without local shell dependency | UI-ENT-002, CLOUD-001 | Planned | UI + Platform | Phase J |
 | INT-001 | Integrations | Add AI integration manager (MCP client setup/verification including ChatGPT-path policy controls) | `packages/ui/src/app/settings/*`, CLI/bootstrap modules | Tenant admins can configure and verify integrations with explicit policy boundaries | UI-ENT-002 | Planned | Platform + UI | Phase J |
@@ -359,7 +359,7 @@ Exit criteria:
 | ARCH-001 | Phase G | Semantic blackboard event runtime + gate evaluator | Platform | In Progress | TBD | SYNC-02, MCP-01 | TBD |
 | CONN-001 | Phase H | Always-on connector service lifecycle and stream bridge | Platform | In Progress | TBD | ARCH-001 | TBD |
 | CLOUD-001 | Phase I | Hosted control plane connector APIs + stream gateway | Platform + Cloud | In Progress | TBD | CONN-001 | TBD |
-| SYNC-001 | Phase I | Sync mode enforcement (`local_only`/`metadata_only`/`full_sync`) | Platform + Cloud | Planned | TBD | CLOUD-001 | TBD |
+| SYNC-001 | Phase I | Sync mode enforcement (`local_only`/`metadata_only`/`full_sync`) | Platform + Cloud | In Progress | TBD | CLOUD-001 | TBD |
 | UI-ENT-002 | Phase J | Hosted enterprise UI architecture rollout | UI | Planned | TBD | CLOUD-001, CONN-001 | TBD |
 | UI-OPS-001 | Phase J | Hosted operations route and reliability controls | UI + Platform | Planned | TBD | UI-ENT-002, CLOUD-001 | TBD |
 | INT-001 | Phase J | AI integration manager + ChatGPT-path controls | Platform + UI | Planned | TBD | UI-ENT-002 | TBD |
@@ -446,6 +446,10 @@ Exit criteria:
 
 ## 11) Change Log (Append-Only)
 
+- 2026-02-24: SYNC-001 (partial) implemented — added per-context sync policy model and migration (`contexts.syncPolicy`, default `metadata_only`), daemon `getSyncPolicy`/`setSyncPolicy` handlers with audit event `set_sync_policy`, sync-engine policy enforcement (`local_only` queue/push skip, `metadata_only` redacted encrypted metadata payload, `full_sync` full encrypted context dump), MCP tools (`ctx_sync_policy_get`, `ctx_sync_policy_set`), and CLI controls (`0ctx sync policy get/set`). Added daemon tests for sync-engine policy behavior and handler-level sync-policy audit coverage.
+- 2026-02-24: DX-04/CONN-001 (partial) implemented — added setup/operator controls requested for enterprise rollout: `0ctx connector status --require-bridge`, `0ctx setup --dashboard-query`, `0ctx setup --skip-service`, and `0ctx setup --skip-bootstrap`. Setup can now enforce bridge/cloud posture while also supporting constrained-environment onboarding paths.
+- 2026-02-24: DX-04/CONN-001 (partial) implemented — hardened setup workflow with strict enterprise controls: `0ctx setup --require-cloud`, `--wait-cloud-ready`, `--cloud-wait-timeout-ms`, `--cloud-wait-interval-ms`, and `--create-context=<name>`. Setup now enforces cloud-ready posture checks before completion when requested and can provision an initial context during onboarding.
+- 2026-02-24: CONN-001 (partial) implemented — added machine-readable CLI outputs for automation: `0ctx setup --json`, `0ctx bootstrap --json`, `0ctx install --json`, `0ctx connector register --json`, and `0ctx connector verify --json`. Added quiet-path handling in bootstrap/install and updated CLI help/docs/test coverage.
 - 2026-02-24: CONN-001 (partial) implemented — extracted connector queue drain logic into a dedicated CLI helper (`packages/cli/src/connector-queue-drain.ts`) and added targeted unit coverage for timeout/bridge-unsupported/drained branches (`packages/cli/test/connector-queue-drain.test.ts`). Added queue ops-log clear controls via `0ctx connector queue logs --clear` with confirm/dry-run safety.
 - 2026-02-24: CONN-001 (partial) implemented — added `doctor` check `ops_log_writable` for early detection of local CLI ops-log permission/path issues; expanded install/quickstart docs with queue drain wait-reason troubleshooting guidance.
 - 2026-02-24: CONN-001 (partial) implemented — added `0ctx connector queue logs` for local ops-audit tailing and strict drain exit controls (`--strict`/`--fail-on-retry`) so retry events can fail automation even if queue eventually drains.

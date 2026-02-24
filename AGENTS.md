@@ -114,7 +114,7 @@ MCP stdio server translating tool calls into daemon IPC calls.
   - MCP handlers
   - Local session bootstrap and context tracking
 - `src/tools.ts`:
-  - Context graph tools plus enterprise operations (`ctx_health`, `ctx_metrics`, audit and backup tools)
+  - Context graph tools plus enterprise operations (`ctx_health`, `ctx_metrics`, sync-policy, audit, and backup tools)
 - `src/bootstrap.ts`:
   - Auto-registration CLI for MCP clients (Claude/Cursor/Windsurf)
   - Idempotent merge into client `mcpServers` config
@@ -202,6 +202,10 @@ Enterprise/ops:
 
 - `health`
 - `metricsSnapshot`
+- `syncStatus`
+- `syncNow`
+- `getSyncPolicy`
+- `setSyncPolicy`
 - `getCapabilities`
 - `listAuditEvents`
 - `createBackup`

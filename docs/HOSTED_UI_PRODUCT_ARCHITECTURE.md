@@ -32,6 +32,7 @@ Authenticated app:
 - Every visible action must map to a working backend capability.
 - Runtime posture is always visible: `connected`, `degraded`, `offline`.
 - Sync mode label is visible at context scope: `local_only`, `metadata_only`, `full_sync`.
+- Policy change actions route through connector-backed daemon APIs (`setSyncPolicy`) and mirror CLI/MCP controls for parity.
 
 ## 4) Design System Direction
 

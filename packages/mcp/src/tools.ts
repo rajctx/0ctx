@@ -140,6 +140,29 @@ export const tools = [
         },
     },
     {
+        name: 'ctx_sync_policy_get',
+        description: 'Get the active context sync policy (`local_only`, `metadata_only`, `full_sync`).',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                contextId: { type: 'string', description: 'Optional explicit context ID override for this operation.' }
+            },
+            required: [],
+        },
+    },
+    {
+        name: 'ctx_sync_policy_set',
+        description: 'Set the active context sync policy (`local_only`, `metadata_only`, `full_sync`).',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                contextId: { type: 'string', description: 'Optional explicit context ID override for this operation.' },
+                syncPolicy: { type: 'string', enum: ['local_only', 'metadata_only', 'full_sync'] }
+            },
+            required: ['syncPolicy'],
+        },
+    },
+    {
         name: 'ctx_audit_recent',
         description: 'List recent audit events for the active context (or a specific contextId).',
         inputSchema: {

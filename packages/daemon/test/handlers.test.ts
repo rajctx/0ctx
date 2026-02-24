@@ -109,6 +109,43 @@ describe('daemon request handling', () => {
         }
     });
 
+    it('gets and sets per-context sync policy with audit trail', () => {
+        const { db, graph } = createGraph();
+        try {
+            const session = handleRequest(graph, 'conn-sync', { method: 'createSession' }, runtime()) as { sessionToken: string };
+
+            const context = handleRequest(graph, 'conn-sync', {
+                method: 'createContext',
+                sessionToken: session.sessionToken,
+                params: { name: 'sync-policy-context', syncPolicy: 'metadata_only' }
+            }, runtime()) as { id: string };
+
+            const before = handleRequest(graph, 'conn-sync', {
+                method: 'getSyncPolicy',
+                sessionToken: session.sessionToken,
+                params: { contextId: context.id }
+            }, runtime()) as { syncPolicy: string };
+
+            const after = handleRequest(graph, 'conn-sync', {
+                method: 'setSyncPolicy',
+                sessionToken: session.sessionToken,
+                params: { contextId: context.id, syncPolicy: 'full_sync', actor: 'test-user', source: 'test-suite' }
+            }, runtime()) as { syncPolicy: string };
+
+            const events = handleRequest(graph, 'conn-sync', {
+                method: 'listAuditEvents',
+                sessionToken: session.sessionToken,
+                params: { contextId: context.id, limit: 10 }
+            }, runtime()) as Array<{ action: string }>;
+
+            expect(before.syncPolicy).toBe('metadata_only');
+            expect(after.syncPolicy).toBe('full_sync');
+            expect(events.some(event => event.action === 'set_sync_policy')).toBe(true);
+        } finally {
+            db.close();
+        }
+    });
+
     it('records and polls blackboard events via subscriptions', () => {
         const { db, graph } = createGraph();
         const events = new EventRuntime();

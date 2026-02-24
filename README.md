@@ -45,15 +45,23 @@ npm run cli -- setup --clients=all --no-open
 
 # Bootstrap MCP registrations for supported clients
 0ctx bootstrap --clients=claude,cursor,windsurf
+0ctx bootstrap --clients=all --json
 
 # Open hosted dashboard URL
 0ctx dashboard
 
 # Check connector posture
 0ctx connector status --json
+0ctx connector status --json --require-bridge
 
 # Register connector with cloud control plane (fails if cloud unreachable)
 0ctx connector register --require-cloud
+0ctx connector register --require-cloud --json
+0ctx connector verify --require-cloud --json
+
+# Get/set per-context sync policy
+0ctx sync policy get --context-id=<contextId>
+0ctx sync policy set full_sync --context-id=<contextId>
 
 # Run connector control loop in foreground (service target mode)
 0ctx connector run --interval-ms=30000
@@ -72,6 +80,18 @@ npm run cli -- setup --clients=all --no-open
 
 # Repair local install
 0ctx repair --clients=all
+
+# Setup summary for automation
+0ctx setup --clients=all --json
+
+# Enterprise setup with strict cloud posture and initial workspace
+0ctx setup --clients=all --require-cloud --wait-cloud-ready --create-context="Default Workspace"
+
+# Skip managed service/bootstrap in constrained environments
+0ctx setup --clients=all --skip-service --skip-bootstrap --no-open
+
+# Pass onboarding metadata to hosted dashboard handoff
+0ctx setup --clients=all --dashboard-query=source=cli
 ```
 
 ## Documentation

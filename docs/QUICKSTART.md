@@ -14,6 +14,10 @@ npm install -g @0ctx/cli
 
 ```bash
 0ctx setup --clients=all
+0ctx setup --clients=all --json
+0ctx setup --clients=all --require-cloud --wait-cloud-ready --create-context="Default Workspace"
+0ctx setup --clients=all --skip-service --skip-bootstrap --no-open
+0ctx setup --clients=all --dashboard-query=source=cli
 ```
 
 This checks auth, starts/validates the managed local runtime, bootstraps MCP clients (Claude, Cursor, Windsurf), verifies health, and opens the hosted dashboard URL.
@@ -35,6 +39,7 @@ After bootstrap, restart your AI client (Claude Desktop, Cursor, or Windsurf). C
 - `ctx_set`, `ctx_get`, `ctx_query`, `ctx_search`
 - `ctx_checkpoint`, `ctx_rewind`
 - `ctx_health`, `ctx_metrics`, `ctx_audit_recent`
+- `ctx_sync_policy_get`, `ctx_sync_policy_set`
 - `ctx_backup_create`, `ctx_backup_list`, `ctx_backup_restore`
 
 ## 5) Common operations
@@ -45,12 +50,19 @@ After bootstrap, restart your AI client (Claude Desktop, Cursor, or Windsurf). C
 
 # Check connector posture
 0ctx connector status --json
+0ctx connector status --json --require-bridge
 
 # Optional: enforce cloud control-plane registration
 0ctx connector register --require-cloud
+0ctx connector register --require-cloud --json
+0ctx connector verify --require-cloud --json
 
 # Optional: run one connector runtime tick (health + cloud heartbeat)
 0ctx connector run --once
+
+# Get/set per-context sync policy
+0ctx sync policy get --context-id=<contextId>
+0ctx sync policy set metadata_only --context-id=<contextId>
 
 # Check managed connector service state
 0ctx connector service status

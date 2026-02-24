@@ -10,7 +10,8 @@ import type {
     AuditEntry,
     AuditAction,
     AuditMetadata,
-    ContextDump
+    ContextDump,
+    SyncPolicy
 } from './schema';
 
 export class Graph {
@@ -18,23 +19,40 @@ export class Graph {
 
     // ── Context Management ─────────────────────────────────────────
 
-    createContext(name: string, paths: string[] = []): Context {
-        const ctx: Context = { id: randomUUID(), name, paths, createdAt: Date.now() };
+    createContext(name: string, paths: string[] = [], syncPolicy: SyncPolicy = 'metadata_only'): Context {
+        const ctx: Context = { id: randomUUID(), name, paths, syncPolicy, createdAt: Date.now() };
         this.db.prepare(`
-      INSERT INTO contexts (id, name, paths, createdAt)
-      VALUES (@id, @name, @paths, @createdAt)
+      INSERT INTO contexts (id, name, paths, syncPolicy, createdAt)
+      VALUES (@id, @name, @paths, @syncPolicy, @createdAt)
     `).run({ ...ctx, paths: JSON.stringify(ctx.paths) });
         return ctx;
     }
 
     getContext(id: string): Context | null {
         const row = this.db.prepare('SELECT * FROM contexts WHERE id = ?').get(id) as any;
-        return row ? { ...row, paths: JSON.parse(row.paths) } : null;
+        return row ? { ...row, paths: JSON.parse(row.paths), syncPolicy: row.syncPolicy ?? 'metadata_only' } : null;
     }
 
     listContexts(): Context[] {
         const rows = this.db.prepare('SELECT * FROM contexts ORDER BY createdAt DESC').all() as any[];
-        return rows.map(row => ({ ...row, paths: JSON.parse(row.paths) }));
+        return rows.map(row => ({ ...row, paths: JSON.parse(row.paths), syncPolicy: row.syncPolicy ?? 'metadata_only' }));
+    }
+
+    getContextSyncPolicy(contextId: string): SyncPolicy | null {
+        const row = this.db.prepare('SELECT syncPolicy FROM contexts WHERE id = ?').get(contextId) as { syncPolicy?: string } | undefined;
+        if (!row) return null;
+        if (row.syncPolicy === 'local_only' || row.syncPolicy === 'full_sync' || row.syncPolicy === 'metadata_only') {
+            return row.syncPolicy;
+        }
+        return 'metadata_only';
+    }
+
+    setContextSyncPolicy(contextId: string, policy: SyncPolicy): Context | null {
+        const context = this.getContext(contextId);
+        if (!context) return null;
+
+        this.db.prepare('UPDATE contexts SET syncPolicy = ? WHERE id = ?').run(policy, contextId);
+        return this.getContext(contextId);
     }
 
     deleteContext(id: string): void {
@@ -309,7 +327,11 @@ export class Graph {
             throw new Error(`Unsupported dump version ${dump.version}`);
         }
 
-        const context = this.createContext(options?.name || dump.context.name, dump.context.paths);
+        const context = this.createContext(
+            options?.name || dump.context.name,
+            dump.context.paths,
+            (dump.context as Partial<Context>).syncPolicy ?? 'metadata_only'
+        );
         const nodeIdMap = new Map<string, string>();
 
         const insertNode = this.db.prepare(`

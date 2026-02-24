@@ -22,7 +22,9 @@ const CONTEXT_REQUIRED_METHODS = new Set([
     'getGraphData',
     'saveCheckpoint',
     'listCheckpoints',
-    'createBackup'
+    'createBackup',
+    'getSyncPolicy',
+    'setSyncPolicy'
 ]);
 
 type RequestParams = Record<string, unknown>;
@@ -126,6 +128,13 @@ function toEventPayload(params: RequestParams, result: unknown): Record<string, 
     };
 }
 
+function parseSyncPolicy(value: unknown): 'local_only' | 'metadata_only' | 'full_sync' | null {
+    if (value === 'local_only' || value === 'metadata_only' || value === 'full_sync') {
+        return value;
+    }
+    return null;
+}
+
 function recordMutationEvent(
     runtime: HandlerRuntimeContext,
     connectionId: string,
@@ -178,7 +187,7 @@ export function handleRequest(
     if (req.method === 'getCapabilities') {
         return {
             apiVersion: '2',
-            features: ['sessions', 'health', 'capabilities', 'audit_logs', 'metrics', 'backup_restore', 'auth', 'sync', 'blackboard_events', 'task_leases', 'quality_gates'],
+            features: ['sessions', 'health', 'capabilities', 'audit_logs', 'metrics', 'backup_restore', 'auth', 'sync', 'sync_policies', 'blackboard_events', 'task_leases', 'quality_gates'],
             methods: [
                 'listContexts', 'createContext', 'deleteContext', 'switchContext', 'getActiveContext',
                 'addNode', 'getNode', 'updateNode', 'getByKey', 'deleteNode',
@@ -186,7 +195,7 @@ export function handleRequest(
                 'saveCheckpoint', 'rewind', 'listCheckpoints',
                 'createSession', 'refreshSession', 'health', 'getCapabilities', 'metricsSnapshot',
                 'listAuditEvents', 'createBackup', 'listBackups', 'restoreBackup',
-                'auth/status', 'syncStatus', 'syncNow',
+                'auth/status', 'syncStatus', 'syncNow', 'getSyncPolicy', 'setSyncPolicy',
                 'subscribeEvents', 'unsubscribeEvents', 'listSubscriptions', 'pollEvents', 'ackEvent',
                 'getBlackboardState', 'claimTask', 'releaseTask', 'resolveGate'
             ]
@@ -411,7 +420,8 @@ export function handleRequest(
             if (!name) throw new Error("Missing required 'name' for createContext.");
 
             const paths = Array.isArray(params.paths) ? params.paths.filter((p): p is string => typeof p === 'string') : [];
-            const ctx = graph.createContext(name, paths);
+            const syncPolicy = parseSyncPolicy(params.syncPolicy) ?? 'metadata_only';
+            const ctx = graph.createContext(name, paths, syncPolicy);
             syncActiveContext(connectionId, req.sessionToken, ctx.id);
 
             recordMutationAudit(graph, req, 'create_context', ctx.id, params, { contextId: ctx.id }, auditMetadata);
@@ -505,6 +515,27 @@ export function handleRequest(
         }
         case 'listCheckpoints':
             return graph.listCheckpoints(contextId!);
+        case 'getSyncPolicy': {
+            const policy = graph.getContextSyncPolicy(contextId!);
+            if (!policy) {
+                throw new Error(`Context ${contextId} not found`);
+            }
+            return { contextId: contextId!, syncPolicy: policy };
+        }
+        case 'setSyncPolicy': {
+            const policy = parseSyncPolicy(params.syncPolicy);
+            if (!policy) {
+                throw new Error("Invalid syncPolicy. Expected one of: local_only, metadata_only, full_sync.");
+            }
+            const updated = graph.setContextSyncPolicy(contextId!, policy);
+            if (!updated) {
+                throw new Error(`Context ${contextId} not found`);
+            }
+            const result = { contextId: updated.id, syncPolicy: updated.syncPolicy };
+            recordMutationAudit(graph, req, 'set_sync_policy', updated.id, params, result, auditMetadata);
+            recordMutationEvent(runtime, connectionId, req, updated.id, params, result);
+            return result;
+        }
         case 'createBackup': {
             const dump = graph.exportContextDump(contextId!);
             const backup = writeContextBackup({

@@ -88,7 +88,7 @@ Agents can:
 
 Agents cannot bypass:
 - tenant policy
-- data mode restrictions (`local_only`, `metadata_only`, `full_sync`)
+- data mode restrictions (`local_only`, `metadata_only`, `full_sync`) enforced by daemon policy APIs (`getSyncPolicy`, `setSyncPolicy`) and operator controls (`0ctx sync policy get/set`, MCP `ctx_sync_policy_get/set`)
 - required quality gate checks
 
 ## 6) Completion Semantics

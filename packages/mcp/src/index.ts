@@ -103,6 +103,19 @@ server.setRequestHandler(CallToolRequestSchema, async (req: any) => {
                 const metrics = await callDaemon('metricsSnapshot', {});
                 return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(metrics, null, 2) }] } };
             }
+            case 'ctx_sync_policy_get': {
+                const contextId = pickContextId(args);
+                const policy = await callDaemon('getSyncPolicy', { contextId });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(policy, null, 2) }] } };
+            }
+            case 'ctx_sync_policy_set': {
+                const contextId = pickContextId(args);
+                const policy = await callDaemon('setSyncPolicy', {
+                    contextId,
+                    syncPolicy: args.syncPolicy
+                });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(policy, null, 2) }] } };
+            }
             case 'ctx_audit_recent': {
                 const contextId = pickContextId(args);
                 const events = await callDaemon('listAuditEvents', {

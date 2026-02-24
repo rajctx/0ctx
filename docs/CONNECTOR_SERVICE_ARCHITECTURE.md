@@ -37,7 +37,7 @@ It replaces the assumption that the UI runs on the same machine as daemon intern
 4. Policy enforcement
 - cache effective tenant policy
 - block disallowed operations locally
-- enforce context sync modes
+- enforce context sync modes via daemon `getSyncPolicy` / `setSyncPolicy` (CLI surface: `0ctx sync policy get/set`)
 
 ## 3) Service Lifecycle
 

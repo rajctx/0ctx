@@ -29,8 +29,9 @@ Updated: 2026-02-24
 - Branch protection and label policy rollout in GitHub settings.
 - GitHub workflow enablement rollout remains pending (workflows stay disabled for now).
 - `ARCH-001` foundation implementation is underway (daemon blackboard subscriptions, task leases, gate APIs, and MCP tool surface added).
-- `CONN-001` implementation is underway (CLI connector registration state, `connector status/verify`, setup integration, `connector run` runtime loop, service templates switched to launch connector runtime process, preferred `connector service` command path wired, daemon blackboard event-bridge polling/ack state scaffolding added, persistent event queue replay/backoff implemented, connector queue ops commands with wait-mode + strict drain controls, local CLI queue-ops audit logging with log tail/clear support, dedicated drain-path unit coverage, and doctor-time ops-log writability diagnostics).
+- `CONN-001` implementation is underway (CLI connector registration state, `connector status/verify`, setup integration, `connector run` runtime loop, service templates switched to launch connector runtime process, preferred `connector service` command path wired, daemon blackboard event-bridge polling/ack state scaffolding added, persistent event queue replay/backoff implemented, connector queue ops commands with wait-mode + strict drain controls, local CLI queue-ops audit logging with log tail/clear support, dedicated drain-path unit coverage, doctor-time ops-log writability diagnostics, machine-readable JSON outputs for setup/bootstrap/install/register/verify automation flows, strict setup cloud-readiness/context-creation controls, bridge-health enforcement flagging (`status --require-bridge`), and setup skip/handoff controls (`--skip-service`, `--skip-bootstrap`, `--dashboard-query`)).
 - `CLOUD-001` foundation implementation is underway (CLI cloud control-plane client scaffolding for connector register/heartbeat/capabilities with local fallback).
+- `SYNC-001` implementation is underway (context sync policy primitives in core/daemon, sync-engine policy enforcement for `local_only`/`metadata_only`/`full_sync`, MCP sync-policy tools, and CLI `sync policy get/set` controls).
 
 ## Planned
 
@@ -39,7 +40,6 @@ Updated: 2026-02-24
 - `ARCH-001`: Semantic Blackboard runtime (events, subscriptions, gate evaluator).
 - `CONN-001`: Always-on local connector service (Windows/macOS/Linux).
 - `CLOUD-001`: Hosted control plane APIs and connector stream gateway.
-- `SYNC-001`: Policy-based sync (`local_only`, `metadata_only`, `full_sync`) and reconciliation.
 - `UI-ENT-002`: Hosted enterprise UI architecture rollout.
 - `UI-OPS-001`: Hosted operations route with connector health, queue lag, and diagnostics controls.
 - `DX-03`: Hosted-UI-only CLI packaging model (no embedded local UI runtime for end users).

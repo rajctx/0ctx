@@ -258,16 +258,28 @@ async function commandBootstrap(flags: Record<string, string | boolean>): Promis
     const clients = parseClients(flags.clients);
     const dryRun = Boolean(flags['dry-run']);
     const results = runBootstrap(clients, dryRun);
-    printBootstrapResults(results, dryRun);
+    if (!Boolean(flags.quiet) && !Boolean(flags.json)) {
+        printBootstrapResults(results, dryRun);
+    }
+    if (Boolean(flags.json)) {
+        console.log(JSON.stringify({ dryRun, clients, results }, null, 2));
+    }
     return results.some((result: BootstrapResult) => result.status === 'failed') ? 1 : 0;
 }
 
 async function commandInstall(flags: Record<string, string | boolean>): Promise<number> {
-    console.log('Running install workflow...');
+    const quiet = Boolean(flags.quiet);
+    const asJson = Boolean(flags.json);
+    const skipBootstrap = Boolean(flags['skip-bootstrap']);
+    if (!quiet && !asJson) {
+        console.log('Running install workflow...');
+    }
     const daemonStatus = await isDaemonReachable();
 
     if (!daemonStatus.ok) {
-        console.log('daemon: starting background service...');
+        if (!quiet && !asJson) {
+            console.log('daemon: starting background service...');
+        }
         try {
             startDaemonDetached();
         } catch (error) {
@@ -282,8 +294,22 @@ async function commandInstall(flags: Record<string, string | boolean>): Promise<
         return 1;
     }
 
-    const bootstrapCode = await commandBootstrap(flags);
-    if (bootstrapCode !== 0) return bootstrapCode;
+    let bootstrapCode = 0;
+    if (!skipBootstrap) {
+        bootstrapCode = await commandBootstrap({ ...flags, quiet: quiet || asJson, json: false });
+        if (bootstrapCode !== 0) return bootstrapCode;
+    }
+
+    if (quiet || asJson) {
+        if (asJson) {
+            console.log(JSON.stringify({
+                ok: true,
+                daemonRunning: true,
+                bootstrap: skipBootstrap ? 'skipped' : 'ok'
+            }, null, 2));
+        }
+        return 0;
+    }
 
     return commandStatus();
 }
@@ -383,7 +409,7 @@ async function commandRepair(flags: Record<string, string | boolean>): Promise<n
 }
 
 async function commandDashboard(flags: Record<string, string | boolean>): Promise<number> {
-    const url = getHostedDashboardUrl();
+    const url = applyDashboardQuery(getHostedDashboardUrl(), flags['dashboard-query']);
     console.log(`dashboard_url: ${url}`);
 
     if (Boolean(flags['no-open'])) {
@@ -405,6 +431,34 @@ function parsePositiveNumberFlag(value: string | boolean | undefined, fallback: 
 
 function parsePositiveIntegerFlag(value: string | boolean | undefined, fallback: number): number {
     return Math.max(1, Math.floor(parsePositiveNumberFlag(value, fallback)));
+}
+
+function parseOptionalStringFlag(value: string | boolean | undefined): string | null {
+    if (typeof value !== 'string') return null;
+    const normalized = value.trim();
+    return normalized.length > 0 ? normalized : null;
+}
+
+function sleepMs(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function applyDashboardQuery(url: string, queryRaw: string | boolean | undefined): string {
+    if (typeof queryRaw !== 'string' || queryRaw.trim().length === 0) return url;
+    const normalized = queryRaw.trim().replace(/^\?+/, '');
+    if (normalized.length === 0) return url;
+
+    try {
+        const parsedUrl = new URL(url);
+        const query = new URLSearchParams(normalized);
+        for (const [key, value] of query.entries()) {
+            parsedUrl.searchParams.set(key, value);
+        }
+        return parsedUrl.toString();
+    } catch {
+        const sep = url.includes('?') ? '&' : '?';
+        return `${url}${sep}${normalized}`;
+    }
 }
 
 async function commandConnectorQueue(action: string | undefined, flags: Record<string, string | boolean>): Promise<number> {
@@ -774,6 +828,7 @@ async function commandConnector(action: string | undefined, flags: Record<string
         const registration = readConnectorState();
         const token = resolveToken();
         const requireCloud = Boolean(flags.cloud) || Boolean(flags['require-cloud']);
+        const asJson = Boolean(flags.json);
         let cloudOk = !requireCloud;
         let cloudError: string | null = null;
 
@@ -795,7 +850,18 @@ async function commandConnector(action: string | undefined, flags: Record<string
 
         const ok = checks.daemon && checks.registration && checks.auth && checks.cloud;
 
-        if (!Boolean(flags.quiet)) {
+        const payload = {
+            ok,
+            requireCloud,
+            checks,
+            machineId: registration?.machineId ?? null,
+            daemonError: daemon.ok ? null : (daemon.error ?? 'unknown'),
+            cloudError
+        };
+
+        if (asJson) {
+            console.log(JSON.stringify(payload, null, 2));
+        } else if (!Boolean(flags.quiet)) {
             console.log('\nConnector Verify\n');
             console.log(`  daemon:       ${checks.daemon ? 'ok' : 'missing'}`);
             console.log(`  registration: ${checks.registration ? 'ok' : 'missing'}`);
@@ -819,9 +885,17 @@ async function commandConnector(action: string | undefined, flags: Record<string
     }
 
     if (action === 'register') {
+        const asJson = Boolean(flags.json);
         const token = resolveToken();
         if (!token) {
             console.error('connector_register_requires_auth: run `0ctx auth login` first.');
+            if (asJson) {
+                console.log(JSON.stringify({
+                    ok: false,
+                    error: 'connector_register_requires_auth',
+                    message: 'run `0ctx auth login` first.'
+                }, null, 2));
+            }
             return 1;
         }
 
@@ -878,7 +952,23 @@ async function commandConnector(action: string | undefined, flags: Record<string
             writeConnectorState(state);
         }
 
-        if (!Boolean(flags.quiet)) {
+        const payload = {
+            ok: true,
+            created,
+            machineId: state.machineId,
+            tenantId: state.tenantId ?? null,
+            dashboardUrl: state.uiUrl,
+            registrationMode: state.registrationMode,
+            cloudRegistration: cloudRegistrationStatus,
+            cloudRegistrationId: state.cloud.registrationId ?? null,
+            cloudStreamUrl: state.cloud.streamUrl ?? null,
+            cloudError,
+            statePath: getConnectorStatePath()
+        };
+
+        if (asJson) {
+            console.log(JSON.stringify(payload, null, 2));
+        } else if (!Boolean(flags.quiet)) {
             console.log(`connector_registration: ${created ? 'created' : 'existing'}`);
             console.log(`machine_id: ${state.machineId}`);
             console.log(`tenant_id: ${state.tenantId ?? 'n/a'}`);
@@ -899,6 +989,13 @@ async function commandConnector(action: string | undefined, flags: Record<string
 
         if (requireCloud && state.registrationMode !== 'cloud') {
             console.error('connector_register_cloud_required: unable to register with cloud control plane');
+            if (asJson) {
+                console.log(JSON.stringify({
+                    ...payload,
+                    ok: false,
+                    error: 'connector_register_cloud_required'
+                }, null, 2));
+            }
             return 1;
         }
 
@@ -909,6 +1006,7 @@ async function commandConnector(action: string | undefined, flags: Record<string
         const daemon = await isDaemonReachable();
         const registration = readConnectorState();
         const token = resolveToken();
+        const requireBridge = Boolean(flags['require-bridge']);
         const cloudRequired = registration?.registrationMode === 'cloud';
         const cloudProbeRequested = Boolean(flags.cloud) || cloudRequired;
         let sync: {
@@ -1042,9 +1140,32 @@ async function commandConnector(action: string | undefined, flags: Record<string
             dashboardUrl: getHostedDashboardUrl()
         };
 
+        const bridgeReasons: string[] = [];
+        if (!payload.registration.registered || !payload.registration.runtime) {
+            bridgeReasons.push('not_registered');
+        } else {
+            if (!payload.registration.runtime.eventBridgeSupported) {
+                bridgeReasons.push('bridge_not_supported');
+            }
+            if (payload.registration.runtime.eventBridgeError) {
+                bridgeReasons.push('bridge_error');
+            }
+            if (payload.registration.runtime.queue.backoff > 0) {
+                bridgeReasons.push('queue_backoff');
+            }
+        }
+        const bridge = {
+            required: requireBridge,
+            healthy: bridgeReasons.length === 0,
+            reasons: bridgeReasons
+        };
+        const exitCode = (requireBridge && !bridge.healthy)
+            ? 1
+            : (posture === 'connected' ? 0 : 1);
+
         if (Boolean(flags.json)) {
-            console.log(JSON.stringify(payload, null, 2));
-            return posture === 'connected' ? 0 : 1;
+            console.log(JSON.stringify({ ...payload, bridge }, null, 2));
+            return exitCode;
         }
 
         console.log('\nConnector Status\n');
@@ -1089,8 +1210,14 @@ async function commandConnector(action: string | undefined, flags: Record<string
         if (!payload.daemon.running && payload.daemon.error) {
             console.log(`  daemon_error: ${payload.daemon.error}`);
         }
+        if (requireBridge || !bridge.healthy) {
+            console.log(`  bridge:       ${bridge.healthy ? 'healthy' : 'unhealthy'}`);
+            if (!bridge.healthy) {
+                console.log(`  bridge_issue: ${bridge.reasons.join(',')}`);
+            }
+        }
         console.log('');
-        return posture === 'connected' ? 0 : 1;
+        return exitCode;
     }
 
     if (action === 'logs') {
@@ -1112,53 +1239,256 @@ async function commandConnector(action: string | undefined, flags: Record<string
 }
 
 async function commandSetup(flags: Record<string, string | boolean>): Promise<number> {
-    console.log('Running setup workflow...');
+    const asJson = Boolean(flags.json);
+    const quiet = Boolean(flags.quiet) || asJson;
+    const skipService = Boolean(flags['skip-service']);
+    const skipBootstrap = Boolean(flags['skip-bootstrap']);
+    const requireCloud = Boolean(flags['require-cloud']);
+    const waitCloudReady = Boolean(flags['wait-cloud-ready']);
+    const cloudWaitTimeoutMs = parsePositiveIntegerFlag(flags['cloud-wait-timeout-ms'], 60_000);
+    const cloudWaitIntervalMs = parsePositiveIntegerFlag(flags['cloud-wait-interval-ms'], 2_000);
+    const createContextName = parseOptionalStringFlag(flags['create-context']);
+    const dashboardQueryInput = flags['dashboard-query'];
+    const steps: Array<{
+        id: string;
+        status: 'pass' | 'warn' | 'fail';
+        code: number;
+        message: string;
+    }> = [];
 
-    if (!resolveToken()) {
-        console.log('auth: no active session found. Starting login...');
-        const authCode = await commandAuthLogin(flags);
-        if (authCode !== 0) return authCode;
-    } else {
-        console.log('auth: already logged in');
+    if (!quiet) {
+        console.log('Running setup workflow...');
     }
 
-    // Best effort: install/enable/start managed service.
-    for (const action of ['install', 'enable', 'start'] as const) {
-        const code = await commandConnector(action, flags);
-        if (code !== 0) {
-            console.log(`connector ${action}: warning (continuing with local runtime flow)`);
+    if (!resolveToken()) {
+        if (!quiet) {
+            console.log('auth: no active session found. Starting login...');
+        }
+        const authCode = await commandAuthLogin(flags);
+        steps.push({
+            id: 'auth_login',
+            status: authCode === 0 ? 'pass' : 'fail',
+            code: authCode,
+            message: authCode === 0 ? 'Authentication completed.' : 'Authentication failed.'
+        });
+        if (authCode !== 0) {
+            if (asJson) {
+                console.log(JSON.stringify({ ok: false, steps, dashboardUrl: getHostedDashboardUrl() }, null, 2));
+            }
+            return authCode;
+        }
+    } else {
+        if (!quiet) {
+            console.log('auth: already logged in');
+        }
+        steps.push({
+            id: 'auth_login',
+            status: 'pass',
+            code: 0,
+            message: 'Already authenticated.'
+        });
+    }
+
+    if (skipService) {
+        steps.push({
+            id: 'connector_service',
+            status: 'warn',
+            code: 0,
+            message: 'Service installation/start was skipped by --skip-service.'
+        });
+    } else {
+        // Best effort: install/enable/start managed service.
+        for (const action of ['install', 'enable', 'start'] as const) {
+            const code = await commandConnector(action, { ...flags, quiet });
+            steps.push({
+                id: `connector_service_${action}`,
+                status: code === 0 ? 'pass' : 'warn',
+                code,
+                message: code === 0
+                    ? `Connector service ${action} succeeded.`
+                    : `Connector service ${action} failed; continuing with local runtime flow.`
+            });
+            if (code !== 0 && !quiet) {
+                console.log(`connector ${action}: warning (continuing with local runtime flow)`);
+            }
         }
     }
 
-    const installCode = await commandInstall(flags);
-    if (installCode !== 0) return installCode;
+    const installCode = await commandInstall({ ...flags, quiet, json: false, 'skip-bootstrap': skipBootstrap });
+    steps.push({
+        id: 'install',
+        status: installCode === 0 ? 'pass' : 'fail',
+        code: installCode,
+        message: installCode === 0
+            ? `Install workflow completed${skipBootstrap ? ' (bootstrap skipped).' : '.'}`
+            : 'Install workflow failed.'
+    });
+    if (installCode !== 0) {
+        if (asJson) {
+            console.log(JSON.stringify({ ok: false, steps, dashboardUrl: getHostedDashboardUrl() }, null, 2));
+        }
+        return installCode;
+    }
 
-    const registerCode = await commandConnector('register', { ...flags, quiet: true });
+    const registerCode = await commandConnector('register', { ...flags, quiet: true, json: false, 'require-cloud': requireCloud });
+    steps.push({
+        id: 'connector_register',
+        status: registerCode === 0 ? 'pass' : 'fail',
+        code: registerCode,
+        message: registerCode === 0 ? 'Connector registration completed.' : 'Connector registration failed.'
+    });
     if (registerCode !== 0) {
         console.error('setup_register_failed: unable to register connector metadata');
+        if (asJson) {
+            console.log(JSON.stringify({ ok: false, steps, dashboardUrl: getHostedDashboardUrl() }, null, 2));
+        }
         return registerCode;
     }
 
-    const verifyCode = await commandConnector('verify', flags);
+    const verifyCode = await commandConnector('verify', {
+        ...flags,
+        quiet: true,
+        json: false,
+        'require-cloud': requireCloud,
+        cloud: requireCloud
+    });
+    steps.push({
+        id: 'connector_verify',
+        status: verifyCode === 0 ? 'pass' : 'fail',
+        code: verifyCode,
+        message: verifyCode === 0 ? 'Connector verification passed.' : 'Connector verification failed.'
+    });
     if (verifyCode !== 0) {
         console.error('setup_verify_failed: connector/runtime verification failed');
+        if (asJson) {
+            console.log(JSON.stringify({ ok: false, steps, dashboardUrl: getHostedDashboardUrl() }, null, 2));
+        }
         return verifyCode;
     }
 
-    return commandDashboard(flags);
+    if (waitCloudReady || requireCloud) {
+        if (!quiet) {
+            console.log('cloud: waiting for connector cloud-ready posture...');
+        }
+
+        const waitStartedAt = Date.now();
+        let attempts = 0;
+        let ready = false;
+        while (Date.now() - waitStartedAt < cloudWaitTimeoutMs) {
+            attempts += 1;
+            const cloudVerifyCode = await commandConnector('verify', {
+                ...flags,
+                quiet: true,
+                json: false,
+                'require-cloud': true,
+                cloud: true
+            });
+            if (cloudVerifyCode === 0) {
+                ready = true;
+                break;
+            }
+            await sleepMs(cloudWaitIntervalMs);
+        }
+
+        const elapsedMs = Date.now() - waitStartedAt;
+        steps.push({
+            id: 'cloud_ready',
+            status: ready ? 'pass' : 'fail',
+            code: ready ? 0 : 1,
+            message: ready
+                ? `Cloud-ready posture confirmed after ${attempts} attempt(s) in ${elapsedMs}ms.`
+                : `Cloud-ready posture not confirmed within ${elapsedMs}ms (${attempts} attempt(s)).`
+        });
+
+        if (!ready) {
+            if (asJson) {
+                console.log(JSON.stringify({ ok: false, steps, dashboardUrl: getHostedDashboardUrl() }, null, 2));
+            } else {
+                console.error('setup_cloud_ready_timeout: connector did not reach cloud-ready posture within timeout');
+            }
+            return 1;
+        }
+    }
+
+    let createdContextId: string | null = null;
+    if (createContextName) {
+        try {
+            const created = await sendToDaemon('createContext', { name: createContextName }) as { id?: string; contextId?: string };
+            createdContextId = created?.id ?? created?.contextId ?? null;
+            steps.push({
+                id: 'create_context',
+                status: 'pass',
+                code: 0,
+                message: `Context created: ${createContextName}`
+            });
+        } catch (error) {
+            const errorText = error instanceof Error ? error.message : String(error);
+            steps.push({
+                id: 'create_context',
+                status: 'fail',
+                code: 1,
+                message: `Failed to create context '${createContextName}': ${errorText}`
+            });
+            if (asJson) {
+                console.log(JSON.stringify({ ok: false, steps, dashboardUrl: getHostedDashboardUrl() }, null, 2));
+            } else {
+                console.error(`setup_create_context_failed: ${errorText}`);
+            }
+            return 1;
+        }
+    }
+
+    let dashboardQuery = parseOptionalStringFlag(dashboardQueryInput);
+    if (dashboardQueryInput !== undefined) {
+        const parts = new URLSearchParams(dashboardQuery ?? '');
+        const state = readConnectorState();
+        if (state) {
+            parts.set('machineId', state.machineId);
+            if (state.tenantId) parts.set('tenantId', state.tenantId);
+            parts.set('registrationMode', state.registrationMode);
+        }
+        if (createContextName) parts.set('contextName', createContextName);
+        if (createdContextId) parts.set('contextId', createdContextId);
+        if (requireCloud) parts.set('requireCloud', '1');
+        dashboardQuery = parts.toString();
+    }
+
+    const resolvedDashboardUrl = applyDashboardQuery(getHostedDashboardUrl(), dashboardQuery ?? undefined);
+    const dashboardFlags = dashboardQuery ? { ...flags, 'dashboard-query': dashboardQuery } : flags;
+    const dashboardCode = asJson ? 0 : await commandDashboard(dashboardFlags);
+    steps.push({
+        id: 'dashboard_handoff',
+        status: dashboardCode === 0 ? 'pass' : 'fail',
+        code: dashboardCode,
+        message: dashboardCode === 0 ? 'Dashboard handoff completed.' : 'Dashboard handoff failed.'
+    });
+
+    if (asJson) {
+        console.log(JSON.stringify({
+            ok: dashboardCode === 0,
+            steps,
+            dashboardUrl: resolvedDashboardUrl
+        }, null, 2));
+    }
+
+    return dashboardCode;
 }
 
 function printHelp(): void {
     console.log(`0ctx CLI
 
 Usage:
-  0ctx setup [--clients=all|claude,cursor,windsurf] [--no-open]
-  0ctx install [--clients=all|claude,cursor,windsurf]
-  0ctx bootstrap [--dry-run] [--clients=...]
+  0ctx setup [--clients=all|claude,cursor,windsurf] [--no-open] [--json]
+             [--require-cloud] [--wait-cloud-ready]
+             [--cloud-wait-timeout-ms=60000] [--cloud-wait-interval-ms=2000]
+             [--create-context=<name>] [--dashboard-query[=k=v&...]]
+             [--skip-service] [--skip-bootstrap]
+  0ctx install [--clients=all|claude,cursor,windsurf] [--json] [--skip-bootstrap]
+  0ctx bootstrap [--dry-run] [--clients=...] [--json]
   0ctx doctor [--json] [--clients=...]
   0ctx status
   0ctx repair [--clients=...]
-  0ctx dashboard [--no-open]
+  0ctx dashboard [--no-open] [--dashboard-query=k=v&...]
   0ctx daemon start
 
 Authentication:
@@ -1176,13 +1506,15 @@ Configuration:
 
 Sync:
   0ctx sync status   Show sync engine health and queue
+  0ctx sync policy get --context-id=<contextId>
+  0ctx sync policy set <local_only|metadata_only|full_sync> --context-id=<contextId>
 
 Connector:
   0ctx connector service install|enable|disable|uninstall|status|start|stop|restart
   0ctx connector install|enable|disable|uninstall|status|start|stop|restart
-  0ctx connector status [--json] [--cloud]
-  0ctx connector verify [--require-cloud]
-  0ctx connector register [--force] [--local-only] [--require-cloud]
+  0ctx connector status [--json] [--cloud] [--require-bridge]
+  0ctx connector verify [--require-cloud] [--json]
+  0ctx connector register [--force] [--local-only] [--require-cloud] [--json]
   0ctx connector run [--once] [--interval-ms=30000] [--no-daemon-autostart]
   0ctx connector queue status [--json]
   0ctx connector queue drain [--max-batches=10] [--batch-size=200] [--wait] [--strict|--fail-on-retry] [--timeout-ms=120000] [--poll-ms=1000] [--json]
@@ -1288,6 +1620,61 @@ async function commandSyncStatus(): Promise<number> {
         return 0;
     } catch (error) {
         console.error('Failed to get sync status:', error instanceof Error ? error.message : String(error));
+        console.error('Is the daemon running? Try: 0ctx daemon start');
+        return 1;
+    }
+}
+
+function getContextIdFlag(flags: Record<string, string | boolean>): string | null {
+    const contextId = flags['context-id'] ?? flags.contextId;
+    if (typeof contextId === 'string' && contextId.trim().length > 0) {
+        return contextId.trim();
+    }
+    return null;
+}
+
+async function commandSyncPolicyGet(flags: Record<string, string | boolean>): Promise<number> {
+    const contextId = getContextIdFlag(flags);
+    if (!contextId) {
+        console.error("Missing required '--context-id' for `0ctx sync policy get`.");
+        return 1;
+    }
+
+    try {
+        const result = await sendToDaemon('getSyncPolicy', { contextId }) as { contextId: string; syncPolicy: string };
+        console.log('\nSync Policy\n');
+        console.log(`  Context: ${result.contextId}`);
+        console.log(`  Policy:  ${result.syncPolicy}`);
+        console.log('');
+        return 0;
+    } catch (error) {
+        console.error('Failed to get sync policy:', error instanceof Error ? error.message : String(error));
+        console.error('Is the daemon running? Try: 0ctx daemon start');
+        return 1;
+    }
+}
+
+async function commandSyncPolicySet(
+    policy: string | undefined,
+    flags: Record<string, string | boolean>
+): Promise<number> {
+    const contextId = getContextIdFlag(flags);
+    if (!contextId) {
+        console.error("Missing required '--context-id' for `0ctx sync policy set`.");
+        return 1;
+    }
+
+    if (policy !== 'local_only' && policy !== 'metadata_only' && policy !== 'full_sync') {
+        console.error("Invalid policy. Expected one of: local_only, metadata_only, full_sync.");
+        return 1;
+    }
+
+    try {
+        const result = await sendToDaemon('setSyncPolicy', { contextId, syncPolicy: policy }) as { contextId: string; syncPolicy: string };
+        console.log(`Sync policy updated: ${result.contextId} -> ${result.syncPolicy}`);
+        return 0;
+    } catch (error) {
+        console.error('Failed to set sync policy:', error instanceof Error ? error.message : String(error));
         console.error('Is the daemon running? Try: 0ctx daemon start');
         return 1;
     }
@@ -1418,6 +1805,14 @@ async function main(): Promise<number> {
         case 'sync': {
             const sub = parsed.subcommand;
             if (sub === 'status' || !sub) return commandSyncStatus();
+            if (sub === 'policy') {
+                const action = parsed.positionalArgs[0];
+                if (action === 'get') return commandSyncPolicyGet(parsed.flags);
+                if (action === 'set') return commandSyncPolicySet(parsed.positionalArgs[1], parsed.flags);
+                console.error('Usage: 0ctx sync policy get --context-id=<contextId>');
+                console.error('   or: 0ctx sync policy set <local_only|metadata_only|full_sync> --context-id=<contextId>');
+                return 1;
+            }
             printHelp();
             return 1;
         }

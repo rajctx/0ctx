@@ -29,6 +29,11 @@ Cloud SQLite is not a primary datastore strategy.
 3. `full_sync`
 - cloud stores full graph state for collaboration and centralized operations.
 
+Operational controls:
+- CLI: `0ctx sync policy get --context-id=<id>` and `0ctx sync policy set <local_only|metadata_only|full_sync> --context-id=<id>`.
+- Daemon IPC: `getSyncPolicy`, `setSyncPolicy`.
+- MCP tools: `ctx_sync_policy_get`, `ctx_sync_policy_set`.
+
 ## 3) Storage Contract
 
 | Entity | Local SQLite | Cloud Postgres | Event Bus | Object Storage | Notes |
