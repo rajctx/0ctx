@@ -10,7 +10,8 @@ import type {
     AuditEntry,
     AuditAction,
     AuditMetadata,
-    ContextDump
+    ContextDump,
+    SyncPolicy
 } from './schema';
 
 export class Graph {
@@ -18,23 +19,40 @@ export class Graph {
 
     // ── Context Management ─────────────────────────────────────────
 
-    createContext(name: string, paths: string[] = []): Context {
-        const ctx: Context = { id: randomUUID(), name, paths, createdAt: Date.now() };
+    createContext(name: string, paths: string[] = [], syncPolicy: SyncPolicy = 'metadata_only'): Context {
+        const ctx: Context = { id: randomUUID(), name, paths, syncPolicy, createdAt: Date.now() };
         this.db.prepare(`
-      INSERT INTO contexts (id, name, paths, createdAt)
-      VALUES (@id, @name, @paths, @createdAt)
+      INSERT INTO contexts (id, name, paths, syncPolicy, createdAt)
+      VALUES (@id, @name, @paths, @syncPolicy, @createdAt)
     `).run({ ...ctx, paths: JSON.stringify(ctx.paths) });
         return ctx;
     }
 
     getContext(id: string): Context | null {
         const row = this.db.prepare('SELECT * FROM contexts WHERE id = ?').get(id) as any;
-        return row ? { ...row, paths: JSON.parse(row.paths) } : null;
+        return row ? { ...row, paths: JSON.parse(row.paths), syncPolicy: row.syncPolicy ?? 'metadata_only' } : null;
     }
 
     listContexts(): Context[] {
         const rows = this.db.prepare('SELECT * FROM contexts ORDER BY createdAt DESC').all() as any[];
-        return rows.map(row => ({ ...row, paths: JSON.parse(row.paths) }));
+        return rows.map(row => ({ ...row, paths: JSON.parse(row.paths), syncPolicy: row.syncPolicy ?? 'metadata_only' }));
+    }
+
+    getContextSyncPolicy(contextId: string): SyncPolicy | null {
+        const row = this.db.prepare('SELECT syncPolicy FROM contexts WHERE id = ?').get(contextId) as { syncPolicy?: string } | undefined;
+        if (!row) return null;
+        if (row.syncPolicy === 'local_only' || row.syncPolicy === 'full_sync' || row.syncPolicy === 'metadata_only') {
+            return row.syncPolicy;
+        }
+        return 'metadata_only';
+    }
+
+    setContextSyncPolicy(contextId: string, policy: SyncPolicy): Context | null {
+        const context = this.getContext(contextId);
+        if (!context) return null;
+
+        this.db.prepare('UPDATE contexts SET syncPolicy = ? WHERE id = ?').run(policy, contextId);
+        return this.getContext(contextId);
     }
 
     deleteContext(id: string): void {
@@ -226,19 +244,76 @@ export class Graph {
             createdAt: Date.now()
         };
 
+        // SEC-001: Compute HMAC chain — each entry's hash includes the previous entry's hash
+        const prevHash = this.getLastAuditHash();
+        const hmacData = `${prevHash}|${entry.id}|${entry.action}|${entry.createdAt}`;
+        const { createHmac } = require('crypto');
+        const auditSecret = process.env.CTX_AUDIT_HMAC_SECRET || 'default-audit-key';
+        const entryHash = createHmac('sha256', auditSecret).update(hmacData).digest('hex');
+
         this.db.prepare(`
       INSERT INTO audit_logs (
-        id, action, contextId, payload, result, actor, source, sessionToken, connectionId, requestId, createdAt
+        id, action, contextId, payload, result, actor, source, sessionToken, connectionId, requestId, createdAt, entryHash, prevHash
       ) VALUES (
-        @id, @action, @contextId, @payload, @result, @actor, @source, @sessionToken, @connectionId, @requestId, @createdAt
+        @id, @action, @contextId, @payload, @result, @actor, @source, @sessionToken, @connectionId, @requestId, @createdAt, @entryHash, @prevHash
       )
     `).run({
             ...entry,
             payload: JSON.stringify(entry.payload),
-            result: entry.result ? JSON.stringify(entry.result) : null
+            result: entry.result ? JSON.stringify(entry.result) : null,
+            entryHash,
+            prevHash
         });
 
-        return entry;
+        return { ...entry, entryHash, prevHash } as AuditEntry;
+    }
+
+    /** SEC-001: Get the hash of the most recent audit entry for HMAC chain continuity. */
+    private getLastAuditHash(): string {
+        try {
+            const row = this.db.prepare(
+                'SELECT entryHash FROM audit_logs ORDER BY rowid DESC LIMIT 1'
+            ).get() as { entryHash?: string } | undefined;
+            return row?.entryHash ?? 'genesis';
+        } catch {
+            // Column may not exist yet in older DBs — return genesis
+            return 'genesis';
+        }
+    }
+
+    /** SEC-001: Verify the HMAC chain integrity of audit logs. */
+    verifyAuditChain(limit = 1000): { valid: boolean; checked: number; brokenAt?: string } {
+        const { createHmac } = require('crypto');
+        const auditSecret = process.env.CTX_AUDIT_HMAC_SECRET || 'default-audit-key';
+
+        let rows: Array<{ id: string; action: string; createdAt: number; entryHash: string; prevHash: string }>;
+        try {
+            rows = this.db.prepare(
+                'SELECT id, action, createdAt, entryHash, prevHash FROM audit_logs ORDER BY rowid ASC LIMIT ?'
+            ).all(limit) as any[];
+        } catch {
+            return { valid: false, checked: 0, brokenAt: 'schema_missing_hash_columns' };
+        }
+
+        if (rows.length === 0) return { valid: true, checked: 0 };
+
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            if (!row.entryHash) continue; // Pre-SEC-001 entries without hashes are skipped
+
+            const expectedPrev = i === 0 ? 'genesis' : (rows[i - 1].entryHash ?? 'genesis');
+            if (row.prevHash !== expectedPrev) {
+                return { valid: false, checked: i + 1, brokenAt: row.id };
+            }
+
+            const hmacData = `${row.prevHash}|${row.id}|${row.action}|${row.createdAt}`;
+            const computed = createHmac('sha256', auditSecret).update(hmacData).digest('hex');
+            if (computed !== row.entryHash) {
+                return { valid: false, checked: i + 1, brokenAt: row.id };
+            }
+        }
+
+        return { valid: true, checked: rows.length };
     }
 
     listAuditEvents(contextId?: string, limit = 50): AuditEntry[] {
@@ -309,7 +384,11 @@ export class Graph {
             throw new Error(`Unsupported dump version ${dump.version}`);
         }
 
-        const context = this.createContext(options?.name || dump.context.name, dump.context.paths);
+        const context = this.createContext(
+            options?.name || dump.context.name,
+            dump.context.paths,
+            (dump.context as Partial<Context>).syncPolicy ?? 'metadata_only'
+        );
         const nodeIdMap = new Map<string, string>();
 
         const insertNode = this.db.prepare(`

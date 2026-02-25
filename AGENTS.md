@@ -30,6 +30,9 @@ npm run dev
 # Run CLI in dev mode
 npm run dev:cli
 
+# CLI release pipeline (single command)
+0ctx release publish --version vX.Y.Z --dry-run
+
 # Start MCP server (build required first)
 npm run start:mcp
 
@@ -39,7 +42,7 @@ npm run bootstrap:mcp
 # Preview MCP registration changes without writing files
 npm run bootstrap:mcp:dry
 
-# Run local UI
+# Run local UI (contributor/dev only; end-user runtime uses hosted UI)
 npm run dev:ui
 
 # Lint packages
@@ -114,7 +117,7 @@ MCP stdio server translating tool calls into daemon IPC calls.
   - MCP handlers
   - Local session bootstrap and context tracking
 - `src/tools.ts`:
-  - Context graph tools plus enterprise operations (`ctx_health`, `ctx_metrics`, audit and backup tools)
+  - Context graph tools plus enterprise operations (`ctx_health`, `ctx_metrics`, sync-policy, audit, and backup tools)
 - `src/bootstrap.ts`:
   - Auto-registration CLI for MCP clients (Claude/Cursor/Windsurf)
   - Idempotent merge into client `mcpServers` config
@@ -124,14 +127,14 @@ MCP stdio server translating tool calls into daemon IPC calls.
 Product-facing command-line surface for install and support workflows.
 
 - `src/index.ts`:
-  - Commands: `install`, `bootstrap`, `doctor`, `status`, `repair`, `daemon start`
+  - Commands: `shell`, `install`, `bootstrap`, `doctor`, `status`, `repair`, `daemon start`, `release publish`
   - Runs daemon health checks and startup flow
   - Uses MCP bootstrap registration for supported clients
   - Provides diagnostics output (human + JSON)
 
 ### `packages/ui` (`@0ctx/ui`)
 
-Next.js local UI that interacts with the daemon.
+Next.js hosted UI codebase (dev/contributor surface). End-user runtime is hosted UI plus local connector/daemon.
 
 ## Key Design Constraints
 
@@ -186,10 +189,12 @@ Context/session:
 CLI/support:
 
 - `0ctx install`
+- `0ctx shell`
 - `0ctx bootstrap`
 - `0ctx doctor`
 - `0ctx status`
 - `0ctx repair`
+- `0ctx release publish`
 
 Graph:
 
@@ -202,7 +207,12 @@ Enterprise/ops:
 
 - `health`
 - `metricsSnapshot`
+- `syncStatus`
+- `syncNow`
+- `getSyncPolicy`
+- `setSyncPolicy`
 - `getCapabilities`
+- `evaluateCompletion`
 - `listAuditEvents`
 - `createBackup`
 - `listBackups`
@@ -215,6 +225,9 @@ Local state under `~/.0ctx/`:
 - `0ctx.db` - SQLite database (WAL mode, foreign keys enabled)
 - `0ctx.sock` - Unix domain socket (or `\\.\pipe\0ctx.sock` on Windows)
 - `master.key` - local encryption key fallback (when `CTX_MASTER_KEY` is not provided)
+- `connector.json` - connector registration + runtime bridge state
+- `connector-event-queue.json` - persistent connector event replay queue (override: `CTX_CONNECTOR_QUEUE_PATH`)
+- `ops.log` - local CLI operations audit log for connector queue actions (override: `CTX_CLI_OPS_LOG_PATH`)
 - `backups/` - encrypted backup files (`.enc`) and optional plaintext dumps (`.json`)
 
 ## Testing and CI
@@ -235,6 +248,10 @@ Local state under `~/.0ctx/`:
   - `scripts/repo/adopt-ui-monorepo.ps1` (or npm scripts above)
 - Governance references:
   - `docs/ENTERPRISE_ROADMAP_AND_TRACKER.md`
+  - `docs/SEMANTIC_BLACKBOARD_ARCHITECTURE.md`
+  - `docs/HYBRID_STORAGE_AND_SYNC_MODEL.md`
+  - `docs/CONNECTOR_SERVICE_ARCHITECTURE.md`
+  - `docs/HOSTED_UI_PRODUCT_ARCHITECTURE.md`
   - `docs/GITHUB_REPO_MANAGEMENT.md`
   - `docs/GITHUB_ENABLEMENT_RUNBOOK.md`
   - `docs/RELEASE.md`

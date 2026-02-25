@@ -46,6 +46,7 @@ export interface Context {
     id: string;               // uuid
     name: string;             // Human readable name (e.g. "Acme Corp Legal Case")
     paths: string[];          // mapped local paths (optional — many contexts are not tied to a directory)
+    syncPolicy: SyncPolicy;   // per-context sync egress policy
     createdAt: number;
 }
 
@@ -60,7 +61,8 @@ export type AuditAction =
     | 'save_checkpoint'
     | 'rewind'
     | 'create_backup'
-    | 'restore_backup';
+    | 'restore_backup'
+    | 'set_sync_policy';
 
 export interface AuditMetadata {
     actor?: string | null;
@@ -93,3 +95,29 @@ export interface ContextDump {
     edges: ContextEdge[];
     checkpoints: Checkpoint[];
 }
+
+// ── SYNC-01: Sync types ────────────────────────────────────────
+
+export type SyncStatus = 'pending' | 'in_flight' | 'done' | 'failed';
+
+export interface SyncQueueEntry {
+    id: string;
+    contextId: string;
+    status: SyncStatus;
+    retryCount: number;
+    lastError?: string | null;
+    createdAt: number;       // unix ms
+    updatedAt: number;       // unix ms
+}
+
+export interface SyncEnvelope {
+    version: 1;
+    contextId: string;
+    tenantId: string;
+    timestamp: number;       // unix ms
+    encrypted: boolean;
+    syncPolicy?: SyncPolicy;
+    payload: unknown;        // EncryptedPayload or raw ContextDump
+}
+
+export type SyncPolicy = 'local_only' | 'metadata_only' | 'full_sync';

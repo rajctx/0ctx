@@ -140,6 +140,29 @@ export const tools = [
         },
     },
     {
+        name: 'ctx_sync_policy_get',
+        description: 'Get the active context sync policy (`local_only`, `metadata_only`, `full_sync`).',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                contextId: { type: 'string', description: 'Optional explicit context ID override for this operation.' }
+            },
+            required: [],
+        },
+    },
+    {
+        name: 'ctx_sync_policy_set',
+        description: 'Set the active context sync policy (`local_only`, `metadata_only`, `full_sync`).',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                contextId: { type: 'string', description: 'Optional explicit context ID override for this operation.' },
+                syncPolicy: { type: 'string', enum: ['local_only', 'metadata_only', 'full_sync'] }
+            },
+            required: ['syncPolicy'],
+        },
+    },
+    {
         name: 'ctx_audit_recent',
         description: 'List recent audit events for the active context (or a specific contextId).',
         inputSchema: {
@@ -183,6 +206,118 @@ export const tools = [
                 name: { type: 'string', description: 'Optional name override for the restored context.' }
             },
             required: ['fileName'],
+        },
+    },
+    {
+        name: 'ctx_runtime_status',
+        description: 'Get the runtime posture of the 0ctx daemon. Returns connected/degraded/offline status, auth state, sync health, and available capabilities. Use this to adapt behavior based on whether the daemon is fully operational.',
+        inputSchema: {
+            type: 'object',
+            properties: {},
+            required: [],
+        },
+    },
+    {
+        name: 'ctx_blackboard_subscribe',
+        description: 'Create a blackboard event subscription for this session. Optionally scope to contextId and event types.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                contextId: { type: 'string', description: 'Optional explicit context scope.' },
+                types: { type: 'array', items: { type: 'string' }, description: 'Optional event types to include.' },
+                afterSequence: { type: 'number', description: 'Optional starting event sequence cursor.' }
+            },
+            required: [],
+        },
+    },
+    {
+        name: 'ctx_blackboard_poll',
+        description: 'Poll events for an existing blackboard subscription.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                subscriptionId: { type: 'string', description: 'Subscription ID from ctx_blackboard_subscribe.' },
+                afterSequence: { type: 'number', description: 'Optional cursor override.' },
+                limit: { type: 'number', description: 'Optional max events (default 100).' }
+            },
+            required: ['subscriptionId'],
+        },
+    },
+    {
+        name: 'ctx_blackboard_ack',
+        description: 'Acknowledge blackboard events for a subscription.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                subscriptionId: { type: 'string', description: 'Subscription ID to ack against.' },
+                eventId: { type: 'string', description: 'Optional event ID to ack.' },
+                sequence: { type: 'number', description: 'Optional sequence cursor to ack up to.' }
+            },
+            required: ['subscriptionId'],
+        },
+    },
+    {
+        name: 'ctx_blackboard_state',
+        description: 'Inspect blackboard runtime state (recent events, leases, gates).',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                contextId: { type: 'string', description: 'Optional explicit context scope.' },
+                limit: { type: 'number', description: 'Optional max number of recent events.' }
+            },
+            required: [],
+        },
+    },
+    {
+        name: 'ctx_blackboard_completion',
+        description: 'Evaluate whether a context has stabilized for completion (gates, leases, and cooldown window).',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                contextId: { type: 'string', description: 'Optional explicit context scope.' },
+                cooldownMs: { type: 'number', description: 'Optional stabilization cooldown window in milliseconds (default 30000).' },
+                requiredGates: { type: 'array', items: { type: 'string' }, description: 'Optional required gate IDs (default: typecheck,test,lint,security).' }
+            },
+            required: [],
+        },
+    },
+    {
+        name: 'ctx_task_claim',
+        description: 'Attempt to claim a blackboard task lease for this session.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                taskId: { type: 'string', description: 'Task identifier to claim.' },
+                contextId: { type: 'string', description: 'Optional explicit context scope.' },
+                leaseMs: { type: 'number', description: 'Optional lease duration in milliseconds.' }
+            },
+            required: ['taskId'],
+        },
+    },
+    {
+        name: 'ctx_task_release',
+        description: 'Release a previously claimed blackboard task lease.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                taskId: { type: 'string', description: 'Task identifier to release.' }
+            },
+            required: ['taskId'],
+        },
+    },
+    {
+        name: 'ctx_gate_resolve',
+        description: 'Resolve or open a blackboard quality gate.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                gateId: { type: 'string', description: 'Quality gate identifier.' },
+                contextId: { type: 'string', description: 'Optional explicit context scope.' },
+                severity: { type: 'string', description: 'Optional severity label.' },
+                status: { type: 'string', enum: ['open', 'resolved'], description: 'Gate status update.' },
+                message: { type: 'string', description: 'Optional gate update message.' }
+            },
+            required: ['gateId'],
         },
     }
 ];

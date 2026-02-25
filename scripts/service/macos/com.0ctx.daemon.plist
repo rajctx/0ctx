@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  launchd plist for the 0ctx connector runtime.
+  Installed to ~/Library/LaunchAgents/ by `0ctx daemon service install`.
+  Placeholders %NODE_PATH% and %CLI_ENTRY% are substituted by the CLI.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.0ctx.daemon</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>%NODE_PATH%</string>
+    <string>%CLI_ENTRY%</string>
+    <string>connector</string>
+    <string>run</string>
+    <string>--quiet</string>
+  </array>
+
+  <!-- Run at login -->
+  <key>RunAtLoad</key>
+  <true/>
+
+  <!-- Keep alive on crash -->
+  <key>KeepAlive</key>
+  <dict>
+    <key>Crashed</key>
+    <true/>
+  </dict>
+
+  <!-- Throttle restart to avoid tight crash loops -->
+  <key>ThrottleInterval</key>
+  <integer>5</integer>
+
+  <!-- Log stdout/stderr to ~/.0ctx/logs/ -->
+  <key>StandardOutPath</key>
+  <string>%LOG_DIR%/connector.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>%LOG_DIR%/connector.err.log</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>NODE_ENV</key>
+    <string>production</string>
+  </dict>
+</dict>
+</plist>

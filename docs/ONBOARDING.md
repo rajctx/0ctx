@@ -1,5 +1,7 @@
 # Maintainer Onboarding
 
+Updated: 2026-02-24
+
 Primary planning/tracking source:
 
 - `docs/ENTERPRISE_ROADMAP_AND_TRACKER.md`
@@ -18,7 +20,7 @@ npm run test
 - `packages/daemon`: runtime/service boundary.
 - `packages/mcp`: MCP adapter surface.
 - `packages/cli`: product entrypoint for installation and diagnostics.
-- `packages/ui`: local visual interaction layer.
+- `packages/ui`: hosted UI codebase (contributor/dev surface; not packaged in end-user CLI runtime).
 
 ## 3) Verify runtime
 
@@ -54,3 +56,13 @@ npm run repo:adopt-ui
 ## 6) Release readiness
 
 Use `docs/RELEASE.md` checklist before cutting `release/vX.Y`.
+
+Key release scripts:
+
+```bash
+npm run release:validate       # typecheck + build + test + clean-tree check
+npm run release:changelog:prepare -- -Version vX.Y.Z
+npm run release:tag:dry -- -Version vX.Y.Z
+npm run release:publish:dry    # pack dry-run all packages (no registry writes)
+npm run release:publish        # publish core → daemon → mcp → cli
+```

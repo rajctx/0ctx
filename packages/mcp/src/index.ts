@@ -103,6 +103,19 @@ server.setRequestHandler(CallToolRequestSchema, async (req: any) => {
                 const metrics = await callDaemon('metricsSnapshot', {});
                 return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(metrics, null, 2) }] } };
             }
+            case 'ctx_sync_policy_get': {
+                const contextId = pickContextId(args);
+                const policy = await callDaemon('getSyncPolicy', { contextId });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(policy, null, 2) }] } };
+            }
+            case 'ctx_sync_policy_set': {
+                const contextId = pickContextId(args);
+                const policy = await callDaemon('setSyncPolicy', {
+                    contextId,
+                    syncPolicy: args.syncPolicy
+                });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(policy, null, 2) }] } };
+            }
             case 'ctx_audit_recent': {
                 const contextId = pickContextId(args);
                 const events = await callDaemon('listAuditEvents', {
@@ -141,6 +154,121 @@ server.setRequestHandler(CallToolRequestSchema, async (req: any) => {
                         content: [{ type: 'text', text: `Restored to context: ${restored.id} (${restored.name})` }]
                     }
                 };
+            }
+            case 'ctx_runtime_status': {
+                const health = await callDaemon('health', {}) as {
+                    auth?: { authenticated?: boolean; tokenExpired?: boolean; email?: string; tenantId?: string };
+                    sync?: {
+                        enabled?: boolean; running?: boolean; lastPushAt?: number | null; lastPullAt?: number | null; lastError?: string | null;
+                        queue?: { pending?: number; inFlight?: number; failed?: number; done?: number }
+                    } | null;
+                };
+
+                const auth = health.auth ?? {};
+                const sync = health.sync ?? {};
+
+                // Compute runtime posture
+                let posture: 'connected' | 'degraded' | 'offline' = 'offline';
+                if (auth.authenticated && !auth.tokenExpired) {
+                    posture = (sync.enabled && sync.running) ? 'connected' : 'degraded';
+                } else if (auth.authenticated && auth.tokenExpired) {
+                    posture = 'degraded';
+                }
+
+                const capabilities = [
+                    'graph', 'search', 'checkpoints', 'audit', 'backups',
+                    ...(auth.authenticated ? ['auth'] : []),
+                    ...(sync.enabled ? ['sync'] : []),
+                ];
+
+                const status = {
+                    posture,
+                    capabilities,
+                    auth: {
+                        authenticated: auth.authenticated ?? false,
+                        email: auth.email ?? null,
+                        tenantId: auth.tenantId ?? null,
+                        tokenExpired: auth.tokenExpired ?? false,
+                    },
+                    sync: {
+                        enabled: sync.enabled ?? false,
+                        running: sync.running ?? false,
+                        lastPushAt: sync.lastPushAt ?? null,
+                        lastPullAt: sync.lastPullAt ?? null,
+                        lastError: sync.lastError ?? null,
+                        queue: sync.queue ?? { pending: 0, inFlight: 0, failed: 0, done: 0 },
+                    },
+                };
+
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(status, null, 2) }] } };
+            }
+            case 'ctx_blackboard_subscribe': {
+                const contextId = pickContextId(args);
+                const subscription = await callDaemon('subscribeEvents', {
+                    contextId,
+                    types: args.types,
+                    afterSequence: args.afterSequence
+                });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(subscription, null, 2) }] } };
+            }
+            case 'ctx_blackboard_poll': {
+                const result = await callDaemon('pollEvents', {
+                    subscriptionId: args.subscriptionId,
+                    afterSequence: args.afterSequence,
+                    limit: args.limit
+                });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] } };
+            }
+            case 'ctx_blackboard_ack': {
+                const result = await callDaemon('ackEvent', {
+                    subscriptionId: args.subscriptionId,
+                    eventId: args.eventId,
+                    sequence: args.sequence
+                });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] } };
+            }
+            case 'ctx_blackboard_state': {
+                const contextId = pickContextId(args);
+                const state = await callDaemon('getBlackboardState', {
+                    contextId,
+                    limit: args.limit
+                });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(state, null, 2) }] } };
+            }
+            case 'ctx_blackboard_completion': {
+                const contextId = pickContextId(args);
+                const completion = await callDaemon('evaluateCompletion', {
+                    contextId,
+                    cooldownMs: args.cooldownMs,
+                    requiredGates: args.requiredGates
+                });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(completion, null, 2) }] } };
+            }
+            case 'ctx_task_claim': {
+                const contextId = pickContextId(args);
+                const claim = await callDaemon('claimTask', {
+                    taskId: args.taskId,
+                    contextId,
+                    leaseMs: args.leaseMs
+                });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(claim, null, 2) }] } };
+            }
+            case 'ctx_task_release': {
+                const released = await callDaemon('releaseTask', {
+                    taskId: args.taskId
+                });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(released, null, 2) }] } };
+            }
+            case 'ctx_gate_resolve': {
+                const contextId = pickContextId(args);
+                const gate = await callDaemon('resolveGate', {
+                    gateId: args.gateId,
+                    contextId,
+                    severity: args.severity,
+                    status: args.status,
+                    message: args.message
+                });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(gate, null, 2) }] } };
             }
             default:
                 throw new Error(`Unknown tool: ${name}`);

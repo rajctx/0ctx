@@ -42,9 +42,11 @@ export default function HomePage() {
           </Link>
           <div className="flex items-center gap-2">
             <ThemeToggle compact />
-            <Button variant="secondary" size="sm" className="hidden sm:inline-flex">
-              Docs
-            </Button>
+            <Link href="/docs">
+              <Button variant="secondary" size="sm" className="hidden sm:inline-flex">
+                Docs
+              </Button>
+            </Link>
             <Link href="/dashboard">
               <Button variant="primary" size="sm">
                 Open Dashboard
@@ -72,10 +74,12 @@ export default function HomePage() {
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
-            <Button variant="secondary" size="lg">
-              <ScanSearch className="h-4 w-4" />
-              See architecture
-            </Button>
+            <a href="https://github.com/0ctx-com/0ctx#architecture" target="_blank" rel="noopener noreferrer">
+              <Button variant="secondary" size="lg">
+                <ScanSearch className="h-4 w-4" />
+                See architecture
+              </Button>
+            </a>
           </div>
           <div className="grid max-w-xl grid-cols-3 gap-3 pt-2">
             <Metric label="Node Queries" value="<50ms" />
@@ -133,10 +137,12 @@ export default function HomePage() {
                 Open dashboard
               </Button>
             </Link>
-            <Button variant="secondary" size="lg">
-              <Database className="h-4 w-4" />
-              Data model
-            </Button>
+            <a href="https://github.com/0ctx-com/0ctx/blob/main/docs/ARCHITECTURE.md" target="_blank" rel="noopener noreferrer">
+              <Button variant="secondary" size="lg">
+                <Database className="h-4 w-4" />
+                Data model
+              </Button>
+            </a>
           </div>
         </Panel>
       </section>

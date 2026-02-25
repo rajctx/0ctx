@@ -17,11 +17,12 @@ import {
   getHealth,
   getMetricsSnapshot,
   HealthSnapshot,
-  MetricsSnapshot
+  MetricsSnapshot,
+  runConnectorStatusWorkflow
 } from '@/app/actions';
 import type { ContextItem } from '@/lib/graph';
 
-const STATUS_REFRESH_INTERVAL_MS = 15_000;
+const STATUS_REFRESH_INTERVAL_MS = 30_000;
 
 interface DashboardStateValue {
   contexts: ContextItem[];
@@ -35,6 +36,10 @@ interface DashboardStateValue {
   daemonOnline: boolean;
   methodCount: number;
   requestCount: number | null;
+  connectorPosture: string;
+  connectorRegistered: boolean;
+  connectorBridgeHealthy: boolean;
+  connectorCloudConnected: boolean;
   lastHealthCheckAt: number | null;
   refreshTick: number;
   refreshDashboardData: () => Promise<void>;
@@ -57,6 +62,11 @@ function resolveRequestCount(snapshot: MetricsSnapshot | null): number | null {
   return null;
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
 export function DashboardStateProvider({ children }: { children: ReactNode }) {
   const [contexts, setContexts] = useState<ContextItem[]>([]);
   const [activeContextId, setActiveContextId] = useState<string | null>(null);
@@ -65,6 +75,10 @@ export function DashboardStateProvider({ children }: { children: ReactNode }) {
   const [health, setHealth] = useState<HealthSnapshot | null>(null);
   const [metrics, setMetrics] = useState<MetricsSnapshot | null>(null);
   const [capabilities, setCapabilities] = useState<CapabilitiesSnapshot | null>(null);
+  const [connectorPosture, setConnectorPosture] = useState('unknown');
+  const [connectorRegistered, setConnectorRegistered] = useState(false);
+  const [connectorBridgeHealthy, setConnectorBridgeHealthy] = useState(false);
+  const [connectorCloudConnected, setConnectorCloudConnected] = useState(false);
   const [lastHealthCheckAt, setLastHealthCheckAt] = useState<number | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
 
@@ -104,9 +118,18 @@ export function DashboardStateProvider({ children }: { children: ReactNode }) {
       getMetricsSnapshot(),
       getCapabilities()
     ]);
+    const connectorStatus = await runConnectorStatusWorkflow({ cloud: true });
+    const connectorPayload = connectorStatus.payload;
+    const registration = asRecord(connectorPayload?.registration);
+    const bridge = asRecord(connectorPayload?.bridge);
+    const cloud = asRecord(connectorPayload?.cloud);
     setHealth(healthData);
     setMetrics(metricsData);
     setCapabilities(capabilitiesData);
+    setConnectorPosture(typeof connectorPayload?.posture === 'string' ? connectorPayload.posture : 'unknown');
+    setConnectorRegistered(registration?.registered === true);
+    setConnectorBridgeHealthy(bridge?.healthy === true);
+    setConnectorCloudConnected(cloud?.connected === true);
     setLastHealthCheckAt(Date.now());
   }, []);
 
@@ -167,6 +190,10 @@ export function DashboardStateProvider({ children }: { children: ReactNode }) {
       daemonOnline: resolveDaemonOnline(health),
       methodCount: Array.isArray(capabilities?.methods) ? capabilities.methods.length : 0,
       requestCount: resolveRequestCount(metrics),
+      connectorPosture,
+      connectorRegistered,
+      connectorBridgeHealthy,
+      connectorCloudConnected,
       lastHealthCheckAt,
       refreshTick,
       refreshDashboardData,
@@ -178,6 +205,10 @@ export function DashboardStateProvider({ children }: { children: ReactNode }) {
       capabilities,
       contexts,
       createNewContext,
+      connectorBridgeHealthy,
+      connectorCloudConnected,
+      connectorPosture,
+      connectorRegistered,
       health,
       isContextLoading,
       lastHealthCheckAt,

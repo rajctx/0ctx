@@ -5,10 +5,12 @@ import fs from 'fs';
 import { randomUUID } from 'crypto';
 import { openDb, Graph } from '@0ctx/core';
 import { handleRequest } from './handlers';
+import { SyncEngine } from './sync-engine';
 import { clearConnectionContext } from './resolver';
 import type { DaemonRequest, DaemonResponse } from './protocol';
 import { RequestMetrics } from './metrics';
 import { log } from './logger';
+import { EventRuntime } from './events';
 
 const IS_WIN = os.platform() === 'win32';
 const DEFAULT_SOCKET_PATH = IS_WIN ? '\\\\.\\pipe\\0ctx.sock' : path.join(os.homedir(), '.0ctx', '0ctx.sock');
@@ -140,12 +142,20 @@ function probeExistingEndpoint(socketPath: string, timeoutMs: number): Promise<S
     });
 }
 
-function createDaemonCloser(server: net.Server, db: ReturnType<typeof openDb>, socketPath: string): () => Promise<void> {
+function createDaemonCloser(
+    server: net.Server,
+    db: ReturnType<typeof openDb>,
+    socketPath: string,
+    syncEngine?: SyncEngine
+): () => Promise<void> {
     let closed = false;
 
     return async () => {
         if (closed) return;
         closed = true;
+
+        // Stop sync engine before closing server
+        syncEngine?.stop();
 
         await new Promise<void>(resolve => {
             if (!server.listening) {
@@ -222,6 +232,8 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Sta
     const graph = new Graph(db);
     const startedAt = Date.now();
     const metrics = new RequestMetrics();
+    const syncEngine = new SyncEngine(graph, db);
+    const eventRuntime = new EventRuntime();
 
     const server = net.createServer(socket => {
         // Unique ID for this client connection to track active context
@@ -245,7 +257,9 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Sta
                     const requestStart = Date.now();
                     const result = handleRequest(graph, connectionId, req, {
                         startedAt,
-                        getMetricsSnapshot: () => metrics.snapshot()
+                        getMetricsSnapshot: () => metrics.snapshot(),
+                        syncEngine,
+                        eventRuntime
                     });
                     const durationMs = Date.now() - requestStart;
                     metrics.record(req.method, true, durationMs);
@@ -292,7 +306,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Sta
         });
     });
 
-    const closeDaemon = createDaemonCloser(server, db, socketPath);
+    const closeDaemon = createDaemonCloser(server, db, socketPath, syncEngine);
 
     try {
         const status = await bindDaemonServer(server, socketPath, probeTimeoutMs);
@@ -303,6 +317,9 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Sta
         }
 
         log('info', 'daemon_started', { socketPath });
+
+        // Start sync engine after successful bind
+        syncEngine.start();
 
         server.on('error', error => {
             log('error', 'daemon_server_error', {

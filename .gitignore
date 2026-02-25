@@ -48,3 +48,8 @@ next-env.d.ts
 # local repo migration artifacts
 .repo-backups/
 
+# local packages
+*.tgz
+
+# ts errors
+tsc_errors.txt

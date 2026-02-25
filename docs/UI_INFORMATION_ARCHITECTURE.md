@@ -1,56 +1,76 @@
 # UI Information Architecture
 
-Updated: 2026-02-22
+Updated: 2026-02-24
 
-Related tracking:
-
+Related:
+- `docs/HOSTED_UI_PRODUCT_ARCHITECTURE.md`
+- `docs/HOSTED_UI_ONBOARDING_SPEC.md`
+- `docs/UI_BFF_API_CONTRACT.md`
 - `docs/ENTERPRISE_ROADMAP_AND_TRACKER.md`
 
 ## Goals
 
-- Keep each dashboard route focused on one operational concern.
-- Preserve a consistent enterprise shell (navigation, context switching, health/status) across all views.
-- Avoid mixing graph editing, diagnostics, audit, and backup workflows on one page.
+- Keep each route focused on one operational concern.
+- Maintain a consistent enterprise shell across authenticated routes.
+- Keep onboarding explicit and verifiable.
+- Avoid mixed concerns (graph editing + ops + backup in one surface).
 
 ## Route Map
 
+## Public
+
+- `/`
+  - landing with product narrative and CTA into onboarding/dashboard.
+- `/install`
+  - guided onboarding checklist and runtime readiness.
+- `/docs`
+  - documentation index and runbook pointers.
+- `/login`, `/auth/*`
+  - Auth0 login/logout/callback/session flow.
+
+## Authenticated
+
 - `/dashboard`
-  - Compatibility entrypoint.
-  - Redirects to `/dashboard/workspace`.
+  - compatibility entrypoint; redirects to `/dashboard/workspace`.
 - `/dashboard/workspace`
-  - Graph visualization, node inspector, edit/delete actions, and graph controls.
+  - graph exploration and context editing.
 - `/dashboard/operations`
-  - Runbook/diagnostics workflows (`install`, `status`, `doctor`, `bootstrap`, `repair`).
+  - runtime diagnostics and remediation controls.
+- `/dashboard/integrations`
+  - AI integration setup and policy controls.
 - `/dashboard/audit`
-  - Audit event visibility and scope filtering.
+  - audit event visibility and filtering.
 - `/dashboard/backups`
-  - Backup create/list/restore workflows.
+  - backup create/list/restore workflows.
+- `/dashboard/settings`
+  - auth/session state, completion evaluation, sync policy controls.
+
+## Authentication and Guarding
+
+- `/dashboard/*` and `/api/v1/*` require authenticated session.
+- Session enforcement is owned by active `proxy.ts`.
+- Unauthenticated access redirects to login with return path preserved.
 
 ## Shared Shell Responsibilities
 
-Implemented in dashboard layout/shell:
-
-- Route navigation for Workspace, Operations, Audit, Backups.
-- Active-context list and context creation.
-- Top status strip:
-  - daemon health state
-  - capability method count
-  - request count
-  - last sync timestamp
-- Refresh action for shared dashboard state.
+Implemented by dashboard shell/layout:
+- global nav and route context
+- active context selector
+- runtime posture indicators
+- connector/cloud posture badges
+- refresh/reload controls
 
 ## State Ownership
 
-- Shared dashboard state provider owns:
-  - contexts + active context
-  - daemon health/metrics/capabilities snapshots
-  - cross-route refresh tick for sync updates
-- Route pages own local behavior:
-  - workspace graph and inspector state
-  - operations/audit/backups view-local interaction state
+- Shared provider:
+  - active context
+  - posture snapshots
+  - capability state
+- Route-local state:
+  - page-specific form/workflow state
+  - operation result panels
+  - filters, pagination, transient feedback
 
 ## Design Constraints
 
-- Keep enterprise visual language consistent with existing dark shell.
-- Minimize floating overlays outside focused task areas.
-- Preserve keyboard access patterns where applicable.
+See `docs/HOSTED_UI_PRODUCT_ARCHITECTURE.md` §5, §8, §9 for UX constraints, design system direction, and performance/accessibility budgets.

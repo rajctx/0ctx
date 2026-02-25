@@ -1,19 +1,43 @@
 {
   "name": "@0ctx/daemon",
   "version": "1.0.0",
-  "description": "",
+  "description": "0ctx persistent local daemon – IPC server and DB owner",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./dist/*": "./dist/*"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "start": "ts-node src/index.ts",
     "dev": "ts-node-dev --respawn src/index.ts",
+    "prepublishOnly": "tsc -b",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
+  "keywords": [
+    "context",
+    "daemon",
+    "ipc",
+    "local-first"
+  ],
   "author": "",
   "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/0ctx-com/0ctx.git",
+    "directory": "packages/daemon"
+  },
   "dependencies": {
-    "@0ctx/core": "file:../core",
+    "@0ctx/core": "^1.0.0",
     "uuid": "^11.0.5"
   },
   "devDependencies": {

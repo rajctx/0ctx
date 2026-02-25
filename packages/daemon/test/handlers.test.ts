@@ -4,6 +4,7 @@ import path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Graph, openDb } from '@0ctx/core';
 import { handleRequest } from '../src/handlers';
+import { EventRuntime } from '../src/events';
 import { resetResolverStateForTests } from '../src/resolver';
 import type { HandlerRuntimeContext } from '../src/handlers';
 
@@ -103,6 +104,190 @@ describe('daemon request handling', () => {
             expect(events.some(event => event.action === 'create_context')).toBe(true);
             expect(events.some(event => event.action === 'add_node')).toBe(true);
             expect(events.every(event => event.sessionToken === session.sessionToken)).toBe(true);
+        } finally {
+            db.close();
+        }
+    });
+
+    it('gets and sets per-context sync policy with audit trail', () => {
+        const { db, graph } = createGraph();
+        try {
+            const session = handleRequest(graph, 'conn-sync', { method: 'createSession' }, runtime()) as { sessionToken: string };
+
+            const context = handleRequest(graph, 'conn-sync', {
+                method: 'createContext',
+                sessionToken: session.sessionToken,
+                params: { name: 'sync-policy-context', syncPolicy: 'metadata_only' }
+            }, runtime()) as { id: string };
+
+            const before = handleRequest(graph, 'conn-sync', {
+                method: 'getSyncPolicy',
+                sessionToken: session.sessionToken,
+                params: { contextId: context.id }
+            }, runtime()) as { syncPolicy: string };
+
+            const after = handleRequest(graph, 'conn-sync', {
+                method: 'setSyncPolicy',
+                sessionToken: session.sessionToken,
+                params: { contextId: context.id, syncPolicy: 'full_sync', actor: 'test-user', source: 'test-suite' }
+            }, runtime()) as { syncPolicy: string };
+
+            const events = handleRequest(graph, 'conn-sync', {
+                method: 'listAuditEvents',
+                sessionToken: session.sessionToken,
+                params: { contextId: context.id, limit: 10 }
+            }, runtime()) as Array<{ action: string }>;
+
+            expect(before.syncPolicy).toBe('metadata_only');
+            expect(after.syncPolicy).toBe('full_sync');
+            expect(events.some(event => event.action === 'set_sync_policy')).toBe(true);
+        } finally {
+            db.close();
+        }
+    });
+
+    it('records and polls blackboard events via subscriptions', () => {
+        const { db, graph } = createGraph();
+        const events = new EventRuntime();
+        const ctxRuntime: HandlerRuntimeContext = {
+            ...runtime(),
+            eventRuntime: events
+        };
+
+        try {
+            const session = handleRequest(graph, 'conn-a', { method: 'createSession' }, ctxRuntime) as { sessionToken: string };
+            const context = handleRequest(graph, 'conn-a', {
+                method: 'createContext',
+                sessionToken: session.sessionToken,
+                params: { name: 'blackboard-context' }
+            }, ctxRuntime) as { id: string };
+
+            const subscription = handleRequest(graph, 'conn-a', {
+                method: 'subscribeEvents',
+                sessionToken: session.sessionToken,
+                params: { contextId: context.id, types: ['NodeAdded'] }
+            }, ctxRuntime) as { subscriptionId: string };
+
+            handleRequest(graph, 'conn-a', {
+                method: 'addNode',
+                sessionToken: session.sessionToken,
+                params: { type: 'goal', content: 'Track blackboard events' }
+            }, ctxRuntime);
+
+            const polled = handleRequest(graph, 'conn-a', {
+                method: 'pollEvents',
+                sessionToken: session.sessionToken,
+                params: { subscriptionId: subscription.subscriptionId }
+            }, ctxRuntime) as { events: Array<{ type: string; contextId: string | null; sequence: number }> };
+
+            expect(polled.events.length).toBeGreaterThan(0);
+            expect(polled.events.some(event => event.type === 'NodeAdded')).toBe(true);
+            expect(polled.events.every(event => event.contextId === context.id)).toBe(true);
+        } finally {
+            db.close();
+        }
+    });
+
+    it('enforces task lease ownership semantics', () => {
+        const { db, graph } = createGraph();
+        const events = new EventRuntime();
+        const ctxRuntime: HandlerRuntimeContext = {
+            ...runtime(),
+            eventRuntime: events
+        };
+
+        try {
+            const sessionA = handleRequest(graph, 'conn-a', { method: 'createSession' }, ctxRuntime) as { sessionToken: string };
+            const sessionB = handleRequest(graph, 'conn-b', { method: 'createSession' }, ctxRuntime) as { sessionToken: string };
+
+            const claimA = handleRequest(graph, 'conn-a', {
+                method: 'claimTask',
+                sessionToken: sessionA.sessionToken,
+                params: { taskId: 'task-1', leaseMs: 30000 }
+            }, ctxRuntime) as { claimed: boolean };
+
+            const claimBWhileHeld = handleRequest(graph, 'conn-b', {
+                method: 'claimTask',
+                sessionToken: sessionB.sessionToken,
+                params: { taskId: 'task-1', leaseMs: 30000 }
+            }, ctxRuntime) as { claimed: boolean };
+
+            const releaseA = handleRequest(graph, 'conn-a', {
+                method: 'releaseTask',
+                sessionToken: sessionA.sessionToken,
+                params: { taskId: 'task-1' }
+            }, ctxRuntime) as { released: boolean };
+
+            const claimBAfterRelease = handleRequest(graph, 'conn-b', {
+                method: 'claimTask',
+                sessionToken: sessionB.sessionToken,
+                params: { taskId: 'task-1', leaseMs: 30000 }
+            }, ctxRuntime) as { claimed: boolean };
+
+            expect(claimA.claimed).toBe(true);
+            expect(claimBWhileHeld.claimed).toBe(false);
+            expect(releaseA.released).toBe(true);
+            expect(claimBAfterRelease.claimed).toBe(true);
+        } finally {
+            db.close();
+        }
+    });
+
+    it('evaluates blackboard completion deterministically', () => {
+        const { db, graph } = createGraph();
+        const events = new EventRuntime();
+        const ctxRuntime: HandlerRuntimeContext = {
+            ...runtime(),
+            eventRuntime: events
+        };
+
+        try {
+            const session = handleRequest(graph, 'conn-a', { method: 'createSession' }, ctxRuntime) as { sessionToken: string };
+            const context = handleRequest(graph, 'conn-a', {
+                method: 'createContext',
+                sessionToken: session.sessionToken,
+                params: { name: 'completion-context' }
+            }, ctxRuntime) as { id: string };
+
+            handleRequest(graph, 'conn-a', {
+                method: 'claimTask',
+                sessionToken: session.sessionToken,
+                params: { contextId: context.id, taskId: 'task-1', leaseMs: 60_000 }
+            }, ctxRuntime);
+            handleRequest(graph, 'conn-a', {
+                method: 'resolveGate',
+                sessionToken: session.sessionToken,
+                params: { contextId: context.id, gateId: 'typecheck', status: 'open', severity: 'high' }
+            }, ctxRuntime);
+
+            const blocked = handleRequest(graph, 'conn-a', {
+                method: 'evaluateCompletion',
+                sessionToken: session.sessionToken,
+                params: { contextId: context.id, cooldownMs: 0, requiredGates: ['typecheck'] }
+            }, ctxRuntime) as { complete: boolean; reasons: string[] };
+
+            handleRequest(graph, 'conn-a', {
+                method: 'releaseTask',
+                sessionToken: session.sessionToken,
+                params: { taskId: 'task-1' }
+            }, ctxRuntime);
+            handleRequest(graph, 'conn-a', {
+                method: 'resolveGate',
+                sessionToken: session.sessionToken,
+                params: { contextId: context.id, gateId: 'typecheck', status: 'resolved' }
+            }, ctxRuntime);
+
+            const complete = handleRequest(graph, 'conn-a', {
+                method: 'evaluateCompletion',
+                sessionToken: session.sessionToken,
+                params: { contextId: context.id, cooldownMs: 0, requiredGates: ['typecheck'] }
+            }, ctxRuntime) as { complete: boolean; reasons: string[] };
+
+            expect(blocked.complete).toBe(false);
+            expect(blocked.reasons).toContain('open_gates');
+            expect(blocked.reasons).toContain('active_leases');
+            expect(complete.complete).toBe(true);
+            expect(complete.reasons).toHaveLength(0);
         } finally {
             db.close();
         }

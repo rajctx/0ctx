@@ -2,26 +2,48 @@
   "name": "@0ctx/ui",
   "version": "1.0.0",
   "private": true,
+  "main": ".next/standalone/packages/ui/server.js",
+  "files": [
+    ".next/standalone"
+  ],
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "postbuild": "node scripts/copy-assets.js",
+    "postinstall": "prisma generate",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio"
   },
   "dependencies": {
+    "@auth0/nextjs-auth0": "^4.15.0",
+    "@prisma/adapter-pg": "^7.0.0",
+    "@prisma/client": "^7.0.0",
+    "@types/d3-force": "^3.0.10",
+    "@types/dagre": "^0.7.53",
+    "@xyflow/react": "^12.10.1",
+    "d3-force": "^3.0.0",
+    "dagre": "^0.8.5",
+    "dotenv": "^16.4.7",
     "lucide-react": "^0.575.0",
     "next": "16.1.6",
+    "pg": "^8.13.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "react-force-graph-2d": "^1.29.1"
+    "reagraph": "^4.30.8"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/pg": "^8.11.10",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "prisma": "^7.0.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

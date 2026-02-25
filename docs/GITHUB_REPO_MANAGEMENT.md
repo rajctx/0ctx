@@ -1,5 +1,7 @@
 # GitHub Repo Management Guide
 
+Updated: 2026-02-24
+
 Canonical enterprise roadmap and tracker:
 
 - `docs/ENTERPRISE_ROADMAP_AND_TRACKER.md`

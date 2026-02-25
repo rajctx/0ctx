@@ -7,13 +7,28 @@ on:
         description: "Release tag (example: v1.2.3)"
         required: true
         type: string
+      dry_run:
+        description: "Dry-run only (no publish, no tag push)"
+        required: false
+        type: boolean
+        default: false
+      npm_tag:
+        description: "npm dist-tag (latest, next)"
+        required: false
+        type: string
+        default: latest
 
 permissions:
   contents: write
 
+concurrency:
+  group: release-manual
+  cancel-in-progress: false
+
 jobs:
   validate-and-release:
     runs-on: ubuntu-latest
+    environment: ${{ inputs.dry_run && 'staging' || 'production' }}
 
     steps:
       - name: Checkout
@@ -26,15 +41,22 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          registry-url: https://registry.npmjs.org
 
       - name: Install
         run: npm ci
 
+      - name: Lint
+        run: npm run lint
+
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Build
+      - name: Build (runtime packages)
         run: npm run build
+
+      - name: Build (UI)
+        run: npm run build --workspace=@0ctx/ui
 
       - name: Test
         run: npm run test
@@ -46,13 +68,46 @@ jobs:
             exit 1
           fi
 
+      - name: Dry-run publish validation
+        run: npm run release:pack:dry
+
+      - name: Generate tarball checksums
+        id: checksums
+        run: |
+          mkdir -p release-artifacts
+          npm pack --workspace=@0ctx/core --workspace=@0ctx/daemon --workspace=@0ctx/mcp --workspace=@0ctx/cli --pack-destination release-artifacts
+          cd release-artifacts
+          sha256sum *.tgz > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Publish packages to npm
+        if: ${{ !inputs.dry_run }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          for pkg in core daemon mcp cli; do
+            npm publish --workspace=@0ctx/$pkg --tag ${{ inputs.npm_tag }} --access public
+          done
+
       - name: Create tag
+        if: ${{ !inputs.dry_run }}
         run: |
           git tag "${{ inputs.version }}"
           git push origin "${{ inputs.version }}"
 
       - name: Create GitHub release
+        if: ${{ !inputs.dry_run }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.version }}
           generate_release_notes: true
+          files: release-artifacts/*
+
+      - name: Notify (webhook)
+        if: ${{ !inputs.dry_run && env.RELEASE_WEBHOOK_URL != '' }}
+        env:
+          RELEASE_WEBHOOK_URL: ${{ secrets.RELEASE_WEBHOOK_URL }}
+        run: |
+          curl -sf -X POST "$RELEASE_WEBHOOK_URL" \
+            -H 'Content-Type: application/json' \
+            -d '{"event":"release","version":"${{ inputs.version }}","tag":"${{ inputs.npm_tag }}","repo":"${{ github.repository }}","run_url":"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"}'

@@ -8,13 +8,16 @@ import {
   Loader2,
   Minus,
   Network,
+  Plus,
   RefreshCw,
   Search,
   Trash2,
+  X,
   ZoomIn,
   ZoomOut
 } from 'lucide-react';
 import {
+  addNodeAction,
   deleteContextAction,
   deleteNodeAction,
   getGraphData,
@@ -74,6 +77,17 @@ export default function WorkspaceView() {
 
   const [commandOpen, setCommandOpen] = useState(false);
   const [commandQuery, setCommandQuery] = useState('');
+
+  // ── Layout state ──
+  const [layoutMode, setLayoutMode] = useState<'force' | 'hierarchical' | 'clustered'>('force');
+
+  // ── Node creation state ──
+  const [creatingNode, setCreatingNode] = useState(false);
+  const [newType, setNewType] = useState<NodeType>('decision');
+  const [newContent, setNewContent] = useState('');
+  const [newTags, setNewTags] = useState('');
+  const [newKey, setNewKey] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
 
   const activeNode = useMemo(
     () => graphData.nodes.find(node => node.id === activeNodeId) ?? null,
@@ -192,6 +206,16 @@ export default function WorkspaceView() {
           setActiveNodeId(null);
           setCommandOpen(false);
         }
+      },
+      {
+        id: 'create-node',
+        label: 'Create new node',
+        hint: 'Graph',
+        run: () => {
+          setActiveNodeId(null);
+          setCreatingNode(true);
+          setCommandOpen(false);
+        }
       }
     ],
     [activeContextId, refreshDashboardData, refreshGraph]
@@ -255,17 +279,100 @@ export default function WorkspaceView() {
     }));
   }, []);
 
+  const handleCreateNode = useCallback(async () => {
+    if (!activeContextId || !newContent.trim()) return;
+    setIsCreating(true);
+    try {
+      const tags = newTags.split(',').map(t => t.trim()).filter(Boolean);
+      const created = await addNodeAction(activeContextId, {
+        type: newType,
+        content: newContent.trim(),
+        tags: tags.length > 0 ? tags : undefined,
+        key: newKey.trim() || undefined
+      });
+      if (created) {
+        setActiveNodeId(created.id);
+      }
+      setCreatingNode(false);
+      setNewType('decision');
+      setNewContent('');
+      setNewTags('');
+      setNewKey('');
+      await refreshGraph(activeContextId);
+    } finally {
+      setIsCreating(false);
+    }
+  }, [activeContextId, newContent, newKey, newTags, newType, refreshGraph]);
+
   const inspectorContent = (
     <div className="flex h-full flex-col">
       <div className="border-b border-[var(--border-muted)] px-4 py-3">
-        <p className="text-[11px] uppercase tracking-[0.15em] text-[var(--text-muted)]">Inspector</p>
+        <p className="text-[11px] uppercase tracking-[0.15em] text-[var(--text-muted)]">
+          {creatingNode ? 'Create' : 'Inspector'}
+        </p>
         <h2 className="mt-1 text-sm font-semibold text-[var(--text-primary)]">
-          {activeNode ? 'Selected Node' : 'No Selection'}
+          {creatingNode ? 'New Node' : activeNode ? 'Selected Node' : 'No Selection'}
         </h2>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4">
-        {activeNode ? (
+        {creatingNode ? (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
+                Type
+              </label>
+              <select
+                value={newType}
+                onChange={e => setNewType(e.target.value as NodeType)}
+                className="h-9 w-full rounded-lg border border-[var(--border-muted)] bg-[var(--surface-raised)] px-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)] focus:ring-2 focus:ring-[var(--focus-ring)]"
+              >
+                {NODE_TYPES.map(type => (
+                  <option key={type} value={type}>
+                    {NODE_TYPE_META[type].label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
+                Content
+              </label>
+              <textarea
+                autoFocus
+                value={newContent}
+                onChange={e => setNewContent(e.target.value)}
+                placeholder="Describe the node…"
+                className="min-h-36 w-full rounded-lg border border-[var(--border-muted)] bg-[var(--surface-raised)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)] focus:ring-2 focus:ring-[var(--focus-ring)]"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
+                Tags
+              </label>
+              <input
+                value={newTags}
+                onChange={e => setNewTags(e.target.value)}
+                placeholder="security, infra, rollout"
+                className="h-9 w-full rounded-lg border border-[var(--border-muted)] bg-[var(--surface-raised)] px-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)] focus:ring-2 focus:ring-[var(--focus-ring)]"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
+                Key <span className="normal-case tracking-normal">(optional, for direct lookup)</span>
+              </label>
+              <input
+                value={newKey}
+                onChange={e => setNewKey(e.target.value)}
+                placeholder="auth-strategy"
+                className="h-9 w-full rounded-lg border border-[var(--border-muted)] bg-[var(--surface-raised)] px-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)] focus:ring-2 focus:ring-[var(--focus-ring)]"
+              />
+            </div>
+          </div>
+        ) : activeNode ? (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <Badge
@@ -316,11 +423,29 @@ export default function WorkspaceView() {
         )}
       </div>
 
-      {activeNode && (
+      {creatingNode && (
+        <div className="flex gap-2 border-t border-[var(--border-muted)] p-4">
+          <Button
+            onClick={() => void handleCreateNode()}
+            disabled={!newContent.trim() || isCreating}
+            variant="primary"
+            className="flex-1"
+          >
+            {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            {isCreating ? 'Creating…' : 'Create'}
+          </Button>
+          <Button variant="secondary" onClick={() => setCreatingNode(false)}>
+            <X className="h-4 w-4" />
+            Cancel
+          </Button>
+        </div>
+      )}
+
+      {!creatingNode && activeNode && (
         <div className="flex gap-2 border-t border-[var(--border-muted)] p-4">
           <Button onClick={() => void handleSave()} disabled={!isDirty || isSaving} variant="primary" className="flex-1">
             {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-            {isSaving ? 'Saving...' : 'Save'}
+            {isSaving ? 'Saving…' : 'Save'}
           </Button>
           <Button variant="danger" onClick={() => void handleDeleteNode()}>
             <Trash2 className="h-4 w-4" />
@@ -357,6 +482,46 @@ export default function WorkspaceView() {
             <Button variant="secondary" size="sm" onClick={() => setCommandOpen(true)}>
               <Command className="h-4 w-4" />
               Command
+            </Button>
+
+            <div className="flex rounded-md shadow-sm ml-2">
+              <Button
+                variant={layoutMode === 'force' ? 'primary' : 'secondary'}
+                size="sm"
+                className="rounded-e-none"
+                onClick={() => setLayoutMode('force')}
+              >
+                Force
+              </Button>
+              <Button
+                variant={layoutMode === 'hierarchical' ? 'primary' : 'secondary'}
+                size="sm"
+                className="rounded-none border-x-0"
+                onClick={() => setLayoutMode('hierarchical')}
+              >
+                Hierarchical
+              </Button>
+              <Button
+                variant={layoutMode === 'clustered' ? 'primary' : 'secondary'}
+                size="sm"
+                className="rounded-s-none"
+                onClick={() => setLayoutMode('clustered')}
+              >
+                Clustered
+              </Button>
+            </div>
+
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={!activeContextId}
+              onClick={() => {
+                setActiveNodeId(null);
+                setCreatingNode(true);
+              }}
+            >
+              <Plus className="h-4 w-4" />
+              Add Node
             </Button>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -411,6 +576,8 @@ export default function WorkspaceView() {
             <ForceGraph
               graphData={filteredGraph}
               activeNodeId={activeNodeId}
+              layoutType={layoutMode === 'hierarchical' ? 'treeTd2d' : 'forceDirected2d'}
+              clusterAttribute={layoutMode === 'clustered' ? 'type' : undefined}
               onNodeClick={setActiveNodeId}
               onBackgroundClick={() => setActiveNodeId(null)}
               onGraphReady={controls => {

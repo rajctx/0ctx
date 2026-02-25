@@ -1,41 +1,24 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import dynamic from 'next/dynamic';
-import type { MutableRefObject, ReactElement } from 'react';
-import type { ForceGraphMethods, LinkObject, NodeObject } from 'react-force-graph-2d';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  ReactFlow,
+  useNodesState,
+  useEdgesState,
+  useReactFlow,
+  ReactFlowProvider,
+  Handle,
+  Position,
+  Background,
+  Controls,
+  type Node,
+  type Edge,
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
 import { asNodeType, GraphPayload, NODE_TYPE_META } from '@/lib/graph';
-
-type GraphNodeData = {
-  id: string;
-  type: string;
-  content: string;
-  tags?: string[];
-  createdAt: number;
-  name?: string;
-};
-
-type GraphLinkData = {
-  id: string;
-  relation: string;
-  source?: string | number | NodeObject<GraphNodeData>;
-  target?: string | number | NodeObject<GraphNodeData>;
-};
-
-type DynamicForceGraphProps = {
-  ref?: MutableRefObject<ForceGraphMethods<GraphNodeData, GraphLinkData> | undefined>;
-  [key: string]: unknown;
-};
-
-const ForceGraph2D = dynamic(() => import('react-force-graph-2d'), {
-  ssr: false
-}) as unknown as (props: DynamicForceGraphProps) => ReactElement;
-
-interface ForceConfig {
-  distance?: (value: number) => void;
-  strength?: (value: number) => void;
-  radius?: (value: number) => void;
-}
+import * as d3 from 'd3-force';
+import dagre from 'dagre';
+import type { LayoutTypes } from 'reagraph'; // kept for backward compatibility
 
 export interface GraphControls {
   fit: () => void;
@@ -45,283 +28,263 @@ export interface GraphControls {
   focusNode: (nodeId: string) => void;
 }
 
-function getEndpointId(endpoint: GraphLinkData['source']): string {
-  if (!endpoint) return '';
-  if (typeof endpoint === 'object' && endpoint.id !== undefined) {
-    return String(endpoint.id);
-  }
-  return String(endpoint);
+function CustomNode({ data, selected }: any) {
+  const meta = NODE_TYPE_META[asNodeType(data.type)];
+  const size = data.size || 32;
+
+  return (
+    <div
+      className="relative flex flex-col items-center justify-center cursor-pointer"
+      style={{
+        width: `${size}px`,
+        height: `${size}px`,
+      }}
+    >
+      <div
+        className={`absolute inset-0 rounded-full transition-all duration-300 ${selected ? 'ring-2 ring-offset-2 ring-offset-[#070d18] scale-110' : 'hover:scale-110'}`}
+        style={{
+          backgroundColor: meta?.color || '#333333',
+          opacity: 0.35,
+          border: `1px solid ${meta?.color || '#444444'}`,
+          boxShadow: selected ? `0 0 20px 2px ${meta?.color || '#333333'}` : 'none'
+        }}
+      />
+
+      <Handle type="target" position={Position.Top} className="opacity-0 w-0 h-0" />
+      <Handle type="source" position={Position.Bottom} className="opacity-0 w-0 h-0" />
+
+      <div
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-max max-w-[150px] text-center pointer-events-none z-10"
+        title={data.label}
+      >
+        <span
+          className="text-[11px] font-medium tracking-wide whitespace-pre-wrap"
+          style={{
+            color: '#f8fafc',
+            textShadow: '0 1px 3px rgba(0,0,0,0.9), 0 2px 6px rgba(0,0,0,0.9)'
+          }}
+        >
+          {data.label}
+        </span>
+      </div>
+    </div>
+  );
 }
 
-function roundRect(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  radius: number
-) {
-  const r = Math.min(radius, width / 2, height / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + width - r, y);
-  ctx.quadraticCurveTo(x + width, y, x + width, y + r);
-  ctx.lineTo(x + width, y + height - r);
-  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
-  ctx.lineTo(x + r, y + height);
-  ctx.quadraticCurveTo(x, y + height, x, y + height - r);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
-  ctx.closePath();
-}
+const nodeTypes = {
+  custom: CustomNode,
+};
 
-export default function ForceGraph({
-  graphData,
-  activeNodeId,
-  onNodeClick,
-  onBackgroundClick,
-  onGraphReady
-}: {
+export interface ForceGraphProps {
   graphData: GraphPayload;
   activeNodeId?: string | null;
+  layoutType?: LayoutTypes;
+  clusterAttribute?: string;
   onNodeClick?: (id: string) => void;
   onBackgroundClick?: () => void;
   onGraphReady?: (controls: GraphControls) => void;
-}) {
-  const graphRef = useRef<ForceGraphMethods<GraphNodeData, GraphLinkData> | undefined>(undefined);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [dimensions, setDimensions] = useState({ width: 1200, height: 760 });
-  const [palette, setPalette] = useState({
-    canvasBg: '#0f172a',
-    canvasGrid: 'rgba(148, 163, 184, 0.08)',
-    edge: 'rgba(148, 163, 184, 0.24)',
-    edgeActive: 'rgba(45, 212, 191, 0.62)',
-    nodeFill: '#e2e8f0',
-    nodeOutline: 'rgba(8, 15, 24, 0.85)',
-    nodeText: '#93c5fd',
-    accent: '#14b8a6',
-    accentBorder: 'rgba(20, 184, 166, 0.45)'
-  });
+}
+
+function FlowEngine({
+  graphData,
+  activeNodeId,
+  layoutType,
+  clusterAttribute,
+  onNodeClick,
+  onBackgroundClick,
+  onGraphReady
+}: ForceGraphProps) {
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const { fitView, setCenter, zoomIn, zoomOut, getNodes } = useReactFlow();
+
+  const [simulationRunning, setSimulationRunning] = useState(false);
 
   useEffect(() => {
-    if (!containerRef.current) return;
-
-    const observer = new ResizeObserver(entries => {
-      const entry = entries[0];
-      if (!entry) return;
-      const { width, height } = entry.contentRect;
-      setDimensions({
-        width: Math.max(320, Math.floor(width)),
-        height: Math.max(320, Math.floor(height))
-      });
+    // Calculate node degrees for sizing
+    const nodeDegree: Record<string, number> = {};
+    graphData.edges.forEach(e => {
+      nodeDegree[e.fromId] = (nodeDegree[e.fromId] || 0) + 1;
+      nodeDegree[e.toId] = (nodeDegree[e.toId] || 0) + 1;
     });
 
-    observer.observe(containerRef.current);
-    return () => observer.disconnect();
-  }, []);
+    // Generate raw nodes and edges based on real graph connectivity
+    const rawNodes = graphData.nodes.map(n => {
+      const label = String(n.content || n.type || '').trim();
+      const shortLabel = label.length > 28 ? `${label.slice(0, 25)}...` : label;
+      const x = 400 + (Math.random() - 0.5) * 100;
+      const y = 300 + (Math.random() - 0.5) * 100;
+
+      const degree = nodeDegree[n.id] || 0;
+      const size = Math.min(100, Math.max(24, 20 + degree * 12));
+
+      return {
+        id: String(n.id),
+        type: 'custom',
+        x,
+        y,
+        position: { x, y },
+        data: { label: shortLabel, type: n.type, raw: n, size }
+      };
+    });
+
+    const rawEdges = graphData.edges.map(e => ({
+      id: String(e.id),
+      source: String(e.fromId),
+      target: String(e.toId),
+      label: '',
+      type: 'default',
+      animated: false,
+      style: { stroke: '#475569', strokeWidth: 1.5, opacity: 0.35 },
+    }));
+
+    if (layoutType === 'hierarchicalTd' || layoutType === 'treeTd2d' || layoutType === 'treeLr2d') {
+      const isLR = layoutType === 'treeLr2d';
+      const g = new dagre.graphlib.Graph();
+      g.setGraph({ rankdir: isLR ? 'LR' : 'TD', marginx: 50, marginy: 50, ranksep: 120, nodesep: 150 });
+      g.setDefaultEdgeLabel(() => ({}));
+
+      rawNodes.forEach(n => g.setNode(n.id, { width: 100, height: 100 }));
+      rawEdges.forEach(e => g.setEdge(e.source, e.target));
+
+      dagre.layout(g);
+
+      const laidOutNodes = rawNodes.map(n => {
+        const nodeWithPosition = g.node(n.id);
+        return {
+          ...n,
+          position: {
+            x: nodeWithPosition.x - 50,
+            y: nodeWithPosition.y - 50,
+          }
+        };
+      });
+
+      setNodes(laidOutNodes as any);
+      setEdges(rawEdges as any);
+      setTimeout(() => fitView({ padding: 0.2, duration: 800 }), 100);
+
+    } else {
+      // Force Directed Layout
+      setSimulationRunning(true);
+      const d3Links = rawEdges.map(e => ({ ...e }));
+      const simulation = d3.forceSimulation(rawNodes as any)
+        .force('link', d3.forceLink(d3Links).id((d: any) => d.id).distance(120))
+        .force('charge', d3.forceManyBody().strength(-600))
+        .force('center', d3.forceCenter(400, 300))
+        .force('collide', d3.forceCollide().radius((d: any) => (d.data?.size || 32) / 2 + 15));
+
+      if (clusterAttribute) {
+        simulation.force('x', d3.forceX().x((d: any) => {
+          const charCode = (d.data.type || '').charCodeAt(0) || 0;
+          return 400 + ((charCode % 3) - 1) * 300;
+        }).strength(0.3));
+        simulation.force('y', d3.forceY().y((d: any) => {
+          const charCode = (d.data.type || '').charCodeAt(1) || 0;
+          return 300 + ((charCode % 3) - 1) * 300;
+        }).strength(0.3));
+      }
+
+      simulation.on('tick', () => {
+        setNodes(rawNodes.map((n: any) => ({
+          ...n,
+          position: { x: n.x, y: n.y }
+        })) as any);
+      });
+
+      simulation.on('end', () => {
+        setSimulationRunning(false);
+        fitView({ padding: 0.3, duration: 1000 });
+      });
+
+      setNodes(rawNodes.map((n: any) => ({
+        ...n,
+        position: { x: n.x, y: n.y }
+      })) as any);
+      setEdges(rawEdges as any);
+
+      return () => {
+        simulation.stop();
+        setSimulationRunning(false);
+      };
+    }
+  }, [graphData, layoutType, clusterAttribute, setNodes, setEdges, fitView]);
 
   useEffect(() => {
-    const resolvePalette = () => {
-      const styles = getComputedStyle(document.documentElement);
-      const get = (key: string, fallback: string) => styles.getPropertyValue(key).trim() || fallback;
-      setPalette({
-        canvasBg: get('--graph-canvas-bg', '#0f172a'),
-        canvasGrid: get('--graph-canvas-grid', 'rgba(148, 163, 184, 0.08)'),
-        edge: get('--graph-edge', 'rgba(148, 163, 184, 0.24)'),
-        edgeActive: get('--graph-edge-active', 'rgba(45, 212, 191, 0.62)'),
-        nodeFill: get('--graph-node-fill', '#e2e8f0'),
-        nodeOutline: get('--graph-node-outline', 'rgba(8, 15, 24, 0.85)'),
-        nodeText: get('--graph-node-text', '#93c5fd'),
-        accent: get('--accent-strong', '#14b8a6'),
-        accentBorder: get('--accent-border', 'rgba(20, 184, 166, 0.45)')
-      });
-    };
-
-    resolvePalette();
-    const observer = new MutationObserver(resolvePalette);
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['data-theme']
-    });
-    return () => observer.disconnect();
-  }, []);
-
-  const formattedData = useMemo(
-    () => ({
-      nodes: graphData.nodes.map(
-        node =>
-          ({
-            ...node,
-            name: node.content || node.type
-          }) as NodeObject<GraphNodeData>
-      ),
-      links: graphData.edges.map(
-        edge =>
-          ({
-            id: edge.id,
-            relation: edge.relation,
-            source: edge.fromId,
-            target: edge.toId
-          }) as LinkObject<GraphNodeData, GraphLinkData>
-      )
-    }),
-    [graphData]
-  );
+    setNodes(nds =>
+      nds.map(n => ({
+        ...n,
+        selected: n.id === activeNodeId,
+      }))
+    );
+    if (!simulationRunning && activeNodeId) {
+      const activeNode = getNodes().find(n => n.id === activeNodeId);
+      if (activeNode) {
+        setCenter(activeNode.position.x + 28, activeNode.position.y + 28, { zoom: 1.2, duration: 800 });
+      }
+    }
+  }, [activeNodeId, setNodes, simulationRunning, getNodes, setCenter]);
 
   const fit = useCallback(() => {
-    graphRef.current?.zoomToFit(550, 64);
-  }, []);
+    fitView({ padding: 0.2, duration: 800 });
+  }, [fitView]);
 
   const reset = useCallback(() => {
-    graphRef.current?.centerAt(0, 0, 320);
-    graphRef.current?.zoom(1, 320);
-  }, []);
+    fitView({ padding: 0.2, duration: 800 });
+  }, [fitView]);
 
-  const zoomIn = useCallback(() => {
-    const current = graphRef.current?.zoom() ?? 1;
-    graphRef.current?.zoom(Math.min(7, current * 1.22), 220);
-  }, []);
-
-  const zoomOut = useCallback(() => {
-    const current = graphRef.current?.zoom() ?? 1;
-    graphRef.current?.zoom(Math.max(0.24, current / 1.22), 220);
-  }, []);
-
-  const focusNode = useCallback(
-    (nodeId: string) => {
-      const node = formattedData.nodes.find(item => item.id === nodeId);
-      if (!node || typeof node.x !== 'number' || typeof node.y !== 'number') return;
-      graphRef.current?.centerAt(node.x, node.y, 420);
-      graphRef.current?.zoom(2.1, 420);
-    },
-    [formattedData.nodes]
-  );
+  const focusNodeObj = useCallback((nodeId: string) => {
+    const n = getNodes().find(nd => nd.id === nodeId);
+    if (n) {
+      setCenter(n.position.x + 28, n.position.y + 28, { zoom: 1.2, duration: 800 });
+    }
+  }, [getNodes, setCenter]);
 
   useEffect(() => {
-    if (!onGraphReady) return;
-    onGraphReady({
-      fit,
-      reset,
-      zoomIn,
-      zoomOut,
-      focusNode
-    });
-  }, [fit, focusNode, onGraphReady, reset, zoomIn, zoomOut]);
-
-  useEffect(() => {
-    if (!graphRef.current) return;
-
-    const linkForce = graphRef.current.d3Force('link') as ForceConfig | undefined;
-    linkForce?.distance?.(120);
-    linkForce?.strength?.(0.45);
-
-    const charge = graphRef.current.d3Force('charge') as ForceConfig | undefined;
-    charge?.strength?.(-225);
-
-    const collision = graphRef.current.d3Force('collision') as ForceConfig | undefined;
-    collision?.radius?.(17);
-  }, [formattedData.nodes.length]);
-
-  useEffect(() => {
-    fit();
-  }, [fit, graphData.nodes.length, graphData.edges.length]);
+    if (onGraphReady) {
+      onGraphReady({
+        fit,
+        reset,
+        zoomIn: () => zoomIn({ duration: 400 }),
+        zoomOut: () => zoomOut({ duration: 400 }),
+        focusNode: focusNodeObj
+      });
+    }
+  }, [fit, onGraphReady, reset, zoomIn, zoomOut, focusNodeObj]);
 
   return (
-    <div ref={containerRef} className="h-full w-full">
-      <ForceGraph2D
-        ref={graphRef}
-        width={dimensions.width}
-        height={dimensions.height}
-        graphData={formattedData}
-        nodeId="id"
-        cooldownTicks={130}
-        minZoom={0.28}
-        maxZoom={7}
-        linkCurvature={0}
-        linkDirectionalArrowLength={0}
-        linkColor={(link: LinkObject<GraphNodeData, GraphLinkData>) => {
-          const sourceId = getEndpointId(link.source);
-          const targetId = getEndpointId(link.target);
-          const isActive = sourceId === activeNodeId || targetId === activeNodeId;
-          return isActive ? palette.edgeActive : palette.edge;
-        }}
-        linkWidth={(link: LinkObject<GraphNodeData, GraphLinkData>) => {
-          const sourceId = getEndpointId(link.source);
-          const targetId = getEndpointId(link.target);
-          return sourceId === activeNodeId || targetId === activeNodeId ? 2 : 1.1;
-        }}
-        onRenderFramePre={(ctx: CanvasRenderingContext2D) => {
-          ctx.fillStyle = palette.canvasBg;
-          ctx.fillRect(0, 0, dimensions.width, dimensions.height);
-        }}
-        nodeCanvasObject={(node: NodeObject<GraphNodeData>, ctx: CanvasRenderingContext2D, globalScale: number) => {
-          const id = node.id !== undefined ? String(node.id) : '';
-          const typed = asNodeType(String(node.type ?? 'artifact'));
-          const meta = NODE_TYPE_META[typed];
-          const isActive = id === activeNodeId;
-          const x = typeof node.x === 'number' ? node.x : 0;
-          const y = typeof node.y === 'number' ? node.y : 0;
-
-          const nodeWidth = isActive ? 14 : 11;
-          const nodeHeight = isActive ? 16 : 13;
-          const left = x - nodeWidth / 2;
-          const top = y - nodeHeight / 2;
-
-          roundRect(ctx, left, top, nodeWidth, nodeHeight, 2.6);
-          ctx.fillStyle = palette.nodeFill;
-          ctx.fill();
-          ctx.lineWidth = isActive ? 1.9 : 1.1;
-          ctx.strokeStyle = isActive ? palette.accent : palette.nodeOutline;
-          ctx.stroke();
-
-          ctx.fillStyle = meta.color;
-          ctx.fillRect(left + 1.1, top + 1.1, nodeWidth - 2.2, 2.4);
-
-          ctx.fillStyle = 'rgba(148, 163, 184, 0.75)';
-          ctx.beginPath();
-          ctx.moveTo(left + nodeWidth - 4, top + 1);
-          ctx.lineTo(left + nodeWidth - 1, top + 1);
-          ctx.lineTo(left + nodeWidth - 1, top + 4);
-          ctx.closePath();
-          ctx.fill();
-
-          if (isActive) {
-            ctx.lineWidth = 2.1;
-            ctx.strokeStyle = palette.accent;
-            ctx.stroke();
-          }
-
-          if (globalScale > 1 || isActive) {
-            const label = String(node.content || node.name || meta.label || '').trim();
-            const shortLabel = label.length > 22 ? `${label.slice(0, 19)}...` : label;
-            const fontSize = Math.max(8 / globalScale, 5.4);
-            ctx.font = `${isActive ? '600' : '500'} ${fontSize}px Manrope, Segoe UI, sans-serif`;
-            ctx.fillStyle = palette.nodeText;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'top';
-            ctx.fillText(shortLabel, x, y + nodeHeight / 2 + 3.5);
-          }
-        }}
-        nodePointerAreaPaint={(
-          node: NodeObject<GraphNodeData>,
-          color: string,
-          ctx: CanvasRenderingContext2D
-        ) => {
-          const x = typeof node.x === 'number' ? node.x : 0;
-          const y = typeof node.y === 'number' ? node.y : 0;
-          ctx.fillStyle = color;
-          ctx.beginPath();
-          ctx.arc(x, y, 12, 0, 2 * Math.PI, false);
-          ctx.fill();
-        }}
-        onNodeClick={(node: NodeObject<GraphNodeData>) => {
-          if (node.id === undefined) return;
-          const id = String(node.id);
-          focusNode(id);
-          onNodeClick?.(id);
-        }}
-        onBackgroundClick={() => onBackgroundClick?.()}
+    <ReactFlow
+      nodes={nodes}
+      edges={edges}
+      nodeTypes={nodeTypes}
+      onNodesChange={onNodesChange}
+      onEdgesChange={onEdgesChange}
+      onNodeClick={(_, node) => {
+        if (onNodeClick) onNodeClick(node.id);
+      }}
+      onPaneClick={() => {
+        if (onBackgroundClick) onBackgroundClick();
+      }}
+      fitView
+      fitViewOptions={{ padding: 0.2 }}
+      proOptions={{ hideAttribution: true }}
+      className="bg-transparent"
+    >
+      <Background color="#cbd5e1" gap={24} size={2} style={{ opacity: 0.15 }} />
+      <Controls
+        className="!bg-white !backdrop-blur-none !shadow-lg !overflow-hidden !border-none !rounded-full [&_button]:!bg-white [&_button]:!border-b [&_button]:!border-gray-100 hover:[&_button]:!bg-gray-50 last:[&_button]:!border-b-0 py-1 [&_svg]:!fill-slate-700"
+        showInteractive={false}
       />
+    </ReactFlow>
+  );
+}
+
+export default function ForceGraph(props: ForceGraphProps) {
+  return (
+    <div className="absolute inset-0 h-full w-full bg-[#070d18] rounded-lg overflow-hidden">
+      <ReactFlowProvider>
+        <FlowEngine {...props} />
+      </ReactFlowProvider>
     </div>
   );
 }

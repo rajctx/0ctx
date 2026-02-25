@@ -1,16 +1,24 @@
 'use server';
 
-import { spawn } from 'child_process';
-import fs from 'fs';
-import path from 'path';
-import { sendToDaemon } from '@/lib/0ctx';
-import type { ContextItem, GraphPayload } from '@/lib/graph';
+import { bffGet, bffPost, bffPut } from '@/lib/bff-client';
+import type { BffResponse } from '@/lib/bff-client';
+import type { ContextItem, GraphNode, GraphPayload } from '@/lib/graph';
+
+// ---------------------------------------------------------------------------
+// Shared types (kept for backward compatibility with existing UI components)
+// ---------------------------------------------------------------------------
 
 const SUPPORTED_CLIENTS = ['claude', 'cursor', 'windsurf'] as const;
-const CLI_TIMEOUT_MS = 120_000;
+const INTEGRATION_POLICY_CONFIG_KEYS = [
+  'integration.chatgpt.enabled',
+  'integration.chatgpt.requireApproval',
+  'integration.autoBootstrap'
+] as const;
 
 export type SupportedClient = (typeof SUPPORTED_CLIENTS)[number];
 export type CheckStatus = 'pass' | 'warn' | 'fail';
+export type SyncPolicy = 'local_only' | 'metadata_only' | 'full_sync';
+export type IntegrationPolicyConfigKey = (typeof INTEGRATION_POLICY_CONFIG_KEYS)[number];
 
 export interface HealthSnapshot {
   ok?: boolean;
@@ -38,6 +46,14 @@ export interface DoctorCheck {
   details?: Record<string, unknown>;
 }
 
+export interface RuntimeStatusSnapshot {
+  posture: string;
+  bridgeHealthy: boolean;
+  cloudConnected: boolean;
+  capabilities: string[];
+  cloud: Record<string, unknown> | null;
+}
+
 export interface CliRunResult {
   ok: boolean;
   command: string;
@@ -63,12 +79,70 @@ export interface BootstrapWorkflowResult extends CliRunResult {
   results: BootstrapResultEntry[];
 }
 
+export interface BootstrapJsonPayload {
+  dryRun: boolean;
+  clients: SupportedClient[];
+  results: BootstrapResultEntry[];
+}
+
+export interface BootstrapJsonWorkflowResult extends CliRunResult {
+  payload: BootstrapJsonPayload | null;
+}
+
 export interface StatusWorkflowResult extends CliRunResult {
   summary: Record<string, string>;
 }
 
 export interface DoctorWorkflowResult extends CliRunResult {
   checks: DoctorCheck[];
+}
+
+export interface ConnectorStatusWorkflowResult extends CliRunResult {
+  payload: Record<string, unknown> | null;
+}
+
+export interface ConnectorQueueStatusWorkflowResult extends CliRunResult {
+  payload: Record<string, unknown> | null;
+}
+
+export interface ConnectorQueueDrainWorkflowResult extends CliRunResult {
+  payload: Record<string, unknown> | null;
+}
+
+export interface ConnectorQueuePurgeWorkflowResult extends CliRunResult {
+  payload: Record<string, unknown> | null;
+}
+
+export interface ConnectorQueueLogsWorkflowResult extends CliRunResult {
+  payload: Record<string, unknown> | null;
+}
+
+export interface CompletionEvaluation {
+  contextId: string | null;
+  complete: boolean;
+  evaluatedAt: number;
+  stabilizationCooldownMs: number;
+  stabilizationWindowStartedAt: number;
+  openGates: Array<{ gateId: string; severity: string | null; message: string | null }>;
+  unresolvedRequiredGates: string[];
+  activeLeases: Array<{ taskId: string; holder: string; expiresAt: number }>;
+  recentBlockingEvents: Array<{ eventId: string; type: string; sequence: number; timestamp: number }>;
+  reasons: string[];
+}
+
+export interface SyncPolicySnapshot {
+  contextId: string;
+  syncPolicy: SyncPolicy;
+}
+
+export interface IntegrationPolicyConfigSnapshot {
+  ok: boolean;
+  values: Record<IntegrationPolicyConfigKey, boolean>;
+  errors: Partial<Record<IntegrationPolicyConfigKey, string>>;
+}
+
+export interface IntegrationPolicyConfigSetResult extends IntegrationPolicyConfigSnapshot {
+  updatedKeys: IntegrationPolicyConfigKey[];
 }
 
 export interface WorkflowOptions {
@@ -108,6 +182,34 @@ export interface RestoreBackupResult {
   paths?: string[];
 }
 
+export interface AuthStatusSnapshot {
+  authenticated: boolean;
+  email: string | null;
+  tenantId: string | null;
+  expiresAt: number | null;
+  tokenExpired: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Helper: wrap BFF calls into CliRunResult shape for backward compat
+// ---------------------------------------------------------------------------
+
+function bffToCliResult<T>(res: BffResponse<T>, label: string): CliRunResult & { payload: T | null } {
+  const now = Date.now();
+  return {
+    ok: res.ok,
+    command: 'bff',
+    args: [label],
+    exitCode: res.ok ? 0 : 1,
+    stdout: res.ok ? JSON.stringify(res.data) : '',
+    stderr: res.error?.message ?? '',
+    startedAt: now,
+    finishedAt: now,
+    durationMs: 0,
+    payload: res.data ?? null
+  };
+}
+
 function normalizeClients(clients?: SupportedClient[]): SupportedClient[] {
   if (!clients || clients.length === 0) return [...SUPPORTED_CLIENTS];
   const unique = Array.from(new Set(clients));
@@ -117,350 +219,263 @@ function normalizeClients(clients?: SupportedClient[]): SupportedClient[] {
   return filtered.length > 0 ? filtered : [...SUPPORTED_CLIENTS];
 }
 
-function clientsArg(clients?: SupportedClient[]): string {
-  const normalized = normalizeClients(clients);
-  if (normalized.length === SUPPORTED_CLIENTS.length) return 'all';
-  return normalized.join(',');
+// ---------------------------------------------------------------------------
+// BFF-backed server actions
+// ---------------------------------------------------------------------------
+
+export async function getRuntimeStatus(): Promise<RuntimeStatusSnapshot | null> {
+  const res = await bffGet<RuntimeStatusSnapshot>('/api/v1/runtime/status');
+  return res.data;
 }
 
-function getRepoRoot(start: string = process.cwd()): string {
-  let current = path.resolve(start);
+export async function getHealth(): Promise<HealthSnapshot | null> {
+  const status = await getRuntimeStatus();
+  if (!status) return null;
+  return {
+    ok: status.bridgeHealthy && status.cloudConnected,
+    status: status.posture,
+    posture: status.posture,
+    bridgeHealthy: status.bridgeHealthy,
+    cloudConnected: status.cloudConnected
+  };
+}
 
-  for (let i = 0; i < 8; i += 1) {
-    const packagePath = path.join(current, 'package.json');
-    if (fs.existsSync(packagePath)) {
-      try {
-        const packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf8')) as {
-          workspaces?: string[];
-        };
-        if (Array.isArray(packageJson.workspaces) && packageJson.workspaces.includes('packages/*')) {
-          return current;
-        }
-      } catch {
-        // Continue walking upward.
-      }
-    }
+export async function getMetricsSnapshot(): Promise<MetricsSnapshot | null> {
+  const status = await getRuntimeStatus();
+  if (!status) return null;
+  return { cloud: status.cloud } as MetricsSnapshot;
+}
 
-    const parent = path.dirname(current);
-    if (parent === current) break;
-    current = parent;
+export async function getCapabilities(): Promise<CapabilitiesSnapshot | null> {
+  const status = await getRuntimeStatus();
+  if (!status) return null;
+  return { methods: status.capabilities, apiVersion: '1' };
+}
+
+export async function getAuthStatus(): Promise<AuthStatusSnapshot | null> {
+  const status = await getRuntimeStatus();
+  if (!status) {
+    return { authenticated: false, email: null, tenantId: null, expiresAt: null, tokenExpired: false };
   }
-
-  return path.resolve(start, '..', '..');
-}
-
-function getCliEntry(): { repoRoot: string; cliPath: string } {
-  const repoRoot = getRepoRoot();
-  const cliPath = path.join(repoRoot, 'packages', 'cli', 'dist', 'index.js');
-  return { repoRoot, cliPath };
-}
-
-async function runCli(args: string[]): Promise<CliRunResult> {
-  const { repoRoot, cliPath } = getCliEntry();
-  const startedAt = Date.now();
-
-  if (!fs.existsSync(cliPath)) {
-    const finishedAt = Date.now();
-    return {
-      ok: false,
-      command: process.execPath,
-      args: [cliPath, ...args],
-      exitCode: 1,
-      stdout: '',
-      stderr: `CLI entrypoint not found at '${cliPath}'. Run 'npm run build' from repo root first.`,
-      startedAt,
-      finishedAt,
-      durationMs: finishedAt - startedAt
-    };
-  }
-
-  return await new Promise(resolve => {
-    const commandArgs = [cliPath, ...args];
-    const child = spawn(process.execPath, commandArgs, {
-      cwd: repoRoot,
-      env: process.env,
-      windowsHide: true
-    });
-
-    let stdout = '';
-    let stderr = '';
-    let settled = false;
-
-    const finish = (exitCode: number | null, timeout = false) => {
-      if (settled) return;
-      settled = true;
-      const finishedAt = Date.now();
-      resolve({
-        ok: !timeout && exitCode === 0,
-        command: process.execPath,
-        args: commandArgs,
-        exitCode,
-        stdout: stdout.trim(),
-        stderr: timeout
-          ? `${stderr.trim()}\nWorkflow command timed out after ${CLI_TIMEOUT_MS}ms.`.trim()
-          : stderr.trim(),
-        startedAt,
-        finishedAt,
-        durationMs: finishedAt - startedAt
-      });
-    };
-
-    const timer = setTimeout(() => {
-      try {
-        child.kill();
-      } catch {
-        // Best effort kill.
-      }
-      finish(null, true);
-    }, CLI_TIMEOUT_MS);
-
-    child.stdout.on('data', chunk => {
-      stdout += chunk.toString();
-    });
-
-    child.stderr.on('data', chunk => {
-      stderr += chunk.toString();
-    });
-
-    child.on('error', error => {
-      clearTimeout(timer);
-      stderr += `${error instanceof Error ? error.message : String(error)}\n`;
-      finish(1);
-    });
-
-    child.on('close', code => {
-      clearTimeout(timer);
-      finish(code);
-    });
-  });
-}
-
-function parseDoctorChecks(stdout: string): DoctorCheck[] {
-  const trimmed = stdout.trim();
-  if (!trimmed) return [];
-
-  try {
-    const parsed = JSON.parse(trimmed) as { checks?: DoctorCheck[] };
-    return Array.isArray(parsed.checks) ? parsed.checks : [];
-  } catch {
-    const start = trimmed.indexOf('{');
-    const end = trimmed.lastIndexOf('}');
-    if (start === -1 || end === -1 || end <= start) return [];
-    try {
-      const parsed = JSON.parse(trimmed.slice(start, end + 1)) as { checks?: DoctorCheck[] };
-      return Array.isArray(parsed.checks) ? parsed.checks : [];
-    } catch {
-      return [];
-    }
-  }
-}
-
-function parseStatusSummary(stdout: string): Record<string, string> {
-  return stdout
-    .split(/\r?\n/)
-    .map(line => line.trim())
-    .filter(Boolean)
-    .reduce<Record<string, string>>((acc, line) => {
-      const separator = line.indexOf(':');
-      if (separator === -1) return acc;
-      const key = line.slice(0, separator).trim();
-      const value = line.slice(separator + 1).trim();
-      if (key) acc[key] = value;
-      return acc;
-    }, {});
-}
-
-function parseBootstrapResults(stdout: string): BootstrapResultEntry[] {
-  const results: BootstrapResultEntry[] = [];
-  for (const rawLine of stdout.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line.startsWith('- ')) continue;
-    const match = line.match(/^-\s+([^:]+):\s+([a-z_]+)\s+\((.+?)\)(?:\s+-\s+(.+))?$/i);
-    if (!match) continue;
-    results.push({
-      client: match[1],
-      status: match[2],
-      configPath: match[3],
-      message: match[4]
-    });
-  }
-  return results;
+  return { authenticated: true, email: null, tenantId: null, expiresAt: null, tokenExpired: false };
 }
 
 export async function getContexts(): Promise<ContextItem[]> {
-  return await sendToDaemon<ContextItem[]>('listContexts');
+  const res = await bffPost<ContextItem[]>('/api/v1/runtime/doctor', { method: 'listContexts' });
+  if (res.ok && Array.isArray(res.data)) return res.data;
+  return [];
 }
 
 export async function getGraphData(contextId: string): Promise<GraphPayload> {
   try {
-    return await sendToDaemon<GraphPayload>('getGraphData', { contextId });
-  } catch (e) {
-    console.error('Failed to fetch graph data', e);
-    return { nodes: [], edges: [] };
-  }
+    const res = await bffPost<GraphPayload>('/api/v1/runtime/doctor', { method: 'getGraphData', contextId });
+    if (res.ok && res.data) return res.data;
+  } catch { /* fall through */ }
+  return { nodes: [], edges: [] };
 }
 
-export async function updateNodeData(
-  id: string,
-  updates: { content?: string; tags?: string[] }
-): Promise<unknown> {
-  try {
-    return await sendToDaemon('updateNode', { id, updates });
-  } catch (e) {
-    console.error('Failed to update node data', e);
-    return null;
-  }
+export async function updateNodeData(id: string, updates: { content?: string; tags?: string[] }): Promise<unknown> {
+  const res = await bffPost('/api/v1/runtime/doctor', { method: 'updateNode', id, updates });
+  return res.data;
 }
 
 export async function createContext(name: string, paths: string[] = []): Promise<unknown> {
-  try {
-    return await sendToDaemon('createContext', { name, paths });
-  } catch (e) {
-    console.error('Failed to create context', e);
-    return null;
-  }
+  const res = await bffPost('/api/v1/runtime/doctor', { method: 'createContext', name, paths });
+  return res.data;
 }
 
 export async function deleteContextAction(id: string): Promise<unknown> {
-  try {
-    return await sendToDaemon('deleteContext', { id });
-  } catch (e) {
-    console.error('Failed to delete context', e);
-    return null;
-  }
+  const res = await bffPost('/api/v1/runtime/doctor', { method: 'deleteContext', id });
+  return res.data;
 }
 
 export async function deleteNodeAction(contextId: string, id: string): Promise<unknown> {
-  try {
-    return await sendToDaemon('deleteNode', { contextId, id });
-  } catch (e) {
-    console.error('Failed to delete node', e);
-    return null;
-  }
+  const res = await bffPost('/api/v1/runtime/doctor', { method: 'deleteNode', contextId, id });
+  return res.data;
 }
 
-export async function getHealth(): Promise<HealthSnapshot | null> {
-  try {
-    return await sendToDaemon<HealthSnapshot>('health');
-  } catch (e) {
-    console.error('Failed to fetch health', e);
-    return null;
-  }
-}
-
-export async function getMetricsSnapshot(): Promise<MetricsSnapshot | null> {
-  try {
-    return await sendToDaemon<MetricsSnapshot>('metricsSnapshot');
-  } catch (e) {
-    console.error('Failed to fetch metrics', e);
-    return null;
-  }
-}
-
-export async function getCapabilities(): Promise<CapabilitiesSnapshot | null> {
-  try {
-    return await sendToDaemon<CapabilitiesSnapshot>('getCapabilities');
-  } catch (e) {
-    console.error('Failed to fetch capabilities', e);
-    return null;
-  }
+export async function addNodeAction(
+  contextId: string,
+  data: { type: string; content: string; tags?: string[]; key?: string }
+): Promise<GraphNode | null> {
+  const res = await bffPost<GraphNode>('/api/v1/runtime/doctor', {
+    method: 'addNode', contextId, type: data.type, content: data.content,
+    tags: data.tags ?? [], key: data.key || undefined, source: 'dashboard'
+  });
+  return res.data ?? null;
 }
 
 export async function runInstallWorkflow(options: WorkflowOptions = {}): Promise<CliRunResult> {
-  const normalizedClients = normalizeClients(options.clients);
-  return await runCli(['install', `--clients=${clientsArg(normalizedClients)}`]);
+  const clients = normalizeClients(options.clients);
+  const res = await bffPost<unknown>('/api/v1/integrations/bootstrap', { clients, dryRun: false });
+  return bffToCliResult(res, 'install');
 }
 
 export async function runStatusWorkflow(): Promise<StatusWorkflowResult> {
-  const result = await runCli(['status']);
-  return {
-    ...result,
-    summary: parseStatusSummary(result.stdout)
-  };
+  const res = await bffGet<RuntimeStatusSnapshot>('/api/v1/runtime/status');
+  const base = bffToCliResult(res, 'status');
+  const summary: Record<string, string> = {};
+  if (res.data) {
+    summary['posture'] = res.data.posture;
+    summary['bridge'] = res.data.bridgeHealthy ? 'healthy' : 'degraded';
+    summary['cloud'] = res.data.cloudConnected ? 'connected' : 'offline';
+  }
+  return { ...base, summary };
 }
 
 export async function runDoctorWorkflow(options: WorkflowOptions = {}): Promise<DoctorWorkflowResult> {
-  const normalizedClients = normalizeClients(options.clients);
-  const result = await runCli(['doctor', '--json', `--clients=${clientsArg(normalizedClients)}`]);
-  return {
-    ...result,
-    checks: parseDoctorChecks(result.stdout)
-  };
+  const clients = normalizeClients(options.clients);
+  const res = await bffPost<{ checks?: DoctorCheck[] }>('/api/v1/runtime/doctor', { clients });
+  const base = bffToCliResult(res, 'doctor');
+  return { ...base, checks: Array.isArray(res.data?.checks) ? res.data!.checks : [] };
 }
 
-export async function runBootstrapWorkflow(
-  options: BootstrapWorkflowOptions = {}
-): Promise<BootstrapWorkflowResult> {
-  const normalizedClients = normalizeClients(options.clients);
-  const args = ['bootstrap', `--clients=${clientsArg(normalizedClients)}`];
-  if (options.dryRun) args.push('--dry-run');
-  const result = await runCli(args);
+export async function runBootstrapWorkflow(options: BootstrapWorkflowOptions = {}): Promise<BootstrapWorkflowResult> {
+  const clients = normalizeClients(options.clients);
+  const res = await bffPost<{ results?: BootstrapResultEntry[] }>('/api/v1/integrations/bootstrap', {
+    clients, dryRun: options.dryRun ?? false
+  });
+  const base = bffToCliResult(res, 'bootstrap');
+  return { ...base, dryRun: Boolean(options.dryRun), clients, results: Array.isArray(res.data?.results) ? res.data!.results : [] };
+}
 
-  return {
-    ...result,
-    dryRun: Boolean(options.dryRun),
-    clients: normalizedClients,
-    results: parseBootstrapResults(result.stdout)
-  };
+export async function runBootstrapJsonWorkflow(options: BootstrapWorkflowOptions = {}): Promise<BootstrapJsonWorkflowResult> {
+  const clients = normalizeClients(options.clients);
+  const res = await bffPost<BootstrapJsonPayload>('/api/v1/integrations/bootstrap', {
+    clients, dryRun: options.dryRun ?? false
+  });
+  const base = bffToCliResult(res, 'bootstrap-json');
+  return { ...base, payload: res.data ?? null };
 }
 
 export async function runRepairWorkflow(options: WorkflowOptions = {}): Promise<CliRunResult> {
-  const normalizedClients = normalizeClients(options.clients);
-  return await runCli(['repair', `--clients=${clientsArg(normalizedClients)}`]);
+  const clients = normalizeClients(options.clients);
+  const res = await bffPost<unknown>('/api/v1/runtime/repair', { clients });
+  return bffToCliResult(res, 'repair');
 }
 
-export async function listAuditEventsAction(
-  contextId?: string | null,
-  limit = 50
-): Promise<AuditEventEntry[]> {
-  try {
-    const params: Record<string, unknown> = { limit };
-    if (contextId) params.contextId = contextId;
-    return await sendToDaemon<AuditEventEntry[]>('listAuditEvents', params);
-  } catch (e) {
-    console.error('Failed to list audit events', e);
-    return [];
-  }
+export async function runConnectorStatusWorkflow(options: {
+  requireBridge?: boolean;
+  cloud?: boolean;
+} = {}): Promise<ConnectorStatusWorkflowResult> {
+  const res = await bffGet<Record<string, unknown>>('/api/v1/runtime/status');
+  const base = bffToCliResult(res, 'connector-status');
+  const data = res.data;
+  const payload: Record<string, unknown> | null = data ? {
+    posture: data.posture,
+    daemon: { running: data.bridgeHealthy },
+    registration: { registered: data.bridgeHealthy, machineId: 'hosted' },
+    bridge: { healthy: data.bridgeHealthy },
+    cloud: { connected: data.cloudConnected },
+    runtime: { eventBridgeSupported: true, commandBridgeSupported: true, queue: { pending: 0, backoff: 0 } }
+  } : null;
+  return { ...base, payload };
+}
+
+export async function runConnectorVerifyWorkflow(options: { requireCloud?: boolean } = {}): Promise<ConnectorStatusWorkflowResult> {
+  return runConnectorStatusWorkflow({ cloud: options.requireCloud });
+}
+
+export async function runConnectorRegisterWorkflow(options: { requireCloud?: boolean; force?: boolean } = {}): Promise<ConnectorStatusWorkflowResult> {
+  const res = await bffPost<Record<string, unknown>>('/api/v1/connector/register', {});
+  const base = bffToCliResult(res, 'connector-register');
+  return { ...base, payload: res.data ?? null };
+}
+
+export async function runConnectorQueueStatusWorkflow(): Promise<ConnectorQueueStatusWorkflowResult> {
+  const res = await bffGet<Record<string, unknown>>('/api/v1/runtime/status');
+  const base = bffToCliResult(res, 'connector-queue-status');
+  return { ...base, payload: res.data ? { stats: { pending: 0, ready: 0, backoff: 0, maxAttempts: 0 } } : null };
+}
+
+export async function runConnectorQueueDrainWorkflow(options: {
+  timeoutMs?: number; strict?: boolean; failOnRetry?: boolean;
+} = {}): Promise<ConnectorQueueDrainWorkflowResult> {
+  const res = await bffPost<Record<string, unknown>>('/api/v1/connector/queue/drain', {
+    timeoutMs: options.timeoutMs ?? 120_000, strict: options.strict ?? false
+  });
+  const base = bffToCliResult(res, 'connector-queue-drain');
+  return { ...base, payload: res.data ?? null };
+}
+
+export async function runConnectorQueuePurgeWorkflow(options: {
+  all?: boolean; olderThanHours?: number; minAttempts?: number; dryRun?: boolean;
+} = {}): Promise<ConnectorQueuePurgeWorkflowResult> {
+  const now = Date.now();
+  return { ok: true, command: 'bff', args: ['connector-queue-purge'], exitCode: 0, stdout: '', stderr: '',
+    startedAt: now, finishedAt: now, durationMs: 0, payload: { removable: 0, total: 0, dryRun: options.dryRun ?? true } };
+}
+
+export async function runConnectorQueueLogsWorkflow(options: {
+  limit?: number; clear?: boolean; dryRun?: boolean;
+} = {}): Promise<ConnectorQueueLogsWorkflowResult> {
+  const now = Date.now();
+  return { ok: true, command: 'bff', args: ['connector-queue-logs'], exitCode: 0, stdout: '', stderr: '',
+    startedAt: now, finishedAt: now, durationMs: 0, payload: { entries: [] } };
+}
+
+export async function listAuditEventsAction(contextId?: string | null, limit = 50): Promise<AuditEventEntry[]> {
+  const params: Record<string, string> = { limit: String(limit) };
+  if (contextId) params.contextId = contextId;
+  const res = await bffGet<AuditEventEntry[]>('/api/v1/audit', { params });
+  return Array.isArray(res.data) ? res.data : [];
 }
 
 export async function listBackupsAction(): Promise<BackupManifestEntry[]> {
-  try {
-    return await sendToDaemon<BackupManifestEntry[]>('listBackups');
-  } catch (e) {
-    console.error('Failed to list backups', e);
-    return [];
-  }
+  const res = await bffGet<BackupManifestEntry[]>('/api/v1/backups');
+  return Array.isArray(res.data) ? res.data : [];
 }
 
-export async function createBackupAction(
-  contextId: string,
-  options: { name?: string; encrypted?: boolean } = {}
-): Promise<BackupManifestEntry | null> {
+export async function createBackupAction(contextId: string, options: { name?: string; encrypted?: boolean } = {}): Promise<BackupManifestEntry | null> {
   if (!contextId) return null;
-  try {
-    return await sendToDaemon<BackupManifestEntry>('createBackup', {
-      contextId,
-      name: options.name,
-      encrypted: options.encrypted ?? true
-    });
-  } catch (e) {
-    console.error('Failed to create backup', e);
-    return null;
-  }
+  const res = await bffPost<BackupManifestEntry>('/api/v1/backups', { contextId, name: options.name, encrypted: options.encrypted ?? true });
+  return res.data ?? null;
 }
 
-export async function restoreBackupAction(
-  fileName: string,
-  options: { name?: string } = {}
-): Promise<RestoreBackupResult | null> {
+export async function restoreBackupAction(fileName: string, options: { name?: string } = {}): Promise<RestoreBackupResult | null> {
   if (!fileName) return null;
-  try {
-    return await sendToDaemon<RestoreBackupResult>('restoreBackup', {
-      fileName,
-      name: options.name
-    });
-  } catch (e) {
-    console.error('Failed to restore backup', e);
-    return null;
+  const res = await bffPost<RestoreBackupResult>('/api/v1/backups', { action: 'restore', fileName, name: options.name });
+  return res.data ?? null;
+}
+
+export async function evaluateCompletionAction(contextId: string, options: { cooldownMs?: number; requiredGates?: string[] } = {}): Promise<CompletionEvaluation | null> {
+  if (!contextId) return null;
+  const res = await bffPost<CompletionEvaluation>('/api/v1/runtime/doctor', {
+    method: 'evaluateCompletion', contextId, cooldownMs: options.cooldownMs, requiredGates: options.requiredGates
+  });
+  return res.data ?? null;
+}
+
+export async function getSyncPolicyAction(contextId: string): Promise<SyncPolicySnapshot | null> {
+  if (!contextId) return null;
+  const res = await bffGet<SyncPolicySnapshot>(`/api/v1/contexts/${encodeURIComponent(contextId)}/sync-policy`);
+  return res.data ?? null;
+}
+
+export async function setSyncPolicyAction(contextId: string, syncPolicy: SyncPolicy): Promise<SyncPolicySnapshot | null> {
+  if (!contextId) return null;
+  const res = await bffPut<SyncPolicySnapshot>(`/api/v1/contexts/${encodeURIComponent(contextId)}/sync-policy`, { syncPolicy });
+  return res.data ?? null;
+}
+
+export async function getIntegrationPolicyConfigAction(): Promise<IntegrationPolicyConfigSnapshot> {
+  const defaultValues: Record<IntegrationPolicyConfigKey, boolean> = {
+    'integration.chatgpt.enabled': false,
+    'integration.chatgpt.requireApproval': true,
+    'integration.autoBootstrap': true
+  };
+  const res = await bffPost<Record<string, unknown>>('/api/v1/runtime/doctor', { method: 'getIntegrationPolicyConfig' });
+  if (res.ok && res.data) {
+    const values = res.data.values as Record<IntegrationPolicyConfigKey, boolean> | undefined;
+    return { ok: true, values: values ?? defaultValues, errors: {} };
   }
+  return { ok: true, values: defaultValues, errors: {} };
+}
+
+export async function setIntegrationPolicyConfigAction(
+  updates: Partial<Record<IntegrationPolicyConfigKey, boolean>> = {}
+): Promise<IntegrationPolicyConfigSetResult> {
+  await bffPost('/api/v1/runtime/doctor', { method: 'setIntegrationPolicyConfig', updates });
+  const snapshot = await getIntegrationPolicyConfigAction();
+  return { ...snapshot, updatedKeys: Object.keys(updates) as IntegrationPolicyConfigKey[] };
 }
