@@ -15,6 +15,7 @@ This document is the canonical env-var contract for hosted UI + connector/cloud 
 | `AUTH0_CLIENT_SECRET` | Yes | Auth0 application client secret. |
 | `CTX_CONTROL_PLANE_URL` | Yes | Base URL for cloud control-plane APIs used by BFF. |
 | `CTX_UI_BASE_URL` | Yes | Canonical hosted UI URL (handoff/links). |
+| `DATABASE_URL` | Yes | PostgreSQL connection string for Prisma ORM (e.g. `postgresql://user:pass@host:5432/db`). |
 | `NODE_ENV` | Yes | Runtime mode (`production`, `development`, `test`). |
 
 ## Optional (Recommended)

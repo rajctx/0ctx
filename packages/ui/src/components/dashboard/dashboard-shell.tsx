@@ -6,7 +6,8 @@ import { usePathname } from 'next/navigation';
 import {
   Activity,
   BookOpen,
-  Bot,
+  ChevronDown,
+  ChevronRight,
   Database,
   HelpCircle,
   History,
@@ -14,9 +15,7 @@ import {
   Loader2,
   LogOut,
   Plus,
-  PlugZap,
   RefreshCw,
-  ServerCog,
   Settings2,
   ShieldCheck
 } from 'lucide-react';
@@ -33,20 +32,6 @@ const ROUTE_ITEMS = [
     label: 'Workspace',
     subtitle: 'Graph + Inspector',
     icon: LayoutGrid
-  },
-  {
-    href: '/dashboard/operations',
-    id: 'operations',
-    label: 'Operations',
-    subtitle: 'Runbook + Diagnostics',
-    icon: ServerCog
-  },
-  {
-    href: '/dashboard/integrations',
-    id: 'integrations',
-    label: 'Integrations',
-    subtitle: 'MCP + Connector',
-    icon: PlugZap
   },
   {
     href: '/dashboard/audit',
@@ -74,12 +59,6 @@ const ROUTE_ITEMS = [
 const SUPPORT_ITEMS = [
   { id: 'docs', label: 'Documentation', icon: BookOpen, href: 'https://github.com/0ctx-com/0ctx' },
   { id: 'help', label: 'Help Center', icon: HelpCircle, href: 'https://github.com/0ctx-com/0ctx/issues' }
-] as const;
-
-const EXTENSIONS = [
-  { id: 'claude', label: 'Claude', client: 'claude' },
-  { id: 'cursor', label: 'Cursor', client: 'cursor' },
-  { id: 'windsurf', label: 'Windsurf', client: 'windsurf' }
 ] as const;
 
 export function DashboardShell({ children }: { children: ReactNode }) {
@@ -159,84 +138,96 @@ export function DashboardShell({ children }: { children: ReactNode }) {
               <nav className="mt-2 space-y-1">
                 {ROUTE_ITEMS.map(item => {
                   const selected = pathname === item.href || pathname.startsWith(`${item.href}/`);
-                  const gated = item.id === 'integrations' && !connectorRegistered;
-                  const degraded = item.id === 'operations' && !connectorBridgeHealthy;
+                  const isWorkspace = item.id === 'workspace';
                   return (
-                    <Link
-                      key={item.id}
-                      href={item.href}
-                      className={cn(
-                        'flex items-start gap-2 rounded-lg px-2.5 py-2 transition-colors',
-                        selected
-                          ? 'bg-[var(--surface-subtle)] text-[var(--text-primary)]'
-                          : 'text-[var(--text-muted)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)]',
-                        degraded ? 'border border-amber-400/20' : '',
-                        gated ? 'opacity-80' : ''
-                      )}
-                    >
-                      <item.icon className="mt-0.5 h-4 w-4" />
-                      <span className="min-w-0">
-                        <span className="block text-sm font-medium">{item.label}</span>
-                        <span className="block truncate text-[11px] text-[var(--text-muted)]">
-                          {item.subtitle}
-                          {gated ? ' · setup required' : degraded ? ' · degraded' : ''}
+                    <div key={item.id}>
+                      <Link
+                        href={item.href}
+                        className={cn(
+                          'flex items-start gap-2 rounded-lg px-2.5 py-2 transition-colors',
+                          selected
+                            ? 'bg-[var(--surface-subtle)] text-[var(--text-primary)]'
+                            : 'text-[var(--text-muted)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)]'
+                        )}
+                      >
+                        <item.icon className="mt-0.5 h-4 w-4" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-medium">{item.label}</span>
+                          <span className="block truncate text-[11px] text-[var(--text-muted)]">
+                            {item.subtitle}
+                          </span>
                         </span>
-                      </span>
-                    </Link>
+                        {isWorkspace && (
+                          <span className="mt-0.5">
+                            {selected ? (
+                              <ChevronDown className="h-3.5 w-3.5 text-[var(--text-muted)]" />
+                            ) : (
+                              <ChevronRight className="h-3.5 w-3.5 text-[var(--text-muted)]" />
+                            )}
+                          </span>
+                        )}
+                      </Link>
+
+                      {/* Context sub-sidebar nested under Workspace */}
+                      {isWorkspace && selected && (
+                        <div className="ml-6 mt-1 space-y-1 border-l border-[var(--border-muted)] pl-2">
+                          <div className="flex items-center justify-between px-1 py-1">
+                            <span className="text-[10px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
+                              Contexts
+                            </span>
+                            <span className="text-[10px] text-[var(--text-muted)]">{contexts.length}</span>
+                          </div>
+                          <div className="max-h-48 space-y-0.5 overflow-y-auto">
+                            {contexts.map(context => (
+                              <button
+                                key={context.id}
+                                type="button"
+                                onClick={() => setActiveContextId(context.id)}
+                                className={cn(
+                                  'w-full rounded-md border px-2 py-1.5 text-left transition-colors',
+                                  activeContextId === context.id
+                                    ? 'border-[var(--accent-border)] bg-[var(--accent-soft)]'
+                                    : 'border-transparent text-[var(--text-muted)] hover:border-[var(--border-muted)] hover:bg-[var(--surface-subtle)]'
+                                )}
+                              >
+                                <p className="truncate text-xs font-medium">{context.name}</p>
+                                <p className="text-[10px] text-[var(--text-muted)]">
+                                  {formatTimestamp(context.createdAt)}
+                                </p>
+                              </button>
+                            ))}
+                          </div>
+                          <div className="mt-1">
+                            {isCreatingContext ? (
+                              <form onSubmit={event => void handleCreateContext(event)}>
+                                <input
+                                  autoFocus
+                                  value={newContextName}
+                                  onChange={event => setNewContextName(event.target.value)}
+                                  onBlur={() => {
+                                    void handleCreateContext();
+                                  }}
+                                  placeholder="Context name"
+                                  className="h-7 w-full rounded-md border border-[var(--border-muted)] bg-[var(--surface-raised)] px-2 text-xs outline-none focus:ring-2 focus:ring-[var(--focus-ring)]"
+                                />
+                              </form>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setIsCreatingContext(true)}
+                                className="flex h-7 w-full items-center justify-center gap-1 rounded-md border border-dashed border-[var(--border-strong)] text-[10px] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                              >
+                                <Plus className="h-3 w-3" />
+                                New context
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
               </nav>
-            </section>
-
-            <section>
-              <div className="mb-2 flex items-center justify-between px-2">
-                <p className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">Contexts</p>
-                <span className="text-xs text-[var(--text-muted)]">{contexts.length}</span>
-              </div>
-              <div className="max-h-52 space-y-1 overflow-y-auto">
-                {contexts.map(context => (
-                  <button
-                    key={context.id}
-                    type="button"
-                    onClick={() => setActiveContextId(context.id)}
-                    className={cn(
-                      'w-full rounded-lg border px-2.5 py-2 text-left transition-colors',
-                      activeContextId === context.id
-                        ? 'border-[var(--accent-border)] bg-[var(--accent-soft)]'
-                        : 'border-transparent text-[var(--text-muted)] hover:border-[var(--border-muted)] hover:bg-[var(--surface-subtle)]'
-                    )}
-                  >
-                    <p className="truncate text-sm font-medium">{context.name}</p>
-                    <p className="text-xs text-[var(--text-muted)]">{formatTimestamp(context.createdAt)}</p>
-                  </button>
-                ))}
-              </div>
-
-              <div className="mt-2">
-                {isCreatingContext ? (
-                  <form onSubmit={event => void handleCreateContext(event)}>
-                    <input
-                      autoFocus
-                      value={newContextName}
-                      onChange={event => setNewContextName(event.target.value)}
-                      onBlur={() => {
-                        void handleCreateContext();
-                      }}
-                      placeholder="Context name"
-                      className="h-8 w-full rounded-lg border border-[var(--border-muted)] bg-[var(--surface-raised)] px-2.5 text-sm outline-none focus:ring-2 focus:ring-[var(--focus-ring)]"
-                    />
-                  </form>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setIsCreatingContext(true)}
-                    className="flex h-8 w-full items-center justify-center gap-1 rounded-lg border border-dashed border-[var(--border-strong)] text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    New context
-                  </button>
-                )}
-              </div>
             </section>
 
             <section>
@@ -253,22 +244,6 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                     <item.icon className="h-4 w-4" />
                     {item.label}
                   </a>
-                ))}
-              </div>
-            </section>
-
-            <section>
-              <p className="px-2 text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">Extensions</p>
-              <div className="mt-2 space-y-1">
-                {EXTENSIONS.map(extension => (
-                  <Link
-                    key={extension.id}
-                    href={`/dashboard/integrations?client=${extension.client}`}
-                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)]"
-                  >
-                    <Bot className="h-4 w-4" />
-                    {extension.label}
-                  </Link>
                 ))}
               </div>
             </section>
@@ -316,19 +291,6 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                 <Badge muted>
                   <Activity className="mr-1.5 h-3.5 w-3.5" />
                   {requestCount ?? '-'} requests
-                </Badge>
-                <Badge muted={!connectorBridgeHealthy}>
-                  <PlugZap className="mr-1.5 h-3.5 w-3.5" />
-                  {connectorPosture}
-                </Badge>
-                <Badge muted={!connectorCloudConnected}>
-                  <span
-                    className={cn(
-                      'mr-1.5 inline-block h-2 w-2 rounded-full',
-                      connectorCloudConnected ? 'bg-emerald-400' : 'bg-amber-400'
-                    )}
-                  />
-                  {connectorCloudConnected ? 'Cloud connected' : 'Cloud optional/degraded'}
                 </Badge>
                 <Button
                   variant="secondary"
