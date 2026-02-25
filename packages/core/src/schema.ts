@@ -114,6 +114,7 @@ export interface SyncEnvelope {
     version: 1;
     contextId: string;
     tenantId: string;
+    userId: string;          // user email or identifier from auth
     timestamp: number;       // unix ms
     encrypted: boolean;
     syncPolicy?: SyncPolicy;

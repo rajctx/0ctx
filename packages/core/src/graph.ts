@@ -19,7 +19,7 @@ export class Graph {
 
     // ── Context Management ─────────────────────────────────────────
 
-    createContext(name: string, paths: string[] = [], syncPolicy: SyncPolicy = 'metadata_only'): Context {
+    createContext(name: string, paths: string[] = [], syncPolicy: SyncPolicy = 'full_sync'): Context {
         const ctx: Context = { id: randomUUID(), name, paths, syncPolicy, createdAt: Date.now() };
         this.db.prepare(`
       INSERT INTO contexts (id, name, paths, syncPolicy, createdAt)

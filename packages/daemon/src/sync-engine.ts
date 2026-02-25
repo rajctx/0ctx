@@ -13,8 +13,8 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import type Database from 'better-sqlite3';
-import type { ContextDump, Graph, SyncEnvelope, SyncPolicy } from '@0ctx/core';
-import { encryptJson, getConfigValue } from '@0ctx/core';
+import type { ContextDump, Graph, SyncEnvelope, SyncPolicy, EncryptedPayload } from '@0ctx/core';
+import { encryptJson, decryptJson, getConfigValue } from '@0ctx/core';
 import {
     createSyncQueueTable,
     enqueueSync,
@@ -35,24 +35,25 @@ const TOKEN_FILE = path.join(os.homedir(), '.0ctx', 'auth.json');
 interface RawTokenStore {
     accessToken?: string;
     tenantId?: string;
+    email?: string;
 }
 
 /**
  * Read raw access token for sync transport.
  * Checks env var first (CTX_AUTH_TOKEN), then file.
  */
-function getRawToken(): { token: string; tenantId: string } | null {
+function getRawToken(): { token: string; tenantId: string; userId: string } | null {
     // SEC-01: Env var takes priority
     const envToken = process.env.CTX_AUTH_TOKEN;
     if (envToken) {
-        return { token: envToken, tenantId: process.env.CTX_TENANT_ID ?? '' };
+        return { token: envToken, tenantId: process.env.CTX_TENANT_ID ?? '', userId: process.env.CTX_USER_ID ?? 'env:CTX_AUTH_TOKEN' };
     }
 
     try {
         if (!fs.existsSync(TOKEN_FILE)) return null;
         const raw = JSON.parse(fs.readFileSync(TOKEN_FILE, 'utf8')) as RawTokenStore;
         if (!raw.accessToken) return null;
-        return { token: raw.accessToken, tenantId: raw.tenantId ?? '' };
+        return { token: raw.accessToken, tenantId: raw.tenantId ?? '', userId: raw.email ?? '' };
     } catch {
         return null;
     }
@@ -187,7 +188,7 @@ export class SyncEngine {
                 markInFlight(this.db, entry.id);
 
                 try {
-                    const built = this.buildEnvelope(entry.contextId, auth.tenantId);
+                    const built = this.buildEnvelope(entry.contextId, auth.tenantId, auth.userId);
                     if (built.kind === 'skip') {
                         markDone(this.db, entry.id);
                         result.succeeded++;
@@ -246,9 +247,11 @@ export class SyncEngine {
                 return { received: 0 };
             }
 
-            // TODO: merge pulled envelopes into graph
             if (pullResult.envelopes.length > 0) {
                 log('info', 'sync_pull_received', { count: pullResult.envelopes.length });
+                for (const envelope of pullResult.envelopes) {
+                    this.mergeEnvelope(envelope);
+                }
             }
 
             this.lastPullAt = Date.now();
@@ -282,7 +285,7 @@ export class SyncEngine {
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
-    private buildEnvelope(contextId: string, tenantId: string): EnvelopeBuildResult {
+    private buildEnvelope(contextId: string, tenantId: string, userId: string): EnvelopeBuildResult {
         const policy = this.graph.getContextSyncPolicy(contextId);
         if (!policy) {
             return { kind: 'missing', reason: 'Context not found' };
@@ -304,6 +307,7 @@ export class SyncEngine {
                     version: 1,
                     contextId,
                     tenantId,
+                    userId,
                     timestamp: Date.now(),
                     encrypted: true,
                     syncPolicy: policy,
@@ -313,6 +317,38 @@ export class SyncEngine {
         } catch (e: unknown) {
             const message = e instanceof Error ? e.message : String(e);
             return { kind: 'missing', reason: message };
+        }
+    }
+
+    private mergeEnvelope(envelope: SyncEnvelope): void {
+        try {
+            // Skip envelopes for contexts we already have locally (avoid duplicates)
+            const existing = this.graph.getContext(envelope.contextId);
+            if (existing) {
+                log('debug', 'sync_pull_skip_existing', { contextId: envelope.contextId });
+                return;
+            }
+
+            // Only full_sync envelopes carry importable data
+            if (envelope.syncPolicy !== 'full_sync') {
+                log('debug', 'sync_pull_skip_policy', { contextId: envelope.contextId, policy: envelope.syncPolicy });
+                return;
+            }
+
+            const dump = envelope.encrypted
+                ? decryptJson<ContextDump>(envelope.payload as EncryptedPayload)
+                : envelope.payload as ContextDump;
+
+            if (!dump || dump.version !== 1 || !dump.context) {
+                log('warn', 'sync_pull_invalid_dump', { contextId: envelope.contextId });
+                return;
+            }
+
+            this.graph.importContextDump(dump);
+            log('info', 'sync_pull_merged', { contextId: envelope.contextId, name: dump.context.name });
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e);
+            log('warn', 'sync_pull_merge_error', { contextId: envelope.contextId, error: msg });
         }
     }
 

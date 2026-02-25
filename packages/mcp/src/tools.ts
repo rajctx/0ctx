@@ -319,5 +319,32 @@ export const tools = [
             },
             required: ['gateId'],
         },
+    },
+    {
+        name: 'ctx_auth_status',
+        description: 'Get the current authentication status (logged in/out, email, tenant, token expiry).',
+        inputSchema: {
+            type: 'object',
+            properties: {},
+            required: [],
+        },
+    },
+    {
+        name: 'ctx_sync_status',
+        description: 'Get the sync engine status including enabled state, queue counts, last push/pull timestamps, and errors.',
+        inputSchema: {
+            type: 'object',
+            properties: {},
+            required: [],
+        },
+    },
+    {
+        name: 'ctx_sync_now',
+        description: 'Trigger an immediate sync cycle (push pending changes then pull remote updates).',
+        inputSchema: {
+            type: 'object',
+            properties: {},
+            required: [],
+        },
     }
 ];
