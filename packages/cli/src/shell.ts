@@ -5,7 +5,7 @@ import readline from 'readline';
 import { spawn } from 'child_process';
 
 const HISTORY_LIMIT = 500;
-const DEFAULT_PROMPT = '0ctx> ';
+const DEFAULT_PROMPT_PLAIN = '0ctx> ';
 
 export interface ShellOptions {
     cliEntrypoint: string;
@@ -48,6 +48,11 @@ function question(rl: readline.Interface, prompt: string): Promise<string> {
 
 function getCompletionCandidates(): string[] {
     return [
+        '/help',
+        '/clear',
+        '/history',
+        '/exit',
+        '/present-option',
         'setup',
         'install',
         'bootstrap',
@@ -78,23 +83,50 @@ function getCompletionCandidates(): string[] {
     ];
 }
 
-function printShellHelp(): void {
-    console.log('\n0ctx interactive shell');
-    console.log('');
-    console.log('Built-ins:');
-    console.log('  help      Show shell help');
-    console.log('  history   Show command history');
-    console.log('  clear     Clear terminal');
-    console.log('  exit      Exit shell');
-    console.log('  quit      Exit shell');
-    console.log('');
-    console.log('All existing 0ctx commands are supported without the "0ctx" prefix.');
-    console.log('Examples:');
-    console.log('  setup --clients=all');
-    console.log('  status');
-    console.log('  connector status --cloud');
-    console.log('  release publish --version v1.2.3 --dry-run');
-    console.log('');
+async function printShellHelp(): Promise<void> {
+    const color = (await import('picocolors')).default;
+
+    const logo = [
+        `  ___      _          `,
+        ` / _ \\ ___| |____  __ `,
+        `| | | / __| __\\ \\/ /  `,
+        `| |_| \\__ \\ |_ >  <   `,
+        ` \\___/|___/\\__/_/\\_\\  `
+    ];
+
+    console.log();
+    for (const line of logo) {
+        // Color '0' (the O part) in cyan, and 'ctx' in white
+        const coloredLine = line
+            .replace(/___|_\s\\|_\||\___\/|\|_\|/g, match => color.cyan(match)) // Attempting to target the '0'
+            .replace(/_          | \_\_\_\| \|\_\_\_\_  \_\_ |\_\_\| \_\_\\ \\\/ \/  |\\\_\_ \\ \|\_ \>  \<   |\|\_\_\_\/\\_\_\/\_\/\\\_\\  /, match => color.white(match));
+
+        // A simpler approach to coloring the logo block:
+        console.log(color.cyan(line.substring(0, 6)) + color.white(line.substring(6)));
+    }
+    console.log();
+    console.log(color.dim('──────────────────────────────────────────────────'));
+
+    console.log(`\n${color.bold('Built-ins')}`);
+    console.log(`  ${color.cyan('help'.padEnd(10))} ${color.dim('Show shell help')}`);
+    console.log(`  ${color.cyan('history'.padEnd(10))} ${color.dim('Show command history')}`);
+    console.log(`  ${color.cyan('clear'.padEnd(10))} ${color.dim('Clear terminal')}`);
+    console.log(`  ${color.cyan('exit / quit'.padEnd(10))} ${color.dim('Exit shell')}`);
+
+    console.log(`\n${color.bold('Slash Commands')}`);
+    console.log(`  ${color.magenta('/help'.padEnd(20))} ${color.dim('Show shell help')}`);
+    console.log(`  ${color.magenta('/history'.padEnd(20))} ${color.dim('Show command history')}`);
+    console.log(`  ${color.magenta('/clear'.padEnd(20))} ${color.dim('Clear terminal')}`);
+    console.log(`  ${color.magenta('/exit'.padEnd(20))} ${color.dim('Exit shell')}`);
+    console.log(`  ${color.magenta('/present-option'.padEnd(20))} ${color.dim('Present UI options overlay')}`);
+
+    console.log(`\n${color.bold('Get started')}`);
+    console.log(`  ${color.green('>')} ${color.cyan('status'.padEnd(35))} ${color.dim('(check daemon and system health)')}`);
+    console.log(`  ${color.green('>')} ${color.cyan('setup --clients=all'.padEnd(35))} ${color.dim('(configure MCP clients)')}`);
+    console.log(`  ${color.green('>')} ${color.cyan('connector status --cloud'.padEnd(35))} ${color.dim('(check cloud connection)')}`);
+    console.log(`  ${color.green('>')} ${color.cyan('auth login'.padEnd(35))} ${color.dim('(authenticate with 0ctx)')}`);
+
+    console.log(`\n${color.dim('All existing 0ctx commands are supported without the "0ctx" prefix.')}\n`);
 }
 
 export function tokenizeShellInput(input: string): string[] {
@@ -198,7 +230,9 @@ export async function runInteractiveShell(options: ShellOptions): Promise<number
         return 1;
     }
 
-    const prompt = options.prompt ?? DEFAULT_PROMPT;
+    const color = (await import('picocolors')).default;
+    const prompt = options.prompt ?? `${color.cyan('0ctx')}${color.dim('>')} `;
+
     const history = loadHistory();
     const completions = getCompletionCandidates();
     const rl = readline.createInterface({
@@ -215,7 +249,7 @@ export async function runInteractiveShell(options: ShellOptions): Promise<number
 
     rl.history = [...history].reverse();
 
-    printShellHelp();
+    await printShellHelp();
 
     let lastExitCode = 0;
     let interrupted = false;
@@ -241,25 +275,31 @@ export async function runInteractiveShell(options: ShellOptions): Promise<number
 
             if (!line) continue;
 
-            if (line === 'exit' || line === 'quit') {
+            if (line === 'exit' || line === 'quit' || line === '/exit' || line === '/quit') {
                 break;
             }
 
-            if (line === 'help') {
-                printShellHelp();
+            if (line === 'help' || line === '/help') {
+                await printShellHelp();
                 continue;
             }
 
-            if (line === 'clear') {
+            if (line === 'clear' || line === '/clear') {
                 console.clear();
                 continue;
             }
 
-            if (line === 'history') {
+            if (line === 'history' || line === '/history') {
                 const snapshot = loadHistory();
                 snapshot.forEach((entry, idx) => {
                     console.log(`${idx + 1}. ${entry}`);
                 });
+                continue;
+            }
+
+            if (line.startsWith('/present-option')) {
+                const args = line.split(' ').slice(1).join(' ');
+                console.log(color.magenta(`[UI Overlay] Presenting options for: ${args || '(defaults)'}`));
                 continue;
             }
 

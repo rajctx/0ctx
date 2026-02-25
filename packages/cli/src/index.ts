@@ -3,6 +3,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { spawn, execSync } from 'child_process';
+import color from 'picocolors';
 import { bootstrapMcpRegistration } from '@0ctx/mcp/dist/bootstrap';
 import { sendToDaemon } from '@0ctx/mcp/dist/client';
 import { listConfig, getConfigValue, setConfigValue, isValidConfigKey, getConfigPath } from '@0ctx/core';
@@ -235,46 +236,84 @@ function runBootstrap(clients: SupportedClient[], dryRun: boolean): ReturnType<t
     });
 }
 
-function printBootstrapResults(results: BootstrapResult[], dryRun: boolean): void {
-    const mode = dryRun ? 'DRY RUN' : 'APPLIED';
-    console.log(`\nMCP bootstrap (${mode})`);
+async function printBootstrapResults(results: BootstrapResult[], dryRun: boolean): Promise<void> {
+    const p = await import('@clack/prompts');
+    const mode = dryRun ? color.yellow('DRY RUN') : color.green('APPLIED');
+    p.log.message(`MCP bootstrap (${mode})`);
+
     for (const result of results) {
-        const suffix = result.message ? ` - ${result.message}` : '';
-        console.log(`- ${result.client}: ${result.status} (${result.configPath})${suffix}`);
+        const clientName = color.cyan(result.client);
+        const suffix = result.message ? color.dim(` - ${result.message}`) : '';
+
+        if (result.status === 'success') {
+            p.log.success(`${clientName}: configured (${result.configPath})${suffix}`);
+        } else if (result.status === 'skipped') {
+            p.log.info(`${clientName}: skipped (${result.configPath || 'no config'})${suffix}`);
+        } else {
+            p.log.error(`${clientName}: failed (${result.configPath || 'no config'})${suffix}`);
+        }
     }
 }
 
 async function commandStatus(): Promise<number> {
+    const p = await import('@clack/prompts');
+    p.intro(color.bgCyan(color.black(' 0ctx status ')));
+    const s = p.spinner();
+    s.start('Checking daemon health');
+
     const daemon = await isDaemonReachable();
-    console.log(`daemon: ${daemon.ok ? 'running' : 'not running'}`);
-    console.log(`socket: ${SOCKET_PATH}`);
-    console.log(`db: ${DB_PATH}`);
-    console.log(`master_key: ${fs.existsSync(KEY_PATH) || Boolean(process.env.CTX_MASTER_KEY) ? 'present' : 'missing'}`);
+    s.stop(`Daemon is ${daemon.ok ? color.green('running') : color.red('not running')}`);
+
+    const info: Record<string, string> = {
+        'Socket': SOCKET_PATH,
+        'Database': DB_PATH,
+        'Master Key': fs.existsSync(KEY_PATH) || Boolean(process.env.CTX_MASTER_KEY) ? color.green('present') : color.yellow('missing')
+    };
 
     if (!daemon.ok) {
-        if (daemon.error) console.log(`daemon_error: ${daemon.error}`);
-        return 1;
+        if (daemon.error) {
+            info['Error'] = color.red(daemon.error);
+        }
+    } else {
+        try {
+            const capabilities = await sendToDaemon('getCapabilities', {});
+            const methods = Array.isArray(capabilities?.methods) ? capabilities.methods.length : 0;
+            info['API Version'] = capabilities?.apiVersion ?? 'unknown';
+            info['RPC Methods'] = String(methods);
+        } catch (error) {
+            info['API Error'] = color.red(error instanceof Error ? error.message : String(error));
+        }
     }
 
-    try {
-        const capabilities = await sendToDaemon('getCapabilities', {});
-        const methods = Array.isArray(capabilities?.methods) ? capabilities.methods.length : 0;
-        console.log(`api_version: ${capabilities?.apiVersion ?? 'unknown'}`);
-        console.log(`methods: ${methods}`);
-    } catch (error) {
-        console.log(`capabilities_error: ${error instanceof Error ? error.message : String(error)}`);
-    }
+    p.note(
+        Object.entries(info).map(([k, v]) => `${color.dim(k.padEnd(12))} : ${v}`).join('\n'),
+        'System Details'
+    );
+    p.outro(daemon.ok ? 'All systems operational' : color.yellow('Daemon degraded or offline'));
 
-    return 0;
+    return daemon.ok ? 0 : 1;
 }
 
 async function commandBootstrap(flags: Record<string, string | boolean>): Promise<number> {
+    const p = await import('@clack/prompts');
     const clients = parseClients(flags.clients);
     const dryRun = Boolean(flags['dry-run']);
-    const results = runBootstrap(clients, dryRun);
+
     if (!Boolean(flags.quiet) && !Boolean(flags.json)) {
-        printBootstrapResults(results, dryRun);
+        p.intro(color.bgBlue(color.black(' 0ctx bootstrap ')));
     }
+
+    const s = p.spinner();
+    if (!Boolean(flags.quiet) && !Boolean(flags.json)) s.start('Applying MCP configurations');
+
+    const results = runBootstrap(clients, dryRun);
+
+    if (!Boolean(flags.quiet) && !Boolean(flags.json)) {
+        s.stop('Bootstrap complete');
+        await printBootstrapResults(results, dryRun);
+        p.outro(results.some(r => r.status === 'failed') ? color.yellow('Bootstrap finished with errors') : color.green('Bootstrap successful'));
+    }
+
     if (Boolean(flags.json)) {
         console.log(JSON.stringify({ dryRun, clients, results }, null, 2));
     }
@@ -282,36 +321,51 @@ async function commandBootstrap(flags: Record<string, string | boolean>): Promis
 }
 
 async function commandInstall(flags: Record<string, string | boolean>): Promise<number> {
+    const p = await import('@clack/prompts');
     const quiet = Boolean(flags.quiet);
     const asJson = Boolean(flags.json);
     const skipBootstrap = Boolean(flags['skip-bootstrap']);
+
     if (!quiet && !asJson) {
-        console.log('Running install workflow...');
+        p.intro(color.bgBlue(color.black(' 0ctx install ')));
     }
+
+    const s = p.spinner();
+    if (!quiet && !asJson) s.start('Checking daemon status');
+
     const daemonStatus = await isDaemonReachable();
 
     if (!daemonStatus.ok) {
-        if (!quiet && !asJson) {
-            console.log('daemon: starting background service...');
-        }
+        if (!quiet && !asJson) s.message('Starting background service...');
         try {
             startDaemonDetached();
         } catch (error) {
-            console.error(`failed_to_start_daemon: ${error instanceof Error ? error.message : String(error)}`);
+            if (!quiet && !asJson) s.stop(color.red('Failed to start daemon'));
+            console.error(error instanceof Error ? error.message : String(error));
+            if (!quiet && !asJson) p.outro(color.red('Install failed'));
             return 1;
         }
     }
 
+    if (!quiet && !asJson) s.message('Waiting for daemon to become ready...');
     const ready = await waitForDaemon();
+
     if (!ready) {
-        console.error('daemon_start_timeout: unable to reach daemon health endpoint');
+        if (!quiet && !asJson) s.stop(color.red('Daemon start timeout'));
+        console.error('Unable to reach daemon health endpoint.');
+        if (!quiet && !asJson) p.outro(color.red('Install failed'));
         return 1;
     }
 
+    if (!quiet && !asJson) s.stop(color.green('Daemon is ready'));
+
     let bootstrapCode = 0;
     if (!skipBootstrap) {
-        bootstrapCode = await commandBootstrap({ ...flags, quiet: quiet || asJson, json: false });
-        if (bootstrapCode !== 0) return bootstrapCode;
+        bootstrapCode = await commandBootstrap({ ...flags, quiet: (quiet || asJson), json: false });
+        if (bootstrapCode !== 0) {
+            if (!quiet && !asJson) p.outro(color.yellow('Install partial (bootstrap failed)'));
+            return bootstrapCode;
+        }
     }
 
     if (quiet || asJson) {
@@ -325,7 +379,9 @@ async function commandInstall(flags: Record<string, string | boolean>): Promise<
         return 0;
     }
 
-    return commandStatus();
+    const checks = await isDaemonReachable();
+    p.outro(color.green(`Installation complete! Daemon is ${checks.ok ? 'running' : 'degraded'}.`));
+    return checks.ok ? 0 : 1;
 }
 
 async function commandDoctor(flags: Record<string, string | boolean>): Promise<number> {
@@ -388,37 +444,63 @@ async function commandDoctor(flags: Record<string, string | boolean>): Promise<n
     if (asJson) {
         console.log(JSON.stringify({ checks }, null, 2));
     } else {
-        console.log('\n0ctx doctor');
+        const p = await import('@clack/prompts');
+        p.intro(color.bgCyan(color.black(' 0ctx doctor ')));
+
         for (const check of checks) {
-            console.log(`- ${check.id}: ${check.status} - ${check.message}`);
+            if (check.status === 'pass') {
+                p.log.success(`${color.bold(check.id)}: ${color.dim(check.message)}`);
+            } else if (check.status === 'warn') {
+                p.log.warn(`${color.bold(check.id)}: ${color.yellow(check.message)}`);
+            } else {
+                p.log.error(`${color.bold(check.id)}: ${color.red(check.message)}`);
+            }
         }
+
+        const hasFailures = checks.some(c => c.status === 'fail');
+        p.outro(hasFailures ? color.red('Doctor found issues requiring attention.') : color.green('All systems go!'));
     }
 
     return checks.some(check => check.status === 'fail') ? 1 : 0;
 }
 
 async function commandRepair(flags: Record<string, string | boolean>): Promise<number> {
-    console.log('Running repair workflow...');
+    const p = await import('@clack/prompts');
+    p.intro(color.bgCyan(color.black(' 0ctx repair ')));
+
+    const s = p.spinner();
+    s.start('Checking daemon status');
 
     const daemon = await isDaemonReachable();
     if (!daemon.ok) {
+        s.message('Starting daemon for repair...');
         try {
             startDaemonDetached();
         } catch (error) {
-            console.error(`repair_failed_to_start_daemon: ${error instanceof Error ? error.message : String(error)}`);
+            s.stop(color.red('Failed to start daemon'));
+            p.log.error(error instanceof Error ? error.message : String(error));
+            p.outro(color.red('Repair failed'));
             return 1;
         }
     }
 
     const ready = await waitForDaemon();
     if (!ready) {
-        console.error('repair_daemon_start_timeout');
+        s.stop(color.red('Daemon start timeout'));
+        p.outro(color.red('Repair failed'));
         return 1;
     }
 
-    const bootstrapCode = await commandBootstrap(flags);
-    if (bootstrapCode !== 0) return bootstrapCode;
+    s.stop(color.green('Daemon is running'));
 
+    p.log.step('Running bootstrap to fix MCP configs');
+    const bootstrapCode = await commandBootstrap({ ...flags, quiet: true, json: false });
+    if (bootstrapCode !== 0) {
+        p.outro(color.yellow('Repair partial (bootstrap failed)'));
+        return bootstrapCode;
+    }
+
+    p.log.step('Running doctor checks');
     return commandDoctor({ ...flags, json: false });
 }
 
@@ -1146,9 +1228,9 @@ async function commandConnector(action: string | undefined, flags: Record<string
                 ? 'degraded'
                 : (cloudRequired && !cloud.connected)
                     ? 'degraded'
-                : (Boolean(registration.runtime.eventBridgeError) || Boolean(registration.runtime.commandBridgeError))
-                    ? 'degraded'
-                : (sync?.enabled && sync?.running ? 'connected' : 'degraded');
+                    : (Boolean(registration.runtime.eventBridgeError) || Boolean(registration.runtime.commandBridgeError))
+                        ? 'degraded'
+                        : (sync?.enabled && sync?.running ? 'connected' : 'degraded');
 
         const payload = {
             posture,

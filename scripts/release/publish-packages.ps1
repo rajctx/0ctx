@@ -111,11 +111,8 @@ try {
     # --- Version consistency check ---
     Assert-VersionsConsistent -RepoRoot $repoRoot
 
-    # --- Deterministic publish order (dependency graph order) ---
+    # --- Deterministic publish order (single package) ---
     $publishOrder = @(
-        "@0ctx/core",
-        "@0ctx/daemon",
-        "@0ctx/mcp",
         "@0ctx/cli"
     )
 

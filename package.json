@@ -24,7 +24,7 @@
     "release:validate": "powershell -ExecutionPolicy Bypass -File scripts/release/validate-release.ps1",
     "release:changelog:prepare": "powershell -ExecutionPolicy Bypass -File scripts/release/prepare-changelog.ps1",
     "release:tag:dry": "powershell -ExecutionPolicy Bypass -File scripts/release/tag-preview.ps1",
-    "release:pack:dry": "npm pack --workspace=@0ctx/core --workspace=@0ctx/daemon --workspace=@0ctx/mcp --workspace=@0ctx/cli --dry-run",
+    "release:pack:dry": "npm pack --workspace=@0ctx/cli --dry-run",
     "release:cli": "npm run build && node packages/cli/dist/index.js release publish",
     "release:cli:dry": "npm run build && node packages/cli/dist/index.js release publish --dry-run",
     "release:publish:dry": "powershell -ExecutionPolicy Bypass -File scripts/release/publish-packages.ps1 -DryRun",

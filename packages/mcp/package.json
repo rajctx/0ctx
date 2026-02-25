@@ -1,6 +1,7 @@
 {
   "name": "@0ctx/mcp",
   "version": "1.0.0",
+  "private": true,
   "description": "0ctx MCP stdio server – translates tool calls into daemon IPC",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -18,17 +19,10 @@
       "default": "./dist/*.js"
     }
   },
-  "files": [
-    "dist"
-  ],
-  "publishConfig": {
-    "access": "public"
-  },
   "scripts": {
     "start": "ts-node src/index.ts",
     "dev": "ts-node-dev --respawn src/index.ts",
     "bootstrap": "node dist/bootstrap.js",
-    "prepublishOnly": "tsc -b",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -39,11 +33,6 @@
   ],
   "author": "",
   "license": "ISC",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/0ctx-com/0ctx.git",
-    "directory": "packages/mcp"
-  },
   "dependencies": {
     "@0ctx/core": "^1.0.0",
     "@0ctx/daemon": "^1.0.0",

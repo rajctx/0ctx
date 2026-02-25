@@ -1,6 +1,6 @@
 {
   "name": "@0ctx/cli",
-  "version": "1.0.0",
+  "version": "1.5.0",
   "description": "0ctx product CLI – install, bootstrap, doctor, and service management",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -31,11 +31,24 @@
     "directory": "packages/cli"
   },
   "dependencies": {
+    "@0ctx/core": "^1.0.0",
     "@0ctx/daemon": "^1.0.0",
     "@0ctx/mcp": "^1.0.0",
-    "cross-keychain": "^1.1.0"
+    "@clack/prompts": "^1.0.1",
+    "@modelcontextprotocol/sdk": "^1.5.0",
+    "better-sqlite3": "^11.8.1",
+    "cross-keychain": "^1.1.0",
+    "picocolors": "^1.1.1",
+    "uuid": "^11.0.5"
   },
+  "bundleDependencies": [
+    "@0ctx/core",
+    "@0ctx/daemon",
+    "@0ctx/mcp"
+  ],
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/uuid": "^10.0.0",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0"
   },
