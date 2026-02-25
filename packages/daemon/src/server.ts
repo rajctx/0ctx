@@ -6,6 +6,8 @@ import { randomUUID } from 'crypto';
 import { openDb, Graph } from '@0ctx/core';
 import { handleRequest } from './handlers';
 import { clearConnectionContext } from './resolver';
+import { initAuth } from './auth';
+import { SyncEngine } from './sync-engine';
 import type { DaemonRequest, DaemonResponse } from './protocol';
 import { RequestMetrics } from './metrics';
 import { log } from './logger';
@@ -140,12 +142,17 @@ function probeExistingEndpoint(socketPath: string, timeoutMs: number): Promise<S
     });
 }
 
-function createDaemonCloser(server: net.Server, db: ReturnType<typeof openDb>, socketPath: string): () => Promise<void> {
+function createDaemonCloser(server: net.Server, db: ReturnType<typeof openDb>, socketPath: string, syncEngine?: SyncEngine): () => Promise<void> {
     let closed = false;
 
     return async () => {
         if (closed) return;
         closed = true;
+
+        // Stop sync engine before closing connections
+        if (syncEngine) {
+            syncEngine.stop();
+        }
 
         await new Promise<void>(resolve => {
             if (!server.listening) {
@@ -223,6 +230,13 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Sta
     const startedAt = Date.now();
     const metrics = new RequestMetrics();
 
+    // Initialize auth module from persisted state
+    initAuth(db);
+
+    // Initialize sync engine (starts background timer)
+    const syncEngine = new SyncEngine(db, graph);
+    syncEngine.start();
+
     const server = net.createServer(socket => {
         // Unique ID for this client connection to track active context
         const connectionId = randomUUID();
@@ -245,7 +259,8 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Sta
                     const requestStart = Date.now();
                     const result = handleRequest(graph, connectionId, req, {
                         startedAt,
-                        getMetricsSnapshot: () => metrics.snapshot()
+                        getMetricsSnapshot: () => metrics.snapshot(),
+                        syncEngine
                     });
                     const durationMs = Date.now() - requestStart;
                     metrics.record(req.method, true, durationMs);
@@ -292,7 +307,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Sta
         });
     });
 
-    const closeDaemon = createDaemonCloser(server, db, socketPath);
+    const closeDaemon = createDaemonCloser(server, db, socketPath, syncEngine);
 
     try {
         const status = await bindDaemonServer(server, socketPath, probeTimeoutMs);

@@ -3,6 +3,7 @@ export interface DaemonRequest {
     params?: Record<string, unknown>;
     requestId?: string;
     sessionToken?: string;
+    authToken?: string;
     apiVersion?: string;
 }
 

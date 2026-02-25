@@ -56,7 +56,7 @@ function parseArgs(argv: string[]): ParsedArgs {
         flags[key] = true;
     }
 
-    const hasSubcommand = command === 'daemon';
+    const hasSubcommand = command === 'daemon' || command === 'auth' || command === 'sync';
     return {
         command,
         subcommand: hasSubcommand ? maybeSubcommand : undefined,
@@ -166,7 +166,164 @@ async function commandStatus(): Promise<number> {
         console.log(`capabilities_error: ${error instanceof Error ? error.message : String(error)}`);
     }
 
+    try {
+        const authState = await sendToDaemon('authStatus', {});
+        console.log(`auth: ${authState?.authenticated ? 'authenticated' : 'not authenticated'}`);
+        if (authState?.userId) console.log(`user_id: ${authState.userId}`);
+        if (authState?.tenantId) console.log(`tenant_id: ${authState.tenantId}`);
+    } catch (error) {
+        console.log(`auth_error: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    try {
+        const syncState = await sendToDaemon('syncStatus', {});
+        console.log(`sync: ${syncState?.enabled ? 'enabled' : 'disabled'}`);
+        console.log(`sync_pending: ${syncState?.pendingItems ?? 0}`);
+        console.log(`sync_failed: ${syncState?.failedItems ?? 0}`);
+        if (syncState?.lastSyncAt) console.log(`last_sync: ${new Date(syncState.lastSyncAt).toISOString()}`);
+    } catch (error) {
+        console.log(`sync_error: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
     return 0;
+}
+
+// ── Auth commands ───────────────────────────────────────────────
+
+async function commandAuthLogin(flags: Record<string, string | boolean>): Promise<number> {
+    const daemon = await isDaemonReachable();
+    if (!daemon.ok) {
+        console.error('Daemon is not running. Start it first with `0ctx daemon start`.');
+        return 1;
+    }
+
+    const tenantUrl = typeof flags['tenant-url'] === 'string' ? flags['tenant-url'] : (typeof flags.tenant === 'string' ? flags.tenant : null);
+    if (!tenantUrl) {
+        console.error('Missing required --tenant-url flag.');
+        return 1;
+    }
+
+    try {
+        const loginInit = await sendToDaemon('authLogin', { tenantUrl });
+        console.log('\nDevice code authentication initiated.');
+        console.log(`Open: ${loginInit.verificationUri}`);
+        console.log(`Enter code: ${loginInit.userCode}`);
+        console.log('\nPolling for completion...');
+
+        // Poll for login completion
+        const maxPolls = Math.ceil(loginInit.expiresIn / loginInit.interval);
+        for (let i = 0; i < maxPolls; i += 1) {
+            await new Promise(resolve => setTimeout(resolve, loginInit.interval * 1000));
+            const pollResult = await sendToDaemon('authPollLogin', { deviceCode: loginInit.deviceCode });
+
+            if (pollResult.status === 'complete') {
+                console.log(`\nAuthenticated successfully!`);
+                console.log(`user_id: ${pollResult.userId}`);
+                console.log(`tenant_id: ${pollResult.tenantId}`);
+                return 0;
+            }
+
+            if (pollResult.status === 'expired') {
+                console.error('Login expired. Try again.');
+                return 1;
+            }
+
+            // Still pending, continue polling
+        }
+
+        console.error('Login timed out.');
+        return 1;
+    } catch (error) {
+        console.error(`Auth login failed: ${error instanceof Error ? error.message : String(error)}`);
+        return 1;
+    }
+}
+
+async function commandAuthLogout(): Promise<number> {
+    const daemon = await isDaemonReachable();
+    if (!daemon.ok) {
+        console.error('Daemon is not running.');
+        return 1;
+    }
+
+    try {
+        await sendToDaemon('authLogout', {});
+        console.log('Logged out successfully.');
+        return 0;
+    } catch (error) {
+        console.error(`Auth logout failed: ${error instanceof Error ? error.message : String(error)}`);
+        return 1;
+    }
+}
+
+async function commandAuthStatus(): Promise<number> {
+    const daemon = await isDaemonReachable();
+    if (!daemon.ok) {
+        console.error('Daemon is not running.');
+        return 1;
+    }
+
+    try {
+        const authState = await sendToDaemon('authStatus', {});
+        console.log(`authenticated: ${authState.authenticated}`);
+        console.log(`user_id: ${authState.userId ?? 'none'}`);
+        console.log(`tenant_id: ${authState.tenantId ?? 'none'}`);
+        console.log(`tenant_url: ${authState.tenantUrl ?? 'none'}`);
+        console.log(`device_id: ${authState.deviceId ?? 'none'}`);
+        if (authState.tokenExpiresAt) {
+            console.log(`token_expires: ${new Date(authState.tokenExpiresAt).toISOString()}`);
+        }
+        return 0;
+    } catch (error) {
+        console.error(`Auth status failed: ${error instanceof Error ? error.message : String(error)}`);
+        return 1;
+    }
+}
+
+// ── Sync commands ───────────────────────────────────────────────
+
+async function commandSyncStatus(): Promise<number> {
+    const daemon = await isDaemonReachable();
+    if (!daemon.ok) {
+        console.error('Daemon is not running.');
+        return 1;
+    }
+
+    try {
+        const syncState = await sendToDaemon('syncStatus', {});
+        console.log(`enabled: ${syncState.enabled}`);
+        console.log(`authenticated: ${syncState.authenticated}`);
+        console.log(`pending_items: ${syncState.pendingItems}`);
+        console.log(`failed_items: ${syncState.failedItems}`);
+        console.log(`last_sync: ${syncState.lastSyncAt ? new Date(syncState.lastSyncAt).toISOString() : 'never'}`);
+        console.log(`last_error: ${syncState.lastError ?? 'none'}`);
+        return 0;
+    } catch (error) {
+        console.error(`Sync status failed: ${error instanceof Error ? error.message : String(error)}`);
+        return 1;
+    }
+}
+
+async function commandSyncTrigger(): Promise<number> {
+    const daemon = await isDaemonReachable();
+    if (!daemon.ok) {
+        console.error('Daemon is not running.');
+        return 1;
+    }
+
+    try {
+        console.log('Triggering full sync...');
+        const result = await sendToDaemon('syncTrigger', {});
+        if (result.ok) {
+            console.log(`Full sync complete. Contexts synced: ${result.contextsSynced}`);
+            return 0;
+        }
+        console.error(`Sync failed: ${result.error ?? 'unknown error'}`);
+        return 1;
+    } catch (error) {
+        console.error(`Sync trigger failed: ${error instanceof Error ? error.message : String(error)}`);
+        return 1;
+    }
 }
 
 async function commandBootstrap(flags: Record<string, string | boolean>): Promise<number> {
@@ -238,6 +395,49 @@ async function commandDoctor(flags: Record<string, string | boolean>): Promise<n
         details: { results: dryRunResults }
     });
 
+    // Auth check
+    if (daemon.ok) {
+        try {
+            const authState = await sendToDaemon('authStatus', {});
+            checks.push({
+                id: 'auth_state',
+                status: authState?.authenticated ? 'pass' : 'warn',
+                message: authState?.authenticated
+                    ? `Authenticated as ${authState.userId}.`
+                    : 'Not authenticated. Run `0ctx auth login --tenant-url=<url>` to connect.',
+                details: { authenticated: authState?.authenticated, userId: authState?.userId, tenantId: authState?.tenantId }
+            });
+        } catch (error) {
+            checks.push({
+                id: 'auth_state',
+                status: 'warn',
+                message: `Could not check auth state: ${error instanceof Error ? error.message : String(error)}`
+            });
+        }
+
+        // Sync check
+        try {
+            const syncState = await sendToDaemon('syncStatus', {});
+            const syncOk = syncState?.enabled && syncState?.failedItems === 0;
+            checks.push({
+                id: 'sync_state',
+                status: syncOk ? 'pass' : (syncState?.failedItems > 0 ? 'fail' : 'warn'),
+                message: syncOk
+                    ? `Sync enabled. ${syncState.pendingItems} pending items.`
+                    : syncState?.failedItems > 0
+                        ? `Sync has ${syncState.failedItems} failed items.`
+                        : 'Sync not fully active.',
+                details: { ...syncState }
+            });
+        } catch (error) {
+            checks.push({
+                id: 'sync_state',
+                status: 'warn',
+                message: `Could not check sync state: ${error instanceof Error ? error.message : String(error)}`
+            });
+        }
+    }
+
     const asJson = Boolean(flags.json);
     if (asJson) {
         console.log(JSON.stringify({ checks }, null, 2));
@@ -286,6 +486,13 @@ Usage:
   0ctx status
   0ctx repair [--clients=...]
   0ctx daemon start
+
+  0ctx auth login --tenant-url=<url>
+  0ctx auth logout
+  0ctx auth status
+
+  0ctx sync status
+  0ctx sync trigger
 `);
 }
 
@@ -317,6 +524,28 @@ async function main(): Promise<number> {
             }
             printHelp();
             return 1;
+        case 'auth':
+            switch (parsed.subcommand) {
+                case 'login':
+                    return commandAuthLogin(parsed.flags);
+                case 'logout':
+                    return commandAuthLogout();
+                case 'status':
+                    return commandAuthStatus();
+                default:
+                    printHelp();
+                    return 1;
+            }
+        case 'sync':
+            switch (parsed.subcommand) {
+                case 'status':
+                    return commandSyncStatus();
+                case 'trigger':
+                    return commandSyncTrigger();
+                default:
+                    printHelp();
+                    return 1;
+            }
         case 'help':
         default:
             printHelp();

@@ -4,7 +4,7 @@ import path from 'path';
 import os from 'os';
 
 const DB_PATH = path.join(os.homedir(), '.0ctx', '0ctx.db');
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 4;
 
 export interface OpenDbOptions {
     dbPath?: string;
@@ -42,6 +42,16 @@ function migrate(db: Database.Database) {
     if (version < 2) {
         migrateToV2(db);
         setSchemaVersion(db, 2);
+    }
+
+    if (version < 3) {
+        migrateToV3(db);
+        setSchemaVersion(db, 3);
+    }
+
+    if (version < 4) {
+        migrateToV4(db);
+        setSchemaVersion(db, 4);
     }
 }
 
@@ -113,6 +123,43 @@ function migrateToV2(db: Database.Database) {
 
     CREATE INDEX IF NOT EXISTS idx_audit_logs_created
       ON audit_logs(createdAt DESC);
+  `);
+}
+
+function migrateToV3(db: Database.Database) {
+    db.exec(`
+    CREATE TABLE IF NOT EXISTS auth_state (
+      key       TEXT PRIMARY KEY,
+      value     TEXT NOT NULL,
+      updatedAt INTEGER NOT NULL
+    );
+  `);
+}
+
+function migrateToV4(db: Database.Database) {
+    db.exec(`
+    CREATE TABLE IF NOT EXISTS sync_queue (
+      id              TEXT PRIMARY KEY,
+      entityType      TEXT NOT NULL,
+      entityId        TEXT NOT NULL,
+      action          TEXT NOT NULL,
+      payload         TEXT NOT NULL DEFAULT '{}',
+      userId          TEXT NOT NULL,
+      tenantId        TEXT NOT NULL,
+      createdAt       INTEGER NOT NULL,
+      attempts        INTEGER NOT NULL DEFAULT 0,
+      lastAttemptAt   INTEGER,
+      status          TEXT NOT NULL DEFAULT 'pending'
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_sync_queue_status_created
+      ON sync_queue(status, createdAt ASC);
+
+    CREATE TABLE IF NOT EXISTS sync_state (
+      key       TEXT PRIMARY KEY,
+      value     TEXT NOT NULL,
+      updatedAt INTEGER NOT NULL
+    );
   `);
 }
 

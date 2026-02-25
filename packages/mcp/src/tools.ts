@@ -184,5 +184,32 @@ export const tools = [
             },
             required: ['fileName'],
         },
+    },
+    {
+        name: 'ctx_auth_status',
+        description: 'Check current authentication state (user ID, tenant, token status).',
+        inputSchema: {
+            type: 'object',
+            properties: {},
+            required: [],
+        },
+    },
+    {
+        name: 'ctx_sync_status',
+        description: 'Get the current cloud sync status including pending items, failures, and last sync time.',
+        inputSchema: {
+            type: 'object',
+            properties: {},
+            required: [],
+        },
+    },
+    {
+        name: 'ctx_sync_trigger',
+        description: 'Trigger a full sync of all contexts to the cloud. Requires authentication.',
+        inputSchema: {
+            type: 'object',
+            properties: {},
+            required: [],
+        },
     }
 ];

@@ -10,6 +10,13 @@ import {
     touchSession
 } from './resolver';
 import { listBackups, readContextBackup, writeContextBackup } from './backup';
+import {
+    getAuthState,
+    initiateDeviceCodeLogin,
+    pollDeviceCodeLogin,
+    clearAuth
+} from './auth';
+import type { SyncEngine } from './sync-engine';
 import type { MetricsSnapshot } from './metrics';
 
 const CONTEXT_REQUIRED_METHODS = new Set([
@@ -27,6 +34,7 @@ type RequestParams = Record<string, unknown>;
 export interface HandlerRuntimeContext {
     startedAt: number;
     getMetricsSnapshot?: () => MetricsSnapshot;
+    syncEngine?: SyncEngine;
 }
 
 const MUTATING_ACTIONS: Record<string, AuditAction> = {
@@ -134,16 +142,59 @@ export function handleRequest(
     if (req.method === 'getCapabilities') {
         return {
             apiVersion: '2',
-            features: ['sessions', 'health', 'capabilities', 'audit_logs', 'metrics', 'backup_restore'],
+            features: ['sessions', 'health', 'capabilities', 'audit_logs', 'metrics', 'backup_restore', 'auth', 'cloud_sync'],
             methods: [
                 'listContexts', 'createContext', 'deleteContext', 'switchContext', 'getActiveContext',
                 'addNode', 'getNode', 'updateNode', 'getByKey', 'deleteNode',
                 'addEdge', 'getSubgraph', 'search', 'getGraphData',
                 'saveCheckpoint', 'rewind', 'listCheckpoints',
                 'createSession', 'refreshSession', 'health', 'getCapabilities', 'metricsSnapshot',
-                'listAuditEvents', 'createBackup', 'listBackups', 'restoreBackup'
+                'listAuditEvents', 'createBackup', 'listBackups', 'restoreBackup',
+                'authLogin', 'authPollLogin', 'authLogout', 'authStatus',
+                'syncStatus', 'syncTrigger'
             ]
         };
+    }
+
+    // ── Auth methods ────────────────────────────────────────────
+
+    if (req.method === 'authStatus') {
+        return getAuthState();
+    }
+
+    if (req.method === 'authLogin') {
+        const tenantUrl = typeof params.tenantUrl === 'string' ? params.tenantUrl : null;
+        if (!tenantUrl) throw new Error("Missing required 'tenantUrl' for authLogin.");
+        return initiateDeviceCodeLogin(tenantUrl);
+    }
+
+    if (req.method === 'authPollLogin') {
+        const deviceCode = typeof params.deviceCode === 'string' ? params.deviceCode : null;
+        if (!deviceCode) throw new Error("Missing required 'deviceCode' for authPollLogin.");
+        return pollDeviceCodeLogin(deviceCode);
+    }
+
+    if (req.method === 'authLogout') {
+        clearAuth();
+        return { success: true };
+    }
+
+    // ── Sync methods ───────────────────────────────────────────
+
+    if (req.method === 'syncStatus') {
+        return runtime.syncEngine ? runtime.syncEngine.getStatus() : {
+            enabled: false,
+            authenticated: false,
+            lastSyncAt: null,
+            pendingItems: 0,
+            failedItems: 0,
+            lastError: 'Sync engine not initialized.'
+        };
+    }
+
+    if (req.method === 'syncTrigger') {
+        if (!runtime.syncEngine) throw new Error('Sync engine not initialized.');
+        return runtime.syncEngine.triggerFullSync();
     }
 
     if (req.method === 'createSession') {
@@ -204,6 +255,7 @@ export function handleRequest(
             syncActiveContext(connectionId, req.sessionToken, ctx.id);
 
             recordMutationAudit(graph, req, 'create_context', ctx.id, params, { contextId: ctx.id }, auditMetadata);
+            runtime.syncEngine?.enqueue('context', ctx.id, 'create', { id: ctx.id, name: ctx.name, paths: ctx.paths, createdAt: ctx.createdAt });
             return ctx;
         }
         case 'deleteContext': {
@@ -222,6 +274,7 @@ export function handleRequest(
 
             const result = { success: true };
             recordMutationAudit(graph, req, 'delete_context', id, params, result, auditMetadata);
+            runtime.syncEngine?.enqueue('context', id, 'delete', { id });
             return result;
         }
         case 'switchContext': {
@@ -238,6 +291,7 @@ export function handleRequest(
         case 'addNode': {
             const result = graph.addNode({ ...params, contextId: contextId! } as Parameters<Graph['addNode']>[0]);
             recordMutationAudit(graph, req, 'add_node', contextId, params, { id: result.id, contextId: result.contextId }, auditMetadata);
+            runtime.syncEngine?.enqueue('node', result.id, 'create', { ...result });
             return result;
         }
         case 'getNode':
@@ -245,6 +299,7 @@ export function handleRequest(
         case 'updateNode': {
             const result = graph.updateNode(params.id as string, params.updates as Parameters<Graph['updateNode']>[1]);
             recordMutationAudit(graph, req, 'update_node', contextId, params, { id: params.id as string, updated: Boolean(result) }, auditMetadata);
+            if (result) runtime.syncEngine?.enqueue('node', result.id, 'update', { ...result });
             return result;
         }
         case 'getByKey':
@@ -253,11 +308,13 @@ export function handleRequest(
             graph.deleteNode(params.id as string);
             const result = { success: true };
             recordMutationAudit(graph, req, 'delete_node', contextId, params, result, auditMetadata);
+            runtime.syncEngine?.enqueue('node', params.id as string, 'delete', { id: params.id });
             return result;
         }
         case 'addEdge': {
             const result = graph.addEdge(params.fromId as string, params.toId as string, params.relation as Parameters<Graph['addEdge']>[2]);
             recordMutationAudit(graph, req, 'add_edge', contextId, params, { id: result.id }, auditMetadata);
+            runtime.syncEngine?.enqueue('edge', result.id, 'create', { ...result });
             return result;
         }
         case 'getSubgraph':
@@ -269,6 +326,7 @@ export function handleRequest(
         case 'saveCheckpoint': {
             const result = graph.saveCheckpoint(contextId!, params.name as string);
             recordMutationAudit(graph, req, 'save_checkpoint', contextId, params, { id: result.id }, auditMetadata);
+            runtime.syncEngine?.enqueue('checkpoint', result.id, 'create', { ...result });
             return result;
         }
         case 'rewind': {

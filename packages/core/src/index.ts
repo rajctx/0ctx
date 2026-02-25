@@ -13,5 +13,12 @@ export type {
     AuditEntry,
     AuditAction,
     AuditMetadata,
-    ContextDump
+    ContextDump,
+    AuthState,
+    SyncQueueEntry,
+    SyncQueueStatus,
+    SyncEntityType,
+    SyncAction,
+    SyncStatusSnapshot,
+    SyncEnvelope
 } from './schema';

@@ -93,3 +93,55 @@ export interface ContextDump {
     edges: ContextEdge[];
     checkpoints: Checkpoint[];
 }
+
+// ── Auth ──────────────────────────────────────────────────────────
+
+export interface AuthState {
+    userId: string | null;
+    tenantId: string | null;
+    tenantUrl: string | null;
+    deviceId: string | null;
+    tokenExpiresAt: number | null;
+    authenticated: boolean;
+}
+
+// ── Sync ──────────────────────────────────────────────────────────
+
+export type SyncQueueStatus = 'pending' | 'synced' | 'failed';
+
+export type SyncEntityType = 'context' | 'node' | 'edge' | 'checkpoint';
+
+export type SyncAction = 'create' | 'update' | 'delete';
+
+export interface SyncQueueEntry {
+    id: string;
+    entityType: SyncEntityType;
+    entityId: string;
+    action: SyncAction;
+    payload: Record<string, unknown>;
+    userId: string;
+    tenantId: string;
+    createdAt: number;
+    attempts: number;
+    lastAttemptAt: number | null;
+    status: SyncQueueStatus;
+}
+
+export interface SyncStatusSnapshot {
+    enabled: boolean;
+    authenticated: boolean;
+    lastSyncAt: number | null;
+    pendingItems: number;
+    failedItems: number;
+    lastError: string | null;
+}
+
+export interface SyncEnvelope {
+    version: 1;
+    userId: string;
+    tenantId: string;
+    deviceId: string;
+    syncedAt: number;
+    encrypted: boolean;
+    payload: unknown;
+}
