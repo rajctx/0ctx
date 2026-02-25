@@ -270,6 +270,18 @@ server.setRequestHandler(CallToolRequestSchema, async (req: any) => {
                 });
                 return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(gate, null, 2) }] } };
             }
+            case 'ctx_auth_status': {
+                const authStatus = await callDaemon('auth/status', {});
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(authStatus, null, 2) }] } };
+            }
+            case 'ctx_sync_status': {
+                const syncStatus = await callDaemon('syncStatus', {});
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(syncStatus, null, 2) }] } };
+            }
+            case 'ctx_sync_now': {
+                const syncResult = await callDaemon('syncNow', {});
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(syncResult, null, 2) }] } };
+            }
             default:
                 throw new Error(`Unknown tool: ${name}`);
         }
