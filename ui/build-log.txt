@@ -1,0 +1,57 @@
+Γû▓ Next.js 16.1.6 (Turbopack)
+- Environments: .env
+
+  Creating an optimized production build ...
+Γ£ô Compiled successfully in 7.9s
+  Running TypeScript ...
+  Collecting page data using 11 workers ...
+  Generating static pages using 11 workers (0/35) ...
+  Generating static pages using 11 workers (8/35) 
+  Generating static pages using 11 workers (17/35) 
+  Generating static pages using 11 workers (26/35) 
+Γ£ô Generating static pages using 11 workers (35/35) in 655.5ms
+  Finalizing page optimization ...
+
+Route (app)
+Γöî Γùï /
+Γö£ Γùï /_not-found
+Γö£ ╞Æ /api/v1/audit
+Γö£ ╞Æ /api/v1/audit/verify
+Γö£ ╞Æ /api/v1/auth/device
+Γö£ ╞Æ /api/v1/auth/device/token
+Γö£ ╞Æ /api/v1/backups
+Γö£ ╞Æ /api/v1/connector/queue/drain
+Γö£ ╞Æ /api/v1/connector/register
+Γö£ ╞Æ /api/v1/connectors/capabilities
+Γö£ ╞Æ /api/v1/connectors/commands
+Γö£ ╞Æ /api/v1/connectors/commands/ack
+Γö£ ╞Æ /api/v1/connectors/commands/exec
+Γö£ ╞Æ /api/v1/connectors/events
+Γö£ ╞Æ /api/v1/connectors/heartbeat
+Γö£ ╞Æ /api/v1/connectors/trust/verify
+Γö£ ╞Æ /api/v1/contexts/[contextId]/sync-policy
+Γö£ ╞Æ /api/v1/events/stream
+Γö£ ╞Æ /api/v1/health
+Γö£ ╞Æ /api/v1/integrations/bootstrap
+Γö£ ╞Æ /api/v1/metrics
+Γö£ ╞Æ /api/v1/runtime/doctor
+Γö£ ╞Æ /api/v1/runtime/repair
+Γö£ ╞Æ /api/v1/runtime/status
+Γö£ ╞Æ /api/v1/tenants
+Γö£ ╞Æ /api/v1/tenants/[id]
+Γö£ Γùï /auth/device
+Γö£ Γùï /dashboard
+Γö£ Γùï /dashboard/audit
+Γö£ Γùï /dashboard/backups
+Γö£ Γùï /dashboard/settings
+Γö£ Γùï /dashboard/workspace
+Γö£ Γùï /docs
+Γö£ Γùï /install
+Γöö Γùï /login
+
+
+╞Æ Proxy (Middleware)
+
+Γùï  (Static)   prerendered as static content
+╞Æ  (Dynamic)  server-rendered on demand
+
