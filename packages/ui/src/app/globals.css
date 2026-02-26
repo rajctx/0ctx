@@ -1,106 +1,69 @@
 @import "tailwindcss";
 
 :root {
-  --font-body: "Manrope", "Segoe UI", sans-serif;
-  --font-display: "Space Grotesk", "Segoe UI", sans-serif;
+  --font-body: var(--font-mono);
+  --font-display: var(--font-tech);
 
-  --bg-canvas: #f2f5f8;
-  --bg-grid: rgba(15, 23, 42, 0.055);
-  --bg-gradient-a: rgba(14, 116, 144, 0.11);
-  --bg-gradient-b: rgba(8, 145, 178, 0.09);
+  /* Dashboard Structure Variables mapped to new design */
+  --bg-color: #030303;
+  --fg-color: #e0e0e0;
+  --dim-color: #4a4a4a;
+  --accent-color: #ffffff;
+  --grid-line: rgba(255, 255, 255, 0.1);
 
-  --surface-base: rgba(255, 255, 255, 0.9);
-  --surface-raised: rgba(255, 255, 255, 0.98);
-  --surface-subtle: rgba(248, 250, 252, 0.85);
-  --surface-glass: rgba(255, 255, 255, 0.64);
-  --surface-overlay: rgba(244, 247, 251, 0.88);
+  /* Mapping old UI variable names to the new aesthetic */
+  --bg-canvas: var(--bg-color);
+  --bg-grid: var(--grid-line);
+  --bg-gradient-a: transparent;
+  --bg-gradient-b: transparent;
 
-  --text-primary: #0f172a;
-  --text-secondary: #334155;
-  --text-muted: #64748b;
-  --text-inverse: #f8fafc;
+  --surface-base: var(--bg-color);
+  --surface-raised: #080808;
+  --surface-subtle: rgba(255, 255, 255, 0.03);
+  --surface-glass: rgba(0, 0, 0, 0.8);
+  --surface-overlay: rgba(0, 0, 0, 0.9);
 
-  --border-muted: rgba(15, 23, 42, 0.11);
-  --border-strong: rgba(15, 23, 42, 0.2);
-  --focus-ring: rgba(20, 184, 166, 0.48);
+  --text-primary: var(--fg-color);
+  --text-secondary: #aaaaaa;
+  --text-muted: var(--dim-color);
+  --text-inverse: var(--bg-color);
 
-  --accent-strong: #0f766e;
-  --accent-strong-hover: #0d6862;
-  --accent-contrast: #f8fafc;
-  --accent-soft: rgba(15, 118, 110, 0.14);
-  --accent-border: rgba(15, 118, 110, 0.34);
-  --accent-text: #0d5c57;
+  --border-muted: var(--grid-line);
+  --border-strong: var(--dim-color);
+  --focus-ring: rgba(255, 255, 255, 0.2);
 
-  --danger-bg: rgba(190, 24, 93, 0.09);
-  --danger-bg-hover: rgba(190, 24, 93, 0.14);
-  --danger-border: rgba(225, 29, 72, 0.3);
-  --danger-fg: #9f1239;
-
-  --graph-edge: rgba(30, 41, 59, 0.14);
-  --graph-edge-active: rgba(20, 184, 166, 0.5);
-  --graph-node-outline: rgba(248, 250, 252, 0.95);
-  --graph-label: #1e293b;
-  --graph-canvas-bg: #0f172a;
-  --graph-canvas-grid: rgba(148, 163, 184, 0.09);
-  --graph-node-fill: #e2e8f0;
-  --graph-node-text: #93c5fd;
-
-  --radius-sm: 10px;
-  --radius-md: 14px;
-  --radius-lg: 20px;
-
-  --shadow-soft: 0 10px 34px -18px rgba(15, 23, 42, 0.45);
-  --shadow-float: 0 20px 55px -28px rgba(15, 23, 42, 0.52);
-}
-
-[data-theme='dark'] {
-  --bg-canvas: #080d12;
-  --bg-grid: rgba(148, 163, 184, 0.08);
-  --bg-gradient-a: rgba(15, 118, 110, 0.18);
-  --bg-gradient-b: rgba(56, 189, 248, 0.11);
-
-  --surface-base: rgba(13, 18, 26, 0.86);
-  --surface-raised: rgba(15, 22, 31, 0.95);
-  --surface-subtle: rgba(30, 41, 59, 0.62);
-  --surface-glass: rgba(15, 23, 42, 0.56);
-  --surface-overlay: rgba(8, 15, 24, 0.9);
-
-  --text-primary: #e2e8f0;
-  --text-secondary: #cbd5e1;
-  --text-muted: #94a3b8;
-  --text-inverse: #0f172a;
-
-  --border-muted: rgba(148, 163, 184, 0.2);
-  --border-strong: rgba(148, 163, 184, 0.38);
-  --focus-ring: rgba(45, 212, 191, 0.5);
-
-  --accent-strong: #14b8a6;
-  --accent-strong-hover: #0d9488;
-  --accent-contrast: #062827;
-  --accent-soft: rgba(20, 184, 166, 0.19);
-  --accent-border: rgba(45, 212, 191, 0.4);
-  --accent-text: #5eead4;
+  --accent-strong: var(--accent-color);
+  --accent-strong-hover: #cccccc;
+  --accent-contrast: var(--bg-color);
+  --accent-soft: rgba(255, 255, 255, 0.1);
+  --accent-border: var(--fg-color);
+  --accent-text: var(--accent-color);
 
   --danger-bg: rgba(225, 29, 72, 0.16);
   --danger-bg-hover: rgba(225, 29, 72, 0.24);
   --danger-border: rgba(251, 113, 133, 0.4);
   --danger-fg: #fecdd3;
 
-  --graph-edge: rgba(148, 163, 184, 0.2);
-  --graph-edge-active: rgba(45, 212, 191, 0.56);
-  --graph-node-outline: rgba(8, 15, 24, 0.95);
-  --graph-label: #e2e8f0;
-  --graph-canvas-bg: #070d18;
-  --graph-canvas-grid: rgba(148, 163, 184, 0.1);
-  --graph-node-fill: #e2e8f0;
-  --graph-node-text: #93c5fd;
+  --graph-edge: rgba(255, 255, 255, 0.1);
+  --graph-edge-active: rgba(255, 255, 255, 0.4);
+  --graph-node-outline: #000000;
+  --graph-label: var(--fg-color);
+  --graph-canvas-bg: var(--bg-color);
+  --graph-canvas-grid: var(--grid-line);
+  --graph-node-fill: var(--dim-color);
+  --graph-node-text: var(--fg-color);
 
-  --shadow-soft: 0 12px 38px -22px rgba(2, 6, 23, 0.88);
-  --shadow-float: 0 24px 60px -32px rgba(2, 6, 23, 0.95);
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+
+  --shadow-soft: none;
+  --shadow-float: none;
 }
 
 * {
   border-color: var(--border-muted);
+  box-sizing: border-box;
 }
 
 html,
@@ -113,16 +76,11 @@ body {
   font-family: var(--font-body);
   color: var(--text-primary);
   background-color: var(--bg-canvas);
-  background-image: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--bg-canvas), white 4%) 0%,
-    var(--bg-canvas) 100%
-  );
+  background-image:
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px) 0 0 / 100px 100px,
+    linear-gradient(var(--grid-line) 1px, transparent 1px) 0 0 / 100px 100px;
   text-rendering: optimizeLegibility;
-}
-
-[data-theme='dark'] body {
-  background-image: linear-gradient(180deg, #0d121c 0%, #090d14 100%);
+  -webkit-font-smoothing: antialiased;
 }
 
 h1,
@@ -130,7 +88,9 @@ h2,
 h3,
 h4 {
   font-family: var(--font-display);
-  letter-spacing: -0.015em;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .ui-fade-in {
@@ -154,9 +114,7 @@ h4 {
 }
 
 .glass-layer {
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  background: color-mix(in srgb, var(--surface-base), transparent 18%);
+  background: rgba(0, 0, 0, 0.8);
   border: 1px solid var(--border-muted);
 }
 
@@ -164,6 +122,7 @@ h4 {
   from {
     opacity: 0;
   }
+
   to {
     opacity: 1;
   }
@@ -174,6 +133,7 @@ h4 {
     opacity: 0;
     transform: translateY(14px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);

@@ -19,7 +19,6 @@ import {
   Settings2,
   ShieldCheck
 } from 'lucide-react';
-import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn, formatTimestamp } from '@/lib/ui';
@@ -114,21 +113,14 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   );
 
   return (
-    <div className="min-h-screen bg-[#090d14] text-slate-100 [--text-primary:#e2e8f0] [--text-secondary:#cbd5e1] [--text-muted:#94a3b8] [--surface-base:rgba(13,17,24,0.96)] [--surface-raised:rgba(17,23,33,0.98)] [--surface-subtle:rgba(26,33,46,0.8)] [--surface-glass:rgba(13,17,24,0.9)] [--surface-overlay:rgba(13,17,24,0.94)] [--border-muted:rgba(148,163,184,0.18)] [--border-strong:rgba(148,163,184,0.32)] [--focus-ring:rgba(251,146,60,0.38)] [--accent-strong:#f97316] [--accent-strong-hover:#ea580c] [--accent-contrast:#fff7ed] [--accent-soft:rgba(249,115,22,0.16)] [--accent-border:rgba(249,115,22,0.4)] [--accent-text:#fdba74] [--danger-bg:rgba(225,29,72,0.15)] [--danger-bg-hover:rgba(225,29,72,0.26)] [--danger-border:rgba(251,113,133,0.45)] [--danger-fg:#fecdd3] [--graph-canvas-bg:#080d17] [--graph-edge:rgba(148,163,184,0.24)] [--graph-edge-active:rgba(249,115,22,0.6)] [--graph-node-outline:rgba(8,15,24,0.85)] [--graph-node-fill:#e2e8f0] [--graph-node-text:#93c5fd]">
+    <div className="min-h-screen">
       <div className="mx-auto flex min-h-screen w-full max-w-[1900px]">
-        <aside className="hidden w-[280px] flex-col border-r border-[var(--border-muted)] bg-[#0d1016] lg:flex">
+        <aside className="hidden w-[280px] flex-col border-r border-[var(--border-muted)] lg:flex">
           <div className="border-b border-[var(--border-muted)] px-4 py-4">
-            <div className="mb-3 flex gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-rose-500/90" />
-              <span className="h-2.5 w-2.5 rounded-full bg-amber-400/90" />
-              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500/90" />
-            </div>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">Organization</p>
-                <p className="text-lg font-semibold text-[var(--text-primary)]">Acme</p>
+                <p className="text-lg font-semibold text-[var(--text-primary)] tracking-[0.05em]">0CTX</p>
               </div>
-              <ThemeToggle compact />
             </div>
           </div>
 
@@ -263,7 +255,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
         </aside>
 
         <section className="flex min-w-0 flex-1 flex-col">
-          <header className="border-b border-[var(--border-muted)] bg-gradient-to-b from-[#581a1a]/55 to-transparent px-4 py-4 md:px-6">
+          <header className="border-b border-[var(--border-muted)] px-4 py-4 md:px-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-[11px] uppercase tracking-[0.15em] text-[var(--text-muted)]">{routeMeta.label}</p>
