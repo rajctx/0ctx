@@ -1,0 +1,302 @@
+#landing-page {
+    --bg-color: #030303;
+    --fg-color: #e0e0e0;
+    --dim-color: #4a4a4a;
+    --accent-color: #ffffff;
+    --grid-line: rgba(255, 255, 255, 0.1);
+    --font-mono: 'Space Mono', 'Courier Prime', monospace;
+    --font-tech: 'Inter', system-ui, -apple-system, sans-serif;
+
+    background-color: var(--bg-color);
+    color: var(--fg-color);
+    font-family: var(--font-mono);
+    font-size: 14px;
+    line-height: 1.5;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+}
+
+#landing-page * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    cursor: crosshair;
+}
+
+#landing-page h1,
+#landing-page h2,
+#landing-page h3,
+#landing-page h4 {
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+#landing-page h1 {
+    font-size: clamp(3rem, 10vw, 8rem);
+    line-height: 0.9;
+    letter-spacing: -0.02em;
+    font-weight: 700;
+    mix-blend-mode: exclusion;
+}
+
+#landing-page h2 {
+    font-size: 1.2rem;
+    border-bottom: 1px solid var(--fg-color);
+    padding-bottom: 0.5rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    justify-content: space-between;
+}
+
+#landing-page h2 span.coord {
+    font-size: 0.8rem;
+    opacity: 0.6;
+}
+
+#landing-page p {
+    margin-bottom: 1.5rem;
+    max-width: 60ch;
+    color: #aaa;
+}
+
+#landing-page .container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 2rem;
+    border-left: 1px solid var(--grid-line);
+    border-right: 1px solid var(--grid-line);
+    position: relative;
+    background:
+        linear-gradient(90deg, var(--grid-line) 1px, transparent 1px) 0 0 / 100px 100px,
+        linear-gradient(var(--grid-line) 1px, transparent 1px) 0 0 / 100px 100px;
+}
+
+#landing-page .section {
+    padding: 8rem 0;
+    border-bottom: 1px solid var(--grid-line);
+    position: relative;
+}
+
+#landing-page .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4rem;
+}
+
+#landing-page .grid-4 {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 2rem;
+}
+
+#landing-page .ruler-x {
+    height: 20px;
+    width: 100%;
+    border-bottom: 1px solid var(--dim-color);
+    background-image: linear-gradient(90deg, var(--dim-color) 1px, transparent 1px);
+    background-size: 20px 100%;
+    opacity: 0.5;
+    margin-bottom: 2rem;
+}
+
+#landing-page #noise-layer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.05;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}
+
+#landing-page #fog-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+    background: radial-gradient(circle at 50% 50%, transparent 0%, var(--bg-color) 80%);
+}
+
+#landing-page #graph-canvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -2;
+    opacity: 0.4;
+}
+
+#landing-page .hero {
+    height: 90vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+}
+
+#landing-page .hero-content {
+    z-index: 2;
+    padding-left: 4rem;
+    border-left: 2px solid var(--fg-color);
+}
+
+#landing-page .hero-meta {
+    font-family: var(--font-tech);
+    font-size: 0.8rem;
+    letter-spacing: 0.1em;
+    margin-bottom: 1rem;
+    display: flex;
+    gap: 2rem;
+    color: var(--dim-color);
+}
+
+#landing-page .hero-description {
+    font-size: 1.5rem;
+    color: var(--fg-color);
+    margin-top: 2rem;
+    max-width: 600px;
+}
+
+#landing-page .btn {
+    display: inline-block;
+    margin-top: 3rem;
+    padding: 1rem 2rem;
+    border: 1px solid var(--fg-color);
+    background: transparent;
+    color: var(--fg-color);
+    text-decoration: none;
+    text-transform: uppercase;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+#landing-page .btn:hover {
+    background: var(--fg-color);
+    color: var(--bg-color);
+}
+
+#landing-page .btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 4px;
+    background: var(--fg-color);
+}
+
+#landing-page .btn::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 4px;
+    height: 4px;
+    background: var(--fg-color);
+}
+
+#landing-page .feature-card {
+    border: 1px solid var(--dim-color);
+    padding: 2rem;
+    background: rgba(0, 0, 0, 0.8);
+    transition: border-color 0.3s;
+}
+
+#landing-page .feature-card:hover {
+    border-color: var(--fg-color);
+}
+
+#landing-page .feature-icon {
+    height: 40px;
+    width: 40px;
+    border: 1px solid var(--fg-color);
+    border-radius: 50%;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+}
+
+#landing-page .chart-bar-container {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    height: 60px;
+    margin-top: 1rem;
+    opacity: 0.7;
+}
+
+#landing-page .chart-bar {
+    width: 8px;
+    background: var(--dim-color);
+    transition: height 1s;
+}
+
+#landing-page .chart-bar.active {
+    background: var(--fg-color);
+}
+
+#landing-page .terminal {
+    border: 1px solid var(--dim-color);
+    padding: 1rem;
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    background: #080808;
+    color: #ccc;
+}
+
+#landing-page .prompt::before {
+    content: "> ";
+    color: var(--fg-color);
+}
+
+#landing-page .cursor {
+    display: inline-block;
+    width: 8px;
+    height: 1.2em;
+    background: var(--fg-color);
+    animation: blink 1s infinite;
+    vertical-align: bottom;
+}
+
+@keyframes blink {
+    50% {
+        opacity: 0;
+    }
+}
+
+#landing-page footer {
+    padding: 4rem 2rem;
+    border-top: 1px solid var(--fg-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+}
+
+@media (max-width: 900px) {
+
+    #landing-page .grid-2,
+    #landing-page .grid-4 {
+        grid-template-columns: 1fr;
+    }
+
+    #landing-page h1 {
+        font-size: 4rem;
+    }
+
+    #landing-page .hero-content {
+        padding-left: 1rem;
+        border-left: none;
+    }
+}
