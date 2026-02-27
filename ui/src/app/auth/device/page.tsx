@@ -1,39 +1,62 @@
 'use client';
 
-import { useState } from 'react';
+/**
+ * /auth/device — Device code entry page for CLI authentication.
+ *
+ * Flow:
+ *   1. CLI opens this page (usually with ?user_code=XXXX-XXXX pre-filled via
+ *      verificationUriComplete). User sees their code already filled in.
+ *   2. On submit we redirect to Auth0's /activate endpoint with the code.
+ *   3. Auth0 handles consent / login. After approval, the device code is
+ *      resolved server-side and the CLI's polling loop receives the tokens.
+ *
+ * useSearchParams must be wrapped in Suspense per Next.js App Router rules.
+ */
+
+import { Suspense, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { CheckCircle2, Loader2, Terminal, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Panel } from '@/components/ui/panel';
 
-type Phase = 'input' | 'authorizing' | 'success' | 'error';
+type Phase = 'input' | 'authorizing' | 'error';
 
-export default function DeviceAuthPage() {
-  const [userCode, setUserCode] = useState('');
+function DeviceAuthForm() {
+  const searchParams = useSearchParams();
+  const prefilledCode = (searchParams.get('user_code') ?? '').toUpperCase();
+
+  const [userCode, setUserCode] = useState(prefilledCode);
   const [phase, setPhase] = useState<Phase>('input');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  async function handleAuthorize() {
-    if (!userCode.trim()) return;
+  // Auto-submit when the code arrives via verificationUriComplete URL param
+  useEffect(() => {
+    if (prefilledCode) {
+      doAuthorize(prefilledCode);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function doAuthorize(code: string) {
+    const trimmed = code.trim().toUpperCase();
+    if (!trimmed) return;
+
     setPhase('authorizing');
     setErrorMessage(null);
 
-    try {
-      // In the full implementation, this would:
-      // 1. Verify the user code against Auth0
-      // 2. Show consent screen
-      // 3. Approve the device code
-      // For now we redirect to Auth0's hosted verification page
-      const verifyUrl = new URL('/authorize', window.location.origin);
-      verifyUrl.searchParams.set('user_code', userCode.trim().toUpperCase());
-
-      // Simulate authorization - in production this would go through Auth0's
-      // device verification flow. The hosted Auth0 page handles the actual
-      // consent; this page serves as a branded entry point.
-      window.location.href = `${process.env.NEXT_PUBLIC_AUTH0_ISSUER_BASE_URL ?? ''}/activate?user_code=${encodeURIComponent(userCode.trim().toUpperCase())}`;
-    } catch (err) {
+    const auth0Issuer = process.env.NEXT_PUBLIC_AUTH0_ISSUER_BASE_URL;
+    if (!auth0Issuer) {
       setPhase('error');
-      setErrorMessage(err instanceof Error ? err.message : 'Authorization failed.');
+      setErrorMessage('Auth server not configured. Contact support.');
+      return;
     }
+
+    // Redirect to Auth0's device activation endpoint.
+    // Auth0 shows its own consent UI; after approval it resolves the device
+    // code so the CLI polling loop can exchange it for tokens.
+    const activateUrl = new URL('/activate', auth0Issuer);
+    activateUrl.searchParams.set('user_code', trimmed);
+    window.location.href = activateUrl.toString();
   }
 
   return (
@@ -68,13 +91,11 @@ export default function DeviceAuthPage() {
                 value={userCode}
                 onChange={e => setUserCode(e.target.value.toUpperCase())}
                 placeholder="XXXX-XXXX"
-                autoFocus
+                autoFocus={!prefilledCode}
                 autoComplete="off"
                 spellCheck={false}
                 className="h-12 w-full rounded-xl border border-[var(--border-muted)] bg-[var(--surface-raised)] px-4 text-center font-mono text-lg tracking-[0.2em] text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)] focus:ring-2 focus:ring-[var(--focus-ring)]"
-                onKeyDown={e => {
-                  if (e.key === 'Enter') handleAuthorize();
-                }}
+                onKeyDown={e => { if (e.key === 'Enter') doAuthorize(userCode); }}
               />
             </div>
             <Button
@@ -82,33 +103,22 @@ export default function DeviceAuthPage() {
               size="lg"
               className="w-full"
               disabled={!userCode.trim()}
-              onClick={handleAuthorize}
+              onClick={() => doAuthorize(userCode)}
             >
               Authorize Device
             </Button>
           </div>
         )}
 
-        {/* Authorizing phase */}
+        {/* Authorizing — in-flight redirect */}
         {phase === 'authorizing' && (
           <div className="flex flex-col items-center gap-3 py-4">
             <Loader2 className="h-8 w-8 animate-spin text-[var(--accent-strong)]" />
-            <p className="text-sm text-[var(--text-secondary)]">Redirecting to authorization…</p>
+            <p className="text-sm text-[var(--text-secondary)]">Redirecting to Auth0…</p>
           </div>
         )}
 
-        {/* Success phase */}
-        {phase === 'success' && (
-          <div className="flex flex-col items-center gap-3 py-4">
-            <CheckCircle2 className="h-8 w-8 text-[var(--success-fg)]" />
-            <p className="text-sm font-medium text-[var(--text-primary)]">Device authorized</p>
-            <p className="text-xs text-[var(--text-muted)]">
-              You can close this window and return to your terminal.
-            </p>
-          </div>
-        )}
-
-        {/* Error phase */}
+        {/* Error */}
         {phase === 'error' && (
           <div className="flex flex-col items-center gap-3 py-4">
             <XCircle className="h-8 w-8 text-[var(--danger-fg)]" />
@@ -119,22 +129,26 @@ export default function DeviceAuthPage() {
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => {
-                setPhase('input');
-                setErrorMessage(null);
-                setUserCode('');
-              }}
+              onClick={() => { setPhase('input'); setErrorMessage(null); setUserCode(''); }}
             >
               Try again
             </Button>
           </div>
         )}
 
-        {/* Footer */}
         <p className="text-center text-[10px] text-[var(--text-muted)]">
-          This page is used to authorize the 0ctx CLI. If you did not initiate this request from a terminal, you can safely close this window.
+          Only proceed if you initiated this from your terminal.
+          You can safely close this window otherwise.
         </p>
       </Panel>
     </div>
+  );
+}
+
+export default function DeviceAuthPage() {
+  return (
+    <Suspense>
+      <DeviceAuthForm />
+    </Suspense>
   );
 }

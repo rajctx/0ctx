@@ -72,11 +72,17 @@ export async function POST(request: NextRequest) {
       interval: number;
     };
 
+    // Use our branded /auth/device page instead of the raw Auth0 activation
+    // URL so users land on the 0ctx-branded page. verificationUriComplete
+    // pre-fills the user code via query param so they don't have to type it.
+    const verificationUri = `${CTX_UI_BASE_URL}/auth/device`;
+    const verificationUriComplete = `${CTX_UI_BASE_URL}/auth/device?user_code=${encodeURIComponent(data.user_code)}`;
+
     return jsonResponse({
       deviceCode: data.device_code,
       userCode: data.user_code,
-      verificationUri: `${CTX_UI_BASE_URL}/auth/device`,
-      verificationUriComplete: data.verification_uri_complete,
+      verificationUri,
+      verificationUriComplete,
       expiresIn: data.expires_in,
       interval: data.interval
     });

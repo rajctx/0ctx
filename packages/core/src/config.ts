@@ -26,10 +26,10 @@ export interface AppConfig {
 }
 
 const DEFAULTS: AppConfig = {
-    'auth.server': 'https://auth.0ctx.com',
+    'auth.server': 'https://0ctx.com',
     'sync.enabled': true,
-    'sync.endpoint': 'https://api.0ctx.com/v1/sync',
-    'ui.url': 'https://app.0ctx.com',
+    'sync.endpoint': 'https://0ctx.com/api/v1/sync',
+    'ui.url': 'https://0ctx.com',
     'integration.chatgpt.enabled': false,
     'integration.chatgpt.requireApproval': true,
     'integration.autoBootstrap': true

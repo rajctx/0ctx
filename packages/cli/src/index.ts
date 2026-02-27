@@ -1639,7 +1639,7 @@ function printHelp(): void {
     console.log(`0ctx CLI
 
 Usage:
-  0ctx
+  0ctx                    First run: auto setup + auth. Afterwards: interactive shell.
   0ctx shell
   0ctx setup [--clients=all|claude,cursor,windsurf] [--no-open] [--json]
              [--require-cloud] [--wait-cloud-ready]
@@ -1929,6 +1929,13 @@ async function main(): Promise<number> {
             return 0;
         }
         if (process.stdin.isTTY && process.stdout.isTTY) {
+            // First-time experience: if no token exists, auto-run setup so the
+            // user doesn't have to know about `0ctx setup` on first install.
+            if (!resolveToken()) {
+                console.log(color.bold('\nWelcome to 0ctx!'));
+                console.log(color.dim("Looks like this is your first time. Let's get you set up.\n"));
+                return commandSetup({});
+            }
             return commandShell();
         }
         printHelp();

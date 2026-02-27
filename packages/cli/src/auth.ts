@@ -6,7 +6,16 @@
  *   2. OS keyring (macOS Keychain / Windows Credential Manager / Linux Secret Service)
  *   3. ~/.0ctx/auth.json fallback (0o600) — or forced via --insecure-storage
  *
- * Auth server: CTX_AUTH_SERVER env var (default: https://auth.0ctx.com)
+ * Auth server: CTX_AUTH_SERVER env var (default: https://0ctx.com)
+ *
+ * The CLI talks to the 0ctx.com BFF proxy routes (not Auth0 directly):
+ *   POST {authServer}/api/v1/auth/device         → initiate device code
+ *   POST {authServer}/api/v1/auth/device/token   → poll for tokens
+ *   POST {authServer}/api/v1/auth/device/refresh → refresh access token
+ *   POST {authServer}/api/v1/auth/device/revoke  → revoke refresh token
+ *
+ * All requests/responses are JSON (not form-encoded).
+ * All proxy responses use camelCase; mapped to snake_case types locally.
  */
 
 import fs from 'fs';
@@ -20,9 +29,8 @@ import { getConfigValue, saveConfig } from '@0ctx/core';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-const DEFAULT_AUTH_SERVER = 'https://auth.0ctx.com';
-const CLIENT_ID = '0ctx-cli';
-const DEFAULT_SCOPE = 'profile sync';
+const DEFAULT_AUTH_SERVER = 'https://0ctx.com';
+const DEFAULT_SCOPE = 'openid profile email offline_access';
 const TOKEN_FILE = path.join(os.homedir(), '.0ctx', 'auth.json');
 
 function getAuthServer(): string {
@@ -39,6 +47,7 @@ export interface TokenStore {
     tenantId: string;
 }
 
+// Internal snake_case types (RFC 8628 names kept for readability inside this module)
 interface DeviceCodeResponse {
     device_code: string;
     user_code: string;
@@ -60,6 +69,31 @@ interface TokenResponse {
 interface TokenErrorResponse {
     error: string;
     error_description?: string;
+}
+
+// Proxy BFF response shapes (camelCase — what 0ctx.com returns)
+interface BffDeviceCodeResponse {
+    deviceCode: string;
+    userCode: string;
+    verificationUri: string;
+    verificationUriComplete?: string;
+    expiresIn: number;
+    interval: number;
+    // Error shape
+    error?: string;
+}
+
+interface BffTokenResponse {
+    accessToken?: string;
+    refreshToken?: string | null;
+    idToken?: string | null;
+    tokenType?: string;
+    expiresIn?: number;
+    email?: string | null;
+    tenantId?: string | null;
+    // Error shape
+    error?: string;
+    errorDescription?: string;
 }
 
 // ─── Token store I/O (SEC-02: keyring-first, file-fallback) ───────────────────
@@ -185,7 +219,13 @@ function openBrowser(url: string): void {
 
 // ─── HTTP helpers ─────────────────────────────────────────────────────────────
 
-function httpPost(url: string, body: string, timeoutMs = 10_000): Promise<string> {
+/** Generic HTTP POST with configurable Content-Type. */
+function httpPost(
+    url: string,
+    body: string,
+    contentType: string,
+    timeoutMs = 10_000
+): Promise<string> {
     return new Promise((resolve, reject) => {
         const parsed = new URL(url);
         const lib = parsed.protocol === 'https:' ? https : http;
@@ -196,7 +236,7 @@ function httpPost(url: string, body: string, timeoutMs = 10_000): Promise<string
                 path: parsed.pathname + parsed.search,
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Content-Type': contentType,
                     'Content-Length': Buffer.byteLength(body),
                     'User-Agent': '0ctx-cli/1.0'
                 },
@@ -218,10 +258,9 @@ function httpPost(url: string, body: string, timeoutMs = 10_000): Promise<string
     });
 }
 
-function urlEncode(params: Record<string, string>): string {
-    return Object.entries(params)
-        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
-        .join('&');
+/** POST JSON to our BFF proxy routes. All 0ctx.com auth API routes expect JSON. */
+function httpJsonPost(url: string, body: Record<string, unknown>, timeoutMs = 10_000): Promise<string> {
+    return httpPost(url, JSON.stringify(body), 'application/json', timeoutMs);
 }
 
 function sleep(ms: number): Promise<void> {
@@ -231,20 +270,28 @@ function sleep(ms: number): Promise<void> {
 // ─── Device code flow (RFC 8628) ─────────────────────────────────────────────
 
 async function requestDeviceCode(authServer: string): Promise<DeviceCodeResponse> {
-    const body = urlEncode({ client_id: CLIENT_ID, scope: DEFAULT_SCOPE });
     let raw: string;
     try {
-        raw = await httpPost(`${authServer}/device/code`, body);
+        raw = await httpJsonPost(`${authServer}/api/v1/auth/device`, { scope: DEFAULT_SCOPE });
     } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         throw new Error(`Cannot connect to auth server (${authServer}): ${msg}`);
     }
 
-    const parsed = JSON.parse(raw) as DeviceCodeResponse;
-    if (!parsed.device_code || !parsed.user_code) {
-        throw new Error(`Unexpected device code response: ${raw}`);
+    const parsed = JSON.parse(raw) as BffDeviceCodeResponse;
+    if (parsed.error || !parsed.deviceCode || !parsed.userCode) {
+        throw new Error(`Device code error: ${parsed.error ?? 'unexpected response'} — ${raw}`);
     }
-    return parsed;
+
+    // Map camelCase BFF response → internal snake_case shape
+    return {
+        device_code: parsed.deviceCode,
+        user_code: parsed.userCode,
+        verification_uri: parsed.verificationUri,
+        verification_uri_complete: parsed.verificationUriComplete,
+        expires_in: parsed.expiresIn,
+        interval: parsed.interval,
+    };
 }
 
 async function pollForToken(
@@ -259,43 +306,45 @@ async function pollForToken(
     while (Date.now() < deadline) {
         await sleep(intervalMs);
 
-        const body = urlEncode({
-            client_id: CLIENT_ID,
-            grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
-            device_code: deviceCode
-        });
-
         let raw: string;
         try {
-            raw = await httpPost(`${authServer}/token`, body);
+            raw = await httpJsonPost(`${authServer}/api/v1/auth/device/token`, { deviceCode });
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : String(e);
             throw new Error(`Token poll failed: ${msg}`);
         }
 
-        const parsed = JSON.parse(raw) as TokenResponse | TokenErrorResponse;
-        if ('access_token' in parsed) {
-            const tokenResp = parsed as TokenResponse;
+        const parsed = JSON.parse(raw) as BffTokenResponse;
+
+        if (parsed.accessToken) {
             // SEC-04: Validate token_type per RFC 6749 §5.1
-            if (tokenResp.token_type && tokenResp.token_type.toLowerCase() !== 'bearer') {
-                throw new Error(`Unexpected token_type: ${tokenResp.token_type}`);
+            const tokenType = parsed.tokenType ?? 'Bearer';
+            if (tokenType.toLowerCase() !== 'bearer') {
+                throw new Error(`Unexpected token_type: ${tokenType}`);
             }
-            return tokenResp;
+            // Map camelCase BFF response → internal snake_case shape
+            return {
+                access_token: parsed.accessToken,
+                refresh_token: parsed.refreshToken ?? '',
+                expires_in: parsed.expiresIn ?? 3600,
+                token_type: tokenType,
+                email: parsed.email ?? undefined,
+                tenant_id: parsed.tenantId ?? undefined,
+            };
         }
 
-        const errParsed = parsed as TokenErrorResponse;
-        if (errParsed.error === 'authorization_pending') continue;
-        if (errParsed.error === 'slow_down') {
-            await sleep(5_000); // extra delay when server requests it
+        if (parsed.error === 'authorization_pending') continue;
+        if (parsed.error === 'slow_down') {
+            await sleep(5_000);
             continue;
         }
-        if (errParsed.error === 'expired_token') {
+        if (parsed.error === 'expired_token') {
             throw new Error('Device code expired. Run `0ctx auth login` again.');
         }
-        if (errParsed.error === 'access_denied') {
+        if (parsed.error === 'access_denied') {
             throw new Error('Authorization denied by user.');
         }
-        throw new Error(`Token error: ${errParsed.error} — ${errParsed.error_description ?? ''}`);
+        throw new Error(`Token error: ${parsed.error ?? 'unknown'} — ${parsed.errorDescription ?? ''}`);
     }
 
     throw new Error('Device code expired (timed out). Run `0ctx auth login` again.');
@@ -305,41 +354,37 @@ async function pollForToken(
 
 export async function refreshAccessToken(store: TokenStore): Promise<TokenStore> {
     const authServer = getAuthServer();
-    const body = urlEncode({
-        client_id: CLIENT_ID,
-        grant_type: 'refresh_token',
-        refresh_token: store.refreshToken
-    });
 
     let raw: string;
     try {
-        raw = await httpPost(`${authServer}/token`, body);
+        raw = await httpJsonPost(`${authServer}/api/v1/auth/device/refresh`, {
+            refreshToken: store.refreshToken
+        });
     } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         throw new Error(`Token refresh failed: ${msg}`);
     }
 
-    const parsed = JSON.parse(raw) as TokenResponse | TokenErrorResponse;
-    if (!('access_token' in parsed)) {
-        const err = parsed as TokenErrorResponse;
-        throw new Error(`Refresh error: ${err.error} — ${err.error_description ?? ''}`);
+    const parsed = JSON.parse(raw) as BffTokenResponse;
+    if (!parsed.accessToken) {
+        throw new Error(`Refresh error: ${parsed.error ?? 'unknown'} — ${parsed.errorDescription ?? ''}`);
     }
 
-    const resp = parsed as TokenResponse;
     // SEC-04: Validate token_type
-    if (resp.token_type && resp.token_type.toLowerCase() !== 'bearer') {
-        throw new Error(`Unexpected token_type from refresh: ${resp.token_type}`);
+    const tokenType = parsed.tokenType ?? 'Bearer';
+    if (tokenType.toLowerCase() !== 'bearer') {
+        throw new Error(`Unexpected token_type from refresh: ${tokenType}`);
     }
     // SEC-04: Warn when server does not rotate refresh token
-    if (!resp.refresh_token) {
+    if (!parsed.refreshToken) {
         console.warn('Warning: auth server did not rotate refresh token (RFC 9700 §4.14 recommends rotation)');
     }
     const updated: TokenStore = {
-        accessToken: resp.access_token,
-        refreshToken: resp.refresh_token || store.refreshToken,
-        expiresAt: Date.now() + resp.expires_in * 1000,
-        email: resp.email ?? store.email,
-        tenantId: resp.tenant_id ?? store.tenantId
+        accessToken: parsed.accessToken,
+        refreshToken: parsed.refreshToken || store.refreshToken,
+        expiresAt: Date.now() + (parsed.expiresIn ?? 3600) * 1000,
+        email: parsed.email ?? store.email,
+        tenantId: parsed.tenantId ?? store.tenantId
     };
     writeTokenFile(updated);
     return updated;
@@ -422,13 +467,12 @@ export async function commandAuthLogin(flags: Record<string, string | boolean>):
     // SYNC-02: Auto-configure sync after successful login
     try {
         const serverUrl = new URL(authServer);
-        const apiBase = `${serverUrl.protocol}//api.${serverUrl.hostname.replace(/^auth\./, '')}`;
         saveConfig({
             'auth.server': authServer,
             'sync.enabled': true,
-            'sync.endpoint': `${apiBase}/v1/sync`
+            'sync.endpoint': `${authServer}/api/v1/sync`
         });
-        console.log(`Sync:         enabled (${apiBase}/v1/sync)`);
+        console.log(`Sync:         enabled (${authServer}/api/v1/sync)`);
     } catch {
         // Config write failure shouldn't block login
     }
@@ -488,12 +532,10 @@ export async function commandAuthRotate(flags: Record<string, string | boolean>)
     // Attempt to revoke the old refresh token (best-effort)
     if (oldRefreshToken !== updated.refreshToken) {
         try {
-            const body = urlEncode({
-                client_id: CLIENT_ID,
+            await httpJsonPost(`${authServer}/api/v1/auth/device/revoke`, {
                 token: oldRefreshToken,
-                token_type_hint: 'refresh_token'
-            });
-            await httpPost(`${authServer}/revoke`, body, 5_000);
+                tokenTypeHint: 'refresh_token'
+            }, 5_000);
             console.log('Old refresh token revoked.');
         } catch {
             console.warn('Warning: could not revoke old refresh token (server may not support revocation).');

@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep -l \"TODO\\\\|FIXME\\\\|HACK\\\\|BUG\\\\|XXX\")",
+      "Bash(cat /c/Users/Rajesh/development/0ctx-dev/packages/*/tsconfig.json)",
+      "Bash(git -C /c/Users/Rajesh/development/0ctx-dev log --oneline -20)",
+      "Bash(git -C /c/Users/Rajesh/development/0ctx-dev status)"
+    ]
+  }
+}
