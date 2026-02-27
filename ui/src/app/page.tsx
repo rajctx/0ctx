@@ -56,7 +56,7 @@ export default function HomePage() {
         if (!ctx) return;
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-        ctx.fillStyle = "#ffffff";
+        ctx.fillStyle = "rgba(249, 115, 22, 0.8)";
         ctx.fill();
       }
     }
@@ -90,14 +90,14 @@ export default function HomePage() {
             ctx.lineTo(nodes[j].x, nodes[j].y);
 
             const alpha = 1 - distance / CONNECTION_DISTANCE;
-            ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.2})`;
+            ctx.strokeStyle = `rgba(249, 115, 22, ${alpha * 0.3})`;
             ctx.stroke();
           }
         }
       }
 
       if (Math.random() > 0.95) {
-        ctx.strokeStyle = "rgba(255,255,255,0.05)";
+        ctx.strokeStyle = "rgba(249, 115, 22, 0.1)";
         ctx.beginPath();
         const rx = Math.random() * width;
         ctx.moveTo(rx, 0);

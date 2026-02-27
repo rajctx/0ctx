@@ -51,6 +51,17 @@ export default function LoginPage() {
         window.addEventListener('resize', resize);
         resize();
 
+        const handleKeydown = (e: KeyboardEvent) => {
+            const tag = (e.target as HTMLElement)?.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+            if (e.key.toLowerCase() === 'a') {
+                e.preventDefault();
+                window.location.href = '/api/auth/login';
+            }
+        };
+        window.addEventListener('keydown', handleKeydown);
+
         let animationId: number;
 
         function draw() {
@@ -65,7 +76,7 @@ export default function LoginPage() {
                 const char = chars[Math.floor(Math.random() * chars.length)];
 
                 if (Math.random() > 0.98) {
-                    ctx.fillStyle = 'var(--accent-gold, #c89b3c)';
+                    ctx.fillStyle = 'var(--accent-orange, #f97316)';
                 } else {
                     ctx.fillStyle = 'var(--text-dim, #333333)';
                 }
@@ -95,6 +106,7 @@ export default function LoginPage() {
 
         return () => {
             window.removeEventListener('resize', resize);
+            window.removeEventListener('keydown', handleKeydown);
             cancelAnimationFrame(animationId);
         };
     }, []);
@@ -151,11 +163,11 @@ export default function LoginPage() {
             --text-main: #e5e5e5;
             --text-muted: #666666;
             --text-dim: #333333;
-            --accent-gold: #c89b3c;
-            --accent-gold-dim: rgba(200, 155, 60, 0.15);
+            --accent-orange: #f97316;
+            --accent-orange-dim: rgba(249, 115, 22, 0.15);
             --border-color: #2a2a2a;
             --font-mono: 'SF Mono', 'Segoe UI Mono', 'Fira Code', 'Roboto Mono', monospace;
-            --cursor-color: #c89b3c;
+            --cursor-color: #f97316;
         }
 
         .auth-container {
@@ -265,8 +277,8 @@ export default function LoginPage() {
             width: 6px;
             height: 6px;
             border-radius: 50%;
-            background: var(--accent-gold);
-            box-shadow: 0 0 4px var(--accent-gold);
+            background: var(--accent-orange);
+            box-shadow: 0 0 4px var(--accent-orange);
         }
 
         .editor-body {
@@ -284,7 +296,7 @@ export default function LoginPage() {
         }
 
         .line-active {
-            background: var(--accent-gold-dim);
+            background: var(--accent-orange-dim);
         }
 
         .line-number {
@@ -323,12 +335,12 @@ export default function LoginPage() {
         .ghost-input {
             background: transparent;
             border: none;
-            color: var(--accent-gold);
+            color: var(--accent-orange);
             font-family: var(--font-mono);
             font-size: 14px;
             width: 100%;
             margin-left: 8px;
-            caret-color: var(--accent-gold);
+            caret-color: var(--accent-orange);
             outline: none;
         }
         
@@ -338,7 +350,7 @@ export default function LoginPage() {
         }
 
         .cursor-indicator {
-            color: var(--accent-gold);
+            color: var(--accent-orange);
             margin-right: 4px;
             opacity: 0;
         }
@@ -367,13 +379,13 @@ export default function LoginPage() {
         }
 
         .menu-item.primary-action {
-            color: var(--accent-gold);
-            background: var(--accent-gold-dim);
-            border-left: 2px solid var(--accent-gold);
+            color: var(--accent-orange);
+            background: var(--accent-orange-dim);
+            border-left: 2px solid var(--accent-orange);
         }
         
         .menu-item.primary-action:hover {
-            background: rgba(200, 155, 60, 0.25);
+            background: rgba(249, 115, 22, 0.25);
         }
 
         .google-btn {
@@ -392,8 +404,8 @@ export default function LoginPage() {
         }
 
         .toggle-opt.active {
-            color: var(--accent-gold);
-            border-bottom: 1px solid var(--accent-gold);
+            color: var(--accent-orange);
+            border-bottom: 1px solid var(--accent-orange);
         }
 
         .shortcuts-bar {
@@ -442,7 +454,7 @@ export default function LoginPage() {
                         <canvas ref={canvasRef} className="ascii-canvas"></canvas>
                         <div className="overlay-text">
                             <div className="brand-hero">
-                                <span style={{ color: 'var(--accent-gold)' }}>// 0ctx_daemon_v2.4</span><br />
+                                <span style={{ color: 'var(--accent-orange)' }}>// 0ctx_daemon_v2.4</span><br />
                                 <strong>PERSISTENT MEMORY LAYER</strong><br /><br />
                                 Target: Autonomous Agents<br />
                                 Status: <span className="blink">LISTENING</span><br />

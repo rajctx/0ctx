@@ -6,10 +6,10 @@
 
   /* Dashboard Structure Variables mapped to new design */
   --bg-color: #030303;
-  --fg-color: #e0e0e0;
-  --dim-color: #4a4a4a;
-  --accent-color: #ffffff;
-  --grid-line: rgba(255, 255, 255, 0.1);
+  --fg-color: #e5e5e5;
+  --dim-color: #333333;
+  --accent-color: #f97316;
+  --grid-line: #2a2a2a;
 
   /* Mapping old UI variable names to the new aesthetic */
   --bg-canvas: var(--bg-color);
@@ -18,25 +18,25 @@
   --bg-gradient-b: transparent;
 
   --surface-base: var(--bg-color);
-  --surface-raised: #080808;
+  --surface-raised: #050505;
   --surface-subtle: rgba(255, 255, 255, 0.03);
   --surface-glass: rgba(0, 0, 0, 0.8);
   --surface-overlay: rgba(0, 0, 0, 0.9);
 
   --text-primary: var(--fg-color);
-  --text-secondary: #aaaaaa;
+  --text-secondary: #666666;
   --text-muted: var(--dim-color);
   --text-inverse: var(--bg-color);
 
   --border-muted: var(--grid-line);
   --border-strong: var(--dim-color);
-  --focus-ring: rgba(255, 255, 255, 0.2);
+  --focus-ring: rgba(249, 115, 22, 0.25);
 
   --accent-strong: var(--accent-color);
-  --accent-strong-hover: #cccccc;
+  --accent-strong-hover: #fdba74;
   --accent-contrast: var(--bg-color);
-  --accent-soft: rgba(255, 255, 255, 0.1);
-  --accent-border: var(--fg-color);
+  --accent-soft: rgba(249, 115, 22, 0.15);
+  --accent-border: var(--accent-color);
   --accent-text: var(--accent-color);
 
   --danger-bg: rgba(225, 29, 72, 0.16);
@@ -44,14 +44,14 @@
   --danger-border: rgba(251, 113, 133, 0.4);
   --danger-fg: #fecdd3;
 
-  --graph-edge: rgba(255, 255, 255, 0.1);
-  --graph-edge-active: rgba(255, 255, 255, 0.4);
-  --graph-node-outline: #000000;
+  --graph-edge: rgba(249, 115, 22, 0.3);
+  --graph-edge-active: rgba(249, 115, 22, 0.8);
+  --graph-node-outline: #2a2a2a;
   --graph-label: var(--fg-color);
   --graph-canvas-bg: var(--bg-color);
   --graph-canvas-grid: var(--grid-line);
-  --graph-node-fill: var(--dim-color);
-  --graph-node-text: var(--fg-color);
+  --graph-node-fill: #080808;
+  --graph-node-text: var(--accent-color);
 
   --radius-sm: 0px;
   --radius-md: 0px;

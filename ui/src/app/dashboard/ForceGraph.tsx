@@ -41,7 +41,7 @@ function CustomNode({ data, selected }: any) {
       }}
     >
       <div
-        className={`absolute inset-0 rounded-full transition-all duration-300 ${selected ? 'ring-2 ring-offset-2 ring-offset-[#070d18] scale-110' : 'hover:scale-110'}`}
+        className={`absolute inset-0 rounded-full transition-all duration-300 ${selected ? 'ring-2 ring-offset-2 ring-offset-[var(--surface-base)] scale-110' : 'hover:scale-110'}`}
         style={{
           backgroundColor: meta?.color || '#333333',
           opacity: 0.35,
@@ -272,7 +272,7 @@ function FlowEngine({
     >
       <Background color="#cbd5e1" gap={24} size={2} style={{ opacity: 0.15 }} />
       <Controls
-        className="!bg-white !backdrop-blur-none !shadow-lg !overflow-hidden !border-none !rounded-full [&_button]:!bg-white [&_button]:!border-b [&_button]:!border-gray-100 hover:[&_button]:!bg-gray-50 last:[&_button]:!border-b-0 py-1 [&_svg]:!fill-slate-700"
+        className="!bg-[var(--surface-raised)] !backdrop-blur-none !shadow-lg !overflow-hidden !border !border-[var(--border-muted)] !rounded-full [&_button]:!bg-[var(--surface-raised)] [&_button]:!border-b [&_button]:!border-[var(--border-muted)] hover:[&_button]:!bg-[var(--accent-soft)] last:[&_button]:!border-b-0 py-1 [&_svg]:!fill-[var(--text-muted)] hover:[&_svg]:!fill-[var(--accent-color)]"
         showInteractive={false}
       />
     </ReactFlow>
@@ -281,7 +281,7 @@ function FlowEngine({
 
 export default function ForceGraph(props: ForceGraphProps) {
   return (
-    <div className="absolute inset-0 h-full w-full bg-[#070d18] rounded-lg overflow-hidden">
+    <div className="absolute inset-0 h-full w-full bg-[var(--surface-base)] rounded-lg overflow-hidden">
       <ReactFlowProvider>
         <FlowEngine {...props} />
       </ReactFlowProvider>

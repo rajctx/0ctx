@@ -16,9 +16,8 @@
                         'panel-header': '#080808',
                         text: '#e5e5e5',
                         muted: '#666666',
-                        dim: '#333333',
-                        gold: '#c89b3c',
-                        'gold-dim': 'rgba(200, 155, 60, 0.15)',
+                        orange: '#f97316',
+                        'orange-dim': 'rgba(249, 115, 22, 0.15)',
                         border: '#2a2a2a',
                     },
                     fontFamily: {
@@ -76,7 +75,7 @@
         }
 
         .line-active {
-            background: rgba(200, 155, 60, 0.1);
+            background: rgba(249, 115, 22, 0.1);
         }
 
         .line-active .line-number {
@@ -97,10 +96,10 @@
 
         <div class="relative z-10 pointer-events-none p-10 max-w-[600px] w-full self-center">
             <div class="text-muted text-sm mb-5 tracking-wide">
-                <span class="text-gold">// 0ctx_daemon_v2.4</span><br>
+                <span class="text-orange">// 0ctx_daemon_v2.4</span><br>
                 <strong class="text-text font-medium">PERSISTENT MEMORY LAYER</strong><br><br>
                 Target: Autonomous Agents<br>
-                Status: <span class="text-gold animate-pulse">LISTENING</span><br>
+                Status: <span class="text-orange animate-pulse">LISTENING</span><br>
                 Uptime: 99.999%
             </div>
             <div class="text-dim text-[10px] mt-4 max-w-md">
@@ -117,14 +116,14 @@
             <div
                 class="border-b border-border p-2 px-3 text-muted text-xs flex justify-between bg-panel-header select-none">
                 <div class="flex items-center gap-2">
-                    <div class="w-1.5 h-1.5 rounded-full bg-gold shadow-[0_0_4px_var(--accent-gold)]"></div>
+                    <div class="w-1.5 h-1.5 rounded-full bg-orange shadow-[0_0_4px_theme(colors.orange)]"></div>
                     <span>user_session.config</span>
                 </div>
                 <div class="flex gap-4">
                     <button type="button" id="tab-login" onclick="switchMode('login')"
-                        class="hover:text-gold transition-colors text-gold border-b border-gold pb-[1px]">LOGIN</button>
+                        class="hover:text-orange transition-colors text-orange border-b border-orange pb-[1px]">LOGIN</button>
                     <button type="button" id="tab-signup" onclick="switchMode('signup')"
-                        class="hover:text-gold transition-colors text-dim border-b border-transparent pb-[1px]">SIGNUP</button>
+                        class="hover:text-orange transition-colors text-dim border-b border-transparent pb-[1px]">SIGNUP</button>
                 </div>
             </div>
 
@@ -147,12 +146,12 @@
                         104</div>
                     <div class="grow pr-5 flex items-center w-full relative">
                         <span
-                            class="absolute -left-3 text-gold opacity-100 cursor-indicator transition-opacity">→</span>
+                            class="absolute -left-3 text-orange opacity-100 cursor-indicator transition-opacity">→</span>
                         <span class="syntax-keyword mr-2">const</span>
                         <span class="syntax-var mr-2">identity</span>
                         <span class="syntax-op mr-2">=</span>
                         <input type="email" id="input-email"
-                            class="bg-transparent border-none text-gold w-full no-outline font-mono text-sm placeholder:italic"
+                            class="bg-transparent border-none text-orange w-full no-outline font-mono text-sm placeholder:italic"
                             placeholder="&quot;enter_email@domain.com&quot;" onfocus="highlightLine('line-email')"
                             autocomplete="off" required>
                     </div>
@@ -162,12 +161,13 @@
                     <div class="w-[50px] text-right pr-4 text-dim select-none shrink-0 line-number transition-colors">
                         105</div>
                     <div class="grow pr-5 flex items-center w-full relative">
-                        <span class="absolute -left-3 text-gold opacity-0 cursor-indicator transition-opacity">→</span>
+                        <span
+                            class="absolute -left-3 text-orange opacity-0 cursor-indicator transition-opacity">→</span>
                         <span class="syntax-keyword mr-2">let</span>
                         <span class="syntax-var mr-2">secret</span>
                         <span class="syntax-op mr-2">=</span>
                         <input type="password" id="input-pass"
-                            class="bg-transparent border-none text-gold w-full no-outline font-mono text-sm placeholder:italic"
+                            class="bg-transparent border-none text-orange w-full no-outline font-mono text-sm placeholder:italic"
                             placeholder="&quot;********&quot;" onfocus="highlightLine('line-pass')" autocomplete="off"
                             required>
                     </div>
@@ -177,12 +177,13 @@
                     <div class="w-[50px] text-right pr-4 text-dim select-none shrink-0 line-number transition-colors">
                         106</div>
                     <div class="grow pr-5 flex items-center w-full relative">
-                        <span class="absolute -left-3 text-gold opacity-0 cursor-indicator transition-opacity">→</span>
+                        <span
+                            class="absolute -left-3 text-orange opacity-0 cursor-indicator transition-opacity">→</span>
                         <span class="syntax-keyword mr-2">let</span>
                         <span class="syntax-var mr-2">verify</span>
                         <span class="syntax-op mr-2">=</span>
                         <input type="password" id="input-confirm"
-                            class="bg-transparent border-none text-gold w-full no-outline font-mono text-sm placeholder:italic"
+                            class="bg-transparent border-none text-orange w-full no-outline font-mono text-sm placeholder:italic"
                             placeholder="&quot;confirm_secret&quot;" onfocus="highlightLine('line-confirm')"
                             autocomplete="off">
                     </div>
@@ -197,7 +198,7 @@
                     <div class="w-[50px] text-right pr-4 text-dim select-none shrink-0 line-num-dynamic">107</div>
                     <div class="grow pr-5 w-full">
                         <button type="submit" id="submit-btn"
-                            class="flex items-center w-full text-left text-gold bg-gold-dim border-l-2 border-gold py-2 px-3 hover:bg-[rgba(200,155,60,0.25)] transition-all group/btn mb-2"
+                            class="flex items-center w-full text-left text-orange bg-orange-dim border-l-2 border-orange py-2 px-3 hover:bg-[rgba(249,115,22,0.25)] transition-all group/btn mb-2"
                             style="cursor: pointer;">
                             <span class="mr-3 opacity-70 group-hover/btn:opacity-100 transition-opacity">→</span>
                             <span id="submit-text">Execute_Login()</span>
@@ -262,10 +263,10 @@
             const confirmInput = document.getElementById('input-confirm');
 
             if (mode === 'signup') {
-                loginTab.classList.remove('text-gold', 'border-gold');
+                loginTab.classList.remove('text-orange', 'border-orange');
                 loginTab.classList.add('text-dim', 'border-transparent');
 
-                signupTab.classList.add('text-gold', 'border-gold');
+                signupTab.classList.add('text-orange', 'border-orange');
                 signupTab.classList.remove('text-dim', 'border-transparent');
 
                 confirmLine.classList.remove('hidden');
@@ -276,10 +277,10 @@
                 dynamicNums[1].innerText = "108";
                 dynamicNums[2].innerText = "109";
             } else {
-                signupTab.classList.remove('text-gold', 'border-gold');
+                signupTab.classList.remove('text-orange', 'border-orange');
                 signupTab.classList.add('text-dim', 'border-transparent');
 
-                loginTab.classList.add('text-gold', 'border-gold');
+                loginTab.classList.add('text-orange', 'border-orange');
                 loginTab.classList.remove('text-dim', 'border-transparent');
 
                 confirmLine.classList.add('hidden');
@@ -440,11 +441,11 @@
             draw(ctx) {
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-                ctx.fillStyle = this.isRoot ? '#c89b3c' : (this.glow > 5 ? '#c89b3c' : '#444');
+                ctx.fillStyle = this.isRoot ? '#f97316' : (this.glow > 5 ? '#f97316' : '#444');
 
                 if (this.isRoot || this.glow > 0) {
                     ctx.shadowBlur = this.glow;
-                    ctx.shadowColor = '#c89b3c';
+                    ctx.shadowColor = '#f97316';
                 } else {
                     ctx.shadowBlur = 0;
                 }
@@ -453,7 +454,7 @@
                 ctx.shadowBlur = 0;
 
                 ctx.fillStyle = this.isRoot ? '#e5e5e5' : '#666';
-                if (this.glow > 5) ctx.fillStyle = '#c89b3c';
+                if (this.glow > 5) ctx.fillStyle = '#f97316';
 
                 ctx.font = this.isRoot ? "bold 14px monospace" : "11px monospace";
                 ctx.fillText(this.label, this.x + 12, this.y + 4);
@@ -578,9 +579,9 @@
                 const cx = s.source.x + (s.target.x - s.source.x) * s.progress;
                 const cy = s.source.y + (s.target.y - s.source.y) * s.progress;
 
-                ctx.fillStyle = '#c89b3c';
+                ctx.fillStyle = '#f97316';
                 ctx.shadowBlur = 5;
-                ctx.shadowColor = '#c89b3c';
+                ctx.shadowColor = '#f97316';
                 ctx.beginPath();
                 ctx.arc(cx, cy, 2, 0, Math.PI * 2);
                 ctx.fill();
@@ -607,6 +608,20 @@
             animate();
             document.getElementById('input-email').focus();
         }, 100);
+
+        // Global Keymap Hooks
+        document.addEventListener('keydown', function (e) {
+            // Ignore if user is typing in an input field
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                return;
+            }
+
+            // [G] for Google OAuth
+            if (e.key.toLowerCase() === 'g') {
+                e.preventDefault();
+                document.getElementById('google-btn').click();
+            }
+        });
 
     </script>
 </body>
