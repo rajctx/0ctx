@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 const uiDir = path.resolve(__dirname, '..');
-const standaloneDir = path.resolve(uiDir, '.next/standalone/packages/ui');
+const standaloneDir = path.resolve(uiDir, '.next/standalone/ui');
 
 if (!fs.existsSync(standaloneDir)) {
     console.error('Standalone dir not found. Did you run `next build` with `output: "standalone"`?');

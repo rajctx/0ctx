@@ -2,7 +2,7 @@
   "name": "@0ctx/ui",
   "version": "1.0.0",
   "private": true,
-  "main": ".next/standalone/packages/ui/server.js",
+  "main": ".next/standalone/ui/server.js",
   "files": [
     ".next/standalone"
   ],
