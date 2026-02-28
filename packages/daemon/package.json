@@ -1,6 +1,6 @@
 {
   "name": "@0ctx/daemon",
-  "version": "0.1.2",
+  "version": "0.1.5",
   "private": true,
   "description": "0ctx persistent local daemon – IPC server and DB owner",
   "main": "dist/index.js",

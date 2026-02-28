@@ -53,12 +53,7 @@ function getBestSuggestion(line: string, completions: string[]): string {
 }
 
 function getCompletionCandidates(): string[] {
-    return [
-        '/help',
-        '/clear',
-        '/history',
-        '/exit',
-        '/present-option',
+    const commands = [
         'setup',
         'install',
         'bootstrap',
@@ -71,6 +66,7 @@ function getCompletionCandidates(): string[] {
         'auth login',
         'auth logout',
         'auth status',
+        'auth rotate',
         'config list',
         'config get',
         'config set',
@@ -85,8 +81,12 @@ function getCompletionCandidates(): string[] {
         'connector queue purge',
         'connector queue logs',
         'daemon start',
-        'daemon service status'
+        'daemon service status',
     ];
+    const builtins = ['/help', '/clear', '/history', '/exit', '/present-option'];
+    // Also expose slash-prefixed variants of every command so `/auth login` autocompletes
+    const slashVariants = commands.map(c => `/${c}`);
+    return [...builtins, ...commands, ...slashVariants];
 }
 
 async function printShellHelp(): Promise<void> {
@@ -349,9 +349,13 @@ export async function runInteractiveShell(options: ShellOptions): Promise<number
 
             appendHistoryEntry(line);
 
+            // Strip leading '/' from non-built-in slash commands so that
+            // e.g. `/auth login` runs as `auth login`
+            const commandLine = line.startsWith('/') ? line.slice(1) : line;
+
             let tokens: string[];
             try {
-                tokens = tokenizeShellInput(line);
+                tokens = tokenizeShellInput(commandLine);
             } catch (error) {
                 console.error(error instanceof Error ? error.message : String(error));
                 lastExitCode = 1;

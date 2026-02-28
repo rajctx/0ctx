@@ -1945,13 +1945,25 @@ async function main(): Promise<number> {
             return 0;
         }
         if (process.stdin.isTTY && process.stdout.isTTY) {
-            // First-time experience: if no token exists, auto-run setup so the
-            // user doesn't have to know about `0ctx setup` on first install.
-            if (!resolveToken()) {
+            // Auto-run setup if this machine hasn't been fully configured yet.
+            // Checks: (1) no auth token, (2) no connector state on disk, or
+            // (3) connector was never cloud-registered on this machine.
+            const hasToken = !!resolveToken();
+            const connectorState = readConnectorState();
+            const isCloudRegistered = connectorState?.registrationMode === 'cloud';
+
+            if (!hasToken) {
                 console.log(color.bold('\nWelcome to 0ctx!'));
                 console.log(color.dim("Looks like this is your first time. Let's get you set up.\n"));
                 return commandSetup({});
             }
+
+            if (!connectorState || !isCloudRegistered) {
+                console.log(color.bold('\nAlmost there!'));
+                console.log(color.dim("This machine isn't registered yet. Running setup to connect it...\n"));
+                return commandSetup({});
+            }
+
             return commandShell();
         }
         printHelp();
