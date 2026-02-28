@@ -46,6 +46,12 @@ function question(rl: readline.Interface, prompt: string): Promise<string> {
     });
 }
 
+function getBestSuggestion(line: string, completions: string[]): string {
+    const normalized = line.trim();
+    if (!normalized) return '';
+    return completions.find(c => c.startsWith(normalized) && c !== normalized) ?? '';
+}
+
 function getCompletionCandidates(): string[] {
     return [
         '/help',
@@ -249,12 +255,50 @@ export async function runInteractiveShell(options: ShellOptions): Promise<number
 
     rl.history = [...history].reverse();
 
+    // Inline ghost text (fish-shell style autosuggestions)
+    readline.emitKeypressEvents(process.stdin);
+    let ghostSuffix = '';
+
+    const updateGhostText = () => {
+        const line: string = (rl as any).line ?? '';
+        const suggestion = getBestSuggestion(line, completions);
+        ghostSuffix = suggestion ? suggestion.slice(line.length) : '';
+        if (ghostSuffix) {
+            // Save cursor, write dim suggestion suffix, restore cursor
+            process.stdout.write('\x1b[s\x1b[2m' + ghostSuffix + '\x1b[0m\x1b[u');
+        }
+    };
+
+    const keypressHandler = (_ch: string | undefined, key: readline.Key | undefined) => {
+        if (!key) return;
+
+        // Right arrow at end of line: accept ghost suggestion
+        if (key.name === 'right' && ghostSuffix) {
+            setImmediate(() => {
+                const cursor: number = (rl as any).cursor ?? 0;
+                const line: string = (rl as any).line ?? '';
+                if (cursor >= line.length && ghostSuffix) {
+                    const toInsert = ghostSuffix;
+                    ghostSuffix = '';
+                    rl.write(toInsert);
+                }
+            });
+            return;
+        }
+
+        // After readline re-renders, compute and show the new ghost text
+        setImmediate(updateGhostText);
+    };
+
+    process.stdin.on('keypress', keypressHandler);
+
     await printShellHelp();
 
     let lastExitCode = 0;
     let interrupted = false;
 
     rl.on('SIGINT', () => {
+        ghostSuffix = '';
         if (interrupted) {
             rl.close();
             return;
@@ -317,6 +361,7 @@ export async function runInteractiveShell(options: ShellOptions): Promise<number
             lastExitCode = await runShellCommand(tokens, options);
         }
     } finally {
+        process.stdin.off('keypress', keypressHandler);
         rl.close();
     }
 
