@@ -15,6 +15,7 @@
     "start:mcp": "node packages/mcp/dist/index.js",
     "dev:mcp": "node packages/mcp/dist/index.js",
     "cli": "node packages/cli/dist/index.js",
+    "cli:install-local": "npm run build && node -e \"const{execSync}=require('child_process');const g=execSync('npm root -g').toString().trim();const src='packages/cli/dist/index.js';const dst=g+'/@0ctx/cli/dist/index.js';require('fs').copyFileSync(src,dst);console.log('Installed to '+dst);\"",
     "bootstrap:mcp": "npm run build && node packages/mcp/dist/bootstrap.js",
     "bootstrap:mcp:dry": "npm run build && node packages/mcp/dist/bootstrap.js --dry-run",
     "repo:check-nested-git": "powershell -ExecutionPolicy Bypass -File scripts/repo/check-nested-git.ps1",

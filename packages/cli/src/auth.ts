@@ -72,6 +72,27 @@ interface TokenErrorResponse {
 }
 
 // Proxy BFF response shapes (camelCase — what 0ctx.com returns)
+interface BffError {
+    code: string;
+    message: string;
+    retryable?: boolean;
+    correlationId?: string;
+}
+
+/** Extract a readable message from either BFF error shape. */
+function bffErrorMessage(error: BffError | string | undefined): string {
+    if (!error) return 'unknown error';
+    if (typeof error === 'string') return error;
+    return error.message ?? error.code ?? 'unknown error';
+}
+
+/** Extract the error code for polling state comparisons. */
+function bffErrorCode(error: BffError | string | undefined): string | undefined {
+    if (!error) return undefined;
+    if (typeof error === 'string') return error;
+    return error.code;
+}
+
 interface BffDeviceCodeResponse {
     deviceCode: string;
     userCode: string;
@@ -79,8 +100,8 @@ interface BffDeviceCodeResponse {
     verificationUriComplete?: string;
     expiresIn: number;
     interval: number;
-    // Error shape
-    error?: string;
+    // BFF always uses object errors for this endpoint
+    error?: BffError;
 }
 
 interface BffTokenResponse {
@@ -91,8 +112,9 @@ interface BffTokenResponse {
     expiresIn?: number;
     email?: string | null;
     tenantId?: string | null;
-    // Error shape
-    error?: string;
+    // Polling passthrough errors ("authorization_pending" etc.) are plain strings.
+    // BFF hard errors (device_auth_upstream_error etc.) are BffError objects.
+    error?: BffError | string;
     errorDescription?: string;
 }
 
@@ -280,7 +302,7 @@ async function requestDeviceCode(authServer: string): Promise<DeviceCodeResponse
 
     const parsed = JSON.parse(raw) as BffDeviceCodeResponse;
     if (parsed.error || !parsed.deviceCode || !parsed.userCode) {
-        throw new Error(`Device code error: ${parsed.error ?? 'unexpected response'} — ${raw}`);
+        throw new Error(`Device code error: ${bffErrorMessage(parsed.error)} — ${raw}`);
     }
 
     // Map camelCase BFF response → internal snake_case shape
@@ -333,18 +355,19 @@ async function pollForToken(
             };
         }
 
-        if (parsed.error === 'authorization_pending') continue;
-        if (parsed.error === 'slow_down') {
+        const errCode = bffErrorCode(parsed.error);
+        if (errCode === 'authorization_pending') continue;
+        if (errCode === 'slow_down') {
             await sleep(5_000);
             continue;
         }
-        if (parsed.error === 'expired_token') {
+        if (errCode === 'expired_token') {
             throw new Error('Device code expired. Run `0ctx auth login` again.');
         }
-        if (parsed.error === 'access_denied') {
+        if (errCode === 'access_denied') {
             throw new Error('Authorization denied by user.');
         }
-        throw new Error(`Token error: ${parsed.error ?? 'unknown'} — ${parsed.errorDescription ?? ''}`);
+        throw new Error(`Token error: ${bffErrorMessage(parsed.error)} — ${parsed.errorDescription ?? ''}`);
     }
 
     throw new Error('Device code expired (timed out). Run `0ctx auth login` again.');
@@ -367,7 +390,7 @@ export async function refreshAccessToken(store: TokenStore): Promise<TokenStore>
 
     const parsed = JSON.parse(raw) as BffTokenResponse;
     if (!parsed.accessToken) {
-        throw new Error(`Refresh error: ${parsed.error ?? 'unknown'} — ${parsed.errorDescription ?? ''}`);
+        throw new Error(`Refresh error: ${bffErrorMessage(parsed.error)} — ${parsed.errorDescription ?? ''}`);
     }
 
     // SEC-04: Validate token_type

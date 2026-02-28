@@ -15,8 +15,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { correlationId, errorResponse, jsonResponse } from '@/lib/bff';
 
 const AUTH0_ISSUER = process.env.AUTH0_ISSUER_BASE_URL ?? '';
-const AUTH0_CLIENT_ID = process.env.AUTH0_CLIENT_ID ?? '';
+// AUTH0_DEVICE_CLIENT_ID must be a "Native" application in Auth0 to support
+// the Device Code grant (RFC 8628). Falls back to AUTH0_CLIENT_ID so that
+// existing deployments continue to surface a clear 503 until configured.
+const AUTH0_CLIENT_ID =
+  process.env.AUTH0_DEVICE_CLIENT_ID ?? process.env.AUTH0_CLIENT_ID ?? '';
 const CTX_UI_BASE_URL = process.env.CTX_UI_BASE_URL ?? 'http://localhost:3000';
+// Audience must match the API Identifier configured in the Auth0 dashboard.
+// Set AUTH0_AUDIENCE to match exactly what's in manage.auth0.com → APIs.
+const AUTH0_AUDIENCE = process.env.AUTH0_AUDIENCE ?? 'https://0ctx.com/api';
 
 // ─── POST: Initiate device authorization ──────────────────────────────────────
 
@@ -48,7 +55,7 @@ export async function POST(request: NextRequest) {
       body: new URLSearchParams({
         client_id: AUTH0_CLIENT_ID,
         scope,
-        audience: `${CTX_UI_BASE_URL}/api`
+        audience: AUTH0_AUDIENCE
       })
     });
 

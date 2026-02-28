@@ -15,7 +15,9 @@ import { NextRequest } from 'next/server';
 import { correlationId, errorResponse, jsonResponse } from '@/lib/bff';
 
 const AUTH0_ISSUER = process.env.AUTH0_ISSUER_BASE_URL ?? '';
-const AUTH0_CLIENT_ID = process.env.AUTH0_CLIENT_ID ?? '';
+// Must match the Native application used in the device initiation route.
+const AUTH0_CLIENT_ID =
+  process.env.AUTH0_DEVICE_CLIENT_ID ?? process.env.AUTH0_CLIENT_ID ?? '';
 
 /** Decode a JWT payload without verification (safe — token came from Auth0 over HTTPS). */
 function decodeJwtPayload(token: string): Record<string, unknown> | null {
