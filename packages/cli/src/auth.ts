@@ -31,7 +31,15 @@ import { getConfigValue, saveConfig } from '@0ctx/core';
 
 const DEFAULT_AUTH_SERVER = 'https://0ctx.com';
 const DEFAULT_SCOPE = 'openid profile email offline_access';
-const TOKEN_FILE = path.join(os.homedir(), '.0ctx', 'auth.json');
+
+/**
+ * Returns the token file path.
+ * Override with CTX_AUTH_FILE env var for testing or non-standard installs.
+ * Re-evaluated on each call so tests can override process.env at runtime.
+ */
+function getTokenFilePath(): string {
+    return process.env.CTX_AUTH_FILE ?? path.join(os.homedir(), '.0ctx', 'auth.json');
+}
 
 function getAuthServer(): string {
     return getConfigValue('auth.server').replace(/\/$/, '');
@@ -123,8 +131,9 @@ interface BffTokenResponse {
 /** Read from file only (sync fallback). */
 function readTokenFile(): TokenStore | null {
     try {
-        if (!fs.existsSync(TOKEN_FILE)) return null;
-        const raw = fs.readFileSync(TOKEN_FILE, 'utf8');
+        const f = getTokenFilePath();
+        if (!fs.existsSync(f)) return null;
+        const raw = fs.readFileSync(f, 'utf8');
         return JSON.parse(raw) as TokenStore;
     } catch {
         return null;
@@ -132,13 +141,14 @@ function readTokenFile(): TokenStore | null {
 }
 
 function writeTokenFile(store: TokenStore): void {
-    const dir = path.dirname(TOKEN_FILE);
+    const f = getTokenFilePath();
+    const dir = path.dirname(f);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(TOKEN_FILE, JSON.stringify(store, null, 2), { encoding: 'utf8', mode: 0o600 });
+    fs.writeFileSync(f, JSON.stringify(store, null, 2), { encoding: 'utf8', mode: 0o600 });
 }
 
 function clearTokenFile(): void {
-    try { fs.unlinkSync(TOKEN_FILE); } catch { /* already gone */ }
+    try { fs.unlinkSync(getTokenFilePath()); } catch { /* already gone */ }
 }
 
 /** Read token: keyring first, then file (sync compat wrapper). */
@@ -482,7 +492,7 @@ export async function commandAuthLogin(flags: Record<string, string | boolean>):
     console.log('');
     console.log(`Logged in as: ${store.email}`);
     if (store.tenantId) console.log(`Tenant:       ${store.tenantId}`);
-    console.log(`Stored in:    ${storageDest === 'keyring' ? 'OS credential store' : TOKEN_FILE}`);
+    console.log(`Stored in:    ${storageDest === 'keyring' ? 'OS credential store' : getTokenFilePath()}`);
     if (storageDest === 'file' && !insecure) {
         console.log('  (OS keyring unavailable — using plaintext file fallback)');
     }
@@ -576,7 +586,7 @@ export async function commandAuthRotate(flags: Record<string, string | boolean>)
     console.log(`Token rotated successfully.`);
     console.log(`  Email:     ${updated.email}`);
     console.log(`  Expires:   ${new Date(updated.expiresAt).toISOString()} (${expiresInHuman})`);
-    console.log(`  Stored in: ${storageDest === 'keyring' ? 'OS credential store' : TOKEN_FILE}`);
+    console.log(`  Stored in: ${storageDest === 'keyring' ? 'OS credential store' : getTokenFilePath()}`);
     return 0;
 }
 
@@ -638,7 +648,7 @@ export function commandAuthStatus(flags: Record<string, string | boolean>): numb
         console.log(`Email:     ${store.email}`);
         if (store.tenantId) console.log(`Tenant:    ${store.tenantId}`);
         console.log(`Expires:   ${expiresDate}`);
-        if (!isEnv) console.log(`File:      ${TOKEN_FILE}`);
+        if (!isEnv) console.log(`File:      ${getTokenFilePath()}`);
         if (expired && !isEnv) {
             console.log('');
             console.log('Token expired. Run: 0ctx auth login');

@@ -26,6 +26,7 @@ afterEach(() => {
     delete process.env.CTX_CONTROL_PLANE_URL;
     delete process.env.CTX_AUTH_TOKEN;
     delete process.env.CTX_AUTH_TOKEN_ROTATION_WARN_DAYS;
+    delete process.env.CTX_AUTH_FILE;
 });
 
 describe('Connector trust verification (SEC-001)', () => {
@@ -93,7 +94,9 @@ describe('Token expiry awareness (SEC-001)', () => {
     });
 
     it('returns no warning when not logged in', () => {
-        // No CTX_AUTH_TOKEN and no token file → null
+        // Point CTX_AUTH_FILE at a path that never exists so readTokenFile returns null,
+        // regardless of whether the developer has a real ~/.0ctx/auth.json on disk.
+        process.env.CTX_AUTH_FILE = '/nonexistent/ctx-test-auth-file-should-not-exist.json';
         const result = checkTokenExpiryWarning();
         expect(result.expiresInMs).toBeNull();
         expect(result.shouldWarn).toBe(false);
