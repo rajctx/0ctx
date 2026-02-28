@@ -263,6 +263,8 @@ export function runBootstrapFromCli(): number {
     return failed ? 1 : 0;
 }
 
-if (require.main === module) {
-    process.exitCode = runBootstrapFromCli();
-}
+// NOTE: Do NOT add a `require.main === module` auto-run block here.
+// When esbuild bundles this ESM file into the CLI's CJS bundle, the bundled
+// module's `module` object IS `require.main`, so the guard evaluates to true
+// on every CLI invocation — causing the bootstrap to run before every command.
+// Call runBootstrapFromCli() explicitly from the CLI entry point if needed.

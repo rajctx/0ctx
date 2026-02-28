@@ -261,7 +261,22 @@ async function commandStatus(): Promise<number> {
     const s = p.spinner();
     s.start('Checking daemon health');
 
-    const daemon = await isDaemonReachable();
+    let daemon = await isDaemonReachable();
+
+    // Auto-start daemon if not running (best-effort, no error if it fails)
+    if (!daemon.ok) {
+        s.message('Daemon not running — starting...');
+        try {
+            startDaemonDetached();
+            const started = await waitForDaemon(8000);
+            if (started) {
+                daemon = await isDaemonReachable();
+            }
+        } catch {
+            // Best-effort only — status will report offline if it didn't start
+        }
+    }
+
     s.stop(`Daemon is ${daemon.ok ? color.green('running') : color.red('not running')}`);
 
     const info: Record<string, string> = {
@@ -1964,8 +1979,11 @@ async function main(): Promise<number> {
             if (sub === 'logout') return Promise.resolve(commandAuthLogout());
             if (sub === 'status') return Promise.resolve(commandAuthStatus(parsed.flags));
             if (sub === 'rotate') return commandAuthRotate(parsed.flags);
-            printHelp();
-            return 1;
+            console.log(`\nAuthentication commands:\n`);
+            console.log(`  auth login    Start device-code login flow`);
+            console.log(`  auth logout   Clear stored credentials`);
+            console.log(`  auth status   Show current auth state\n`);
+            return sub ? 1 : 0;
         }
         case 'daemon':
             if (parsed.subcommand === 'start') {
