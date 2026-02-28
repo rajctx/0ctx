@@ -1,6 +1,6 @@
 {
   "name": "@0ctx/mcp",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "private": true,
   "description": "0ctx MCP stdio server – translates tool calls into daemon IPC",
   "main": "dist/index.js",

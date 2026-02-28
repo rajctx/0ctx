@@ -1,6 +1,6 @@
 {
   "name": "@0ctx/cli",
-  "version": "1.5.0",
+  "version": "0.1.0",
   "description": "0ctx product CLI – install, bootstrap, doctor, and service management",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
