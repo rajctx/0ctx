@@ -20,7 +20,8 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, '../..');
 
-if (!existsSync('dist')) mkdirSync('dist');
+const dist = resolve(__dirname, 'dist');
+if (!existsSync(dist)) mkdirSync(dist);
 
 // ── Workspace package aliases ────────────────────────────────────────────────
 // Point @0ctx/* imports directly at TypeScript source so esbuild compiles and
@@ -43,12 +44,12 @@ const alias = {
 console.log('→ Bundling @0ctx/cli (esbuild)...');
 
 await esbuild.build({
-  entryPoints: ['src/index.ts'],
+  entryPoints: [resolve(__dirname, 'src/index.ts')],
   bundle: true,
   platform: 'node',
   target: 'node18',
   format: 'cjs',
-  outfile: 'dist/index.js',
+  outfile: resolve(__dirname, 'dist/index.js'),
 
   // Workspace packages resolved above via alias
   alias,
