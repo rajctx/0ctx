@@ -586,14 +586,31 @@ let _store: Store | null = null;
 
 /**
  * Get the singleton store instance.
- * Uses PgStore when DATABASE_URL is set and NODE_ENV=production,
- * otherwise falls back to MemoryStore.
+ * Uses PrismaStore (Postgres) whenever DATABASE_URL is set — in both dev and production.
+ * Falls back to MemoryStore only when DATABASE_URL is absent (e.g. in unit tests).
+ *
+ * In development: set DATABASE_URL in ui/.env pointing to your Postgres instance.
+ * Local Postgres: `docker compose up postgres` then set DATABASE_URL=postgres://ctx:ctx_dev_password@localhost:5432/ctx
+ * Cloud Postgres: use a Neon or Supabase connection string.
  */
 export function getStore(): Store {
   if (_store) return _store;
 
-  const usePrisma = process.env.DATABASE_URL && process.env.NODE_ENV === 'production';
-  _store = usePrisma ? new PrismaStore() : new MemoryStore();
+  if (process.env.DATABASE_URL) {
+    _store = new PrismaStore();
+  } else {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(
+        'DATABASE_URL is required in production. Set it in your environment and re-deploy.'
+      );
+    }
+    console.warn(
+      '[store] DATABASE_URL not set — using in-memory store. Data will NOT persist. ' +
+        'Set DATABASE_URL in ui/.env or run: docker compose up postgres'
+    );
+    _store = new MemoryStore();
+  }
+
   return _store;
 }
 

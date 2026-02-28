@@ -111,7 +111,7 @@ export interface ConnectorCommandAckResponse {
 }
 
 function parseTimeoutMs(): number {
-    const raw = process.env.CTX_CONTROL_PLANE_TIMEOUT_MS;
+    const raw = process.env.CTX_API_TIMEOUT_MS ?? process.env.CTX_CONTROL_PLANE_TIMEOUT_MS;
     if (!raw) return DEFAULT_TIMEOUT_MS;
     const parsed = Number(raw);
     if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_TIMEOUT_MS;
@@ -119,7 +119,9 @@ function parseTimeoutMs(): number {
 }
 
 export function getControlPlaneBaseUrl(): string {
-    const explicit = process.env.CTX_CONTROL_PLANE_URL?.trim();
+    // CTX_API_URL is the canonical env var pointing to the deployed BFF/API.
+    // CTX_CONTROL_PLANE_URL is kept for backward compatibility.
+    const explicit = (process.env.CTX_API_URL ?? process.env.CTX_CONTROL_PLANE_URL)?.trim();
     if (explicit) return explicit.replace(/\/$/, '');
 
     try {

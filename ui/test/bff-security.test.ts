@@ -1,5 +1,5 @@
-import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { checkRateLimit, validateCsrf, signRequest } from '../src/lib/bff';
+import { describe, expect, it } from 'vitest';
+import { checkRateLimit, validateCsrf } from '../src/lib/bff';
 
 // Reset rate limit state between tests by clearing module-level map via re-import
 // Since the map is module-scoped, we test cumulative behavior within each test.
@@ -95,38 +95,5 @@ describe('CSRF validation (SEC-001)', () => {
             origin: 'not-a-url'
         });
         expect(validateCsrf(req)).toBe(false);
-    });
-});
-
-describe('Request signing (SEC-001)', () => {
-    const originalSecret = process.env.CTX_CP_SIGNING_SECRET;
-
-    afterEach(() => {
-        if (originalSecret !== undefined) {
-            process.env.CTX_CP_SIGNING_SECRET = originalSecret;
-        } else {
-            delete process.env.CTX_CP_SIGNING_SECRET;
-        }
-    });
-
-    it('returns empty headers when no secret is configured', () => {
-        // signRequest uses module-level constant, so this tests default behavior
-        const headers = signRequest('{"test": true}');
-        // If CTX_CP_SIGNING_SECRET is not set in env, returns empty
-        if (!process.env.CTX_CP_SIGNING_SECRET) {
-            expect(headers).toEqual({});
-        } else {
-            expect(headers).toHaveProperty('X-CTX-Timestamp');
-            expect(headers).toHaveProperty('X-CTX-Signature');
-        }
-    });
-
-    it('produces consistent signature for same input (when secret set)', () => {
-        // We test the function's structure — actual signing depends on module-level secret
-        const body = '{"action":"test"}';
-        const h1 = signRequest(body);
-        const h2 = signRequest(body);
-        // Both should have same structure
-        expect(Object.keys(h1)).toEqual(Object.keys(h2));
     });
 });

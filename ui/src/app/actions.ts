@@ -383,9 +383,9 @@ export async function runConnectorRegisterWorkflow(options: { requireCloud?: boo
 }
 
 export async function runConnectorQueueStatusWorkflow(): Promise<ConnectorQueueStatusWorkflowResult> {
-  const res = await bffGet<Record<string, unknown>>('/api/v1/runtime/status');
+  const res = await bffGet<Record<string, unknown>>('/api/v1/connector/queue/status');
   const base = bffToCliResult(res, 'connector-queue-status');
-  return { ...base, payload: res.data ? { stats: { pending: 0, ready: 0, backoff: 0, maxAttempts: 0 } } : null };
+  return { ...base, payload: res.data ?? null };
 }
 
 export async function runConnectorQueueDrainWorkflow(options: {
@@ -401,17 +401,17 @@ export async function runConnectorQueueDrainWorkflow(options: {
 export async function runConnectorQueuePurgeWorkflow(options: {
   all?: boolean; olderThanHours?: number; minAttempts?: number; dryRun?: boolean;
 } = {}): Promise<ConnectorQueuePurgeWorkflowResult> {
-  const now = Date.now();
-  return { ok: true, command: 'bff', args: ['connector-queue-purge'], exitCode: 0, stdout: '', stderr: '',
-    startedAt: now, finishedAt: now, durationMs: 0, payload: { removable: 0, total: 0, dryRun: options.dryRun ?? true } };
+  const res = await bffPost<Record<string, unknown>>('/api/v1/connector/queue/purge', options);
+  const base = bffToCliResult(res, 'connector-queue-purge');
+  return { ...base, payload: res.data ?? null };
 }
 
 export async function runConnectorQueueLogsWorkflow(options: {
   limit?: number; clear?: boolean; dryRun?: boolean;
 } = {}): Promise<ConnectorQueueLogsWorkflowResult> {
-  const now = Date.now();
-  return { ok: true, command: 'bff', args: ['connector-queue-logs'], exitCode: 0, stdout: '', stderr: '',
-    startedAt: now, finishedAt: now, durationMs: 0, payload: { entries: [] } };
+  const res = await bffGet<Record<string, unknown>>('/api/v1/connector/queue/logs', { params: options as Record<string, string> });
+  const base = bffToCliResult(res, 'connector-queue-logs');
+  return { ...base, payload: res.data ?? null };
 }
 
 export async function listAuditEventsAction(contextId?: string | null, limit = 50): Promise<AuditEventEntry[]> {

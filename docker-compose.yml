@@ -1,4 +1,4 @@
-# CLOUD-002: Production docker-compose for 0ctx
+# Production docker-compose for 0ctx
 # Usage: docker compose up -d
 # Requires: .env file with DATABASE_URL and AUTH0 secrets
 
@@ -23,7 +23,7 @@ services:
   app:
     build:
       context: .
-      dockerfile: packages/ui/Dockerfile
+      dockerfile: ui/Dockerfile
     restart: unless-stopped
     depends_on:
       postgres:
@@ -38,7 +38,6 @@ services:
       AUTH0_ISSUER_BASE_URL: ${AUTH0_ISSUER_BASE_URL}
       AUTH0_CLIENT_ID: ${AUTH0_CLIENT_ID}
       AUTH0_CLIENT_SECRET: ${AUTH0_CLIENT_SECRET}
-      CTX_CP_SIGNING_SECRET: ${CTX_CP_SIGNING_SECRET}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/v1/health"]
       interval: 10s

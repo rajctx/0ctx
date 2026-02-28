@@ -1,12 +1,8 @@
-import { randomUUID, createHmac } from 'crypto';
+import { randomUUID } from 'crypto';
 import { auth0 } from '@/lib/auth0';
 import { getStore } from '@/lib/store';
 
-const CONTROL_PLANE_URL =
-  process.env.CTX_CONTROL_PLANE_URL || 'http://127.0.0.1:8787';
-const BFF_TIMEOUT_MS = Number(process.env.CTX_BFF_TIMEOUT_MS) || 30_000;
 const BFF_RATE_LIMIT_RPM = Number(process.env.CTX_BFF_RATE_LIMIT_RPM) || 300;
-const CP_SIGNING_SECRET = process.env.CTX_CP_SIGNING_SECRET || '';
 
 // ─── SEC-001: Rate limiting (in-memory sliding window) ────────────────────────
 
@@ -70,24 +66,6 @@ export function validateCsrf(request: Request): boolean {
   return true;
 }
 
-// ─── SEC-001: Request signing for control-plane calls ─────────────────────────
-
-/**
- * Sign a request body with HMAC-SHA256 for control-plane verification.
- * Returns headers to attach. No-op if CTX_CP_SIGNING_SECRET is not set.
- */
-export function signRequest(body: string): Record<string, string> {
-  if (!CP_SIGNING_SECRET) return {};
-  const timestamp = Date.now().toString();
-  const signature = createHmac('sha256', CP_SIGNING_SECRET)
-    .update(`${timestamp}.${body}`)
-    .digest('hex');
-  return {
-    'X-CTX-Timestamp': timestamp,
-    'X-CTX-Signature': signature
-  };
-}
-
 export type RuntimePosture = 'connected' | 'degraded' | 'offline';
 export type SyncPolicy = 'local_only' | 'metadata_only' | 'full_sync';
 export type OnboardingStepStatus = 'todo' | 'in_progress' | 'blocked' | 'done';
@@ -138,8 +116,9 @@ export function errorResponse(
 }
 
 /**
- * Resolve Auth0 session. Returns access token string or null.
- * For dev without Auth0 configured, falls back to CTX_BFF_DEV_TOKEN env var.
+ * Resolve Auth0 session. Returns the access token string or null.
+ * Works for both browser sessions (Auth0 cookie) and CLI connectors
+ * (device-code bearer token forwarded via Authorization header).
  */
 export async function resolveSession(): Promise<string | null> {
   try {
@@ -150,11 +129,6 @@ export async function resolveSession(): Promise<string | null> {
   } catch {
     // Auth0 not configured or session unavailable.
   }
-
-  // Dev fallback: allow a static token for local development.
-  const devToken = process.env.CTX_BFF_DEV_TOKEN;
-  if (devToken) return devToken;
-
   return null;
 }
 
@@ -175,110 +149,9 @@ export async function requireSession(): Promise<
   return [token, null];
 }
 
-/** HTTP call to control-plane API. */
-export async function cpFetch(
-  path: string,
-  options: {
-    method?: string;
-    token: string;
-    body?: unknown;
-    timeoutMs?: number;
-    requestId?: string;
-  }
-): Promise<Response> {
-  const url = `${CONTROL_PLANE_URL}${path}`;
-  const controller = new AbortController();
-  const timeout = setTimeout(
-    () => controller.abort(),
-    options.timeoutMs ?? BFF_TIMEOUT_MS
-  );
-
-  try {
-    const bodyStr = options.body !== undefined ? JSON.stringify(options.body) : undefined;
-    const reqId = options.requestId ?? correlationId();
-
-    const headers: Record<string, string> = {
-      Authorization: `Bearer ${options.token}`,
-      'Content-Type': 'application/json',
-      'X-Request-Id': reqId,
-      ...signRequest(bodyStr ?? '')
-    };
-
-    const fetchOptions: RequestInit = {
-      method: options.method ?? 'GET',
-      headers,
-      signal: controller.signal
-    };
-
-    if (bodyStr !== undefined) {
-      fetchOptions.body = bodyStr;
-    }
-
-    return await fetch(url, fetchOptions);
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-/** Parse JSON from a control-plane response, returning null on failure. */
-export async function cpJson<T>(response: Response): Promise<T | null> {
-  try {
-    return (await response.json()) as T;
-  } catch {
-    return null;
-  }
-}
-
 /**
- * Execute a command on a connector via the control-plane command bridge.
- * Uses the synchronous /v1/connectors/commands/exec endpoint.
- */
-export async function cpExecCommand(
-  token: string,
-  machineId: string,
-  method: string,
-  params: Record<string, unknown> = {},
-  options: { contextId?: string; timeoutMs?: number } = {}
-): Promise<{ ok: boolean; result: unknown; error?: string }> {
-  const res = await cpFetch('/v1/connectors/commands/exec', {
-    method: 'POST',
-    token,
-    body: {
-      machineId,
-      method,
-      params,
-      contextId: options.contextId ?? null,
-      timeoutMs: options.timeoutMs ?? 15_000
-    },
-    timeoutMs: (options.timeoutMs ?? 15_000) + 5_000
-  });
-
-  const data = await cpJson<{
-    ok?: boolean;
-    result?: unknown;
-    error?: string;
-    status?: string;
-  }>(res);
-
-  if (!res.ok || !data) {
-    return {
-      ok: false,
-      result: null,
-      error: data?.error ?? `Control-plane returned ${res.status}`
-    };
-  }
-
-  return {
-    ok: data.ok !== false && data.status !== 'failed',
-    result: data.result ?? data,
-    error: data.error
-  };
-}
-
-/**
- * Execute a command on a connector via the in-process store (CLOUD-002).
- * Replaces the old cpExecCommand which made an HTTP hop to the control-plane.
- * Enqueues the command and polls the store until ack or timeout.
+ * Execute a command on a connector via the in-process store.
+ * Enqueues the command into Postgres and polls until the connector acks it.
  */
 export async function storeExecCommand(
   machineId: string,
