@@ -1,8 +1,22 @@
-# Changelog
+﻿# Changelog
 
 All notable changes to 0ctx are tracked here.
 
 ## [Unreleased]
+
+### Platform (Core/Daemon/MCP)
+- _None recorded._
+
+### Product (CLI/UI)
+- _None recorded._
+
+### Governance & Release
+- _None recorded._
+
+### Security & Compliance
+- _None recorded._
+
+## [v0.1.0] - 2026-02-28
 
 ### Platform (Core/Daemon/MCP)
 

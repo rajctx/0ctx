@@ -529,7 +529,7 @@ async function commandReleasePublish(flags: Record<string, string | boolean>): P
     const versionRaw = parseOptionalStringFlag(flags.version);
     if (!versionRaw) {
         console.error('Missing required --version argument.');
-        console.error('Usage: 0ctx release publish --version vX.Y.Z [--tag latest] [--otp 123456] [--dry-run] [--json]');
+        console.error('Usage: 0ctx release publish --version vX.Y.Z [--tag latest] [--otp 123456] [--dry-run] [--allow-dirty] [--json]');
         return 1;
     }
 
@@ -537,6 +537,7 @@ async function commandReleasePublish(flags: Record<string, string | boolean>): P
         version: versionRaw,
         tag: parseOptionalStringFlag(flags.tag) ?? 'latest',
         dryRun: Boolean(flags['dry-run']),
+        allowDirty: Boolean(flags['allow-dirty']),
         otp: parseOptionalStringFlag(flags.otp) ?? undefined,
         skipValidate: Boolean(flags['skip-validate']),
         skipChangelog: Boolean(flags['skip-changelog']),

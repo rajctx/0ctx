@@ -23,6 +23,7 @@ export interface ReleasePublishOptions {
     version: string;
     tag?: string;
     dryRun?: boolean;
+    allowDirty?: boolean;
     otp?: string;
     skipValidate?: boolean;
     skipChangelog?: boolean;
@@ -153,6 +154,7 @@ async function runPublishScript(
     params: {
         repoRoot: string;
         dryRun: boolean;
+        allowDirty?: boolean;
         otp?: string;
         tag: string;
     },
@@ -161,7 +163,10 @@ async function runPublishScript(
     const scriptPath = path.join(params.repoRoot, 'scripts', 'release', 'publish-packages.ps1');
     const args = ['-ExecutionPolicy', 'Bypass', '-File', scriptPath, '-Tag', params.tag];
     if (params.dryRun) {
-        args.push('-DryRun', '-AllowDirty');
+        args.push('-DryRun');
+    }
+    if (params.allowDirty) {
+        args.push('-AllowDirty');
     }
     if (params.otp) {
         args.push('-OTP', params.otp);
@@ -189,7 +194,9 @@ export async function runReleasePublish(options: ReleasePublishOptions): Promise
     };
 
     if (!options.skipValidate) {
-        const validateArgs = dryRun ? ['-DryRun', '-AllowDirty'] : [];
+        const validateArgs: string[] = [];
+        if (dryRun) validateArgs.push('-DryRun');
+        if (options.allowDirty) validateArgs.push('-AllowDirty');
         const ok = await pushAndCheck(runNpmScript('validate', 'release:validate', validateArgs, repoRoot, outputMode));
         if (!ok) {
             return { ok: false, repoRoot, version, tag, dryRun, steps };
@@ -254,6 +261,7 @@ export async function runReleasePublish(options: ReleasePublishOptions): Promise
                 {
                     repoRoot,
                     dryRun,
+                    allowDirty: options.allowDirty,
                     otp: options.otp,
                     tag
                 },
