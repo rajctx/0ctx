@@ -16,8 +16,6 @@ All notable changes to 0ctx are tracked here.
 ### Security & Compliance
 - _None recorded._
 
-## [v0.1.0] - 2026-02-28
-
 ### Platform (Core/Daemon/MCP)
 
 - Added enterprise hardening features across core/daemon/mcp (audit, backup, metrics, protocol/session).
