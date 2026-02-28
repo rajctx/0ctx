@@ -3,20 +3,21 @@
   "version": "0.1.0",
   "description": "0ctx product CLI – install, bootstrap, doctor, and service management",
   "main": "dist/index.js",
-  "types": "dist/index.d.ts",
   "bin": {
     "0ctx": "dist/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "build.mjs"
   ],
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
+    "build": "node build.mjs",
     "start": "node dist/index.js",
     "dev": "ts-node-dev --respawn src/index.ts",
-    "prepublishOnly": "tsc -b"
+    "prepublishOnly": "node build.mjs"
   },
   "keywords": [
     "context",
@@ -31,21 +32,9 @@
     "directory": "packages/cli"
   },
   "dependencies": {
-    "@0ctx/core": "^1.0.0",
-    "@0ctx/daemon": "^1.0.0",
-    "@0ctx/mcp": "^1.0.0",
-    "@clack/prompts": "^1.0.1",
-    "@modelcontextprotocol/sdk": "^1.5.0",
     "better-sqlite3": "^11.8.1",
-    "cross-keychain": "^1.1.0",
-    "picocolors": "^1.1.1",
-    "uuid": "^11.0.5"
+    "cross-keychain": "^1.1.0"
   },
-  "bundleDependencies": [
-    "@0ctx/core",
-    "@0ctx/daemon",
-    "@0ctx/mcp"
-  ],
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",
     "@types/uuid": "^10.0.0",
