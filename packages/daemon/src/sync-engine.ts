@@ -160,6 +160,8 @@ export class SyncEngine {
             await this.push();
             await this.pull();
             cleanupDone(this.db);
+            // Clear sticky error on successful cycle so stale errors don't persist
+            this.lastError = null;
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : String(e);
             this.lastError = msg;
