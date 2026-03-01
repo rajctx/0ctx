@@ -23,16 +23,19 @@ export interface AppConfig {
     'integration.chatgpt.enabled': boolean;
     'integration.chatgpt.requireApproval': boolean;
     'integration.autoBootstrap': boolean;
+    /** Per-machine HMAC secret for audit log chain integrity. Auto-generated on first use. */
+    'audit.hmacSecret': string;
 }
 
 const DEFAULTS: AppConfig = {
-    'auth.server': 'https://www.0ctx.com',
+    'auth.server': 'https://0ctx.com',
     'sync.enabled': true,
-    'sync.endpoint': 'https://www.0ctx.com/api/v1/sync',
-    'ui.url': 'https://www.0ctx.com',
+    'sync.endpoint': 'https://0ctx.com/api/v1/sync',
+    'ui.url': 'https://0ctx.com',
     'integration.chatgpt.enabled': false,
     'integration.chatgpt.requireApproval': true,
-    'integration.autoBootstrap': true
+    'integration.autoBootstrap': true,
+    'audit.hmacSecret': ''
 };
 
 /** Map of config keys to env var overrides */
@@ -42,7 +45,8 @@ const ENV_OVERRIDES: Partial<Record<keyof AppConfig, string>> = {
     'sync.endpoint': 'CTX_SYNC_ENDPOINT',
     'integration.chatgpt.enabled': 'CTX_INTEGRATION_CHATGPT_ENABLED',
     'integration.chatgpt.requireApproval': 'CTX_INTEGRATION_CHATGPT_REQUIRE_APPROVAL',
-    'integration.autoBootstrap': 'CTX_INTEGRATION_AUTO_BOOTSTRAP'
+    'integration.autoBootstrap': 'CTX_INTEGRATION_AUTO_BOOTSTRAP',
+    'audit.hmacSecret': 'CTX_AUDIT_HMAC_SECRET'
 };
 
 const BOOLEAN_KEYS = new Set<keyof AppConfig>([

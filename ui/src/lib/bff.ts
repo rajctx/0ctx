@@ -149,25 +149,74 @@ export async function requireSession(): Promise<
   return [token, null];
 }
 
+// ─── Token claim extraction ────────────────────────────────────────────────────
+
+export interface TokenClaims {
+  /** Auth0 user subject (e.g. "auth0|abc123") */
+  sub: string;
+  /** Tenant ID injected by Auth0 Action as the custom claim https://0ctx.com/tenant_id */
+  tenantId: string | null;
+}
+
+/**
+ * Decode an already-verified Auth0 JWT access token's payload.
+ * Does NOT re-verify the signature — Auth0 SDK already verified it.
+ * Extracts `sub` and the `https://0ctx.com/tenant_id` custom claim.
+ */
+export function decodeTokenClaims(token: string): TokenClaims {
+  try {
+    const parts = token.split('.');
+    if (parts.length < 2) return { sub: '', tenantId: null };
+    const payload = JSON.parse(
+      Buffer.from(parts[1], 'base64url').toString('utf8')
+    ) as Record<string, unknown>;
+    const sub = typeof payload.sub === 'string' ? payload.sub : '';
+    const tenantId =
+      typeof payload['https://0ctx.com/tenant_id'] === 'string'
+        ? (payload['https://0ctx.com/tenant_id'] as string)
+        : null;
+    return { sub, tenantId };
+  } catch {
+    return { sub: '', tenantId: null };
+  }
+}
+
+/**
+ * Require a valid session and return the token + decoded JWT claims.
+ * Returns [token, claims, null] on success or [null, null, Response] on failure.
+ */
+export async function requireTenantSession(): Promise<
+  [string, TokenClaims, null] | [null, null, Response]
+> {
+  const [token, authErr] = await requireSession();
+  if (authErr) return [null, null, authErr];
+  const claims = decodeTokenClaims(token);
+  return [token, claims, null];
+}
+
 /**
  * Execute a command on a connector via the in-process store.
  * Enqueues the command into Postgres and polls until the connector acks it.
+ * tenantId must be provided — it is the authoritative identity from the JWT.
  */
 export async function storeExecCommand(
   machineId: string,
   method: string,
   params: Record<string, unknown> = {},
-  options: { contextId?: string; timeoutMs?: number; tenantId?: string } = {}
+  options: { contextId?: string; timeoutMs?: number; tenantId: string } = { tenantId: '' }
 ): Promise<{ ok: boolean; result: unknown; error?: string }> {
+  if (!options.tenantId) {
+    return { ok: false, result: null, error: 'tenantId is required to dispatch commands' };
+  }
   const store = getStore();
-  const connector = await store.getConnector(machineId);
+  const connector = await store.getConnector(machineId, options.tenantId);
   if (!connector) {
     return { ok: false, result: null, error: 'Connector not registered' };
   }
 
   const command = await store.enqueueCommand(
     machineId,
-    options.tenantId ?? connector.tenantId,
+    options.tenantId,
     method,
     params,
     options.contextId ?? null

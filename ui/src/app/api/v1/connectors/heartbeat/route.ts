@@ -1,9 +1,14 @@
-import { errorResponse, jsonResponse, requireSession, resolveMachineId } from '@/lib/bff';
+import { errorResponse, jsonResponse, requireTenantSession } from '@/lib/bff';
 import { getStore } from '@/lib/store';
 
 export async function POST(request: Request) {
-  const [, authErr] = await requireSession();
+  const [, claims, authErr] = await requireTenantSession();
   if (authErr) return authErr;
+
+  const tenantId = claims.tenantId;
+  if (!tenantId) {
+    return errorResponse(403, 'no_tenant', 'No tenant associated with this account.');
+  }
 
   let body: Record<string, unknown> = {};
   try {
@@ -12,13 +17,22 @@ export async function POST(request: Request) {
     // Empty body is fine.
   }
 
-  const machineId = typeof body.machineId === 'string' ? body.machineId : resolveMachineId();
+  const machineId = typeof body.machineId === 'string' ? body.machineId : null;
   const posture = typeof body.posture === 'string' ? body.posture : null;
+
+  if (!machineId) {
+    return errorResponse(400, 'invalid_request', 'machineId is required');
+  }
 
   try {
     const store = getStore();
-    const accepted = await store.updateHeartbeat(machineId, posture);
+    // Composite lookup — 404 if this machine doesn't belong to this tenant.
+    const connector = await store.getConnector(machineId, tenantId);
+    if (!connector) {
+      return errorResponse(404, 'not_found', 'Connector not registered');
+    }
 
+    const accepted = await store.updateHeartbeat(machineId, tenantId, posture);
     if (!accepted) {
       return errorResponse(404, 'not_found', 'Connector not registered');
     }

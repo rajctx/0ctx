@@ -3,12 +3,10 @@
  *
  * Provides an abstract Store interface with two backends:
  *   - MemoryStore  — default for NODE_ENV=development / tests
- *   - PgStore      — uses `pg` pool via DATABASE_URL for production
+ *   - PrismaStore  — uses Prisma + DATABASE_URL for production
  *
- * Usage:
- *   import { getStore } from '@/lib/store';
- *   const store = getStore();
- *   await store.upsertConnector({ machineId, ... });
+ * Connector identity is a composite (tenantId, machineId).
+ * Two tenants can register machines with the same hostname without collision.
  */
 
 import { randomUUID } from 'crypto';
@@ -24,7 +22,7 @@ export interface Tenant {
 
 export interface Connector {
   machineId: string;
-  tenantId: string | null;
+  tenantId: string;          // always required — composite identity
   registrationId: string;
   streamUrl: string;
   capabilities: string[];
@@ -39,7 +37,7 @@ export interface Command {
   commandId: string;
   machineId: string;
   cursor: number;
-  tenantId: string | null;
+  tenantId: string;          // always required
   contextId: string | null;
   method: string;
   params: Record<string, unknown>;
@@ -52,7 +50,7 @@ export interface Command {
 export interface EventIngest {
   id: string;
   machineId: string;
-  tenantId: string | null;
+  tenantId: string;          // always required
   subscriptionId: string;
   cursor: number;
   events: unknown[];
@@ -61,6 +59,7 @@ export interface EventIngest {
 
 export interface TrustChallenge {
   machineId: string;
+  tenantId: string;          // part of composite identity
   nonce: string;
   createdAt: number;
   expiresAt: number;
@@ -73,24 +72,25 @@ export interface Store {
   getTenant(tenantId: string): Promise<Tenant | null>;
   createTenant(tenant: Omit<Tenant, 'createdAt'>): Promise<Tenant>;
 
-  // Connectors
-  getConnector(machineId: string): Promise<Connector | null>;
+  // Connectors — keyed by composite (tenantId, machineId)
+  getConnector(machineId: string, tenantId: string): Promise<Connector | null>;
   getConnectorsByTenant(tenantId: string): Promise<Connector[]>;
   upsertConnector(connector: Connector): Promise<Connector>;
-  updateHeartbeat(machineId: string, posture: string | null): Promise<boolean>;
+  updateHeartbeat(machineId: string, tenantId: string, posture: string | null): Promise<boolean>;
 
   // Commands
-  getQueue(machineId: string, afterCursor?: number, limit?: number): Promise<Command[]>;
+  getQueue(machineId: string, tenantId: string, afterCursor?: number, limit?: number): Promise<Command[]>;
   getCommand(commandId: string): Promise<Command | null>;
   enqueueCommand(
     machineId: string,
-    tenantId: string | null,
+    tenantId: string,
     method: string,
     params: Record<string, unknown>,
     contextId: string | null
   ): Promise<Command>;
   ackCommand(
     machineId: string,
+    tenantId: string,
     commandId: string,
     status: 'applied' | 'failed',
     result?: unknown,
@@ -101,10 +101,10 @@ export interface Store {
   ingestEvents(entry: Omit<EventIngest, 'id' | 'receivedAt'>): Promise<EventIngest>;
   getEvents(opts: { machineId?: string; tenantId?: string; limit?: number }): Promise<EventIngest[]>;
 
-  // Trust
-  setTrustChallenge(machineId: string, nonce: string, ttlMs?: number): Promise<TrustChallenge>;
-  getTrustChallenge(machineId: string): Promise<TrustChallenge | null>;
-  deleteTrustChallenge(machineId: string): Promise<void>;
+  // Trust — keyed by composite (tenantId, machineId)
+  setTrustChallenge(machineId: string, tenantId: string, nonce: string, ttlMs?: number): Promise<TrustChallenge>;
+  getTrustChallenge(machineId: string, tenantId: string): Promise<TrustChallenge | null>;
+  deleteTrustChallenge(machineId: string, tenantId: string): Promise<void>;
 
   // Lifecycle
   migrate(): Promise<void>;
@@ -113,14 +113,16 @@ export interface Store {
 
 // ── MemoryStore ──────────────────────────────────────────────────────────────
 
-const DEFAULT_CAPABILITIES = ['sync', 'blackboard', 'commands'];
+function connectorKey(machineId: string, tenantId: string): string {
+  return `${tenantId}::${machineId}`;
+}
 
 export class MemoryStore implements Store {
   private tenants = new Map<string, Tenant>();
-  private connectors = new Map<string, Connector>();
-  private commandQueues = new Map<string, Command[]>();
+  private connectors = new Map<string, Connector>();  // key: connectorKey(machineId, tenantId)
+  private commandQueues = new Map<string, Command[]>(); // key: connectorKey(machineId, tenantId)
   private eventLog: EventIngest[] = [];
-  private trustChallenges = new Map<string, TrustChallenge>();
+  private trustChallenges = new Map<string, TrustChallenge>(); // key: connectorKey(machineId, tenantId)
   private globalCursor = 0;
 
   async getTenant(tenantId: string): Promise<Tenant | null> {
@@ -133,8 +135,8 @@ export class MemoryStore implements Store {
     return tenant;
   }
 
-  async getConnector(machineId: string): Promise<Connector | null> {
-    return this.connectors.get(machineId) ?? null;
+  async getConnector(machineId: string, tenantId: string): Promise<Connector | null> {
+    return this.connectors.get(connectorKey(machineId, tenantId)) ?? null;
   }
 
   async getConnectorsByTenant(tenantId: string): Promise<Connector[]> {
@@ -142,20 +144,20 @@ export class MemoryStore implements Store {
   }
 
   async upsertConnector(connector: Connector): Promise<Connector> {
-    this.connectors.set(connector.machineId, connector);
+    this.connectors.set(connectorKey(connector.machineId, connector.tenantId), connector);
     return connector;
   }
 
-  async updateHeartbeat(machineId: string, posture: string | null): Promise<boolean> {
-    const c = this.connectors.get(machineId);
+  async updateHeartbeat(machineId: string, tenantId: string, posture: string | null): Promise<boolean> {
+    const c = this.connectors.get(connectorKey(machineId, tenantId));
     if (!c) return false;
     c.lastHeartbeatAt = Date.now();
     c.posture = posture;
     return true;
   }
 
-  async getQueue(machineId: string, afterCursor = 0, limit = 200): Promise<Command[]> {
-    const queue = this.commandQueues.get(machineId) ?? [];
+  async getQueue(machineId: string, tenantId: string, afterCursor = 0, limit = 200): Promise<Command[]> {
+    const queue = this.commandQueues.get(connectorKey(machineId, tenantId)) ?? [];
     return queue
       .filter(cmd => cmd.status === 'pending' && cmd.cursor > afterCursor)
       .slice(0, limit);
@@ -171,15 +173,16 @@ export class MemoryStore implements Store {
 
   async enqueueCommand(
     machineId: string,
-    tenantId: string | null,
+    tenantId: string,
     method: string,
     params: Record<string, unknown>,
     contextId: string | null
   ): Promise<Command> {
-    if (!this.commandQueues.has(machineId)) {
-      this.commandQueues.set(machineId, []);
+    const key = connectorKey(machineId, tenantId);
+    if (!this.commandQueues.has(key)) {
+      this.commandQueues.set(key, []);
     }
-    const queue = this.commandQueues.get(machineId)!;
+    const queue = this.commandQueues.get(key)!;
     const command: Command = {
       commandId: randomUUID(),
       machineId,
@@ -198,12 +201,13 @@ export class MemoryStore implements Store {
 
   async ackCommand(
     machineId: string,
+    tenantId: string,
     commandId: string,
     status: 'applied' | 'failed',
     result?: unknown,
     error?: string
   ): Promise<boolean> {
-    const queue = this.commandQueues.get(machineId) ?? [];
+    const queue = this.commandQueues.get(connectorKey(machineId, tenantId)) ?? [];
     const cmd = queue.find(c => c.commandId === commandId);
     if (!cmd) return false;
     cmd.status = status;
@@ -229,29 +233,30 @@ export class MemoryStore implements Store {
     return results.slice(-(opts.limit ?? 100));
   }
 
-  async setTrustChallenge(machineId: string, nonce: string, ttlMs = 300_000): Promise<TrustChallenge> {
+  async setTrustChallenge(machineId: string, tenantId: string, nonce: string, ttlMs = 300_000): Promise<TrustChallenge> {
     const challenge: TrustChallenge = {
       machineId,
+      tenantId,
       nonce,
       createdAt: Date.now(),
       expiresAt: Date.now() + ttlMs
     };
-    this.trustChallenges.set(machineId, challenge);
+    this.trustChallenges.set(connectorKey(machineId, tenantId), challenge);
     return challenge;
   }
 
-  async getTrustChallenge(machineId: string): Promise<TrustChallenge | null> {
-    const c = this.trustChallenges.get(machineId);
+  async getTrustChallenge(machineId: string, tenantId: string): Promise<TrustChallenge | null> {
+    const c = this.trustChallenges.get(connectorKey(machineId, tenantId));
     if (!c) return null;
     if (Date.now() > c.expiresAt) {
-      this.trustChallenges.delete(machineId);
+      this.trustChallenges.delete(connectorKey(machineId, tenantId));
       return null;
     }
     return c;
   }
 
-  async deleteTrustChallenge(machineId: string): Promise<void> {
-    this.trustChallenges.delete(machineId);
+  async deleteTrustChallenge(machineId: string, tenantId: string): Promise<void> {
+    this.trustChallenges.delete(connectorKey(machineId, tenantId));
   }
 
   async migrate(): Promise<void> {
@@ -295,21 +300,15 @@ export class MemoryStore implements Store {
 
 // ── PrismaStore ──────────────────────────────────────────────────────────────
 
-/**
- * Production Postgres-backed store using Prisma v7.
- * Requires DATABASE_URL to be set.
- */
 export class PrismaStore implements Store {
   private getClient() {
-    // Lazy import to avoid pulling Prisma into environments that don't need it
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { prisma } = require('@/lib/prisma') as { prisma: import('@/generated/prisma').PrismaClient };
     return prisma;
   }
 
   async migrate(): Promise<void> {
-    // Prisma migrations are run via CLI (`prisma migrate deploy`).
-    // This is a no-op at runtime.
+    // Prisma migrations are run via CLI (`prisma migrate deploy`). No-op at runtime.
   }
 
   async close(): Promise<void> {
@@ -345,8 +344,10 @@ export class PrismaStore implements Store {
 
   // ── Connectors ──
 
-  async getConnector(machineId: string): Promise<Connector | null> {
-    const row = await this.getClient().connector.findUnique({ where: { machineId } });
+  async getConnector(machineId: string, tenantId: string): Promise<Connector | null> {
+    const row = await this.getClient().connector.findUnique({
+      where: { tenantId_machineId: { tenantId, machineId } }
+    });
     if (!row) return null;
     return this.toConnector(row);
   }
@@ -358,9 +359,8 @@ export class PrismaStore implements Store {
 
   async upsertConnector(c: Connector): Promise<Connector> {
     await this.getClient().connector.upsert({
-      where: { machineId: c.machineId },
+      where: { tenantId_machineId: { tenantId: c.tenantId, machineId: c.machineId } },
       update: {
-        tenantId: c.tenantId,
         registrationId: c.registrationId,
         streamUrl: c.streamUrl,
         capabilities: c.capabilities,
@@ -385,10 +385,10 @@ export class PrismaStore implements Store {
     return c;
   }
 
-  async updateHeartbeat(machineId: string, posture: string | null): Promise<boolean> {
+  async updateHeartbeat(machineId: string, tenantId: string, posture: string | null): Promise<boolean> {
     try {
       await this.getClient().connector.update({
-        where: { machineId },
+        where: { tenantId_machineId: { tenantId, machineId } },
         data: { lastHeartbeatAt: new Date(), posture }
       });
       return true;
@@ -399,10 +399,11 @@ export class PrismaStore implements Store {
 
   // ── Commands ──
 
-  async getQueue(machineId: string, afterCursor = 0, limit = 200): Promise<Command[]> {
+  async getQueue(machineId: string, tenantId: string, afterCursor = 0, limit = 200): Promise<Command[]> {
     const rows = await this.getClient().command.findMany({
       where: {
         machineId,
+        tenantId,
         status: 'pending',
         cursor: { gt: BigInt(afterCursor) }
       },
@@ -420,7 +421,7 @@ export class PrismaStore implements Store {
 
   async enqueueCommand(
     machineId: string,
-    tenantId: string | null,
+    tenantId: string,
     method: string,
     params: Record<string, unknown>,
     contextId: string | null
@@ -442,6 +443,7 @@ export class PrismaStore implements Store {
 
   async ackCommand(
     machineId: string,
+    tenantId: string,
     commandId: string,
     status: 'applied' | 'failed',
     result?: unknown,
@@ -449,7 +451,7 @@ export class PrismaStore implements Store {
   ): Promise<boolean> {
     try {
       await this.getClient().command.updateMany({
-        where: { commandId, machineId },
+        where: { commandId, machineId, tenantId },
         data: {
           status,
           result: result !== undefined ? (result as object) : undefined,
@@ -511,35 +513,38 @@ export class PrismaStore implements Store {
 
   // ── Trust ──
 
-  async setTrustChallenge(machineId: string, nonce: string, ttlMs = 300_000): Promise<TrustChallenge> {
+  async setTrustChallenge(machineId: string, tenantId: string, nonce: string, ttlMs = 300_000): Promise<TrustChallenge> {
     const expiresAt = new Date(Date.now() + ttlMs);
     await this.getClient().trustChallenge.upsert({
-      where: { machineId },
+      where: { tenantId_machineId: { tenantId, machineId } },
       update: { nonce, createdAt: new Date(), expiresAt },
-      create: { machineId, nonce, expiresAt }
+      create: { machineId, tenantId, nonce, expiresAt }
     });
-    return { machineId, nonce, createdAt: Date.now(), expiresAt: expiresAt.getTime() };
+    return { machineId, tenantId, nonce, createdAt: Date.now(), expiresAt: expiresAt.getTime() };
   }
 
-  async getTrustChallenge(machineId: string): Promise<TrustChallenge | null> {
-    const row = await this.getClient().trustChallenge.findUnique({ where: { machineId } });
+  async getTrustChallenge(machineId: string, tenantId: string): Promise<TrustChallenge | null> {
+    const row = await this.getClient().trustChallenge.findUnique({
+      where: { tenantId_machineId: { tenantId, machineId } }
+    });
     if (!row || Date.now() > row.expiresAt.getTime()) return null;
     return {
       machineId: row.machineId,
+      tenantId: row.tenantId,
       nonce: row.nonce,
       createdAt: row.createdAt.getTime(),
       expiresAt: row.expiresAt.getTime()
     };
   }
 
-  async deleteTrustChallenge(machineId: string): Promise<void> {
-    await this.getClient().trustChallenge.deleteMany({ where: { machineId } });
+  async deleteTrustChallenge(machineId: string, tenantId: string): Promise<void> {
+    await this.getClient().trustChallenge.deleteMany({ where: { machineId, tenantId } });
   }
 
   // ── Helpers ──
 
   private toConnector(r: {
-    machineId: string; tenantId: string | null; registrationId: string;
+    machineId: string; tenantId: string; registrationId: string;
     streamUrl: string; capabilities: unknown; posture: string | null;
     trustLevel: string; trustVerifiedAt: Date | null; registeredAt: Date;
     lastHeartbeatAt: Date | null;
@@ -560,7 +565,7 @@ export class PrismaStore implements Store {
 
   private toCommand(r: {
     commandId: string; machineId: string; cursor: bigint;
-    tenantId: string | null; contextId: string | null; method: string;
+    tenantId: string; contextId: string | null; method: string;
     params: unknown; createdAt: Date; status: string;
     result: unknown; error: string | null;
   }): Command {
@@ -584,15 +589,6 @@ export class PrismaStore implements Store {
 
 let _store: Store | null = null;
 
-/**
- * Get the singleton store instance.
- * Uses PrismaStore (Postgres) whenever DATABASE_URL is set — in both dev and production.
- * Falls back to MemoryStore only when DATABASE_URL is absent (e.g. in unit tests).
- *
- * In development: set DATABASE_URL in ui/.env pointing to your Postgres instance.
- * Local Postgres: `docker compose up postgres` then set DATABASE_URL=postgres://ctx:ctx_dev_password@localhost:5432/ctx
- * Cloud Postgres: use a Neon or Supabase connection string.
- */
 export function getStore(): Store {
   if (_store) return _store;
 

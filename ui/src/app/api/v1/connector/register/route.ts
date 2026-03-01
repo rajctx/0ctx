@@ -1,17 +1,16 @@
 import { randomUUID } from 'crypto';
-import {
-  errorResponse,
-  jsonResponse,
-  requireSession,
-  resolveMachineId
-} from '@/lib/bff';
+import { errorResponse, jsonResponse, requireTenantSession } from '@/lib/bff';
 import { getStore } from '@/lib/store';
 
 export async function POST(request: Request) {
-  const [, authErr] = await requireSession();
+  const [, claims, authErr] = await requireTenantSession();
   if (authErr) return authErr;
 
-  const machineId = resolveMachineId();
+  const tenantId = claims.tenantId;
+  if (!tenantId) {
+    return errorResponse(403, 'no_tenant', 'No tenant associated with this account.');
+  }
+
   let body: Record<string, unknown> = {};
   try {
     body = (await request.json()) as Record<string, unknown>;
@@ -19,10 +18,17 @@ export async function POST(request: Request) {
     // Empty body is fine.
   }
 
+  const machineId =
+    typeof body.machineId === 'string' && body.machineId ? body.machineId : null;
+
+  if (!machineId) {
+    return errorResponse(400, 'invalid_request', 'machineId is required');
+  }
+
   try {
     const store = getStore();
-    const tenantId = typeof body.tenantId === 'string' ? body.tenantId : null;
-    const existing = await store.getConnector(machineId);
+    // Composite lookup — only returns a connector owned by this tenant.
+    const existing = await store.getConnector(machineId, tenantId);
 
     const connector = existing ?? {
       machineId,
@@ -36,13 +42,11 @@ export async function POST(request: Request) {
       registeredAt: Date.now(),
       lastHeartbeatAt: null
     };
-    connector.tenantId = tenantId;
 
     await store.upsertConnector(connector);
 
-    // Issue trust challenge nonce
     const nonce = randomUUID();
-    await store.setTrustChallenge(machineId, nonce);
+    await store.setTrustChallenge(machineId, tenantId, nonce);
 
     return jsonResponse({
       registrationId: connector.registrationId,

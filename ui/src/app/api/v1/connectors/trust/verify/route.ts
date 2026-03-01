@@ -1,9 +1,14 @@
-import { errorResponse, jsonResponse, requireSession, resolveMachineId } from '@/lib/bff';
+import { errorResponse, jsonResponse, requireTenantSession } from '@/lib/bff';
 import { getStore } from '@/lib/store';
 
 export async function POST(request: Request) {
-  const [, authErr] = await requireSession();
+  const [, claims, authErr] = await requireTenantSession();
   if (authErr) return authErr;
+
+  const tenantId = claims.tenantId;
+  if (!tenantId) {
+    return errorResponse(403, 'no_tenant', 'No tenant associated with this account.');
+  }
 
   let body: Record<string, unknown> = {};
   try {
@@ -12,22 +17,25 @@ export async function POST(request: Request) {
     return errorResponse(400, 'invalid_body', 'Request body must be valid JSON');
   }
 
-  const machineId = typeof body.machineId === 'string' ? body.machineId : resolveMachineId();
+  const machineId = typeof body.machineId === 'string' ? body.machineId : null;
   const challengeResponse = typeof body.challengeResponse === 'string' ? body.challengeResponse : null;
 
+  if (!machineId) {
+    return errorResponse(400, 'invalid_request', 'machineId is required');
+  }
   if (!challengeResponse) {
     return errorResponse(400, 'invalid_request', 'challengeResponse is required');
   }
 
   try {
     const store = getStore();
-    const connector = await store.getConnector(machineId);
-
+    // Composite lookup — 404 if this machine doesn't belong to this tenant.
+    const connector = await store.getConnector(machineId, tenantId);
     if (!connector) {
       return errorResponse(400, 'invalid_request', 'Connector not registered');
     }
 
-    const challenge = await store.getTrustChallenge(machineId);
+    const challenge = await store.getTrustChallenge(machineId, tenantId);
     if (!challenge) {
       return errorResponse(400, 'no_challenge', 'No pending trust challenge for this machine');
     }
@@ -36,7 +44,7 @@ export async function POST(request: Request) {
     connector.trustLevel = 'verified';
     connector.trustVerifiedAt = Date.now();
     await store.upsertConnector(connector);
-    await store.deleteTrustChallenge(machineId);
+    await store.deleteTrustChallenge(machineId, tenantId);
 
     return jsonResponse({ accepted: true, trustLevel: 'verified' });
   } catch (err) {

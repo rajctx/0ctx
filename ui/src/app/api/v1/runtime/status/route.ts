@@ -1,30 +1,40 @@
-import {
-  errorResponse,
-  jsonResponse,
-  requireSession,
-  resolveMachineId
-} from '@/lib/bff';
+import { errorResponse, jsonResponse, requireTenantSession } from '@/lib/bff';
 import { getStore } from '@/lib/store';
 
 export async function GET() {
-  const [, authErr] = await requireSession();
+  const [, claims, authErr] = await requireTenantSession();
   if (authErr) return authErr;
-
-  const machineId = resolveMachineId();
 
   try {
     const store = getStore();
-    const connector = await store.getConnector(machineId);
 
-    const posture = connector?.posture ?? 'offline';
-    const bridgeHealthy = !!connector;
-    const cloudConnected = true; // In-process — always reachable
+    // Fetch all connectors registered for this tenant.
+    const connectors = claims.tenantId
+      ? await store.getConnectorsByTenant(claims.tenantId)
+      : [];
+
+    // Derive aggregate posture: connected > degraded > offline.
+    let posture: string = 'offline';
+    if (connectors.some(c => c.posture === 'connected')) {
+      posture = 'connected';
+    } else if (connectors.some(c => c.posture === 'degraded')) {
+      posture = 'degraded';
+    }
+
+    const bridgeHealthy = connectors.length > 0;
+    const capabilities = connectors.flatMap(c => c.capabilities ?? []);
+    const uniqueCapabilities = [...new Set(capabilities)];
 
     return jsonResponse({
       posture,
       bridgeHealthy,
-      cloudConnected,
-      capabilities: connector?.capabilities ?? [],
+      cloudConnected: true, // In-process — always reachable
+      capabilities: uniqueCapabilities,
+      connectors: connectors.map(c => ({
+        machineId: c.machineId,
+        posture: c.posture ?? 'offline',
+        lastHeartbeatAt: c.lastHeartbeatAt
+      })),
       cloud: { status: 'ok' }
     });
   } catch (err) {

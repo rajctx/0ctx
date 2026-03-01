@@ -8,12 +8,6 @@
       "port": 3000
     },
     {
-      "name": "Control Plane",
-      "runtimeExecutable": "node",
-      "runtimeArgs": ["cloud/control-plane/server.js"],
-      "port": 8787
-    },
-    {
       "name": "Daemon",
       "runtimeExecutable": "node",
       "runtimeArgs": ["packages/daemon/dist/index.js"],

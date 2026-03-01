@@ -2,7 +2,7 @@ import http from 'http';
 import https from 'https';
 import { getConfigValue } from '@0ctx/core';
 
-const DEFAULT_CONTROL_PLANE_BASE_URL = 'https://api.0ctx.com/v1';
+const DEFAULT_CONTROL_PLANE_BASE_URL = 'https://0ctx.com/api/v1';
 const DEFAULT_TIMEOUT_MS = 10_000;
 
 interface CloudRequestOptions {

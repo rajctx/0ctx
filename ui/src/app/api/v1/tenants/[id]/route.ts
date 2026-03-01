@@ -1,16 +1,21 @@
-import { errorResponse, jsonResponse, requireSession } from '@/lib/bff';
+import { errorResponse, jsonResponse, requireTenantSession } from '@/lib/bff';
 import { getStore } from '@/lib/store';
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const [, authErr] = await requireSession();
+  const [, claims, authErr] = await requireTenantSession();
   if (authErr) return authErr;
 
   const { id } = await params;
   if (!id) {
     return errorResponse(400, 'invalid_request', 'Tenant ID is required');
+  }
+
+  // Users can only read their own tenant.
+  if (claims.tenantId && id !== claims.tenantId) {
+    return errorResponse(403, 'forbidden', 'Access to this tenant is not allowed');
   }
 
   try {
@@ -21,7 +26,6 @@ export async function GET(
       return errorResponse(404, 'not_found', 'Tenant not found');
     }
 
-    // Also return connectors scoped to this tenant
     const connectors = await store.getConnectorsByTenant(id);
 
     return jsonResponse({ ...tenant, connectors });

@@ -1,10 +1,15 @@
-import { errorResponse, jsonResponse, requireSession, resolveMachineId } from '@/lib/bff';
+import { errorResponse, jsonResponse, requireTenantSession } from '@/lib/bff';
 import { getStore } from '@/lib/store';
 import { emitEvent } from '@/lib/events';
 
 export async function POST(request: Request) {
-  const [, authErr] = await requireSession();
+  const [, claims, authErr] = await requireTenantSession();
   if (authErr) return authErr;
+
+  const tenantId = claims.tenantId;
+  if (!tenantId) {
+    return errorResponse(403, 'no_tenant', 'No tenant associated with this account.');
+  }
 
   let body: Record<string, unknown> = {};
   try {
@@ -13,12 +18,15 @@ export async function POST(request: Request) {
     return errorResponse(400, 'invalid_body', 'Request body must be valid JSON');
   }
 
-  const machineId = typeof body.machineId === 'string' ? body.machineId : resolveMachineId();
+  const machineId = typeof body.machineId === 'string' ? body.machineId : null;
+  if (!machineId) {
+    return errorResponse(400, 'invalid_request', 'machineId is required');
+  }
 
   try {
     const store = getStore();
-    const connector = await store.getConnector(machineId);
-
+    // Composite lookup — 404 if this machine doesn't belong to this tenant.
+    const connector = await store.getConnector(machineId, tenantId);
     if (!connector) {
       return errorResponse(404, 'not_found', 'Connector not registered');
     }
@@ -26,13 +34,12 @@ export async function POST(request: Request) {
     const events = Array.isArray(body.events) ? body.events : [];
     const entry = await store.ingestEvents({
       machineId,
-      tenantId: typeof body.tenantId === 'string' ? body.tenantId : null,
+      tenantId,
       subscriptionId: typeof body.subscriptionId === 'string' ? body.subscriptionId : '',
       cursor: typeof body.cursor === 'number' ? body.cursor : 0,
       events
     });
 
-    // Fan-out to SSE subscribers
     emitEvent(entry);
 
     return jsonResponse({ accepted: true, processed: events.length });

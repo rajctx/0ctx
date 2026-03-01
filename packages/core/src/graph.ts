@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { randomUUID, randomBytes } from 'crypto';
 import type Database from 'better-sqlite3';
 import type {
     ContextNode,
@@ -13,9 +13,34 @@ import type {
     ContextDump,
     SyncPolicy
 } from './schema';
+import { getConfigValue, setConfigValue } from './config';
 
 export class Graph {
     constructor(private db: Database.Database) { }
+
+    /**
+     * SEC-001: Resolve the per-machine audit HMAC secret.
+     * Priority: CTX_AUDIT_HMAC_SECRET env var → persisted ~/.0ctx/config.json value → auto-generated.
+     * Auto-generated secrets are saved to config.json so the chain stays verifiable across restarts.
+     */
+    private resolveAuditSecret(): string {
+        // 1. Explicit env var override (enterprise/CI)
+        const envSecret = process.env.CTX_AUDIT_HMAC_SECRET;
+        if (envSecret && envSecret.length > 0) return envSecret;
+
+        // 2. Persisted per-machine secret
+        const stored = getConfigValue('audit.hmacSecret');
+        if (stored && stored.length > 0) return stored;
+
+        // 3. First run — generate, persist, and return
+        const generated = randomBytes(32).toString('hex');
+        try {
+            setConfigValue('audit.hmacSecret', generated);
+        } catch {
+            // Config dir not writable — use in-memory for this session only
+        }
+        return generated;
+    }
 
     // ── Context Management ─────────────────────────────────────────
 
@@ -248,7 +273,7 @@ export class Graph {
         const prevHash = this.getLastAuditHash();
         const hmacData = `${prevHash}|${entry.id}|${entry.action}|${entry.createdAt}`;
         const { createHmac } = require('crypto');
-        const auditSecret = process.env.CTX_AUDIT_HMAC_SECRET || 'default-audit-key';
+        const auditSecret = this.resolveAuditSecret();
         const entryHash = createHmac('sha256', auditSecret).update(hmacData).digest('hex');
 
         this.db.prepare(`
@@ -284,7 +309,7 @@ export class Graph {
     /** SEC-001: Verify the HMAC chain integrity of audit logs. */
     verifyAuditChain(limit = 1000): { valid: boolean; checked: number; brokenAt?: string } {
         const { createHmac } = require('crypto');
-        const auditSecret = process.env.CTX_AUDIT_HMAC_SECRET || 'default-audit-key';
+        const auditSecret = this.resolveAuditSecret();
 
         let rows: Array<{ id: string; action: string; createdAt: number; entryHash: string; prevHash: string }>;
         try {

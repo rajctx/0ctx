@@ -27,8 +27,8 @@ model Tenant {
 // ── Connectors ───────────────────────────────────────────────────────────────
 
 model Connector {
-  machineId       String    @id @map("machine_id")
-  tenantId        String?   @map("tenant_id")
+  machineId       String    @map("machine_id")
+  tenantId        String    @map("tenant_id")           // non-nullable — every connector must belong to a tenant
   registrationId  String    @map("registration_id")
   streamUrl       String    @default("") @map("stream_url")
   capabilities    Json      @default("[\"sync\",\"blackboard\",\"commands\"]")
@@ -38,12 +38,12 @@ model Connector {
   registeredAt    DateTime  @default(now()) @map("registered_at") @db.Timestamptz
   lastHeartbeatAt DateTime? @map("last_heartbeat_at") @db.Timestamptz
 
-  tenant          Tenant?          @relation(fields: [tenantId], references: [tenantId], onDelete: SetNull)
+  tenant          Tenant           @relation(fields: [tenantId], references: [tenantId], onDelete: Cascade)
   commands        Command[]
   eventsIngest    EventsIngest[]
   trustChallenge  TrustChallenge?
 
-  @@index([tenantId], map: "idx_connectors_tenant")
+  @@id([tenantId, machineId])   // composite PK — two tenants can have the same machineId
   @@map("connectors")
 }
 
@@ -53,7 +53,7 @@ model Command {
   commandId  String   @id @map("command_id")
   machineId  String   @map("machine_id")
   cursor     BigInt   @default(autoincrement())
-  tenantId   String?  @map("tenant_id")
+  tenantId   String   @map("tenant_id")              // non-nullable — matches connector tenantId
   contextId  String?  @map("context_id")
   method     String
   params     Json     @default("{}")
@@ -62,8 +62,8 @@ model Command {
   result     Json?
   error      String?
 
-  connector  Connector @relation(fields: [machineId], references: [machineId], onDelete: Cascade)
-  tenant     Tenant?   @relation(fields: [tenantId], references: [tenantId])
+  connector  Connector @relation(fields: [tenantId, machineId], references: [tenantId, machineId], onDelete: Cascade)
+  tenant     Tenant    @relation(fields: [tenantId], references: [tenantId])
 
   @@index([machineId, status, cursor], map: "idx_commands_machine_status")
   @@index([tenantId], map: "idx_commands_tenant")
@@ -75,13 +75,13 @@ model Command {
 model EventsIngest {
   id             String   @id
   machineId      String   @map("machine_id")
-  tenantId       String?  @map("tenant_id")
+  tenantId       String   @map("tenant_id")            // non-nullable — matches connector tenantId
   subscriptionId String   @default("") @map("subscription_id")
   cursor         BigInt   @default(0)
   events         Json     @default("[]")
   receivedAt     DateTime @default(now()) @map("received_at") @db.Timestamptz
 
-  connector      Connector @relation(fields: [machineId], references: [machineId], onDelete: Cascade)
+  connector      Connector @relation(fields: [tenantId, machineId], references: [tenantId, machineId], onDelete: Cascade)
 
   @@index([machineId], map: "idx_events_machine")
   @@index([tenantId], map: "idx_events_tenant")
@@ -92,12 +92,14 @@ model EventsIngest {
 // ── Trust challenges ─────────────────────────────────────────────────────────
 
 model TrustChallenge {
-  machineId  String   @id @map("machine_id")
+  machineId  String   @map("machine_id")
+  tenantId   String   @map("tenant_id")              // part of composite PK + FK
   nonce      String
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
   expiresAt  DateTime @map("expires_at") @db.Timestamptz
 
-  connector  Connector @relation(fields: [machineId], references: [machineId], onDelete: Cascade)
+  connector  Connector @relation(fields: [tenantId, machineId], references: [tenantId, machineId], onDelete: Cascade)
 
+  @@id([tenantId, machineId])
   @@map("trust_challenges")
 }

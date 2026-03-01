@@ -2,18 +2,22 @@ import {
   storeExecCommand,
   errorResponse,
   jsonResponse,
-  requireSession,
-  resolveMachineId
+  requireTenantSession
 } from '@/lib/bff';
 
 export async function GET() {
-  const [, authErr] = await requireSession();
+  const [, claims, authErr] = await requireTenantSession();
   if (authErr) return authErr;
 
-  const machineId = resolveMachineId();
+  const tenantId = claims.tenantId;
+  if (!tenantId) {
+    return errorResponse(403, 'no_tenant', 'No tenant associated with this account.');
+  }
+
+  const machineId = claims.sub; // target the user's own machine via sub as fallback
 
   try {
-    const result = await storeExecCommand(machineId, 'listBackups', {});
+    const result = await storeExecCommand(machineId, 'listBackups', {}, { tenantId });
 
     if (!result.ok) {
       return errorResponse(502, 'backups_list_failed', result.error ?? 'Failed to list backups', true);
@@ -31,10 +35,14 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const [, authErr] = await requireSession();
+  const [, claims, authErr] = await requireTenantSession();
   if (authErr) return authErr;
 
-  const machineId = resolveMachineId();
+  const tenantId = claims.tenantId;
+  if (!tenantId) {
+    return errorResponse(403, 'no_tenant', 'No tenant associated with this account.');
+  }
+
   let body: Record<string, unknown> = {};
   try {
     body = (await request.json()) as Record<string, unknown>;
@@ -42,7 +50,12 @@ export async function POST(request: Request) {
     return errorResponse(400, 'invalid_body', 'Request body must be valid JSON');
   }
 
+  const machineId = typeof body.machineId === 'string' ? body.machineId : null;
   const contextId = body.contextId as string;
+
+  if (!machineId) {
+    return errorResponse(400, 'invalid_request', 'machineId is required');
+  }
   if (!contextId) {
     return errorResponse(400, 'invalid_request', 'contextId is required');
   }
@@ -56,7 +69,7 @@ export async function POST(request: Request) {
         name: body.name ?? undefined,
         encrypted: body.encrypted !== false
       },
-      { contextId }
+      { contextId, tenantId }
     );
 
     if (!result.ok) {
