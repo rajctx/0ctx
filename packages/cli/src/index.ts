@@ -55,6 +55,7 @@ import { appendCliOpsLogEntry, clearCliOpsLog, getCliOpsLogPath, readCliOpsLog }
 import { drainConnectorQueue } from './connector-queue-drain';
 import { runInteractiveShell } from './shell';
 import { runReleasePublish } from './release';
+import { startLogsServer } from './logs-server';
 
 type SupportedClient = 'claude' | 'cursor' | 'windsurf';
 type CheckStatus = 'pass' | 'warn' | 'fail';
@@ -530,6 +531,27 @@ async function commandDashboard(flags: Record<string, string | boolean>): Promis
 
     openUrl(url);
     console.log('Opened dashboard URL in your default browser (best effort).');
+    return 0;
+}
+
+async function commandLogs(flags: Record<string, string | boolean>): Promise<number> {
+    const { port, close } = await startLogsServer();
+    const url = `http://127.0.0.1:${port}`;
+    console.log(`logs_url: ${url}`);
+
+    if (!Boolean(flags['no-open'])) {
+        openUrl(url);
+        console.log('Opened local logs in your default browser (best effort).');
+    }
+
+    console.log('Local logs server running. Press Ctrl+C to stop (auto-closes after 30 min of inactivity).');
+
+    await new Promise<void>(resolve => {
+        process.once('SIGINT', resolve);
+        process.once('SIGTERM', resolve);
+    });
+
+    await close();
     return 0;
 }
 
@@ -1667,6 +1689,7 @@ Usage:
   0ctx doctor [--json] [--clients=...]
   0ctx status
   0ctx repair [--clients=...]
+  0ctx logs [--no-open]
   0ctx dashboard [--no-open] [--dashboard-query=k=v&...]
   0ctx release publish --version vX.Y.Z [--tag latest|next] [--otp 123456] [--dry-run] [--json]
   0ctx daemon start
@@ -2044,6 +2067,8 @@ async function main(): Promise<number> {
                 return commandConnectorQueue(parsed.positionalArgs[0], parsed.flags);
             }
             return commandConnector(parsed.subcommand, parsed.flags);
+        case 'logs':
+            return commandLogs(parsed.flags);
         case 'dashboard':
             return commandDashboard(parsed.flags);
         case 'shell':

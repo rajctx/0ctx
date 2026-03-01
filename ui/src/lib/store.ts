@@ -65,6 +65,18 @@ export interface TrustChallenge {
   expiresAt: number;
 }
 
+export interface StoredSyncEnvelope {
+  id: string;
+  tenantId: string;
+  contextId: string;
+  userId: string;
+  timestamp: number;         // unix ms from daemon clock
+  encrypted: boolean;
+  syncPolicy?: string;       // full_sync | metadata_only | local_only
+  payload: unknown;          // EncryptedPayload blob or ContextDump
+  receivedAt: number;
+}
+
 // ── Store interface ──────────────────────────────────────────────────────────
 
 export interface Store {
@@ -106,6 +118,10 @@ export interface Store {
   getTrustChallenge(machineId: string, tenantId: string): Promise<TrustChallenge | null>;
   deleteTrustChallenge(machineId: string, tenantId: string): Promise<void>;
 
+  // Sync — stores encrypted context dumps from daemon sync engine
+  storeSyncEnvelope(envelope: Omit<StoredSyncEnvelope, 'id' | 'receivedAt'>): Promise<StoredSyncEnvelope>;
+  getSyncEnvelopes(tenantId: string, since: number, limit?: number): Promise<StoredSyncEnvelope[]>;
+
   // Lifecycle
   migrate(): Promise<void>;
   close(): Promise<void>;
@@ -123,6 +139,7 @@ export class MemoryStore implements Store {
   private commandQueues = new Map<string, Command[]>(); // key: connectorKey(machineId, tenantId)
   private eventLog: EventIngest[] = [];
   private trustChallenges = new Map<string, TrustChallenge>(); // key: connectorKey(machineId, tenantId)
+  private syncEnvelopes: StoredSyncEnvelope[] = [];
   private globalCursor = 0;
 
   async getTenant(tenantId: string): Promise<Tenant | null> {
@@ -259,6 +276,23 @@ export class MemoryStore implements Store {
     this.trustChallenges.delete(connectorKey(machineId, tenantId));
   }
 
+  async storeSyncEnvelope(envelope: Omit<StoredSyncEnvelope, 'id' | 'receivedAt'>): Promise<StoredSyncEnvelope> {
+    const stored: StoredSyncEnvelope = {
+      ...envelope,
+      id: randomUUID(),
+      receivedAt: Date.now(),
+    };
+    this.syncEnvelopes.push(stored);
+    return stored;
+  }
+
+  async getSyncEnvelopes(tenantId: string, since: number, limit = 50): Promise<StoredSyncEnvelope[]> {
+    return this.syncEnvelopes
+      .filter(e => e.tenantId === tenantId && e.timestamp > since)
+      .sort((a, b) => a.timestamp - b.timestamp)
+      .slice(0, limit);
+  }
+
   async migrate(): Promise<void> {
     // No-op for in-memory store
   }
@@ -269,6 +303,7 @@ export class MemoryStore implements Store {
     this.commandQueues.clear();
     this.eventLog = [];
     this.trustChallenges.clear();
+    this.syncEnvelopes = [];
   }
 
   // ── MemoryStore helpers (for stats/health) ──
@@ -541,6 +576,35 @@ export class PrismaStore implements Store {
     await this.getClient().trustChallenge.deleteMany({ where: { machineId, tenantId } });
   }
 
+  // ── Sync ──
+
+  async storeSyncEnvelope(envelope: Omit<StoredSyncEnvelope, 'id' | 'receivedAt'>): Promise<StoredSyncEnvelope> {
+    const row = await this.getClient().syncEnvelope.create({
+      data: {
+        tenantId: envelope.tenantId,
+        contextId: envelope.contextId,
+        userId: envelope.userId,
+        timestamp: BigInt(envelope.timestamp),
+        encrypted: envelope.encrypted,
+        syncPolicy: envelope.syncPolicy ?? null,
+        payload: envelope.payload as object,
+      }
+    });
+    return this.toSyncEnvelope(row);
+  }
+
+  async getSyncEnvelopes(tenantId: string, since: number, limit = 50): Promise<StoredSyncEnvelope[]> {
+    const rows = await this.getClient().syncEnvelope.findMany({
+      where: {
+        tenantId,
+        timestamp: { gt: BigInt(since) },
+      },
+      orderBy: { timestamp: 'asc' },
+      take: Math.min(limit, 200),
+    });
+    return rows.map(r => this.toSyncEnvelope(r));
+  }
+
   // ── Helpers ──
 
   private toConnector(r: {
@@ -581,6 +645,24 @@ export class PrismaStore implements Store {
       status: r.status as 'pending' | 'applied' | 'failed',
       result: r.result ?? null,
       error: r.error ?? undefined
+    };
+  }
+
+  private toSyncEnvelope(r: {
+    id: string; tenantId: string; contextId: string; userId: string;
+    timestamp: bigint; encrypted: boolean; syncPolicy: string | null;
+    payload: unknown; receivedAt: Date;
+  }): StoredSyncEnvelope {
+    return {
+      id: r.id,
+      tenantId: r.tenantId,
+      contextId: r.contextId,
+      userId: r.userId,
+      timestamp: Number(r.timestamp),
+      encrypted: r.encrypted,
+      syncPolicy: r.syncPolicy ?? undefined,
+      payload: r.payload,
+      receivedAt: r.receivedAt.getTime(),
     };
   }
 }

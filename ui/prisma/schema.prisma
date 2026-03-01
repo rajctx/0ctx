@@ -18,8 +18,9 @@ model Tenant {
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
   settings   Json     @default("{}")
 
-  connectors Connector[]
-  commands   Command[]
+  connectors     Connector[]
+  commands       Command[]
+  syncEnvelopes  SyncEnvelope[]
 
   @@map("tenants")
 }
@@ -87,6 +88,29 @@ model EventsIngest {
   @@index([tenantId], map: "idx_events_tenant")
   @@index([receivedAt(sort: Desc)], map: "idx_events_received")
   @@map("events_ingest")
+}
+
+// ── Sync envelopes ────────────────────────────────────────────────────────────
+// Stores encrypted context dumps pushed by the daemon sync engine.
+// Pull returns envelopes newer than `since` (timestamp ms) for the same tenant.
+
+model SyncEnvelope {
+  id          String   @id @default(uuid())
+  tenantId    String   @map("tenant_id")
+  contextId   String   @map("context_id")
+  userId      String   @default("") @map("user_id")
+  timestamp   BigInt   @map("timestamp")            // unix ms from daemon clock
+  encrypted   Boolean  @default(true)
+  syncPolicy  String?  @map("sync_policy")          // full_sync | metadata_only | local_only
+  payload     Json     @default("{}")               // EncryptedPayload or ContextDump blob
+  receivedAt  DateTime @default(now()) @map("received_at") @db.Timestamptz
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [tenantId], onDelete: Cascade)
+
+  @@index([tenantId, timestamp],  map: "idx_sync_envelopes_tenant_ts")
+  @@index([tenantId, contextId],  map: "idx_sync_envelopes_tenant_ctx")
+  @@index([receivedAt(sort: Desc)], map: "idx_sync_envelopes_received")
+  @@map("sync_envelopes")
 }
 
 // ── Trust challenges ─────────────────────────────────────────────────────────
