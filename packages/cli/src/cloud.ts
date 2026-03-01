@@ -199,8 +199,19 @@ async function requestJson<T>(options: CloudRequestOptions): Promise<CloudApiRes
                     let error = `HTTP ${statusCode}`;
                     if (text.trim()) {
                         try {
-                            const parsed = JSON.parse(text) as { error?: string; message?: string };
-                            error = parsed.error || parsed.message || error;
+                            // The BFF returns { "error": { "code": "...", "message": "..." } }.
+                            // We must handle both flat { "error": "..." } and nested envelopes.
+                            const parsed = JSON.parse(text) as {
+                                error?: string | { code?: string; message?: string };
+                                message?: string;
+                            };
+                            if (typeof parsed.error === 'string') {
+                                error = parsed.error;
+                            } else if (parsed.error && typeof parsed.error === 'object') {
+                                error = parsed.error.message ?? parsed.error.code ?? error;
+                            } else if (typeof parsed.message === 'string') {
+                                error = parsed.message;
+                            }
                         } catch {
                             error = `${error}: ${text.slice(0, 200)}`;
                         }

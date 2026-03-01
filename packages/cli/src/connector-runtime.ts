@@ -99,7 +99,7 @@ export interface ConnectorRuntimeDependencies {
     fetchConnectorCapabilities(
         token: string,
         machineId: string
-    ): Promise<{ ok: boolean; error?: string; data?: { capabilities?: string[]; features?: string[] } }>;
+    ): Promise<{ ok: boolean; statusCode?: number; error?: string; data?: { capabilities?: string[]; features?: string[] } }>;
     sendConnectorHeartbeat(
         token: string,
         payload: {
@@ -512,20 +512,33 @@ export async function runConnectorRuntimeCycle(
                     ?? registration.cloud.capabilities;
                 cloudConnected = true;
                 lastError = null;
+            } else if (capabilitiesResult.statusCode === 404) {
+                // Connector was removed from the cloud DB (or DB was reset).
+                // Reset to local mode so the next cycle re-registers.
+                registration.registrationMode = 'local';
+                registration.cloud.registrationId = null;
+                registration.cloud.streamUrl = null;
+                registration.cloud.capabilities = [];
+                lastError = 'connector_not_found_in_cloud';
             } else {
                 lastError = capabilitiesResult.error ?? 'cloud_capabilities_failed';
             }
 
+            // Only proceed with heartbeat and bridges if still registered in cloud mode.
+            // Capabilities returning 404 resets registrationMode to 'local', and the
+            // next cycle will attempt re-registration instead.
             const postureForHeartbeat: 'connected' | 'degraded' | 'offline' = daemon.ok ? 'connected' : 'offline';
-            const heartbeatResult = await deps.sendConnectorHeartbeat(token.accessToken, {
-                machineId: registration.machineId,
-                tenantId: registration.tenantId,
-                posture: postureForHeartbeat,
-                daemonRunning: daemon.ok,
-                syncEnabled: Boolean(sync?.enabled),
-                syncRunning: Boolean(sync?.running),
-                queue: sync?.queue
-            });
+            const heartbeatResult = registration.registrationMode === 'cloud'
+                ? await deps.sendConnectorHeartbeat(token.accessToken, {
+                    machineId: registration.machineId,
+                    tenantId: registration.tenantId,
+                    posture: postureForHeartbeat,
+                    daemonRunning: daemon.ok,
+                    syncEnabled: Boolean(sync?.enabled),
+                    syncRunning: Boolean(sync?.running),
+                    queue: sync?.queue
+                })
+                : { ok: false as const, error: 'connector_not_found_in_cloud' };
 
             if (heartbeatResult.ok) {
                 cloudConnected = true;
@@ -539,7 +552,7 @@ export async function runConnectorRuntimeCycle(
             }
 
             let daemonSessionToken = registration.runtime.daemonSessionToken;
-            if (daemon.ok && (registration.runtime.eventBridgeSupported || registration.runtime.commandBridgeSupported) && !daemonSessionToken) {
+            if (daemon.ok && registration.registrationMode === 'cloud' && (registration.runtime.eventBridgeSupported || registration.runtime.commandBridgeSupported) && !daemonSessionToken) {
                 try {
                     const session = await deps.createDaemonSession();
                     daemonSessionToken = session.sessionToken;
@@ -553,7 +566,7 @@ export async function runConnectorRuntimeCycle(
                 }
             }
 
-            if (daemon.ok && registration.runtime.eventBridgeSupported) {
+            if (daemon.ok && registration.registrationMode === 'cloud' && registration.runtime.eventBridgeSupported) {
                 try {
                     if (!daemonSessionToken) {
                         throw new Error('daemon_session_unavailable');
@@ -719,7 +732,7 @@ export async function runConnectorRuntimeCycle(
                 }
             }
 
-            if (daemon.ok && registration.runtime.commandBridgeSupported) {
+            if (daemon.ok && registration.registrationMode === 'cloud' && registration.runtime.commandBridgeSupported) {
                 try {
                     if (!daemonSessionToken) {
                         throw new Error('daemon_session_unavailable');

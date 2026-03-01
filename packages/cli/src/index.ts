@@ -38,7 +38,7 @@ import {
     stopService as stopServiceLinux,
     restartService as restartServiceLinux,
 } from './service-linux';
-import { commandAuthLogin, commandAuthLogout, commandAuthStatus, commandAuthRotate, checkTokenExpiryWarning, resolveToken } from './auth';
+import { commandAuthLogin, commandAuthLogout, commandAuthStatus, commandAuthRotate, checkTokenExpiryWarning, resolveToken, isTokenExpired, refreshAccessToken, getEnvToken } from './auth';
 import { getConnectorStatePath, readConnectorState, registerConnector, writeConnectorState } from './connector';
 import { fetchConnectorCapabilities, registerConnectorInCloud, sendConnectorEvents, sendConnectorHeartbeat } from './cloud';
 import { runConnectorRuntime } from './connector-runtime';
@@ -1969,16 +1969,35 @@ async function main(): Promise<number> {
         }
         if (process.stdin.isTTY && process.stdout.isTTY) {
             // Auto-run setup if this machine hasn't been fully configured yet.
-            // Checks: (1) no auth token, (2) no connector state on disk.
-            // Cloud registration mode is not required — local registration is sufficient
-            // to reach the shell. Cloud sync state is managed separately.
-            const hasToken = !!resolveToken();
+            // Checks: (1) no auth token, (2) expired token (try silent refresh first),
+            // (3) no connector state on disk.
+            const tokenStore = resolveToken();
             const connectorState = readConnectorState();
 
-            if (!hasToken) {
+            if (!tokenStore) {
                 console.log(color.bold('\nWelcome to 0ctx!'));
                 console.log(color.dim("Looks like this is your first time. Let's get you set up.\n"));
                 return commandSetup({});
+            }
+
+            // If the stored token is expired, attempt a silent refresh.
+            // Fall back to interactive login only if the refresh fails.
+            if (!getEnvToken() && isTokenExpired(tokenStore)) {
+                let refreshed = false;
+                if (tokenStore.refreshToken) {
+                    try {
+                        await refreshAccessToken(tokenStore);
+                        refreshed = true;
+                    } catch {
+                        // Refresh failed — will prompt below
+                    }
+                }
+                if (!refreshed) {
+                    console.log(color.bold('\nYour session has expired.'));
+                    console.log(color.dim('Logging you back in...\n'));
+                    const loginCode = await commandAuthLogin({});
+                    if (loginCode !== 0) return loginCode;
+                }
             }
 
             if (!connectorState) {

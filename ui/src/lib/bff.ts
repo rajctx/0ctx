@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { headers as getRequestHeaders } from 'next/headers';
 import { auth0 } from '@/lib/auth0';
 import { getStore } from '@/lib/store';
 
@@ -119,8 +120,13 @@ export function errorResponse(
  * Resolve Auth0 session. Returns the access token string or null.
  * Works for both browser sessions (Auth0 cookie) and CLI connectors
  * (device-code bearer token forwarded via Authorization header).
+ *
+ * Priority:
+ *  1. Auth0 cookie session (browser / dashboard)
+ *  2. Authorization: Bearer <token> header (CLI / daemon device-code flow)
  */
 export async function resolveSession(): Promise<string | null> {
+  // 1. Try cookie-based Auth0 session first (browser sessions).
   try {
     const session = await auth0.getSession();
     if (session?.tokenSet?.accessToken) {
@@ -129,6 +135,20 @@ export async function resolveSession(): Promise<string | null> {
   } catch {
     // Auth0 not configured or session unavailable.
   }
+
+  // 2. Fall back to Authorization: Bearer header (CLI / daemon).
+  //    The token is a valid Auth0 JWT issued via the device-code flow.
+  try {
+    const hdrs = await getRequestHeaders();
+    const authorization = hdrs.get('authorization');
+    if (authorization?.startsWith('Bearer ')) {
+      const token = authorization.slice('Bearer '.length).trim();
+      if (token) return token;
+    }
+  } catch {
+    // headers() is only available inside a request context.
+  }
+
   return null;
 }
 
