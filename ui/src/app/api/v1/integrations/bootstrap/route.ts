@@ -2,15 +2,18 @@ import {
   storeExecCommand,
   errorResponse,
   jsonResponse,
-  requireSession,
-  resolveMachineId
+  requireTenantSession
 } from '@/lib/bff';
 
 export async function POST(request: Request) {
-  const [, authErr] = await requireSession();
+  const [, claims, authErr] = await requireTenantSession();
   if (authErr) return authErr;
 
-  const machineId = resolveMachineId();
+  const tenantId = claims.tenantId;
+  if (!tenantId) {
+    return errorResponse(403, 'no_tenant', 'No tenant associated with this account.');
+  }
+
   let body: Record<string, unknown> = {};
   try {
     body = (await request.json()) as Record<string, unknown>;
@@ -18,15 +21,21 @@ export async function POST(request: Request) {
     // Empty body is fine.
   }
 
+  const machineId = typeof body.machineId === 'string' ? body.machineId : null;
+  if (!machineId) {
+    return errorResponse(400, 'invalid_request', 'machineId is required');
+  }
+
   const clients = Array.isArray(body.clients) ? body.clients : ['claude', 'cursor', 'windsurf'];
   const dryRun = body.dryRun === true;
 
   try {
-    const result = await storeExecCommand(machineId, 'bootstrap', {
-      clients,
-      dryRun,
-      json: true
-    });
+    const result = await storeExecCommand(
+      machineId,
+      'bootstrap',
+      { clients, dryRun, json: true },
+      { tenantId }
+    );
 
     if (!result.ok) {
       return errorResponse(502, 'bootstrap_failed', result.error ?? 'Bootstrap workflow failed', true);
