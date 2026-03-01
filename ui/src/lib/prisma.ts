@@ -4,8 +4,9 @@
  * Uses @prisma/adapter-pg (Rust-free architecture).
  * globalThis pattern prevents connection pool exhaustion during Next.js hot-reload.
  *
- * DATABASE_URL must be set. If the database is unreachable on first query,
- * Prisma will throw a clear connection error — no silent degradation.
+ * Initialization is lazy (via getPrisma()) so this module can be statically
+ * imported without DATABASE_URL — important for local dev with MemoryStore.
+ * When DATABASE_URL *is* set, the first call to getPrisma() creates the client.
  */
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@/generated/prisma';
@@ -30,8 +31,13 @@ function createPrismaClient(): PrismaClient {
   return new PrismaClient({ adapter });
 }
 
-export const prisma = globalForPrisma.prisma ?? createPrismaClient();
-
-if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = prisma;
+/**
+ * Returns the singleton PrismaClient, creating it on first call.
+ * Throws if DATABASE_URL is not set.
+ */
+export function getPrisma(): PrismaClient {
+  if (!globalForPrisma.prisma) {
+    globalForPrisma.prisma = createPrismaClient();
+  }
+  return globalForPrisma.prisma;
 }

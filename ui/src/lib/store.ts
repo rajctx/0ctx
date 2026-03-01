@@ -10,6 +10,7 @@
  */
 
 import { randomUUID } from 'crypto';
+import { getPrisma } from '@/lib/prisma';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -337,9 +338,7 @@ export class MemoryStore implements Store {
 
 export class PrismaStore implements Store {
   private getClient() {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { prisma } = require('@/lib/prisma') as { prisma: import('@/generated/prisma').PrismaClient };
-    return prisma;
+    return getPrisma();
   }
 
   async migrate(): Promise<void> {

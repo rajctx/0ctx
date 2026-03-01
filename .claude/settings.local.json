@@ -10,7 +10,8 @@
       "Bash(python3 -m json.tool)",
       "Bash(python3 -c \"import json; d=json.load\\(open\\(''/c/Users/Rajesh/.0ctx/connector.json''\\)\\); print\\(''registrationMode:'', d.get\\(''registrationMode''\\)\\); print\\(''tenantId:'', d.get\\(''tenantId''\\)\\); print\\(''cloud.lastError:'', d.get\\(''cloud'', {}\\).get\\(''lastError''\\)\\)\")",
       "Bash(npm run build --workspace=packages/cli)",
-      "Bash(npx tsc --noEmit --skipLibCheck)"
+      "Bash(npx tsc --noEmit --skipLibCheck)",
+      "Bash(npx tsc --noEmit --pretty)"
     ]
   }
 }
