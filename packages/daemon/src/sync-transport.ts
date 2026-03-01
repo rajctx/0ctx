@@ -84,8 +84,21 @@ export async function pushEnvelope(token: string, envelope: SyncEnvelope): Promi
 
         let error: string;
         try {
-            const parsed = JSON.parse(res.body) as { error?: string; message?: string };
-            error = parsed.error ?? parsed.message ?? `HTTP ${res.status}`;
+            // BFF returns { "error": { "code": "...", "message": "..." } } — handle
+            // both flat string and nested object envelopes, same as cloud.ts.
+            const parsed = JSON.parse(res.body) as {
+                error?: string | { code?: string; message?: string };
+                message?: string;
+            };
+            if (typeof parsed.error === 'string') {
+                error = parsed.error;
+            } else if (parsed.error && typeof parsed.error === 'object') {
+                error = parsed.error.message ?? parsed.error.code ?? `HTTP ${res.status}`;
+            } else if (typeof parsed.message === 'string') {
+                error = parsed.message;
+            } else {
+                error = `HTTP ${res.status}`;
+            }
         } catch {
             error = `HTTP ${res.status}: ${res.body.slice(0, 200)}`;
         }
