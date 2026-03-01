@@ -237,7 +237,10 @@ async function requestWithFallback<T>(
         const result = await requestJson<T>({ ...options, path });
         if (result.ok) return result;
         last = result;
-        if (result.statusCode !== 404) break;
+        // Fall through to the next path candidate on 404 (not found) or 405
+        // (method not allowed — can happen when a route exists but has no handler
+        // for this HTTP method, e.g. plural vs singular path naming mismatch).
+        if (result.statusCode !== 404 && result.statusCode !== 405) break;
     }
 
     return last ?? { ok: false, statusCode: 0, error: 'Cloud request failed' };

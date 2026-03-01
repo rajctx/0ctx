@@ -1969,11 +1969,11 @@ async function main(): Promise<number> {
         }
         if (process.stdin.isTTY && process.stdout.isTTY) {
             // Auto-run setup if this machine hasn't been fully configured yet.
-            // Checks: (1) no auth token, (2) no connector state on disk, or
-            // (3) connector was never cloud-registered on this machine.
+            // Checks: (1) no auth token, (2) no connector state on disk.
+            // Cloud registration mode is not required — local registration is sufficient
+            // to reach the shell. Cloud sync state is managed separately.
             const hasToken = !!resolveToken();
             const connectorState = readConnectorState();
-            const isCloudRegistered = connectorState?.registrationMode === 'cloud';
 
             if (!hasToken) {
                 console.log(color.bold('\nWelcome to 0ctx!'));
@@ -1981,7 +1981,7 @@ async function main(): Promise<number> {
                 return commandSetup({});
             }
 
-            if (!connectorState || !isCloudRegistered) {
+            if (!connectorState) {
                 console.log(color.bold('\nAlmost there!'));
                 console.log(color.dim("This machine isn't registered yet. Running setup to connect it...\n"));
                 return commandSetup({});
