@@ -1,6 +1,6 @@
 {
   "name": "@0ctx/daemon",
-  "version": "0.1.6",
+  "version": "0.1.9",
   "private": true,
   "description": "0ctx persistent local daemon – IPC server and DB owner",
   "main": "dist/index.js",
@@ -26,7 +26,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@0ctx/core": "^1.0.0",
+    "@0ctx/core": "*",
+    "better-sqlite3": "^11.8.1",
     "uuid": "^11.0.5"
   },
   "devDependencies": {

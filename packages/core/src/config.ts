@@ -25,6 +25,8 @@ export interface AppConfig {
     'integration.autoBootstrap': boolean;
     /** Per-machine HMAC secret for audit log chain integrity. Auto-generated on first use. */
     'audit.hmacSecret': string;
+    /** Whether telemetry events are collected (true) or disabled (false) */
+    'telemetry.enabled': boolean;
 }
 
 const DEFAULTS: AppConfig = {
@@ -35,7 +37,8 @@ const DEFAULTS: AppConfig = {
     'integration.chatgpt.enabled': false,
     'integration.chatgpt.requireApproval': true,
     'integration.autoBootstrap': true,
-    'audit.hmacSecret': ''
+    'audit.hmacSecret': '',
+    'telemetry.enabled': true
 };
 
 /** Map of config keys to env var overrides */
@@ -46,14 +49,16 @@ const ENV_OVERRIDES: Partial<Record<keyof AppConfig, string>> = {
     'integration.chatgpt.enabled': 'CTX_INTEGRATION_CHATGPT_ENABLED',
     'integration.chatgpt.requireApproval': 'CTX_INTEGRATION_CHATGPT_REQUIRE_APPROVAL',
     'integration.autoBootstrap': 'CTX_INTEGRATION_AUTO_BOOTSTRAP',
-    'audit.hmacSecret': 'CTX_AUDIT_HMAC_SECRET'
+    'audit.hmacSecret': 'CTX_AUDIT_HMAC_SECRET',
+    'telemetry.enabled': 'CTX_TELEMETRY_ENABLED'
 };
 
 const BOOLEAN_KEYS = new Set<keyof AppConfig>([
     'sync.enabled',
     'integration.chatgpt.enabled',
     'integration.chatgpt.requireApproval',
-    'integration.autoBootstrap'
+    'integration.autoBootstrap',
+    'telemetry.enabled'
 ]);
 
 function parseBooleanValue(value: string): boolean {

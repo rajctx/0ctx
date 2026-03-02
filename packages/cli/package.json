@@ -1,6 +1,6 @@
 {
   "name": "@0ctx/cli",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "0ctx product CLI – install, bootstrap, doctor, and service management",
   "main": "dist/index.js",
   "bin": {
@@ -32,8 +32,10 @@
     "directory": "packages/cli"
   },
   "dependencies": {
+    "@clack/prompts": "^1.0.1",
     "better-sqlite3": "^11.8.1",
-    "cross-keychain": "^1.1.0"
+    "cross-keychain": "^1.1.0",
+    "posthog-node": "^5.26.1"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",

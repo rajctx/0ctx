@@ -1,6 +1,6 @@
 {
   "name": "@0ctx/mcp",
-  "version": "0.1.6",
+  "version": "0.1.9",
   "private": true,
   "description": "0ctx MCP stdio server – translates tool calls into daemon IPC",
   "main": "dist/index.js",
@@ -34,8 +34,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@0ctx/core": "^1.0.0",
-    "@0ctx/daemon": "^1.0.0",
+    "@0ctx/core": "*",
+    "@0ctx/daemon": "*",
     "@modelcontextprotocol/sdk": "^1.5.0"
   },
   "devDependencies": {

@@ -56,6 +56,7 @@ import { drainConnectorQueue } from './connector-queue-drain';
 import { runInteractiveShell } from './shell';
 import { runReleasePublish } from './release';
 import { startLogsServer } from './logs-server';
+import { initTelemetry, captureEvent, shutdownTelemetry } from './telemetry';
 
 type SupportedClient = 'claude' | 'cursor' | 'windsurf';
 type CheckStatus = 'pass' | 'warn' | 'fail';
@@ -1962,8 +1963,17 @@ async function commandDaemonService(action: string | undefined): Promise<number>
 
 async function main(): Promise<number> {
     const argv = process.argv.slice(2);
+
+    let deviceId: string | undefined;
+    try {
+        const state = readConnectorState();
+        if (state) deviceId = state.machineId;
+    } catch (e) { }
+    initTelemetry(deviceId);
+
     if (argv.length === 0) {
         if (process.env.CTX_SHELL_MODE === '1') {
+            captureEvent('cli_command_executed', { command: 'help' });
             printHelp();
             return 0;
         }
@@ -2003,16 +2013,20 @@ async function main(): Promise<number> {
             if (!connectorState) {
                 console.log(color.bold('\nAlmost there!'));
                 console.log(color.dim("This machine isn't registered yet. Running setup to connect it...\n"));
+                captureEvent('cli_command_executed', { command: 'setup', interactive: true });
                 return commandSetup({});
             }
 
+            captureEvent('cli_command_executed', { command: 'shell', interactive: true });
             return commandShell();
         }
+        captureEvent('cli_command_executed', { command: 'help' });
         printHelp();
         return 0;
     }
 
     const parsed = parseArgs(argv);
+    captureEvent('cli_command_executed', { command: parsed.command, subcommand: parsed.subcommand });
 
     switch (parsed.command) {
         case 'setup':
@@ -2112,10 +2126,12 @@ async function main(): Promise<number> {
 }
 
 main()
-    .then(code => {
+    .then(async code => {
+        await shutdownTelemetry();
         process.exitCode = code;
     })
-    .catch(error => {
+    .catch(async error => {
+        await shutdownTelemetry();
         console.error(error instanceof Error ? error.message : String(error));
         process.exitCode = 1;
     });
