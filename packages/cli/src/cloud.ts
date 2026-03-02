@@ -2,7 +2,8 @@ import http from 'http';
 import https from 'https';
 import { getConfigValue } from '@0ctx/core';
 
-const DEFAULT_CONTROL_PLANE_BASE_URL = 'https://0ctx.com/api/v1';
+const DEFAULT_CONTROL_PLANE_BASE_URL = 'https://www.0ctx.com/api/v1';
+const MAX_REDIRECTS = 3;
 const DEFAULT_TIMEOUT_MS = 10_000;
 
 interface CloudRequestOptions {
@@ -158,85 +159,98 @@ function buildUrl(path: string, query?: Record<string, string | number | null | 
 }
 
 async function requestJson<T>(options: CloudRequestOptions): Promise<CloudApiResult<T>> {
-    const url = buildUrl(options.path, options.query);
+    const initialUrl = buildUrl(options.path, options.query);
     const payload = options.body === undefined ? undefined : JSON.stringify(options.body);
 
-    return new Promise((resolve) => {
-        const transport = url.protocol === 'https:' ? https : http;
-        const req = transport.request(
-            {
-                hostname: url.hostname,
-                port: url.port || (url.protocol === 'https:' ? 443 : 80),
-                path: url.pathname + url.search,
-                method: options.method,
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${options.token}`,
-                    ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {})
+    function doRequest(targetUrl: URL, redirectsLeft: number): Promise<CloudApiResult<T>> {
+        return new Promise((resolve) => {
+            const transport = targetUrl.protocol === 'https:' ? https : http;
+            const req = transport.request(
+                {
+                    hostname: targetUrl.hostname,
+                    port: targetUrl.port || (targetUrl.protocol === 'https:' ? 443 : 80),
+                    path: targetUrl.pathname + targetUrl.search,
+                    method: options.method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${options.token}`,
+                        ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {})
+                    },
+                    timeout: parseTimeoutMs()
                 },
-                timeout: parseTimeoutMs()
-            },
-            (res) => {
-                const chunks: Buffer[] = [];
-                res.on('data', (chunk: Buffer) => chunks.push(chunk));
-                res.on('end', () => {
+                (res) => {
                     const statusCode = res.statusCode ?? 0;
-                    const text = Buffer.concat(chunks).toString('utf8');
 
-                    if (statusCode >= 200 && statusCode < 300) {
-                        if (!text.trim()) {
-                            resolve({ ok: true, statusCode, data: {} as T });
-                            return;
-                        }
-                        try {
-                            resolve({ ok: true, statusCode, data: JSON.parse(text) as T });
-                        } catch {
-                            resolve({ ok: true, statusCode, data: {} as T });
-                        }
+                    // Follow 3xx redirects (301, 302, 307, 308) up to MAX_REDIRECTS.
+                    if (statusCode >= 300 && statusCode < 400 && res.headers.location && redirectsLeft > 0) {
+                        const location = new URL(res.headers.location, targetUrl);
+                        res.resume(); // drain the response body
+                        resolve(doRequest(location, redirectsLeft - 1));
                         return;
                     }
 
-                    let error = `HTTP ${statusCode}`;
-                    if (text.trim()) {
-                        try {
-                            // The BFF returns { "error": { "code": "...", "message": "..." } }.
-                            // We must handle both flat { "error": "..." } and nested envelopes.
-                            const parsed = JSON.parse(text) as {
-                                error?: string | { code?: string; message?: string };
-                                message?: string;
-                            };
-                            if (typeof parsed.error === 'string') {
-                                error = parsed.error;
-                            } else if (parsed.error && typeof parsed.error === 'object') {
-                                error = parsed.error.message ?? parsed.error.code ?? error;
-                            } else if (typeof parsed.message === 'string') {
-                                error = parsed.message;
+                    const chunks: Buffer[] = [];
+                    res.on('data', (chunk: Buffer) => chunks.push(chunk));
+                    res.on('end', () => {
+                        const text = Buffer.concat(chunks).toString('utf8');
+
+                        if (statusCode >= 200 && statusCode < 300) {
+                            if (!text.trim()) {
+                                resolve({ ok: true, statusCode, data: {} as T });
+                                return;
                             }
-                        } catch {
-                            error = `${error}: ${text.slice(0, 200)}`;
+                            try {
+                                resolve({ ok: true, statusCode, data: JSON.parse(text) as T });
+                            } catch {
+                                resolve({ ok: true, statusCode, data: {} as T });
+                            }
+                            return;
                         }
-                    }
 
-                    resolve({ ok: false, statusCode, error });
+                        let error = `HTTP ${statusCode}`;
+                        if (text.trim()) {
+                            try {
+                                // The BFF returns { "error": { "code": "...", "message": "..." } }.
+                                // We must handle both flat { "error": "..." } and nested envelopes.
+                                const parsed = JSON.parse(text) as {
+                                    error?: string | { code?: string; message?: string };
+                                    message?: string;
+                                };
+                                if (typeof parsed.error === 'string') {
+                                    error = parsed.error;
+                                } else if (parsed.error && typeof parsed.error === 'object') {
+                                    error = parsed.error.message ?? parsed.error.code ?? error;
+                                } else if (typeof parsed.message === 'string') {
+                                    error = parsed.message;
+                                }
+                            } catch {
+                                error = `${error}: ${text.slice(0, 200)}`;
+                            }
+                        }
+
+                        resolve({ ok: false, statusCode, error });
+                    });
+                }
+            );
+
+            req.on('error', (err) => {
+                resolve({
+                    ok: false,
+                    statusCode: 0,
+                    error: err instanceof Error ? err.message : String(err)
                 });
-            }
-        );
-
-        req.on('error', (err) => {
-            resolve({
-                ok: false,
-                statusCode: 0,
-                error: err instanceof Error ? err.message : String(err)
             });
-        });
 
-        req.on('timeout', () => {
-            req.destroy(new Error('Request timed out'));
-        });
+            req.on('timeout', () => {
+                req.destroy(new Error('Request timed out'));
+            });
 
-        if (payload) req.write(payload);
-        req.end();
-    });
+            if (payload) req.write(payload);
+            req.end();
+        });
+    }
+
+    return doRequest(initialUrl, MAX_REDIRECTS);
 }
 
 async function requestWithFallback<T>(
