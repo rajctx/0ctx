@@ -1,18 +1,40 @@
 /**
  * BFF HTTP client for calling /api/v1/* routes.
  * Used by server actions (actions.ts) and can be used from client components.
+ *
+ * Server-side calls (from server actions) forward the browser's Auth0 session
+ * cookie so API routes can authenticate via auth0.getSession().
  */
 
-const BFF_BASE =
-  typeof window !== 'undefined'
-    ? '' // Client-side: relative URLs
-    : process.env.CTX_UI_BASE_URL || 'http://localhost:3000';
+const IS_SERVER = typeof window === 'undefined';
+
+const BFF_BASE = IS_SERVER
+  ? process.env.CTX_UI_BASE_URL || 'http://localhost:3000'
+  : ''; // Client-side: relative URLs
 
 export interface BffResponse<T = unknown> {
   ok: boolean;
   status: number;
   data: T | null;
   error?: { code: string; message: string; retryable: boolean; correlationId: string };
+}
+
+/**
+ * When running on the server (inside a server action), read cookies from the
+ * incoming browser request so they can be forwarded to the internal API call.
+ * This is required because `fetch()` from server actions does not automatically
+ * include the browser's cookies.
+ */
+async function getServerCookieHeader(): Promise<string | null> {
+  if (!IS_SERVER) return null;
+  try {
+    // Dynamic import avoids bundling next/headers on the client.
+    const { cookies } = await import('next/headers');
+    const cookieStore = await cookies();
+    return cookieStore.toString();
+  } catch {
+    return null;
+  }
 }
 
 export async function bffGet<T = unknown>(
@@ -66,9 +88,17 @@ async function bffFetch<T>(
   );
 
   try {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+
+    // Forward browser cookies when running server-side (server actions).
+    const cookieHeader = await getServerCookieHeader();
+    if (cookieHeader) {
+      headers['Cookie'] = cookieHeader;
+    }
+
     const fetchOptions: RequestInit = {
       method: options.method,
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       signal: controller.signal
     };
 
