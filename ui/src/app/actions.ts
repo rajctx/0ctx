@@ -311,11 +311,43 @@ export async function getCapabilities(): Promise<CapabilitiesSnapshot | null> {
 }
 
 export async function getAuthStatus(): Promise<AuthStatusSnapshot | null> {
-  const status = await getRuntimeStatus();
-  if (!status) {
+  try {
+    const { auth0 } = await import('@/lib/auth0');
+    const session = await auth0.getSession();
+    if (!session?.tokenSet?.accessToken) {
+      return { authenticated: false, email: null, tenantId: null, expiresAt: null, tokenExpired: false };
+    }
+
+    const token = session.tokenSet.accessToken;
+    const parts = token.split('.');
+    let email: string | null = null;
+    let tenantId: string | null = null;
+    let expiresAt: number | null = null;
+    let tokenExpired = false;
+
+    if (parts.length >= 2) {
+      try {
+        const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as Record<string, unknown>;
+        tenantId = typeof payload['https://0ctx.com/tenant_id'] === 'string'
+          ? payload['https://0ctx.com/tenant_id'] as string : null;
+        email = typeof payload['https://0ctx.com/email'] === 'string'
+          ? payload['https://0ctx.com/email'] as string : null;
+        if (typeof payload.exp === 'number') {
+          expiresAt = payload.exp * 1000; // convert to ms
+          tokenExpired = Date.now() > expiresAt;
+        }
+      } catch { /* opaque token — leave defaults */ }
+    }
+
+    // Fallback email from session user info
+    if (!email && session.user?.email) {
+      email = session.user.email as string;
+    }
+
+    return { authenticated: true, email, tenantId, expiresAt, tokenExpired };
+  } catch {
     return { authenticated: false, email: null, tenantId: null, expiresAt: null, tokenExpired: false };
   }
-  return { authenticated: true, email: null, tenantId: null, expiresAt: null, tokenExpired: false };
 }
 
 export async function getContexts(): Promise<ContextItem[]> {
