@@ -13,6 +13,7 @@
  */
 import { NextRequest } from 'next/server';
 import { correlationId, errorResponse, jsonResponse } from '@/lib/bff';
+import { getStore } from '@/lib/store';
 
 const AUTH0_ISSUER = process.env.AUTH0_ISSUER_BASE_URL ?? '';
 // Must match the Native application used in the device initiation route.
@@ -105,6 +106,17 @@ export async function POST(request: NextRequest) {
         tenantId = typeof claims['https://0ctx.com/tenant_id'] === 'string'
           ? (claims['https://0ctx.com/tenant_id'] as string)
           : null;
+      }
+    }
+
+    // Auto-provision tenant row on first device-code login so the CLI can
+    // register connectors without the user visiting the dashboard first.
+    if (tenantId) {
+      try {
+        const store = getStore();
+        await store.createTenant({ tenantId, name: email ?? '', settings: {} });
+      } catch {
+        // Non-fatal — connector register endpoint also auto-provisions.
       }
     }
 

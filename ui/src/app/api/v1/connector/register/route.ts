@@ -27,6 +27,13 @@ export async function POST(request: Request) {
 
   try {
     const store = getStore();
+
+    // Auto-provision tenant row if it doesn't exist yet (idempotent upsert).
+    // The dashboard layout also does this, but the CLI may register before
+    // the user ever visits the dashboard — without the tenant row the FK on
+    // connectors would fail.
+    await store.createTenant({ tenantId, name: '', settings: {} });
+
     // Composite lookup — only returns a connector owned by this tenant.
     const existing = await store.getConnector(machineId, tenantId);
 
