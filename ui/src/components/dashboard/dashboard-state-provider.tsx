@@ -6,19 +6,17 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode
 } from 'react';
 import {
   CapabilitiesSnapshot,
   createContext as createContextAction,
-  getCapabilities,
   getContexts,
-  getHealth,
-  getMetricsSnapshot,
+  getOperationalSnapshot,
   HealthSnapshot,
   MetricsSnapshot,
-  runConnectorStatusWorkflow
 } from '@/app/actions';
 import type { ContextItem } from '@/lib/graph';
 
@@ -112,20 +110,16 @@ export function DashboardStateProvider({ children }: { children: ReactNode }) {
     []
   );
 
+  // Single API call replaces the previous 4 parallel calls to /api/v1/runtime/status
   const refreshOperationalState = useCallback(async () => {
-    const [healthData, metricsData, capabilitiesData] = await Promise.all([
-      getHealth(),
-      getMetricsSnapshot(),
-      getCapabilities()
-    ]);
-    const connectorStatus = await runConnectorStatusWorkflow({ cloud: true });
-    const connectorPayload = connectorStatus.payload;
+    const snapshot = await getOperationalSnapshot();
+    const connectorPayload = snapshot.connectorStatus.payload;
     const registration = asRecord(connectorPayload?.registration);
     const bridge = asRecord(connectorPayload?.bridge);
     const cloud = asRecord(connectorPayload?.cloud);
-    setHealth(healthData);
-    setMetrics(metricsData);
-    setCapabilities(capabilitiesData);
+    setHealth(snapshot.health);
+    setMetrics(snapshot.metrics);
+    setCapabilities(snapshot.capabilities);
     setConnectorPosture(typeof connectorPayload?.posture === 'string' ? connectorPayload.posture : 'unknown');
     setConnectorRegistered(registration?.registered === true);
     setConnectorBridgeHealthy(bridge?.healthy === true);
@@ -165,11 +159,41 @@ export function DashboardStateProvider({ children }: { children: ReactNode }) {
     void refreshDashboardData();
   }, [refreshDashboardData]);
 
+  // Visibility-aware polling: pause when tab is hidden
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   useEffect(() => {
-    const interval = window.setInterval(() => {
-      void refreshOperationalState();
-    }, STATUS_REFRESH_INTERVAL_MS);
-    return () => window.clearInterval(interval);
+    function startPolling() {
+      if (intervalRef.current) return;
+      intervalRef.current = setInterval(() => {
+        void refreshOperationalState();
+      }, STATUS_REFRESH_INTERVAL_MS);
+    }
+
+    function stopPolling() {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'visible') {
+        // Refresh immediately when tab becomes visible again
+        void refreshOperationalState();
+        startPolling();
+      } else {
+        stopPolling();
+      }
+    }
+
+    startPolling();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      stopPolling();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [refreshOperationalState]);
 
   const activeContext = useMemo(

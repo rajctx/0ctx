@@ -228,6 +228,64 @@ export async function getRuntimeStatus(): Promise<RuntimeStatusSnapshot | null> 
   return res.data;
 }
 
+/**
+ * Single call that derives health, metrics, capabilities, and connector status
+ * from one `/api/v1/runtime/status` request instead of 4 separate ones.
+ */
+export async function getOperationalSnapshot(): Promise<{
+  health: HealthSnapshot | null;
+  metrics: MetricsSnapshot | null;
+  capabilities: CapabilitiesSnapshot | null;
+  connectorStatus: ConnectorStatusWorkflowResult;
+}> {
+  const status = await getRuntimeStatus();
+  if (!status) {
+    const now = Date.now();
+    return {
+      health: null,
+      metrics: null,
+      capabilities: null,
+      connectorStatus: {
+        ok: false, command: 'bff', args: ['connector-status'],
+        exitCode: 1, stdout: '', stderr: 'no status', startedAt: now,
+        finishedAt: now, durationMs: 0, payload: null,
+      },
+    };
+  }
+
+  const health: HealthSnapshot = {
+    ok: status.bridgeHealthy && status.cloudConnected,
+    status: status.posture,
+    posture: status.posture,
+    bridgeHealthy: status.bridgeHealthy,
+    cloudConnected: status.cloudConnected,
+  };
+
+  const metrics: MetricsSnapshot = { cloud: status.cloud } as MetricsSnapshot;
+
+  const capabilities: CapabilitiesSnapshot = {
+    methods: status.capabilities,
+    apiVersion: '1',
+  };
+
+  const now = Date.now();
+  const connectorStatus: ConnectorStatusWorkflowResult = {
+    ok: true, command: 'bff', args: ['connector-status'],
+    exitCode: 0, stdout: JSON.stringify(status), stderr: '',
+    startedAt: now, finishedAt: now, durationMs: 0,
+    payload: {
+      posture: status.posture,
+      daemon: { running: status.bridgeHealthy },
+      registration: { registered: status.bridgeHealthy, machineId: 'hosted' },
+      bridge: { healthy: status.bridgeHealthy },
+      cloud: { connected: status.cloudConnected },
+      runtime: { eventBridgeSupported: true, commandBridgeSupported: true, queue: { pending: 0, backoff: 0 } },
+    },
+  };
+
+  return { health, metrics, capabilities, connectorStatus };
+}
+
 export async function getHealth(): Promise<HealthSnapshot | null> {
   const status = await getRuntimeStatus();
   if (!status) return null;

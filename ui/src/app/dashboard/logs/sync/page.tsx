@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { StatusBadge } from '@/components/logs/status-badge';
 import { fmtAgo, fmtTsISO, fmtBytes } from '@/lib/log-format';
+import { useVisibleInterval } from '@/lib/use-visible-interval';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -87,11 +88,8 @@ export default function SyncContextsPage() {
     }
   }, []);
 
-  useEffect(() => {
-    load();
-    const iv = setInterval(load, 30_000);
-    return () => clearInterval(iv);
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
+  useVisibleInterval(load, 30_000);
 
   // ── Load detail ─────────────────────────────────────────────────────────────
   const loadDetail = useCallback(async (ctx: ContextSummary) => {

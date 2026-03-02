@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { DetailPanel } from '@/components/logs/detail-panel';
 import { fmtAgo, fmtTs } from '@/lib/log-format';
+import { useVisibleInterval } from '@/lib/use-visible-interval';
 
 interface EventBatchRow {
   id: string;
@@ -21,9 +22,14 @@ export default function EventsPage() {
   const [selected, setSelected] = useState<EventBatchRow | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const load = async () => {
-    const url = machineFilter
-      ? `/api/v1/logs/events?limit=100&machineId=${encodeURIComponent(machineFilter)}`
+  const sseActiveRef = useRef(false);
+  const machineFilterRef = useRef(machineFilter);
+  machineFilterRef.current = machineFilter;
+
+  const load = useCallback(async () => {
+    const filter = machineFilterRef.current;
+    const url = filter
+      ? `/api/v1/logs/events?limit=100&machineId=${encodeURIComponent(filter)}`
       : '/api/v1/logs/events?limit=100';
     const res = await fetch(url);
     if (!res.ok) return;
@@ -31,23 +37,32 @@ export default function EventsPage() {
     setEvents(data.events);
     setTotal(data.total);
     setLoading(false);
-  };
+  }, []);
 
-  useEffect(() => { load(); }, [machineFilter]);
-  useEffect(() => {
-    const iv = setInterval(load, 10000);
-    return () => clearInterval(iv);
-  }, [machineFilter]);
+  // Initial load on filter change
+  useEffect(() => { load(); }, [machineFilter, load]);
 
-  // Real-time updates via SSE
+  // SSE for real-time updates — replaces polling when available
   useEffect(() => {
     let es: EventSource | null = null;
     try {
       es = new EventSource('/api/v1/events/stream');
+      es.addEventListener('open', () => { sseActiveRef.current = true; });
       es.addEventListener('message', () => load());
-    } catch { /* SSE not available */ }
-    return () => es?.close();
-  }, [machineFilter]);
+      es.addEventListener('error', () => { sseActiveRef.current = false; });
+    } catch {
+      sseActiveRef.current = false;
+    }
+    return () => {
+      es?.close();
+      sseActiveRef.current = false;
+    };
+  }, [load]);
+
+  // Fallback polling — only fires when SSE is down, pauses when tab hidden
+  useVisibleInterval(() => {
+    if (!sseActiveRef.current) load();
+  }, 15_000);
 
   // Deduplicate machineIds for the filter dropdown
   const machineIds = Array.from(new Set(events.map(e => e.machineId)));

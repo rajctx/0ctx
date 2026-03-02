@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { StatusBadge } from '@/components/logs/status-badge';
 import { Sparkline } from '@/components/logs/sparkline';
 import { fmtAgo, fmtUptime } from '@/lib/log-format';
+import { useVisibleInterval } from '@/lib/use-visible-interval';
 
 interface StaleConnector {
   machineId: string;
@@ -42,7 +43,7 @@ export default function HealthPage() {
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<number>(Date.now());
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const res = await fetch('/api/v1/logs/health');
     if (!res.ok) {
       setError(`Failed to load health data (${res.status})`);
@@ -54,13 +55,10 @@ export default function HealthPage() {
     setError(null);
     setLoading(false);
     setLastRefresh(Date.now());
-  };
-
-  useEffect(() => {
-    load();
-    const iv = setInterval(load, 15000);
-    return () => clearInterval(iv);
   }, []);
+
+  useEffect(() => { load(); }, [load]);
+  useVisibleInterval(load, 15_000);
 
   // Command queue sparkline history (normalized 0–1 by total)
   const pendingHistory = useHistory(

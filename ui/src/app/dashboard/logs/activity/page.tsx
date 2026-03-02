@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { DetailPanel } from '@/components/logs/detail-panel';
 import { fmtTs } from '@/lib/log-format';
+import { useVisibleInterval } from '@/lib/use-visible-interval';
 import type { ActivityItem } from '@/app/api/v1/logs/activity/route';
 
 type Filter = 'all' | 'command' | 'event' | 'heartbeat';
@@ -15,6 +16,8 @@ export default function ActivityPage() {
   const pausedRef = useRef(paused);
   pausedRef.current = paused;
 
+  const sseActiveRef = useRef(false);
+
   const load = useCallback(async () => {
     if (pausedRef.current) return;
     const res = await fetch('/api/v1/logs/activity?limit=100');
@@ -23,24 +26,32 @@ export default function ActivityPage() {
     setItems(data.items);
   }, []);
 
-  // Initial load + SSE for real-time append
+  // SSE for real-time updates — replaces polling when available
   useEffect(() => {
     load();
-    const iv = setInterval(load, 5000);
 
     let es: EventSource | null = null;
     try {
       es = new EventSource('/api/v1/events/stream');
+      es.addEventListener('open', () => { sseActiveRef.current = true; });
       es.addEventListener('message', () => {
         if (!pausedRef.current) load();
       });
-    } catch { /* SSE not available */ }
+      es.addEventListener('error', () => { sseActiveRef.current = false; });
+    } catch {
+      sseActiveRef.current = false;
+    }
 
     return () => {
-      clearInterval(iv);
       es?.close();
+      sseActiveRef.current = false;
     };
   }, [load]);
+
+  // Fallback polling — only fires when SSE is down, pauses when tab hidden
+  useVisibleInterval(() => {
+    if (!sseActiveRef.current) load();
+  }, 10_000);
 
   const visible = filter === 'all' ? items : items.filter(i => i.category === filter);
 

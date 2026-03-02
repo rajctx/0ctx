@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { StatusBadge } from '@/components/logs/status-badge';
 import { fmtAgo } from '@/lib/log-format';
+import { useVisibleInterval } from '@/lib/use-visible-interval';
 
 interface ConnectorRow {
   machineId: string;
@@ -22,20 +23,17 @@ export default function ConnectorsPage() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const res = await fetch('/api/v1/logs/connectors');
     if (!res.ok) return;
     const data = await res.json() as { connectors: ConnectorRow[]; counts: typeof counts };
     setConnectors(data.connectors);
     setCounts(data.counts);
     setLoading(false);
-  };
-
-  useEffect(() => {
-    load();
-    const iv = setInterval(load, 30000);
-    return () => clearInterval(iv);
   }, []);
+
+  useEffect(() => { load(); }, [load]);
+  useVisibleInterval(load, 30_000);
 
   const visible = connectors.filter(c =>
     !search || c.machineId.toLowerCase().includes(search.toLowerCase())

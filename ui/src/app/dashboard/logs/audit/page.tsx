@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { DetailPanel } from '@/components/logs/detail-panel';
 import { fmtTs, fmtAgo } from '@/lib/log-format';
+import { useVisibleInterval } from '@/lib/use-visible-interval';
 
 interface AuditEvent {
   id: string;
@@ -34,9 +35,13 @@ export default function AuditPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = async () => {
+  const contextFilterRef = useRef(contextFilter);
+  contextFilterRef.current = contextFilter;
+
+  const load = useCallback(async () => {
     const params = new URLSearchParams({ limit: '200' });
-    if (contextFilter) params.set('contextId', contextFilter);
+    const filter = contextFilterRef.current;
+    if (filter) params.set('contextId', filter);
 
     const res = await fetch(`/api/v1/audit?${params}`);
     if (!res.ok) {
@@ -64,13 +69,10 @@ export default function AuditPage() {
     });
     setError(null);
     setLoading(false);
-  };
+  }, []);
 
-  useEffect(() => {
-    load();
-    const iv = setInterval(load, 30000);
-    return () => clearInterval(iv);
-  }, [contextFilter]);
+  useEffect(() => { load(); }, [contextFilter, load]);
+  useVisibleInterval(load, 30_000);
 
   const visible = statusFilter === 'all'
     ? events

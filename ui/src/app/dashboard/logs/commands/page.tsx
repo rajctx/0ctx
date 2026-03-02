@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { StatusBadge } from '@/components/logs/status-badge';
 import { DetailPanel } from '@/components/logs/detail-panel';
 import { fmtAgo } from '@/lib/log-format';
+import { useVisibleInterval } from '@/lib/use-visible-interval';
 
 interface CommandRow {
   commandId: string;
@@ -25,28 +26,24 @@ export default function CommandsPage() {
   const [selected, setSelected] = useState<CommandRow | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const load = async () => {
-    const url = statusFilter === 'all' ? '/api/v1/logs/commands?limit=150' : `/api/v1/logs/commands?status=${statusFilter}&limit=150`;
-    const res = await fetch(url);
+  const statusFilterRef = useRef(statusFilter);
+  statusFilterRef.current = statusFilter;
+
+  const load = useCallback(async () => {
+    const filter = statusFilterRef.current;
+    // Single request: always fetch unfiltered to get accurate counts, then filter client-side
+    const res = await fetch('/api/v1/logs/commands?limit=150');
     if (!res.ok) return;
     const data = await res.json() as { commands: CommandRow[]; counts: typeof counts };
-    setCommands(data.commands);
-    // Always fetch overall counts (unfiltered)
-    const totals = await fetch('/api/v1/logs/commands?limit=500');
-    if (totals.ok) {
-      const td = await totals.json() as { counts: typeof counts };
-      setCounts(td.counts);
-    }
+    setCommands(filter === 'all' ? data.commands : data.commands.filter(c => c.status === filter));
+    setCounts(data.counts);
     setLoading(false);
-  };
+  }, []);
 
-  useEffect(() => { load(); }, [statusFilter]);
-  useEffect(() => {
-    const iv = setInterval(() => load(), 15000);
-    return () => clearInterval(iv);
-  }, [statusFilter]);
+  useEffect(() => { load(); }, [statusFilter, load]);
+  useVisibleInterval(load, 15_000);
 
-  const visible = statusFilter === 'all' ? commands : commands.filter(c => c.status === statusFilter);
+  const visible = commands;
 
   return (
     <div>
