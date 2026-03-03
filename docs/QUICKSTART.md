@@ -73,6 +73,9 @@ npm run dev:control-plane
 # Check managed connector service state
 0ctx connector service status
 
+# Open local logs UI (activity + audit + queue + daemon health)
+0ctx logs
+
 # Inspect queued event replay state
 0ctx connector queue status --json
 

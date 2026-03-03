@@ -227,7 +227,7 @@ Local state under `~/.0ctx/`:
 - `master.key` - local encryption key fallback (when `CTX_MASTER_KEY` is not provided)
 - `connector.json` - connector registration + runtime bridge state
 - `connector-event-queue.json` - persistent connector event replay queue (override: `CTX_CONNECTOR_QUEUE_PATH`)
-- `ops.log` - local CLI operations audit log for connector queue actions (override: `CTX_CLI_OPS_LOG_PATH`)
+- `ops.log` - local CLI operations audit log (queue/auth/runtime actions; override: `CTX_CLI_OPS_LOG_PATH`)
 - `backups/` - encrypted backup files (`.enc`) and optional plaintext dumps (`.json`)
 
 ## Testing and CI
@@ -236,8 +236,7 @@ Local state under `~/.0ctx/`:
   - `packages/core/test/*`
   - `packages/daemon/test/*`
 - CI workflow:
-  - current parked location: `.github/workflows-disabled/ci.yml`
-  - expected active location after enablement: `.github/workflows/ci.yml`
+  - active location: `.github/workflows/ci.yml`
   - Runs `npm ci`, `npm run typecheck`, `npm run build`, `npm run test`
 
 ## Repo Governance
@@ -247,11 +246,9 @@ Local state under `~/.0ctx/`:
 - If nested git is detected (for example `packages/ui/.git`), migrate with:
   - `scripts/repo/adopt-ui-monorepo.ps1` (or npm scripts above)
 - Governance references:
-  - `docs/ENTERPRISE_ROADMAP_AND_TRACKER.md`
+  - `docs/INDEX.md`
+  - `docs/ENV_REFERENCE.md`
   - `docs/SEMANTIC_BLACKBOARD_ARCHITECTURE.md`
   - `docs/HYBRID_STORAGE_AND_SYNC_MODEL.md`
   - `docs/CONNECTOR_SERVICE_ARCHITECTURE.md`
-  - `docs/HOSTED_UI_PRODUCT_ARCHITECTURE.md`
-  - `docs/GITHUB_REPO_MANAGEMENT.md`
-  - `docs/GITHUB_ENABLEMENT_RUNBOOK.md`
   - `docs/RELEASE.md`

@@ -34,6 +34,7 @@ npm run dev:control-plane
 0ctx connector queue status --json
 0ctx sync policy get --context-id=<contextId>
 0ctx sync policy set metadata_only --context-id=<contextId>
+0ctx logs
 0ctx connector queue drain --wait --strict --timeout-ms=120000
 0ctx connector queue logs --limit=50
 0ctx connector queue logs --clear --dry-run
@@ -44,7 +45,8 @@ npm run dev:control-plane
 Drain troubleshooting:
 - Use `0ctx connector queue drain --wait --json` and inspect `wait.reason`.
 - Common reasons: `drained`, `timeout`, `max_batches`, `bridge_unsupported`, `single_pass`.
-- For per-run local audit entries, use `0ctx connector queue logs --limit=50`.
+- For local runtime/audit visibility, use `0ctx logs`.
+- For queue operation history, use `0ctx connector queue logs --limit=50`.
 - To clear local ops log safely, use `0ctx connector queue logs --clear --dry-run` first, then `--confirm`.
 
 Service command note:
@@ -65,7 +67,7 @@ still works as an advanced path for daemon + MCP bootstrap only.
 
 ## Environment Variables
 
-See `docs/ENVIRONMENT_VARIABLES.md` for the canonical env-var contract covering hosted UI, BFF, and local runtime.
+See `docs/ENV_REFERENCE.md` for the canonical env-var contract covering hosted UI, BFF, and local runtime.
 
 ## Validate Installation
 
@@ -92,6 +94,7 @@ Expected output:
 
 ```bash
 0ctx bootstrap --clients=all
+0ctx bootstrap --clients=all --dry-run
 0ctx doctor --json
 ```
 

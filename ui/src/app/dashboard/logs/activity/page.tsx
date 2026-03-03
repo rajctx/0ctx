@@ -14,7 +14,10 @@ export default function ActivityPage() {
   const [paused, setPaused] = useState(false);
   const [selected, setSelected] = useState<ActivityItem | null>(null);
   const pausedRef = useRef(paused);
-  pausedRef.current = paused;
+
+  useEffect(() => {
+    pausedRef.current = paused;
+  }, [paused]);
 
   const sseActiveRef = useRef(false);
 

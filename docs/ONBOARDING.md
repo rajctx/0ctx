@@ -2,9 +2,11 @@
 
 Updated: 2026-02-24
 
-Primary planning/tracking source:
+Primary documentation sources:
 
-- `docs/ENTERPRISE_ROADMAP_AND_TRACKER.md`
+- `docs/INDEX.md`
+- `docs/INSTALL.md`
+- `docs/RELEASE.md`
 
 ## 1) Local setup
 
@@ -36,9 +38,8 @@ npm run cli -- doctor --json
   - `fix/<name>`
   - `hotfix/<name>`
 - Follow PR template and link issues.
-- Use labels from `docs/GITHUB_REPO_MANAGEMENT.md`.
 - Do not merge if required checks fail.
-- Workflows are currently parked under `.github/workflows-disabled/`; use `docs/GITHUB_ENABLEMENT_RUNBOOK.md` when re-enable is approved.
+- Workflows are active under `.github/workflows/`.
 
 ## 5) Repo hygiene checks
 

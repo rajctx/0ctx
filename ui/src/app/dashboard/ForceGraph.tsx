@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import {
   ReactFlow,
   useNodesState,
@@ -28,7 +28,18 @@ export interface GraphControls {
   focusNode: (nodeId: string) => void;
 }
 
-function CustomNode({ data, selected }: any) {
+interface FlowNodeData extends Record<string, unknown> {
+  label: string;
+  type: string;
+  raw: unknown;
+  size: number;
+}
+
+type FlowNode = Node<FlowNodeData>;
+type FlowEdge = Edge;
+type SimNode = FlowNode & { x: number; y: number };
+
+function CustomNode({ data, selected }: { data: FlowNodeData; selected?: boolean }) {
   const meta = NODE_TYPE_META[asNodeType(data.type)];
   const size = data.size || 32;
 
@@ -94,11 +105,10 @@ function FlowEngine({
   onBackgroundClick,
   onGraphReady
 }: ForceGraphProps) {
-  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-  const { fitView, setCenter, zoomIn, zoomOut, getNodes } = useReactFlow();
-
-  const [simulationRunning, setSimulationRunning] = useState(false);
+  const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<FlowEdge>([]);
+  const { fitView, setCenter, zoomIn, zoomOut, getNodes } = useReactFlow<FlowNode, FlowEdge>();
+  const simulationRunningRef = useRef(false);
 
   useEffect(() => {
     // Calculate node degrees for sizing
@@ -109,7 +119,7 @@ function FlowEngine({
     });
 
     // Generate raw nodes and edges based on real graph connectivity
-    const rawNodes = graphData.nodes.map(n => {
+    const rawNodes: SimNode[] = graphData.nodes.map(n => {
       const label = String(n.content || n.type || '').trim();
       const shortLabel = label.length > 28 ? `${label.slice(0, 25)}...` : label;
       const x = 400 + (Math.random() - 0.5) * 100;
@@ -128,7 +138,7 @@ function FlowEngine({
       };
     });
 
-    const rawEdges = graphData.edges.map(e => ({
+    const rawEdges: FlowEdge[] = graphData.edges.map(e => ({
       id: String(e.id),
       source: String(e.fromId),
       target: String(e.toId),
@@ -160,52 +170,52 @@ function FlowEngine({
         };
       });
 
-      setNodes(laidOutNodes as any);
-      setEdges(rawEdges as any);
+      setNodes(laidOutNodes);
+      setEdges(rawEdges);
       setTimeout(() => fitView({ padding: 0.2, duration: 800 }), 100);
 
     } else {
       // Force Directed Layout
-      setSimulationRunning(true);
-      const d3Links = rawEdges.map(e => ({ ...e }));
-      const simulation = d3.forceSimulation(rawNodes as any)
-        .force('link', d3.forceLink(d3Links).id((d: any) => d.id).distance(120))
+      simulationRunningRef.current = true;
+      const d3Links = rawEdges.map(e => ({ source: e.source, target: e.target }));
+      const simulation = d3.forceSimulation<SimNode>(rawNodes)
+        .force('link', d3.forceLink<SimNode, { source: string | SimNode; target: string | SimNode }>(d3Links).id((d) => d.id).distance(120))
         .force('charge', d3.forceManyBody().strength(-600))
         .force('center', d3.forceCenter(400, 300))
-        .force('collide', d3.forceCollide().radius((d: any) => (d.data?.size || 32) / 2 + 15));
+        .force('collide', d3.forceCollide<SimNode>().radius((d) => (d.data?.size || 32) / 2 + 15));
 
       if (clusterAttribute) {
-        simulation.force('x', d3.forceX().x((d: any) => {
+        simulation.force('x', d3.forceX<SimNode>().x((d) => {
           const charCode = (d.data.type || '').charCodeAt(0) || 0;
           return 400 + ((charCode % 3) - 1) * 300;
         }).strength(0.3));
-        simulation.force('y', d3.forceY().y((d: any) => {
+        simulation.force('y', d3.forceY<SimNode>().y((d) => {
           const charCode = (d.data.type || '').charCodeAt(1) || 0;
           return 300 + ((charCode % 3) - 1) * 300;
         }).strength(0.3));
       }
 
       simulation.on('tick', () => {
-        setNodes(rawNodes.map((n: any) => ({
+        setNodes(rawNodes.map((n) => ({
           ...n,
           position: { x: n.x, y: n.y }
-        })) as any);
+        })));
       });
 
       simulation.on('end', () => {
-        setSimulationRunning(false);
+        simulationRunningRef.current = false;
         fitView({ padding: 0.3, duration: 1000 });
       });
 
-      setNodes(rawNodes.map((n: any) => ({
+      setNodes(rawNodes.map((n) => ({
         ...n,
         position: { x: n.x, y: n.y }
-      })) as any);
-      setEdges(rawEdges as any);
+      })));
+      setEdges(rawEdges);
 
       return () => {
         simulation.stop();
-        setSimulationRunning(false);
+        simulationRunningRef.current = false;
       };
     }
   }, [graphData, layoutType, clusterAttribute, setNodes, setEdges, fitView]);
@@ -217,13 +227,13 @@ function FlowEngine({
         selected: n.id === activeNodeId,
       }))
     );
-    if (!simulationRunning && activeNodeId) {
+    if (!simulationRunningRef.current && activeNodeId) {
       const activeNode = getNodes().find(n => n.id === activeNodeId);
       if (activeNode) {
         setCenter(activeNode.position.x + 28, activeNode.position.y + 28, { zoom: 1.2, duration: 800 });
       }
     }
-  }, [activeNodeId, setNodes, simulationRunning, getNodes, setCenter]);
+  }, [activeNodeId, setNodes, getNodes, setCenter]);
 
   const fit = useCallback(() => {
     fitView({ padding: 0.2, duration: 800 });
@@ -253,7 +263,7 @@ function FlowEngine({
   }, [fit, onGraphReady, reset, zoomIn, zoomOut, focusNodeObj]);
 
   return (
-    <ReactFlow
+    <ReactFlow<FlowNode, FlowEdge>
       nodes={nodes}
       edges={edges}
       nodeTypes={nodeTypes}

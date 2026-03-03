@@ -36,7 +36,10 @@ export default function AuditPage() {
   const [error, setError] = useState<string | null>(null);
 
   const contextFilterRef = useRef(contextFilter);
-  contextFilterRef.current = contextFilter;
+
+  useEffect(() => {
+    contextFilterRef.current = contextFilter;
+  }, [contextFilter]);
 
   const load = useCallback(async () => {
     const params = new URLSearchParams({ limit: '200' });

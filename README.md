@@ -46,9 +46,13 @@ npm run cli -- setup --clients=all --no-open
 # Bootstrap MCP registrations for supported clients
 0ctx bootstrap --clients=claude,cursor,windsurf
 0ctx bootstrap --clients=all --json
+0ctx bootstrap --clients=all --dry-run
 
 # Open hosted dashboard URL
 0ctx dashboard
+
+# Open local logs UI
+0ctx logs
 
 # Check connector posture
 0ctx connector status --json
@@ -100,16 +104,13 @@ npm run dev:control-plane
 ## Documentation
 
 - `AGENTS.md`: implementation guidance and architecture.
-- `docs/ENTERPRISE_ROADMAP_AND_TRACKER.md`: single source of truth for enterprise roadmap + execution tracker.
+- `docs/INDEX.md`: canonical docs entrypoint.
+- `docs/ENV_REFERENCE.md`: canonical environment/config reference.
 - `docs/SEMANTIC_BLACKBOARD_ARCHITECTURE.md`: hybrid blackboard runtime architecture.
 - `docs/HYBRID_STORAGE_AND_SYNC_MODEL.md`: local/cloud storage contract and sync modes.
 - `docs/CONNECTOR_SERVICE_ARCHITECTURE.md`: always-on local connector service design.
-- `docs/HOSTED_UI_PRODUCT_ARCHITECTURE.md`: hosted UI architecture, IA, and UX constraints.
 - `docs/INSTALL.md`: install and environment setup.
 - `docs/QUICKSTART.md`: first-run workflow.
-- `docs/GITHUB_REPO_MANAGEMENT.md`: repo governance and branch protection.
-- `docs/GITHUB_ENABLEMENT_RUNBOOK.md`: workflow re-enable procedure and rollback.
-- `docs/PLAN_STATUS.md`: completed/in-progress/planned status.
 - `docs/RELEASE.md`: release checklist and tagging.
 - `docs/ONBOARDING.md`: maintainer/contributor onboarding.
 

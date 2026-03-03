@@ -24,7 +24,10 @@ export default function EventsPage() {
 
   const sseActiveRef = useRef(false);
   const machineFilterRef = useRef(machineFilter);
-  machineFilterRef.current = machineFilter;
+
+  useEffect(() => {
+    machineFilterRef.current = machineFilter;
+  }, [machineFilter]);
 
   const load = useCallback(async () => {
     const filter = machineFilterRef.current;

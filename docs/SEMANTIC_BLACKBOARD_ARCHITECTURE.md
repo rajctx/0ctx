@@ -6,8 +6,7 @@ Owner: Platform Architecture
 Related:
 - `docs/HYBRID_STORAGE_AND_SYNC_MODEL.md`
 - `docs/CONNECTOR_SERVICE_ARCHITECTURE.md`
-- `docs/HOSTED_UI_PRODUCT_ARCHITECTURE.md`
-- `docs/ENTERPRISE_ROADMAP_AND_TRACKER.md`
+- `docs/INDEX.md`
 
 ## 1) Goal
 

@@ -8,7 +8,6 @@ Updated: 2026-02-24
 - CI runs automatically on push/PR (OS matrix: ubuntu, windows, macos).
 - PR governance enforces issue linkage.
 - Release can be triggered via manual dispatch or tag push.
-- For workflow management details, see `docs/GITHUB_ENABLEMENT_RUNBOOK.md`.
 
 ## Dry-run-first release sequence
 

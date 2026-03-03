@@ -6,7 +6,7 @@ Owner: Platform + Security
 Related:
 - `docs/SEMANTIC_BLACKBOARD_ARCHITECTURE.md`
 - `docs/CONNECTOR_SERVICE_ARCHITECTURE.md`
-- `docs/ENTERPRISE_ROADMAP_AND_TRACKER.md`
+- `docs/INDEX.md`
 
 ## 1) Decision
 
