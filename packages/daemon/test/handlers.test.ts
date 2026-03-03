@@ -146,6 +146,79 @@ describe('daemon request handling', () => {
         }
     });
 
+    it('supports temporal, topic, graph, and auto recall methods', () => {
+        const { db, graph } = createGraph();
+        try {
+            const session = handleRequest(graph, 'conn-recall', { method: 'createSession' }, runtime()) as { sessionToken: string };
+            const context = handleRequest(graph, 'conn-recall', {
+                method: 'createContext',
+                sessionToken: session.sessionToken,
+                params: { name: 'recall-context' }
+            }, runtime()) as { id: string };
+
+            const first = handleRequest(graph, 'conn-recall', {
+                method: 'addNode',
+                sessionToken: session.sessionToken,
+                params: { type: 'goal', content: 'Improve sleep quality with routine' }
+            }, runtime()) as { id: string };
+
+            const second = handleRequest(graph, 'conn-recall', {
+                method: 'addNode',
+                sessionToken: session.sessionToken,
+                params: { type: 'decision', content: 'Sleep interrupted at 3am, enforce bedtime protocol', tags: ['sleep'] }
+            }, runtime()) as { id: string };
+
+            handleRequest(graph, 'conn-recall', {
+                method: 'addEdge',
+                sessionToken: session.sessionToken,
+                params: { fromId: second.id, toId: first.id, relation: 'supersedes' }
+            }, runtime());
+
+            const temporal = handleRequest(graph, 'conn-recall', {
+                method: 'recallTemporal',
+                sessionToken: session.sessionToken,
+                params: { contextId: context.id, sinceHours: 24, limit: 10 }
+            }, runtime()) as { mode: string; totalEvents: number; sessions: unknown[] };
+
+            const topic = handleRequest(graph, 'conn-recall', {
+                method: 'recallTopic',
+                sessionToken: session.sessionToken,
+                params: { contextId: context.id, query: 'sleep', sinceHours: 24, limit: 10 }
+            }, runtime()) as { mode: string; hits: Array<{ nodeId: string; matchReason: string }> };
+
+            const graphRecall = handleRequest(graph, 'conn-recall', {
+                method: 'recallGraph',
+                sessionToken: session.sessionToken,
+                params: { contextId: context.id, query: 'sleep', depth: 2, maxNodes: 20, limit: 5 }
+            }, runtime()) as { mode: string; anchors: unknown[]; subgraph: { nodes: unknown[]; edges: unknown[] } };
+
+            const auto = handleRequest(graph, 'conn-recall', {
+                method: 'recall',
+                sessionToken: session.sessionToken,
+                params: { contextId: context.id, mode: 'auto', query: 'sleep', sinceHours: 24, limit: 10 }
+            }, runtime()) as { mode: string; summary: { topicHitCount: number; sessionCount: number } };
+
+            expect(temporal.mode).toBe('temporal');
+            expect(temporal.totalEvents).toBeGreaterThan(0);
+            expect(temporal.sessions.length).toBeGreaterThan(0);
+
+            expect(topic.mode).toBe('topic');
+            expect(topic.hits.length).toBeGreaterThan(0);
+            expect(topic.hits[0].nodeId).toBeTruthy();
+            expect(topic.hits[0].matchReason).toBeTruthy();
+
+            expect(graphRecall.mode).toBe('graph');
+            expect(graphRecall.anchors.length).toBeGreaterThan(0);
+            expect(graphRecall.subgraph.nodes.length).toBeGreaterThan(0);
+
+            expect(auto.mode).toBe('auto');
+            expect(auto.summary.topicHitCount).toBeGreaterThan(0);
+            expect(auto.summary.sessionCount).toBeGreaterThan(0);
+        } finally {
+            db.close();
+        }
+    });
+
     it('records and polls blackboard events via subscriptions', () => {
         const { db, graph } = createGraph();
         const events = new EventRuntime();

@@ -82,6 +82,51 @@ server.setRequestHandler(CallToolRequestSchema, async (req: any) => {
                 const results = await callDaemon('search', { contextId, query: args.query, limit: args.limit ?? 10 });
                 return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(results, null, 2) }] } };
             }
+            case 'ctx_recall': {
+                const contextId = pickContextId(args);
+                const recall = await callDaemon('recall', {
+                    contextId,
+                    mode: args.mode ?? 'auto',
+                    query: args.query,
+                    sinceHours: args.sinceHours,
+                    limit: args.limit,
+                    depth: args.depth,
+                    maxNodes: args.maxNodes
+                });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(recall, null, 2) }] } };
+            }
+            case 'ctx_recall_temporal': {
+                const contextId = pickContextId(args);
+                const recall = await callDaemon('recallTemporal', {
+                    contextId,
+                    sinceHours: args.sinceHours,
+                    limit: args.limit
+                });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(recall, null, 2) }] } };
+            }
+            case 'ctx_recall_topic': {
+                const contextId = pickContextId(args);
+                const recall = await callDaemon('recallTopic', {
+                    contextId,
+                    query: args.query,
+                    sinceHours: args.sinceHours,
+                    limit: args.limit
+                });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(recall, null, 2) }] } };
+            }
+            case 'ctx_recall_graph': {
+                const contextId = pickContextId(args);
+                const recall = await callDaemon('recallGraph', {
+                    contextId,
+                    query: args.query,
+                    anchorNodeIds: args.anchorNodeIds,
+                    sinceHours: args.sinceHours,
+                    limit: args.limit,
+                    depth: args.depth,
+                    maxNodes: args.maxNodes
+                });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(recall, null, 2) }] } };
+            }
             case 'ctx_supersede': {
                 await callDaemon('addEdge', { fromId: args.newNodeId, toId: args.oldNodeId, relation: 'supersedes' });
                 return { _meta: {}, toolResult: { content: [{ type: 'text', text: `Node ${args.oldNodeId} successfully superseded.` }] } };
@@ -286,7 +331,20 @@ server.setRequestHandler(CallToolRequestSchema, async (req: any) => {
                 throw new Error(`Unknown tool: ${name}`);
         }
     } catch (e: any) {
-        return { _meta: {}, toolResult: { content: [{ type: 'text', text: `Error: ${e.message}. Ensure you have an active context.` }], isError: true } };
+        const message = String(e?.message ?? e);
+        if (message.includes('Unknown method: recall') || message.includes('Unknown method: recallTopic') || message.includes('Unknown method: recallTemporal') || message.includes('Unknown method: recallGraph')) {
+            return {
+                _meta: {},
+                toolResult: {
+                    content: [{
+                        type: 'text',
+                        text: 'Error: Connected daemon does not support recall APIs yet. Restart/update daemon (or connector service) and retry.'
+                    }],
+                    isError: true
+                }
+            };
+        }
+        return { _meta: {}, toolResult: { content: [{ type: 'text', text: `Error: ${message}. Ensure you have an active context.` }], isError: true } };
     }
 });
 

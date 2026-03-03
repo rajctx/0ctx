@@ -4,7 +4,7 @@ import path from 'path';
 import os from 'os';
 
 const DB_PATH = path.join(os.homedir(), '.0ctx', '0ctx.db');
-export const CURRENT_SCHEMA_VERSION = 4;
+export const CURRENT_SCHEMA_VERSION = 5;
 
 export interface OpenDbOptions {
     dbPath?: string;
@@ -52,6 +52,11 @@ function migrate(db: Database.Database) {
     if (version < 4) {
         migrateToV4(db);
         setSchemaVersion(db, 4);
+    }
+
+    if (version < 5) {
+        migrateToV5(db);
+        setSchemaVersion(db, 5);
     }
 }
 
@@ -148,6 +153,16 @@ function migrateToV3(db: Database.Database) {
         ADD COLUMN syncPolicy TEXT NOT NULL DEFAULT 'metadata_only'
       `);
     }
+}
+
+function migrateToV5(db: Database.Database) {
+    db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_nodes_context_created
+      ON nodes(contextId, createdAt DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_audit_logs_session_created
+      ON audit_logs(sessionToken, createdAt DESC);
+  `);
 }
 
 export function getSchemaVersion(db: Database.Database): number {

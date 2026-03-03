@@ -73,6 +73,47 @@ async function getAuditEntries(limit = 100): Promise<unknown[]> {
     }
 }
 
+async function getTimelineEntries(limit = 200): Promise<Array<Record<string, unknown>>> {
+    const ops = readCliOpsLog(limit).map((entry) => ({
+        kind: 'cli',
+        timestamp: entry.timestamp,
+        title: entry.operation,
+        status: entry.status,
+        details: entry.details ?? {}
+    }));
+
+    const auditRaw = await getAuditEntries(limit);
+    const audit = auditRaw
+        .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object')
+        .map((entry) => {
+            const payload = (entry.payload && typeof entry.payload === 'object') ? entry.payload as Record<string, unknown> : {};
+            const result = (entry.result && typeof entry.result === 'object') ? entry.result as Record<string, unknown> : {};
+            const targetId = typeof payload.id === 'string'
+                ? payload.id
+                : typeof payload.nodeId === 'string'
+                    ? payload.nodeId
+                    : typeof result.id === 'string'
+                        ? result.id
+                        : null;
+            return {
+                kind: 'audit',
+                timestamp: typeof entry.createdAt === 'number' ? entry.createdAt : Date.now(),
+                title: typeof entry.action === 'string' ? entry.action : 'audit_event',
+                status: 'event',
+                details: {
+                    contextId: typeof entry.contextId === 'string' ? entry.contextId : null,
+                    actor: typeof entry.actor === 'string' ? entry.actor : null,
+                    source: typeof entry.source === 'string' ? entry.source : null,
+                    targetId
+                }
+            };
+        });
+
+    return [...ops, ...audit]
+        .sort((a, b) => Number(b.timestamp) - Number(a.timestamp))
+        .slice(0, limit);
+}
+
 export interface LogsServerHandle {
     port: number;
     close(): Promise<void>;
@@ -126,6 +167,15 @@ export async function startLogsServer(): Promise<LogsServerHandle> {
         // Ops log
         if (p === '/api/ops') {
             const entries = readCliOpsLog(200).reverse(); // newest first
+            jsonOk(res, { entries });
+            return;
+        }
+
+        // Unified timeline (CLI ops + daemon audit)
+        if (p === '/api/timeline') {
+            const rawLimit = Number(url.searchParams.get('limit') ?? '200');
+            const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(500, Math.floor(rawLimit)) : 200;
+            const entries = await getTimelineEntries(limit);
             jsonOk(res, { entries });
             return;
         }

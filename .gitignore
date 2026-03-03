@@ -53,3 +53,6 @@ next-env.d.ts
 
 # ts errors
 tsc_errors.txt
+
+# local scratch artifacts
+.tmp/

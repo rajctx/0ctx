@@ -97,6 +97,7 @@ const CLI_VERSION = (() => {
 function normalizeCommandAlias(command: string): string {
     const normalized = command.trim().toLowerCase();
     if (normalized === 'deamon') return 'daemon';
+    if (normalized === 'log') return 'logs';
     return normalized;
 }
 
@@ -175,6 +176,23 @@ async function isDaemonReachable(): Promise<{ ok: boolean; error?: string; healt
             error: error instanceof Error ? error.message : String(error)
         };
     }
+}
+
+function inferDaemonRecoverySteps(error?: string): string[] {
+    const normalized = (error ?? '').toLowerCase();
+    const steps: string[] = ['0ctx daemon start'];
+
+    if (normalized.includes('enoent') || normalized.includes('econnrefused') || normalized.includes('not running')) {
+        steps.push('0ctx connector service status');
+        steps.push('0ctx connector service start');
+    }
+
+    if (normalized.includes('eacces') || normalized.includes('permission') || normalized.includes('access is denied')) {
+        steps.push('Run terminal as Administrator, then retry service commands');
+    }
+
+    steps.push('0ctx doctor');
+    return Array.from(new Set(steps));
 }
 
 function resolveDaemonEntrypoint(): string {
@@ -305,17 +323,23 @@ async function printBootstrapResults(results: BootstrapResult[], dryRun: boolean
     }
 }
 
-async function commandStatus(): Promise<number> {
-    const p = await import('@clack/prompts');
-    p.intro(color.bgCyan(color.black(' 0ctx status ')));
-    const s = p.spinner();
-    s.start('Checking daemon health');
+async function commandStatus(flags: Record<string, string | boolean> = {}): Promise<number> {
+    const asJson = Boolean(flags.json);
+    const p = asJson ? null : await import('@clack/prompts');
+    const s = p ? p.spinner() : null;
+
+    if (p && s) {
+        p.intro(color.bgCyan(color.black(' 0ctx status ')));
+        s.start('Checking daemon health');
+    }
 
     let daemon = await isDaemonReachable();
 
     // Auto-start daemon if not running (best-effort, no error if it fails)
     if (!daemon.ok) {
-        s.message('Daemon not running — starting...');
+        if (s) {
+            s.message('Daemon not running — starting...');
+        }
         try {
             startDaemonDetached();
             const started = await waitForDaemon(8000);
@@ -327,26 +351,82 @@ async function commandStatus(): Promise<number> {
         }
     }
 
-    s.stop(`Daemon is ${daemon.ok ? color.green('running') : color.red('not running')}`);
+    if (s) {
+        s.stop(`Daemon is ${daemon.ok ? color.green('running') : color.red('not running')}`);
+    }
 
-    const info: Record<string, string> = {
-        'Socket': SOCKET_PATH,
-        'Database': DB_PATH,
-        'Master Key': fs.existsSync(KEY_PATH) || Boolean(process.env.CTX_MASTER_KEY) ? color.green('present') : color.yellow('missing')
+    let capabilities: any = null;
+    const missingFeatures: string[] = [];
+    const recoverySteps = daemon.ok ? [] : inferDaemonRecoverySteps(daemon.error);
+    let apiError: string | null = null;
+
+    if (daemon.ok) {
+        try {
+            capabilities = await sendToDaemon('getCapabilities', {});
+            const methodNames = Array.isArray(capabilities?.methods) ? capabilities.methods : [];
+            if (!methodNames.includes('recall')) {
+                missingFeatures.push('recall');
+            }
+        } catch (error) {
+            apiError = error instanceof Error ? error.message : String(error);
+        }
+    }
+
+    const methodNames = Array.isArray(capabilities?.methods) ? capabilities.methods : [];
+    const payload = {
+        ok: daemon.ok && missingFeatures.length === 0,
+        daemon: {
+            running: daemon.ok,
+            error: daemon.ok ? null : (daemon.error ?? 'unknown'),
+            recoverySteps,
+            health: daemon.ok ? (daemon.health ?? null) : null
+        },
+        paths: {
+            socket: SOCKET_PATH,
+            database: DB_PATH,
+            masterKeyPath: KEY_PATH,
+            masterKeyPresent: fs.existsSync(KEY_PATH) || Boolean(process.env.CTX_MASTER_KEY)
+        },
+        capabilities: daemon.ok ? {
+            apiVersion: capabilities?.apiVersion ?? 'unknown',
+            methodCount: methodNames.length,
+            methods: methodNames,
+            missingFeatures
+        } : null,
+        apiError
     };
 
-    if (!daemon.ok) {
-        if (daemon.error) {
-            info['Error'] = color.red(daemon.error);
+    if (asJson) {
+        console.log(JSON.stringify(payload, null, 2));
+        return payload.ok ? 0 : 1;
+    }
+    if (!p) {
+        return payload.ok ? 0 : 1;
+    }
+
+    const info: Record<string, string> = {
+        'Socket': payload.paths.socket,
+        'Database': payload.paths.database,
+        'Master Key': payload.paths.masterKeyPresent ? color.green('present') : color.yellow('missing')
+    };
+
+    if (!payload.daemon.running) {
+        if (payload.daemon.error) {
+            info['Error'] = color.red(payload.daemon.error);
         }
+        payload.daemon.recoverySteps.forEach((step, idx) => {
+            info[`Recover ${idx + 1}`] = color.yellow(step);
+        });
     } else {
-        try {
-            const capabilities = await sendToDaemon('getCapabilities', {});
-            const methods = Array.isArray(capabilities?.methods) ? capabilities.methods.length : 0;
-            info['API Version'] = capabilities?.apiVersion ?? 'unknown';
-            info['RPC Methods'] = String(methods);
-        } catch (error) {
-            info['API Error'] = color.red(error instanceof Error ? error.message : String(error));
+        if (payload.capabilities) {
+            info['API Version'] = payload.capabilities.apiVersion;
+            info['RPC Methods'] = String(payload.capabilities.methodCount);
+            if (payload.capabilities.missingFeatures.includes('recall')) {
+                info['Recall API'] = color.yellow('missing (restart daemon after update)');
+            }
+        }
+        if (payload.apiError) {
+            info['API Error'] = color.red(payload.apiError);
         }
     }
 
@@ -354,9 +434,15 @@ async function commandStatus(): Promise<number> {
         Object.entries(info).map(([k, v]) => `${color.dim(k.padEnd(12))} : ${v}`).join('\n'),
         'System Details'
     );
-    p.outro(daemon.ok ? 'All systems operational' : color.yellow('Daemon degraded or offline'));
+    if (!payload.daemon.running) {
+        p.outro(color.yellow('Daemon degraded or offline'));
+    } else if (payload.capabilities && payload.capabilities.missingFeatures.length > 0) {
+        p.outro(color.yellow(`Daemon reachable but missing capabilities: ${payload.capabilities.missingFeatures.join(', ')}`));
+    } else {
+        p.outro('All systems operational');
+    }
 
-    return daemon.ok ? 0 : 1;
+    return payload.ok ? 0 : 1;
 }
 
 async function commandBootstrap(flags: Record<string, string | boolean>): Promise<number> {
@@ -459,7 +545,10 @@ async function commandDoctor(flags: Record<string, string | boolean>): Promise<n
         id: 'daemon_reachable',
         status: daemon.ok ? 'pass' : 'fail',
         message: daemon.ok ? 'Daemon health check succeeded.' : 'Daemon is not reachable.',
-        details: daemon.ok ? daemon.health : { error: daemon.error }
+        details: daemon.ok ? daemon.health : {
+            error: daemon.error,
+            recoverySteps: inferDaemonRecoverySteps(daemon.error)
+        }
     });
 
     checks.push({
@@ -524,6 +613,15 @@ async function commandDoctor(flags: Record<string, string | boolean>): Promise<n
             }
         }
 
+        if (!daemon.ok) {
+            const recovery = inferDaemonRecoverySteps(daemon.error);
+            console.log('\nDaemon recovery steps:');
+            for (const [idx, step] of recovery.entries()) {
+                console.log(`  ${idx + 1}. ${step}`);
+            }
+            console.log('');
+        }
+
         const hasFailures = checks.some(c => c.status === 'fail');
         p.outro(hasFailures ? color.red('Doctor found issues requiring attention.') : color.green('All systems go!'));
     }
@@ -532,6 +630,7 @@ async function commandDoctor(flags: Record<string, string | boolean>): Promise<n
 }
 
 async function commandRepair(flags: Record<string, string | boolean>): Promise<number> {
+    const deep = Boolean(flags.deep);
     const p = await import('@clack/prompts');
     p.intro(color.bgCyan(color.black(' 0ctx repair ')));
 
@@ -567,6 +666,32 @@ async function commandRepair(flags: Record<string, string | boolean>): Promise<n
         return bootstrapCode;
     }
 
+    if (deep) {
+        p.log.step('Running deep daemon capability checks');
+
+        let capabilities: { methods?: string[] } | null = null;
+        try {
+            capabilities = await sendToDaemon('getCapabilities', {}) as { methods?: string[] } | null;
+        } catch (error) {
+            p.log.warn(`capabilities_check_failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        const methods = Array.isArray(capabilities?.methods) ? capabilities.methods : [];
+        if (!methods.includes('recall')) {
+            p.log.warn('Daemon is running but recall APIs are missing.');
+            console.log('\nDeep repair steps:\n');
+            console.log('  1. Restart daemon/service so latest daemon binary is active');
+            console.log('     - 0ctx daemon start');
+            console.log('     - or 0ctx connector service restart');
+            console.log('  2. Re-run: 0ctx status');
+            console.log('  3. Verify: 0ctx recall --start\n');
+            p.outro(color.yellow('Repair partial (daemon capabilities stale)'));
+            return 1;
+        }
+
+        p.log.success('Deep capability check passed');
+    }
+
     p.log.step('Running doctor checks');
     return commandDoctor({ ...flags, json: false });
 }
@@ -586,6 +711,62 @@ async function commandDashboard(flags: Record<string, string | boolean>): Promis
 }
 
 async function commandLogs(flags: Record<string, string | boolean>): Promise<number> {
+    if (Boolean(flags.snapshot)) {
+        const limit = parsePositiveIntegerFlag(flags.limit, 50);
+        const daemon = await isDaemonReachable();
+        const queueItems = listQueuedConnectorEvents().slice(0, limit);
+        const queueStats = getConnectorQueueStats();
+        const opsEntries = readCliOpsLog(limit).reverse();
+        let auditEntries: unknown[] = [];
+        let capabilities: unknown = null;
+        let syncStatus: unknown = null;
+
+        if (daemon.ok) {
+            try {
+                const auditResult = await sendToDaemon('listAuditEvents', { limit });
+                auditEntries = Array.isArray(auditResult) ? auditResult : [];
+            } catch {
+                auditEntries = [];
+            }
+            try {
+                capabilities = await sendToDaemon('getCapabilities', {});
+            } catch {
+                capabilities = null;
+            }
+            try {
+                syncStatus = await sendToDaemon('syncStatus', {});
+            } catch {
+                syncStatus = null;
+            }
+        }
+
+        console.log(JSON.stringify({
+            timestamp: new Date().toISOString(),
+            daemon: {
+                reachable: daemon.ok,
+                error: daemon.ok ? null : (daemon.error ?? 'unknown'),
+                health: daemon.ok ? (daemon.health ?? null) : null,
+                capabilities,
+                sync: syncStatus
+            },
+            connector: {
+                statePath: getConnectorStatePath(),
+                state: readConnectorState(),
+                queuePath: getConnectorQueuePath(),
+                queue: {
+                    stats: queueStats,
+                    sample: queueItems
+                }
+            },
+            logs: {
+                opsPath: getCliOpsLogPath(),
+                opsEntries,
+                auditEntries
+            }
+        }, null, 2));
+        return 0;
+    }
+
     const { port, close } = await startLogsServer();
     const url = `http://127.0.0.1:${port}`;
     console.log(`logs_url: ${url}`);
@@ -604,6 +785,148 @@ async function commandLogs(flags: Record<string, string | boolean>): Promise<num
 
     await close();
     return 0;
+}
+
+async function commandRecall(flags: Record<string, string | boolean>): Promise<number> {
+    const modeRaw = parseOptionalStringFlag(flags.mode) ?? 'auto';
+    const mode = modeRaw.toLowerCase();
+    const validModes = new Set(['auto', 'temporal', 'topic', 'graph']);
+    if (!validModes.has(mode)) {
+        console.error(`Invalid recall mode: '${modeRaw}'. Expected one of: auto, temporal, topic, graph.`);
+        return 1;
+    }
+
+    const query = parseOptionalStringFlag(flags.query);
+    const contextId = getContextIdFlag(flags);
+    const sinceHours = parsePositiveNumberFlag(flags['since-hours'], 24);
+    const limit = parsePositiveIntegerFlag(flags.limit, 10);
+    const depth = parsePositiveIntegerFlag(flags.depth, 2);
+    const maxNodes = parsePositiveIntegerFlag(flags['max-nodes'], 30);
+    const startBrief = Boolean(flags.start);
+    const asJson = Boolean(flags.json);
+    const effectiveMode = startBrief ? 'auto' : mode;
+
+    try {
+        const capabilities = await sendToDaemon('getCapabilities', {}) as { methods?: string[] } | null;
+        const methods = Array.isArray(capabilities?.methods) ? capabilities?.methods : [];
+        if (!methods.includes('recall')) {
+            console.error('recall_unavailable: connected daemon does not support recall methods.');
+            console.error('Restart daemon/service after updating binaries:');
+            console.error('  0ctx daemon start');
+            console.error('  or 0ctx connector service restart');
+            return 1;
+        }
+
+        const result = await sendToDaemon('recall', {
+            contextId,
+            mode: effectiveMode,
+            query,
+            sinceHours,
+            limit,
+            depth,
+            maxNodes
+        }) as Record<string, any>;
+
+        if (asJson) {
+            console.log(JSON.stringify(result, null, 2));
+            return 0;
+        }
+
+        if (startBrief) {
+            console.log('\nRecall Start Brief\n');
+            console.log(`  mode:          ${result.mode ?? 'auto'}`);
+            console.log(`  context:       ${result.contextId ?? 'active/global'}`);
+            if (query) {
+                console.log(`  query:         ${query}`);
+            }
+
+            const temporal = result.temporal as { sessions?: Array<{ endAt?: number; actions?: string[] }> } | undefined;
+            const sessions = Array.isArray(temporal?.sessions) ? temporal.sessions : [];
+            if (sessions.length > 0) {
+                console.log('\n  recent_sessions:');
+                for (const session of sessions.slice(0, 3)) {
+                    const ts = typeof session.endAt === 'number' ? new Date(session.endAt).toISOString() : 'n/a';
+                    const actions = Array.isArray(session.actions) ? session.actions.slice(0, 3).join(',') : 'n/a';
+                    console.log(`    at=${ts} actions=${actions}`);
+                }
+            }
+
+            const recommendations = Array.isArray(result.recommendations)
+                ? result.recommendations
+                : [];
+            const topicHits = Array.isArray(result.topic?.hits)
+                ? result.topic.hits
+                : [];
+            const anchors = recommendations.length > 0 ? recommendations : topicHits.slice(0, 3).map((hit: any) => ({
+                nodeId: hit.nodeId,
+                score: hit.score,
+                reason: hit.matchReason
+            }));
+
+            if (anchors.length > 0) {
+                console.log('\n  anchors:');
+                for (const anchor of anchors.slice(0, 3)) {
+                    console.log(`    node=${anchor.nodeId ?? 'n/a'} score=${anchor.score ?? 'n/a'} reason=${anchor.reason ?? 'n/a'}`);
+                }
+            }
+
+            const graphNodeCount = result.graph?.subgraph?.nodes?.length ?? 0;
+            console.log(`\n  graph_nodes:   ${graphNodeCount}`);
+            console.log('\n  next_steps:');
+            if (query) {
+                console.log(`    1) 0ctx recall --mode=graph --query="${query}" --json`);
+            } else {
+                console.log('    1) 0ctx recall --mode=topic --query="<your topic>" --json');
+            }
+            console.log('    2) 0ctx logs');
+            console.log('');
+            return 0;
+        }
+
+        console.log('\nRecall Summary\n');
+        console.log(`  mode:          ${result.mode ?? effectiveMode}`);
+        console.log(`  context:       ${result.contextId ?? 'active/global'}`);
+        if (query) {
+            console.log(`  query:         ${query}`);
+        }
+
+        const summary = result.summary as Record<string, unknown> | undefined;
+        if (summary) {
+            console.log(`  sessions:      ${summary.sessionCount ?? 0}`);
+            console.log(`  recent_events: ${summary.recentEventCount ?? 0}`);
+            console.log(`  topic_hits:    ${summary.topicHitCount ?? 0}`);
+            console.log(`  graph_nodes:   ${summary.graphNodeCount ?? 0}`);
+        }
+
+        if (Array.isArray(result.recommendations) && result.recommendations.length > 0) {
+            console.log('\n  recommendations:');
+            for (const item of result.recommendations.slice(0, 5)) {
+                console.log(`    node=${item.nodeId ?? 'n/a'} score=${item.score ?? 'n/a'} reason=${item.reason ?? 'n/a'}`);
+            }
+        }
+
+        if (result.mode === 'topic' && Array.isArray(result.hits)) {
+            console.log('\n  top_hits:');
+            for (const hit of result.hits.slice(0, 5)) {
+                const preview = typeof hit.content === 'string' ? hit.content.slice(0, 96) : '';
+                console.log(`    score=${hit.score ?? 'n/a'} reason=${hit.matchReason ?? 'n/a'} ${preview}`);
+            }
+        }
+
+        console.log('');
+        return 0;
+    } catch (error) {
+        const text = error instanceof Error ? error.message : String(error);
+        if (text.includes('Unknown method: recall')) {
+            console.error('recall_unavailable: daemon does not recognize recall APIs.');
+            console.error('Restart daemon/service after build/update and retry.');
+            console.error('  0ctx daemon start');
+            console.error('  or 0ctx connector service restart');
+            return 1;
+        }
+        console.error('recall_failed:', text);
+        return 1;
+    }
 }
 
 async function commandShell(): Promise<number> {
@@ -650,8 +973,30 @@ async function commandReleasePublish(flags: Record<string, string | boolean>): P
     return result.ok ? 0 : 1;
 }
 
-function commandVersion(): number {
-    console.log(CLI_VERSION);
+function commandVersion(flags: Record<string, string | boolean> = {}): number {
+    const asJson = Boolean(flags.json);
+    const verbose = Boolean(flags.verbose);
+    const payload = {
+        version: CLI_VERSION,
+        cliPath: process.argv[1] ? path.resolve(process.argv[1]) : __filename,
+        node: process.version,
+        platform: `${os.platform()}-${os.arch()}`
+    };
+
+    if (asJson) {
+        console.log(JSON.stringify(payload, null, 2));
+        return 0;
+    }
+
+    if (verbose) {
+        console.log(`version: ${payload.version}`);
+        console.log(`cli_path: ${payload.cliPath}`);
+        console.log(`node: ${payload.node}`);
+        console.log(`platform: ${payload.platform}`);
+        return 0;
+    }
+
+    console.log(payload.version);
     return 0;
 }
 
@@ -1326,7 +1671,8 @@ async function commandConnector(action: string | undefined, flags: Record<string
             posture,
             daemon: {
                 running: daemon.ok,
-                error: daemon.ok ? null : (daemon.error ?? 'unknown')
+                error: daemon.ok ? null : (daemon.error ?? 'unknown'),
+                recoverySteps: daemon.ok ? [] : inferDaemonRecoverySteps(daemon.error)
             },
             registration: registration ? {
                 registered: true,
@@ -1460,6 +1806,9 @@ async function commandConnector(action: string | undefined, flags: Record<string
         }
         if (!payload.daemon.running && payload.daemon.error) {
             console.log(`  daemon_error: ${payload.daemon.error}`);
+            for (const [idx, step] of payload.daemon.recoverySteps.entries()) {
+                console.log(`  daemon_fix_${idx + 1}: ${step}`);
+            }
         }
         if (requireBridge || !bridge.healthy) {
             console.log(`  bridge:       ${bridge.healthy ? 'healthy' : 'unhealthy'}`);
@@ -1472,6 +1821,10 @@ async function commandConnector(action: string | undefined, flags: Record<string
     }
 
     if (action === 'logs') {
+        if (!Boolean(flags.service) && !Boolean(flags.system)) {
+            return commandLogs(flags);
+        }
+
         const platform = os.platform();
         if (platform === 'win32') {
             console.log('Use Windows Event Viewer (Application logs) for service diagnostics.');
@@ -1731,7 +2084,7 @@ function printHelp(): void {
 Usage:
   0ctx                    First run: auto setup + auth. Afterwards: interactive shell.
   0ctx shell
-  0ctx version
+  0ctx version [--verbose] [--json]
   0ctx --version | -v
   0ctx setup [--clients=all|claude,cursor,windsurf] [--no-open] [--json]
              [--require-cloud] [--wait-cloud-ready]
@@ -1741,9 +2094,10 @@ Usage:
   0ctx install [--clients=all|claude,cursor,windsurf] [--json] [--skip-bootstrap]
   0ctx bootstrap [--dry-run] [--clients=...] [--entrypoint=/path/to/mcp-server.js] [--json]
   0ctx doctor [--json] [--clients=...]
-  0ctx status
-  0ctx repair [--clients=...]
-  0ctx logs [--no-open]
+  0ctx status [--json]
+  0ctx repair [--clients=...] [--deep]
+  0ctx logs [--no-open] [--snapshot] [--limit=50]
+  0ctx recall [--mode=auto|temporal|topic|graph] [--query="..."] [--since-hours=24] [--limit=10] [--depth=2] [--max-nodes=30] [--start] [--json]
   0ctx dashboard [--no-open] [--dashboard-query=k=v&...]
   0ctx release publish --version vX.Y.Z [--tag latest|next] [--otp 123456] [--dry-run] [--json]
   0ctx daemon start
@@ -1778,7 +2132,7 @@ Connector:
   0ctx connector queue drain [--max-batches=10] [--batch-size=200] [--wait] [--strict|--fail-on-retry] [--timeout-ms=120000] [--poll-ms=1000] [--json]
   0ctx connector queue purge [--all|--older-than-hours=N|--min-attempts=N] [--dry-run|--confirm] [--json]
   0ctx connector queue logs [--limit=50] [--json] [--clear --confirm|--dry-run]
-  0ctx connector logs
+  0ctx connector logs [--service|--system] [--no-open] [--snapshot] [--limit=50]
 
 Service management compatibility (requires Admin on Windows):
   Both command paths manage the same underlying OS service.
@@ -2178,11 +2532,13 @@ async function main(): Promise<number> {
             case 'doctor':
                 return commandDoctor(parsed.flags);
             case 'status':
-                return commandStatus();
+                return commandStatus(parsed.flags);
             case 'repair':
                 return commandRepair(parsed.flags);
             case 'version':
-                return commandVersion();
+                return commandVersion(parsed.flags);
+            case 'recall':
+                return commandRecall(parsed.flags);
             case 'auth': {
                 const sub = parsed.subcommand;
                 if (sub === 'login') return commandAuthLogin(parsed.flags);

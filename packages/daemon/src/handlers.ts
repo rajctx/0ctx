@@ -1,4 +1,4 @@
-import type { Graph, AuditAction, AuditMetadata } from '@0ctx/core';
+import type { Graph, AuditAction, AuditMetadata, SearchResult } from '@0ctx/core';
 import type { DaemonRequest } from './protocol';
 import {
     clearConnectionContext,
@@ -135,6 +135,233 @@ function parseSyncPolicy(value: unknown): 'local_only' | 'metadata_only' | 'full
     return null;
 }
 
+function parsePositiveInt(value: unknown, fallback: number, max = 500): number {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
+    return Math.max(1, Math.min(max, Math.floor(value)));
+}
+
+function parsePositiveHours(value: unknown, fallbackHours: number): number {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return fallbackHours;
+    return value;
+}
+
+function parseDepth(value: unknown, fallback = 2): number {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
+    return Math.max(1, Math.min(5, Math.floor(value)));
+}
+
+function extractAuditTargetId(entry: { payload?: Record<string, unknown>; result?: Record<string, unknown> | null }): string | null {
+    const payload = (entry.payload && typeof entry.payload === 'object') ? entry.payload : {};
+    const result = (entry.result && typeof entry.result === 'object') ? entry.result : {};
+    const payloadId = typeof payload.id === 'string' ? payload.id : (typeof payload.nodeId === 'string' ? payload.nodeId : null);
+    if (payloadId) return payloadId;
+    const resultId = typeof result.id === 'string' ? result.id : (typeof result.nodeId === 'string' ? result.nodeId : null);
+    return resultId;
+}
+
+function buildTemporalRecall(
+    graph: Graph,
+    contextId: string | null,
+    sinceHours: number,
+    limit: number
+): {
+    mode: 'temporal';
+    contextId: string | null;
+    sinceHours: number;
+    totalEvents: number;
+    sessions: Array<{
+        sessionId: string;
+        startAt: number;
+        endAt: number;
+        eventCount: number;
+        actions: string[];
+        targetIds: string[];
+        recentEvents: Array<{ action: string; createdAt: number; targetId: string | null }>;
+    }>;
+} {
+    const sinceMs = sinceHours * 60 * 60 * 1000;
+    const minCreatedAt = Date.now() - sinceMs;
+    const windowed = graph
+        .listAuditEvents(contextId ?? undefined, Math.max(limit * 10, 100))
+        .filter(event => event.createdAt >= minCreatedAt)
+        .slice(0, Math.max(limit * 5, limit));
+
+    const sessions = new Map<string, Array<{
+        action: string;
+        createdAt: number;
+        targetId: string | null;
+    }>>();
+
+    for (const event of windowed) {
+        const sessionId = event.sessionToken ?? event.connectionId ?? 'unknown';
+        const list = sessions.get(sessionId) ?? [];
+        list.push({
+            action: event.action,
+            createdAt: event.createdAt,
+            targetId: extractAuditTargetId(event)
+        });
+        sessions.set(sessionId, list);
+    }
+
+    const grouped = Array.from(sessions.entries())
+        .map(([sessionId, events]) => {
+            const sorted = [...events].sort((a, b) => b.createdAt - a.createdAt);
+            const allActions = Array.from(new Set(sorted.map(event => event.action)));
+            const targetIds = Array.from(new Set(sorted.map(event => event.targetId).filter((id): id is string => Boolean(id))));
+            const timestamps = sorted.map(event => event.createdAt);
+            return {
+                sessionId,
+                startAt: Math.min(...timestamps),
+                endAt: Math.max(...timestamps),
+                eventCount: sorted.length,
+                actions: allActions,
+                targetIds,
+                recentEvents: sorted.slice(0, 8)
+            };
+        })
+        .sort((a, b) => b.endAt - a.endAt)
+        .slice(0, limit);
+
+    return {
+        mode: 'temporal',
+        contextId,
+        sinceHours,
+        totalEvents: windowed.length,
+        sessions: grouped
+    };
+}
+
+function mapTopicHit(hit: SearchResult): {
+    nodeId: string;
+    key: string | null;
+    type: string;
+    content: string;
+    tags: string[];
+    createdAt: number;
+    score: number;
+    matchReason: string;
+    matchedTerms: string[];
+} {
+    return {
+        nodeId: hit.node.id,
+        key: hit.node.key ?? null,
+        type: hit.node.type,
+        content: hit.node.content,
+        tags: hit.node.tags ?? [],
+        createdAt: hit.node.createdAt,
+        score: hit.score,
+        matchReason: hit.matchReason,
+        matchedTerms: hit.matchedTerms
+    };
+}
+
+function getTopicHits(
+    graph: Graph,
+    contextId: string,
+    query: string,
+    limit: number,
+    sinceHours: number
+): SearchResult[] {
+    const withAdvanced = graph as Graph & {
+        searchAdvanced?: (contextId: string, query: string, options?: { limit?: number; sinceMs?: number; includeSuperseded?: boolean }) => SearchResult[];
+    };
+
+    if (typeof withAdvanced.searchAdvanced === 'function') {
+        return withAdvanced.searchAdvanced(contextId, query, {
+            limit,
+            sinceMs: sinceHours * 60 * 60 * 1000,
+            includeSuperseded: false
+        });
+    }
+
+    const legacyNodes = graph.search(contextId, query, limit);
+    return legacyNodes.map((node, idx) => ({
+        node,
+        score: Math.max(0, 100 - idx * 10),
+        matchReason: 'exact_term',
+        matchedTerms: query.toLowerCase().match(/[a-z0-9_]+/g) ?? []
+    }));
+}
+
+function buildGraphRecall(
+    graph: Graph,
+    contextId: string,
+    options: {
+        query?: string;
+        limit: number;
+        sinceMs: number;
+        depth: number;
+        maxNodes: number;
+        anchorNodeIds?: string[];
+    }
+): {
+    mode: 'graph';
+    contextId: string;
+    anchors: Array<{ nodeId: string; score: number | null; source: 'query' | 'explicit' }>;
+    subgraph: { nodes: Array<Record<string, unknown>>; edges: Array<Record<string, unknown>> };
+} {
+    const anchors: Array<{ nodeId: string; score: number | null; source: 'query' | 'explicit' }> = [];
+
+    if (options.query && options.query.trim().length > 0) {
+        const topicHits = getTopicHits(
+            graph,
+            contextId,
+            options.query,
+            options.limit,
+            Math.max(1, options.sinceMs / (60 * 60 * 1000))
+        );
+        for (const hit of topicHits) {
+            anchors.push({ nodeId: hit.node.id, score: hit.score, source: 'query' });
+        }
+    }
+
+    if (Array.isArray(options.anchorNodeIds)) {
+        for (const nodeId of options.anchorNodeIds) {
+            if (typeof nodeId !== 'string' || nodeId.length === 0) continue;
+            if (anchors.some(anchor => anchor.nodeId === nodeId)) continue;
+            anchors.push({ nodeId, score: null, source: 'explicit' });
+        }
+    }
+
+    const selectedAnchors = anchors.slice(0, options.limit);
+    const nodeMap = new Map<string, Record<string, unknown>>();
+    const edgeMap = new Map<string, Record<string, unknown>>();
+
+    for (const anchor of selectedAnchors) {
+        const subgraph = graph.getSubgraph(anchor.nodeId, options.depth, options.maxNodes);
+        for (const node of subgraph.nodes) {
+            nodeMap.set(node.id, {
+                id: node.id,
+                contextId: node.contextId,
+                type: node.type,
+                content: node.content,
+                key: node.key ?? null,
+                tags: node.tags ?? [],
+                createdAt: node.createdAt
+            });
+        }
+        for (const edge of subgraph.edges) {
+            edgeMap.set(edge.id, {
+                id: edge.id,
+                fromId: edge.fromId,
+                toId: edge.toId,
+                relation: edge.relation,
+                createdAt: edge.createdAt
+            });
+        }
+    }
+
+    return {
+        mode: 'graph',
+        contextId,
+        anchors: selectedAnchors,
+        subgraph: {
+            nodes: Array.from(nodeMap.values()),
+            edges: Array.from(edgeMap.values())
+        }
+    };
+}
+
 function recordMutationEvent(
     runtime: HandlerRuntimeContext,
     connectionId: string,
@@ -187,7 +414,7 @@ export function handleRequest(
     if (req.method === 'getCapabilities') {
         return {
             apiVersion: '2',
-            features: ['sessions', 'health', 'capabilities', 'audit_logs', 'audit_verify', 'metrics', 'backup_restore', 'auth', 'sync', 'sync_policies', 'blackboard_events', 'task_leases', 'quality_gates'],
+            features: ['sessions', 'health', 'capabilities', 'audit_logs', 'audit_verify', 'metrics', 'backup_restore', 'auth', 'sync', 'sync_policies', 'blackboard_events', 'task_leases', 'quality_gates', 'recall'],
             methods: [
                 'listContexts', 'createContext', 'deleteContext', 'switchContext', 'getActiveContext',
                 'addNode', 'getNode', 'updateNode', 'getByKey', 'deleteNode',
@@ -197,7 +424,8 @@ export function handleRequest(
                 'listAuditEvents', 'createBackup', 'listBackups', 'restoreBackup',
                 'auth/status', 'syncStatus', 'syncNow', 'getSyncPolicy', 'setSyncPolicy',
                 'subscribeEvents', 'unsubscribeEvents', 'listSubscriptions', 'pollEvents', 'ackEvent',
-                'getBlackboardState', 'evaluateCompletion', 'claimTask', 'releaseTask', 'resolveGate'
+                'getBlackboardState', 'evaluateCompletion', 'claimTask', 'releaseTask', 'resolveGate',
+                'recallTemporal', 'recallTopic', 'recallGraph', 'recall'
             ]
         };
     }
@@ -417,6 +645,155 @@ export function handleRequest(
         const explicitContextId = getContextIdFromParams(params);
         const limit = typeof params.limit === 'number' ? params.limit : undefined;
         return graph.listAuditEvents(explicitContextId ?? undefined, limit);
+    }
+
+    if (req.method === 'recallTemporal') {
+        const sinceHours = parsePositiveHours(params.sinceHours, 24);
+        const limit = parsePositiveInt(params.limit, 10, 100);
+        return buildTemporalRecall(graph, contextId, sinceHours, limit);
+    }
+
+    if (req.method === 'recallTopic') {
+        if (!contextId) {
+            throw new Error("No active context set for recallTopic. Call 'switchContext' or provide contextId.");
+        }
+        const query = typeof params.query === 'string' ? params.query.trim() : '';
+        if (!query) {
+            throw new Error("Missing required 'query' for recallTopic.");
+        }
+        const limit = parsePositiveInt(params.limit, 10, 100);
+        const sinceHours = parsePositiveHours(params.sinceHours, 24);
+        const hits = getTopicHits(graph, contextId, query, limit, sinceHours);
+        return {
+            mode: 'topic',
+            contextId,
+            query,
+            sinceHours,
+            hits: hits.map(mapTopicHit)
+        };
+    }
+
+    if (req.method === 'recallGraph') {
+        if (!contextId) {
+            throw new Error("No active context set for recallGraph. Call 'switchContext' or provide contextId.");
+        }
+        const limit = parsePositiveInt(params.limit, 6, 40);
+        const sinceHours = parsePositiveHours(params.sinceHours, 24);
+        const depth = parseDepth(params.depth, 2);
+        const maxNodes = parsePositiveInt(params.maxNodes, 30, 200);
+        const query = typeof params.query === 'string' ? params.query.trim() : undefined;
+        const anchorNodeIds = Array.isArray(params.anchorNodeIds)
+            ? params.anchorNodeIds.filter((id): id is string => typeof id === 'string')
+            : undefined;
+
+        return buildGraphRecall(graph, contextId, {
+            query,
+            limit,
+            sinceMs: sinceHours * 60 * 60 * 1000,
+            depth,
+            maxNodes,
+            anchorNodeIds
+        });
+    }
+
+    if (req.method === 'recall') {
+        const mode = typeof params.mode === 'string' ? params.mode : 'auto';
+        if (mode === 'temporal') {
+            const sinceHours = parsePositiveHours(params.sinceHours, 24);
+            const limit = parsePositiveInt(params.limit, 10, 100);
+            return buildTemporalRecall(graph, contextId, sinceHours, limit);
+        }
+        if (mode === 'topic') {
+            if (!contextId) {
+                throw new Error("No active context set for recall topic mode. Call 'switchContext' or provide contextId.");
+            }
+            const query = typeof params.query === 'string' ? params.query.trim() : '';
+            if (!query) {
+                throw new Error("Missing required 'query' for recall topic mode.");
+            }
+            const limit = parsePositiveInt(params.limit, 10, 100);
+            const sinceHours = parsePositiveHours(params.sinceHours, 24);
+            const hits = getTopicHits(graph, contextId, query, limit, sinceHours);
+            return {
+                mode: 'topic',
+                contextId,
+                query,
+                sinceHours,
+                hits: hits.map(mapTopicHit)
+            };
+        }
+        if (mode === 'graph') {
+            if (!contextId) {
+                throw new Error("No active context set for recall graph mode. Call 'switchContext' or provide contextId.");
+            }
+            const limit = parsePositiveInt(params.limit, 6, 40);
+            const sinceHours = parsePositiveHours(params.sinceHours, 24);
+            const depth = parseDepth(params.depth, 2);
+            const maxNodes = parsePositiveInt(params.maxNodes, 30, 200);
+            const query = typeof params.query === 'string' ? params.query.trim() : undefined;
+            const anchorNodeIds = Array.isArray(params.anchorNodeIds)
+                ? params.anchorNodeIds.filter((id): id is string => typeof id === 'string')
+                : undefined;
+            return buildGraphRecall(graph, contextId, {
+                query,
+                limit,
+                sinceMs: sinceHours * 60 * 60 * 1000,
+                depth,
+                maxNodes,
+                anchorNodeIds
+            });
+        }
+
+        const sinceHours = parsePositiveHours(params.sinceHours, 24);
+        const limit = parsePositiveInt(params.limit, 10, 100);
+        const depth = parseDepth(params.depth, 2);
+        const maxNodes = parsePositiveInt(params.maxNodes, 30, 200);
+        const query = typeof params.query === 'string' ? params.query.trim() : '';
+
+        const temporal = buildTemporalRecall(graph, contextId, sinceHours, limit);
+        const topic = (contextId && query)
+            ? {
+                mode: 'topic' as const,
+                contextId,
+                query,
+                sinceHours,
+                hits: getTopicHits(graph, contextId, query, limit, sinceHours).map(mapTopicHit)
+            }
+            : null;
+        const graphRecall = (contextId && query)
+            ? buildGraphRecall(graph, contextId, {
+                query,
+                limit: Math.min(limit, 8),
+                sinceMs: sinceHours * 60 * 60 * 1000,
+                depth,
+                maxNodes
+            })
+            : null;
+
+        const recommendations = topic
+            ? topic.hits.slice(0, 3).map(hit => ({
+                kind: 'node',
+                nodeId: hit.nodeId,
+                score: hit.score,
+                reason: hit.matchReason
+            }))
+            : [];
+
+        return {
+            mode: 'auto',
+            contextId,
+            summary: {
+                query: query || null,
+                sessionCount: temporal.sessions.length,
+                recentEventCount: temporal.totalEvents,
+                topicHitCount: topic?.hits.length ?? 0,
+                graphNodeCount: graphRecall?.subgraph.nodes.length ?? 0
+            },
+            temporal,
+            topic,
+            graph: graphRecall,
+            recommendations
+        };
     }
 
     // SEC-001: Audit chain integrity verification

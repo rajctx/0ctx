@@ -337,10 +337,11 @@ tr.type-backoff  { border-left: 2px solid var(--status-amber); }
     </div>
     <nav>
       <button class="active" onclick="switchView('activity')">Activity Log <span class="code">01</span></button>
-      <button onclick="switchView('audit')">Audit Trail <span class="code">02</span></button>
-      <button onclick="switchView('connector')">Connector State <span class="code">03</span></button>
-      <button onclick="switchView('queue')">Event Queue <span class="code">04</span></button>
-      <button onclick="switchView('daemon')">Daemon Health <span class="code">05</span></button>
+      <button onclick="switchView('timeline')">Timeline <span class="code">02</span></button>
+      <button onclick="switchView('audit')">Audit Trail <span class="code">03</span></button>
+      <button onclick="switchView('connector')">Connector State <span class="code">04</span></button>
+      <button onclick="switchView('queue')">Event Queue <span class="code">05</span></button>
+      <button onclick="switchView('daemon')">Daemon Health <span class="code">06</span></button>
     </nav>
     <div class="status-footer" id="status-footer">
       &gt; DAEMON: <span id="sf-daemon" class="dim">...</span><br>
@@ -378,6 +379,23 @@ tr.type-backoff  { border-left: 2px solid var(--status-amber); }
           </tr></thead>
           <tbody id="activity-body">
             <tr><td colspan="5"><div class="empty-state">Loading...<span class="cursor"></span></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- AUDIT VIEW -->
+      <div id="view-timeline" class="hidden">
+        <table class="data-table" id="timeline-table">
+          <thead><tr>
+            <th width="8"></th>
+            <th>TIMESTAMP</th>
+            <th>KIND</th>
+            <th>TITLE</th>
+            <th>STATUS</th>
+            <th>DETAILS</th>
+          </tr></thead>
+          <tbody id="timeline-body">
+            <tr><td colspan="6"><div class="empty-state">Loading timeline...<span class="cursor"></span></div></td></tr>
           </tbody>
         </table>
       </div>
@@ -475,6 +493,7 @@ tr.type-backoff  { border-left: 2px solid var(--status-amber); }
   let paused = false;
   let activityFilter = 'all';
   let allOpsEntries = [];
+  let allTimelineEntries = [];
   let allAuditEntries = [];
   let selectedRow = null;
 
@@ -482,6 +501,7 @@ tr.type-backoff  { border-left: 2px solid var(--status-amber); }
 
   const TITLES = {
     activity: 'ACTIVITY LOG',
+    timeline: 'TIMELINE',
     audit: 'AUDIT TRAIL',
     connector: 'CONNECTOR STATE',
     queue: 'EVENT QUEUE',
@@ -608,6 +628,59 @@ tr.type-backoff  { border-left: 2px solid var(--status-amber); }
     paused = !paused;
     document.getElementById('btn-pause').textContent = paused ? '> RESUME' : '|| PAUSE';
     document.getElementById('btn-pause').classList.toggle('action', !paused);
+  }
+
+  // ─── Timeline view ───────────────────────────────────────────────────────
+
+  function renderTimelineRows() {
+    const tbody = document.getElementById('timeline-body');
+    if (allTimelineEntries.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state">No timeline entries yet.</div></td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = allTimelineEntries.map((e, i) => {
+      const status = e.status || 'event';
+      const cls = 'type-' + (status === 'success' ? 'success' : status === 'error' ? 'error' : status === 'partial' ? 'partial' : 'event');
+      const detailPreview = e.details && typeof e.details === 'object'
+        ? JSON.stringify(e.details).slice(0, 90) + (JSON.stringify(e.details).length > 90 ? '…' : '')
+        : '--';
+      return '<tr class="' + cls + '" onclick="openTimelineDetail(' + i + ')">' +
+        '<td></td>' +
+        '<td class="dim">' + escape(fmtTs(e.timestamp)) + '</td>' +
+        '<td>' + escape(e.kind || '--') + '</td>' +
+        '<td>' + escape(e.title || '--') + '</td>' +
+        '<td><span class="badge ' + (status === 'success' ? 'green' : status === 'error' ? 'red' : status === 'partial' ? 'amber' : 'gray') + '">' + escape(status) + '</span></td>' +
+        '<td class="dim" style="font-size:11px">' + escape(detailPreview) + '</td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  function openTimelineDetail(idx) {
+    const e = allTimelineEntries[idx];
+    if (!e) return;
+
+    const accent = statusAccent(e.status);
+    document.getElementById('detail-accent-bar').style.background = accent;
+    document.getElementById('dp-type').textContent = (e.kind || 'timeline') + '.' + (e.title || 'event');
+    document.getElementById('dp-type').style.color = accent;
+    document.getElementById('dp-sub').textContent = e.timestamp ? new Date(e.timestamp).toISOString() : '--';
+    document.getElementById('dp-ts').textContent = e.timestamp ? new Date(e.timestamp).toISOString() : '--';
+    document.getElementById('dp-op').textContent = e.title || '--';
+    document.getElementById('dp-status').textContent = e.status || 'event';
+    document.getElementById('dp-status').style.color = accent;
+    document.getElementById('dp-payload').textContent = JSON.stringify(e.details ?? {}, null, 2);
+
+    document.querySelectorAll('#timeline-body tr').forEach((r, i) => r.classList.toggle('row-selected', i === idx));
+    document.getElementById('detail-panel').classList.add('open');
+    document.getElementById('overlay').classList.add('open');
+  }
+
+  async function refreshTimeline() {
+    const data = await api('/api/timeline?limit=250');
+    if (!data) return;
+    allTimelineEntries = data.entries || [];
+    renderTimelineRows();
   }
 
   // ─── Audit view ──────────────────────────────────────────────────────────
@@ -874,6 +947,7 @@ tr.type-backoff  { border-left: 2px solid var(--status-amber); }
 
   function startPolling() {
     refreshActivity();
+    refreshTimeline();
     refreshAudit();
     refreshConnector();
     refreshQueue();
@@ -881,6 +955,7 @@ tr.type-backoff  { border-left: 2px solid var(--status-amber); }
     refreshStatusFooter();
 
     setInterval(refreshActivity, 3000);
+    setInterval(refreshTimeline, 3500);
     setInterval(refreshAudit, 4000);
     setInterval(() => { refreshConnector(); refreshQueue(); }, 5000);
     setInterval(() => { refreshDaemon(); refreshStatusFooter(); }, 6000);
@@ -891,6 +966,7 @@ tr.type-backoff  { border-left: 2px solid var(--status-amber); }
   window.togglePause = togglePause;
   window.filterActivity = filterActivity;
   window.openActivityDetail = openActivityDetail;
+  window.openTimelineDetail = openTimelineDetail;
   window.openAuditDetail = openAuditDetail;
   window.openQueueDetail = openQueueDetail;
   window.closeDetail = closeDetail;

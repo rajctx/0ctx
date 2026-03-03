@@ -96,6 +96,25 @@ export interface ContextDump {
     checkpoints: Checkpoint[];
 }
 
+export type SearchMatchReason =
+    | 'exact_term'
+    | 'tag_match'
+    | 'recent_mutation'
+    | 'connected_to_hot_node';
+
+export interface SearchAdvancedOptions {
+    limit?: number;
+    sinceMs?: number;
+    includeSuperseded?: boolean;
+}
+
+export interface SearchResult {
+    node: ContextNode;
+    score: number;
+    matchReason: SearchMatchReason;
+    matchedTerms: string[];
+}
+
 // ── SYNC-01: Sync types ────────────────────────────────────────
 
 export type SyncStatus = 'pending' | 'in_flight' | 'done' | 'failed';

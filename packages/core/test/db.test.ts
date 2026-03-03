@@ -30,4 +30,23 @@ describe('openDb migrations', () => {
             db.close();
         }
     });
+
+    it('creates performance indexes introduced in schema v5', () => {
+        const db = openDb({ dbPath: createTempDbPath() });
+        try {
+            const nodeIndex = db.prepare(`
+        SELECT name FROM sqlite_master
+        WHERE type = 'index' AND name = 'idx_nodes_context_created'
+      `).get() as { name?: string } | undefined;
+            const auditIndex = db.prepare(`
+        SELECT name FROM sqlite_master
+        WHERE type = 'index' AND name = 'idx_audit_logs_session_created'
+      `).get() as { name?: string } | undefined;
+
+            expect(nodeIndex?.name).toBe('idx_nodes_context_created');
+            expect(auditIndex?.name).toBe('idx_audit_logs_session_created');
+        } finally {
+            db.close();
+        }
+    });
 });

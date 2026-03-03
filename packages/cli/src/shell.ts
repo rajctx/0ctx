@@ -60,6 +60,7 @@ function getCompletionCandidates(): string[] {
         'doctor',
         'status',
         'version',
+        'recall',
         'repair',
         'dashboard',
         'shell',

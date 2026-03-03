@@ -3,7 +3,6 @@ import type Database from 'better-sqlite3';
 import type {
     ContextNode,
     ContextEdge,
-    NodeType,
     EdgeType,
     Checkpoint,
     Context,
@@ -11,12 +10,32 @@ import type {
     AuditAction,
     AuditMetadata,
     ContextDump,
-    SyncPolicy
+    SyncPolicy,
+    SearchAdvancedOptions,
+    SearchMatchReason,
+    SearchResult
 } from './schema';
 import { getConfigValue, setConfigValue } from './config';
 
 export class Graph {
     constructor(private db: Database.Database) { }
+
+    private tokenizeQuery(query: string): string[] {
+        const matches = query.toLowerCase().match(/[a-z0-9_]+/g) ?? [];
+        return Array.from(new Set(matches));
+    }
+
+    private buildFtsQuery(query: string): string {
+        const terms = this.tokenizeQuery(query);
+        if (terms.length === 0) {
+            return `"${query.replace(/"/g, '""')}"`;
+        }
+        return terms.map(term => `"${term.replace(/"/g, '""')}"*`).join(' OR ');
+    }
+
+    private escapeRegex(input: string): string {
+        return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
 
     /**
      * SEC-001: Resolve the per-machine audit HMAC secret.
@@ -228,14 +247,145 @@ export class Graph {
     }
 
     // ── Search ─────────────────────────────────────────────────────
+    searchAdvanced(contextId: string, query: string, options: SearchAdvancedOptions = {}): SearchResult[] {
+        const normalizedQuery = query.trim();
+        if (!normalizedQuery) return [];
+
+        const limit = Math.max(1, Math.min(options.limit ?? 20, 200));
+        const sinceMs = Math.max(1, Math.floor(options.sinceMs ?? 24 * 60 * 60 * 1000));
+        const includeSuperseded = options.includeSuperseded ?? false;
+        const now = Date.now();
+        const queryTerms = this.tokenizeQuery(normalizedQuery);
+        const ftsQuery = this.buildFtsQuery(normalizedQuery);
+
+        let rows: any[] = [];
+        try {
+            rows = this.db.prepare(`
+          SELECT n.*, bm25(nodes_fts, 5.0, 1.5) AS bm25Rank
+          FROM nodes n
+          JOIN nodes_fts ON n.id = nodes_fts.id
+          WHERE n.contextId = ? AND nodes_fts MATCH ?
+          ORDER BY bm25Rank ASC
+          LIMIT ?
+        `).all(contextId, ftsQuery, Math.max(limit * 5, limit)) as any[];
+        } catch {
+            rows = this.db.prepare(`
+          SELECT * FROM nodes
+          WHERE contextId = ?
+            AND (content LIKE ? OR tags LIKE ?)
+          ORDER BY createdAt DESC
+          LIMIT ?
+        `).all(contextId, `%${normalizedQuery}%`, `%${normalizedQuery}%`, Math.max(limit * 5, limit)) as any[];
+        }
+
+        const supersededRows = this.db.prepare(`
+      SELECT DISTINCT e.toId AS id
+      FROM edges e
+      JOIN nodes n ON n.id = e.toId
+      WHERE n.contextId = ? AND e.relation = 'supersedes'
+    `).all(contextId) as Array<{ id: string }>;
+        const supersededNodeIds = new Set(supersededRows.map(row => row.id));
+
+        const candidateIds = rows
+            .map(row => (typeof row.id === 'string' ? row.id : ''))
+            .filter((id): id is string => id.length > 0);
+        const degreeByNode = new Map<string, number>();
+        if (candidateIds.length > 0) {
+            const placeholders = candidateIds.map(() => '?').join(', ');
+            const degreeRows = this.db.prepare(`
+        SELECT nodeId, SUM(cnt) AS degree FROM (
+          SELECT fromId AS nodeId, COUNT(*) AS cnt
+          FROM edges
+          WHERE fromId IN (${placeholders})
+          GROUP BY fromId
+          UNION ALL
+          SELECT toId AS nodeId, COUNT(*) AS cnt
+          FROM edges
+          WHERE toId IN (${placeholders})
+          GROUP BY toId
+        )
+        GROUP BY nodeId
+      `).all(...candidateIds, ...candidateIds) as Array<{ nodeId: string; degree: number }>;
+            for (const row of degreeRows) {
+                degreeByNode.set(row.nodeId, row.degree ?? 0);
+            }
+        }
+
+        const results: SearchResult[] = [];
+        for (let i = 0; i < rows.length; i += 1) {
+            const row = rows[i];
+            const node: ContextNode = { ...row, tags: JSON.parse(row.tags) };
+            const isSuperseded = supersededNodeIds.has(node.id);
+            if (!includeSuperseded && isSuperseded) {
+                continue;
+            }
+
+            const tagsLower = (node.tags ?? []).map(tag => tag.toLowerCase());
+            const contentLower = node.content.toLowerCase();
+
+            const matchedTerms = queryTerms.filter(
+                term => contentLower.includes(term) || tagsLower.some(tag => tag.includes(term))
+            );
+            const exactTermMatches = queryTerms.filter(term => new RegExp(`\\b${this.escapeRegex(term)}\\b`, 'i').test(node.content));
+            const exactTermMatch = exactTermMatches.length > 0;
+            const exactPhraseMatch = normalizedQuery.length >= 3 && contentLower.includes(normalizedQuery.toLowerCase());
+            const tagMatch = queryTerms.some(term => tagsLower.some(tag => tag.includes(term)));
+            const tagTermMatches = queryTerms.filter(term => tagsLower.some(tag => tag.includes(term))).length;
+            const recentMutation = (now - node.createdAt) <= sinceMs;
+            const degree = degreeByNode.get(node.id) ?? 0;
+            const connectedToHotNode = degree >= 3;
+
+            let matchReason: SearchMatchReason = 'exact_term';
+            if (exactPhraseMatch || exactTermMatch) {
+                matchReason = 'exact_term';
+            } else if (tagMatch) {
+                matchReason = 'tag_match';
+            } else if (recentMutation) {
+                matchReason = 'recent_mutation';
+            } else if (connectedToHotNode) {
+                matchReason = 'connected_to_hot_node';
+            }
+
+            const rankScore = Math.max(0, 110 - (i * 4));
+            const bm25Rank = typeof row.bm25Rank === 'number' ? row.bm25Rank : null;
+            let bm25Score = 0;
+            if (bm25Rank !== null) {
+                bm25Score = bm25Rank < 0
+                    ? 30
+                    : Math.max(0, 30 - (bm25Rank * 12));
+            }
+            const termCoverageScore = matchedTerms.length * 5;
+            const exactTermScore = exactTermMatches.length * 4;
+
+            let score = rankScore + bm25Score + termCoverageScore + exactTermScore;
+            if (exactPhraseMatch) score += 12;
+            if (tagMatch) score += 5 + Math.min(9, tagTermMatches * 3);
+            if (recentMutation) score += 4;
+            if (connectedToHotNode) score += 3;
+            if (isSuperseded) score -= 45;
+            score = Math.max(0, Number(score.toFixed(2)));
+
+            results.push({
+                node,
+                score,
+                matchReason,
+                matchedTerms
+            });
+        }
+
+        results.sort((a, b) => {
+            if (b.score !== a.score) return b.score - a.score;
+            return b.node.createdAt - a.node.createdAt;
+        });
+
+        return results.slice(0, limit);
+    }
+
     search(contextId: string, query: string, limit = 20): ContextNode[] {
-        const rows = this.db.prepare(`
-      SELECT n.* FROM nodes n
-      JOIN nodes_fts f ON n.id = f.id
-      WHERE n.contextId = ? AND nodes_fts MATCH ?
-      ORDER BY rank LIMIT ?
-    `).all(contextId, query, limit) as any[];
-        return rows.map(r => ({ ...r, tags: JSON.parse(r.tags) }));
+        return this.searchAdvanced(contextId, query, {
+            limit,
+            includeSuperseded: true
+        }).map(result => result.node);
     }
 
     getGraphData(contextId: string) {
