@@ -337,9 +337,10 @@ tr.type-backoff  { border-left: 2px solid var(--status-amber); }
     </div>
     <nav>
       <button class="active" onclick="switchView('activity')">Activity Log <span class="code">01</span></button>
-      <button onclick="switchView('connector')">Connector State <span class="code">02</span></button>
-      <button onclick="switchView('queue')">Event Queue <span class="code">03</span></button>
-      <button onclick="switchView('daemon')">Daemon Health <span class="code">04</span></button>
+      <button onclick="switchView('audit')">Audit Trail <span class="code">02</span></button>
+      <button onclick="switchView('connector')">Connector State <span class="code">03</span></button>
+      <button onclick="switchView('queue')">Event Queue <span class="code">04</span></button>
+      <button onclick="switchView('daemon')">Daemon Health <span class="code">05</span></button>
     </nav>
     <div class="status-footer" id="status-footer">
       &gt; DAEMON: <span id="sf-daemon" class="dim">...</span><br>
@@ -377,6 +378,24 @@ tr.type-backoff  { border-left: 2px solid var(--status-amber); }
           </tr></thead>
           <tbody id="activity-body">
             <tr><td colspan="5"><div class="empty-state">Loading...<span class="cursor"></span></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- AUDIT VIEW -->
+      <div id="view-audit" class="hidden">
+        <table class="data-table" id="audit-table">
+          <thead><tr>
+            <th width="8"></th>
+            <th>TIMESTAMP</th>
+            <th>ACTION</th>
+            <th>CONTEXT</th>
+            <th>ACTOR</th>
+            <th>SOURCE</th>
+            <th>TARGET</th>
+          </tr></thead>
+          <tbody id="audit-body">
+            <tr><td colspan="7"><div class="empty-state">Loading audit history...<span class="cursor"></span></div></td></tr>
           </tbody>
         </table>
       </div>
@@ -456,12 +475,14 @@ tr.type-backoff  { border-left: 2px solid var(--status-amber); }
   let paused = false;
   let activityFilter = 'all';
   let allOpsEntries = [];
+  let allAuditEntries = [];
   let selectedRow = null;
 
   // ─── View switching ───────────────────────────────────────────────────────
 
   const TITLES = {
     activity: 'ACTIVITY LOG',
+    audit: 'AUDIT TRAIL',
     connector: 'CONNECTOR STATE',
     queue: 'EVENT QUEUE',
     daemon: 'DAEMON HEALTH'
@@ -587,6 +608,70 @@ tr.type-backoff  { border-left: 2px solid var(--status-amber); }
     paused = !paused;
     document.getElementById('btn-pause').textContent = paused ? '> RESUME' : '|| PAUSE';
     document.getElementById('btn-pause').classList.toggle('action', !paused);
+  }
+
+  // ─── Audit view ──────────────────────────────────────────────────────────
+
+  function targetIdFromAudit(entry) {
+    if (!entry || typeof entry !== 'object') return '--';
+    const payload = entry.payload && typeof entry.payload === 'object' ? entry.payload : {};
+    const result = entry.result && typeof entry.result === 'object' ? entry.result : {};
+    return payload.id || payload.nodeId || payload.contextId || result.id || result.contextId || '--';
+  }
+
+  function auditActionClass(action) {
+    if (!action) return 'type-event';
+    if (String(action).startsWith('delete_')) return 'type-error';
+    if (String(action).startsWith('update_')) return 'type-partial';
+    if (String(action).startsWith('create_') || String(action).startsWith('add_') || String(action) === 'save_checkpoint') return 'type-success';
+    return 'type-event';
+  }
+
+  function renderAuditRows() {
+    const tbody = document.getElementById('audit-body');
+    if (allAuditEntries.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">No audit events yet.<br>Create or update data to populate history.</div></td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = allAuditEntries.map((e, i) => {
+      const cls = auditActionClass(e.action);
+      return '<tr class="' + cls + '" onclick="openAuditDetail(' + i + ')">' +
+        '<td></td>' +
+        '<td class="dim">' + escape(fmtTs(e.createdAt)) + '</td>' +
+        '<td>' + escape(e.action || '--') + '</td>' +
+        '<td class="dim">' + escape(e.contextId || '--') + '</td>' +
+        '<td class="dim">' + escape(e.actor || '--') + '</td>' +
+        '<td class="dim">' + escape(e.source || '--') + '</td>' +
+        '<td class="dim">' + escape(targetIdFromAudit(e)) + '</td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  function openAuditDetail(idx) {
+    const e = allAuditEntries[idx];
+    if (!e) return;
+
+    document.getElementById('detail-accent-bar').style.background = 'var(--status-blue)';
+    document.getElementById('dp-type').textContent = 'audit.' + (e.action || 'event');
+    document.getElementById('dp-type').style.color = 'var(--status-blue)';
+    document.getElementById('dp-sub').textContent = e.createdAt ? new Date(e.createdAt).toISOString() : '--';
+    document.getElementById('dp-ts').textContent = e.createdAt ? new Date(e.createdAt).toISOString() : '--';
+    document.getElementById('dp-op').textContent = e.action || '--';
+    document.getElementById('dp-status').textContent = e.source || 'daemon';
+    document.getElementById('dp-status').style.color = 'var(--status-blue)';
+    document.getElementById('dp-payload').textContent = JSON.stringify(e, null, 2);
+
+    document.querySelectorAll('#audit-body tr').forEach((r, i) => r.classList.toggle('row-selected', i === idx));
+    document.getElementById('detail-panel').classList.add('open');
+    document.getElementById('overlay').classList.add('open');
+  }
+
+  async function refreshAudit() {
+    const data = await api('/api/audit?limit=200');
+    if (!data) return;
+    allAuditEntries = data.entries || [];
+    renderAuditRows();
   }
 
   // ─── Connector view ──────────────────────────────────────────────────────
@@ -789,12 +874,14 @@ tr.type-backoff  { border-left: 2px solid var(--status-amber); }
 
   function startPolling() {
     refreshActivity();
+    refreshAudit();
     refreshConnector();
     refreshQueue();
     refreshDaemon();
     refreshStatusFooter();
 
     setInterval(refreshActivity, 3000);
+    setInterval(refreshAudit, 4000);
     setInterval(() => { refreshConnector(); refreshQueue(); }, 5000);
     setInterval(() => { refreshDaemon(); refreshStatusFooter(); }, 6000);
   }
@@ -804,6 +891,7 @@ tr.type-backoff  { border-left: 2px solid var(--status-amber); }
   window.togglePause = togglePause;
   window.filterActivity = filterActivity;
   window.openActivityDetail = openActivityDetail;
+  window.openAuditDetail = openAuditDetail;
   window.openQueueDetail = openQueueDetail;
   window.closeDetail = closeDetail;
 

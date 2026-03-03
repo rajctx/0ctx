@@ -26,6 +26,7 @@ import http from 'http';
 import { execSync } from 'child_process';
 import { storeToKeyring, readFromKeyring, deleteFromKeyring } from './keyring.js';
 import { getConfigValue, saveConfig } from '@0ctx/core';
+import { appendCliOpsLogEntry } from './ops-log.js';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -43,6 +44,18 @@ function getTokenFilePath(): string {
 
 function getAuthServer(): string {
     return getConfigValue('auth.server').replace(/\/$/, '');
+}
+
+function recordAuthOpsEvent(
+    operation: 'auth.login' | 'auth.logout' | 'auth.rotate',
+    status: 'success' | 'error',
+    details: Record<string, unknown> = {}
+): void {
+    appendCliOpsLogEntry({
+        operation,
+        status,
+        details
+    });
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -431,6 +444,7 @@ export async function commandAuthLogin(flags: Record<string, string | boolean>):
     if (envToken) {
         console.log('Already authenticated via CTX_AUTH_TOKEN environment variable.');
         console.log(`Email: ${envToken.email}`);
+        recordAuthOpsEvent('auth.login', 'success', { source: 'env_token' });
         return 0;
     }
 
@@ -442,7 +456,9 @@ export async function commandAuthLogin(flags: Record<string, string | boolean>):
     try {
         deviceCodeResp = await requestDeviceCode(authServer);
     } catch (e: unknown) {
-        console.error(e instanceof Error ? e.message : String(e));
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error(msg);
+        recordAuthOpsEvent('auth.login', 'error', { stage: 'request_device_code', message: msg });
         return 1;
     }
 
@@ -473,7 +489,9 @@ export async function commandAuthLogin(flags: Record<string, string | boolean>):
             deviceCodeResp.expires_in
         );
     } catch (e: unknown) {
-        console.error(e instanceof Error ? e.message : String(e));
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error(msg);
+        recordAuthOpsEvent('auth.login', 'error', { stage: 'poll_token', message: msg });
         return 1;
     }
 
@@ -510,6 +528,11 @@ export async function commandAuthLogin(flags: Record<string, string | boolean>):
         // Config write failure shouldn't block login
     }
 
+    recordAuthOpsEvent('auth.login', 'success', {
+        source: storageDest === 'keyring' ? 'keyring' : 'file',
+        tenantPresent: Boolean(store.tenantId),
+        syncConfigured: true
+    });
     return 0;
 }
 
@@ -522,6 +545,7 @@ export async function commandAuthLogout(): Promise<number> {
     } else {
         console.log('Not logged in — nothing to clear.');
     }
+    recordAuthOpsEvent('auth.logout', 'success', { hadExistingSession: Boolean(existing) });
     return 0;
 }
 
@@ -535,17 +559,20 @@ export async function commandAuthRotate(flags: Record<string, string | boolean>)
     const envToken = getEnvToken();
     if (envToken) {
         console.error('Cannot rotate token: authenticated via CTX_AUTH_TOKEN environment variable.');
+        recordAuthOpsEvent('auth.rotate', 'error', { reason: 'env_token' });
         return 1;
     }
 
     const { store, source } = await readTokenStoreSecure();
     if (!store) {
         console.error('Not logged in. Run: 0ctx auth login');
+        recordAuthOpsEvent('auth.rotate', 'error', { reason: 'not_logged_in' });
         return 1;
     }
 
     if (!store.refreshToken) {
         console.error('No refresh token available — cannot rotate. Run: 0ctx auth login');
+        recordAuthOpsEvent('auth.rotate', 'error', { reason: 'missing_refresh_token' });
         return 1;
     }
 
@@ -558,7 +585,9 @@ export async function commandAuthRotate(flags: Record<string, string | boolean>)
     try {
         updated = await refreshAccessToken(store);
     } catch (e: unknown) {
-        console.error(`Rotation failed: ${e instanceof Error ? e.message : String(e)}`);
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error(`Rotation failed: ${msg}`);
+        recordAuthOpsEvent('auth.rotate', 'error', { reason: 'refresh_failed', message: msg });
         return 1;
     }
 
@@ -587,6 +616,10 @@ export async function commandAuthRotate(flags: Record<string, string | boolean>)
     console.log(`  Email:     ${updated.email}`);
     console.log(`  Expires:   ${new Date(updated.expiresAt).toISOString()} (${expiresInHuman})`);
     console.log(`  Stored in: ${storageDest === 'keyring' ? 'OS credential store' : getTokenFilePath()}`);
+    recordAuthOpsEvent('auth.rotate', 'success', {
+        source: storageDest === 'keyring' ? 'keyring' : 'file',
+        rotated: true
+    });
     return 0;
 }
 

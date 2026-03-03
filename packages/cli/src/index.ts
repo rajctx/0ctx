@@ -181,6 +181,33 @@ function resolveDaemonEntrypoint(): string {
     throw new Error('Could not resolve daemon entrypoint. Run `npm run build` first.');
 }
 
+function resolveMcpEntrypointForBootstrap(explicitEntrypoint?: string): string {
+    if (explicitEntrypoint && explicitEntrypoint.trim().length > 0) {
+        const resolved = path.resolve(explicitEntrypoint.trim());
+        if (fs.existsSync(resolved)) return resolved;
+        throw new Error(`Configured MCP entrypoint does not exist: ${resolved}`);
+    }
+
+    const candidates = [
+        path.resolve(__dirname, 'mcp-server.js'),
+        (() => {
+            try {
+                return require.resolve('@0ctx/mcp/dist/index.js');
+            } catch {
+                return '';
+            }
+        })(),
+        path.resolve(process.cwd(), 'packages', 'mcp', 'dist', 'index.js'),
+        path.resolve(process.cwd(), 'dist', 'mcp-server.js')
+    ].filter(Boolean);
+
+    for (const candidate of candidates) {
+        if (fs.existsSync(candidate)) return candidate;
+    }
+
+    throw new Error('Could not resolve MCP server entrypoint. Run `npm run build` (repo) or `0ctx repair --clients=all` (installed CLI).');
+}
+
 function resolveCliEntrypoint(): string {
     if (process.argv[1]) {
         return path.resolve(process.argv[1]);
@@ -230,11 +257,16 @@ async function waitForDaemon(timeoutMs = 10000): Promise<boolean> {
     return false;
 }
 
-function runBootstrap(clients: SupportedClient[], dryRun: boolean): ReturnType<typeof bootstrapMcpRegistration> {
+function runBootstrap(
+    clients: SupportedClient[],
+    dryRun: boolean,
+    explicitEntrypoint?: string
+): ReturnType<typeof bootstrapMcpRegistration> {
     return bootstrapMcpRegistration({
         clients,
         dryRun,
-        serverName: '0ctx'
+        serverName: '0ctx',
+        entrypoint: resolveMcpEntrypointForBootstrap(explicitEntrypoint)
     });
 }
 
@@ -247,12 +279,12 @@ async function printBootstrapResults(results: BootstrapResult[], dryRun: boolean
         const clientName = color.cyan(result.client);
         const suffix = result.message ? color.dim(` - ${result.message}`) : '';
 
-        if (result.status === 'success') {
-            p.log.success(`${clientName}: configured (${result.configPath})${suffix}`);
+        if (result.status === 'failed') {
+            p.log.error(`${clientName}: failed (${result.configPath || 'no config'})${suffix}`);
         } else if (result.status === 'skipped') {
             p.log.info(`${clientName}: skipped (${result.configPath || 'no config'})${suffix}`);
         } else {
-            p.log.error(`${clientName}: failed (${result.configPath || 'no config'})${suffix}`);
+            p.log.success(`${clientName}: ${result.status} (${result.configPath})${suffix}`);
         }
     }
 }
@@ -315,6 +347,7 @@ async function commandBootstrap(flags: Record<string, string | boolean>): Promis
     const p = await import('@clack/prompts');
     const clients = parseClients(flags.clients);
     const dryRun = Boolean(flags['dry-run']);
+    const entrypoint = parseOptionalStringFlag(flags.entrypoint) ?? undefined;
 
     if (!Boolean(flags.quiet) && !Boolean(flags.json)) {
         p.intro(color.bgBlue(color.black(' 0ctx bootstrap ')));
@@ -323,11 +356,12 @@ async function commandBootstrap(flags: Record<string, string | boolean>): Promis
     const s = p.spinner();
     if (!Boolean(flags.quiet) && !Boolean(flags.json)) s.start('Applying MCP configurations');
 
-    const results = runBootstrap(clients, dryRun);
+    const results = runBootstrap(clients, dryRun, entrypoint);
 
     if (!Boolean(flags.quiet) && !Boolean(flags.json)) {
         s.stop('Bootstrap complete');
         await printBootstrapResults(results, dryRun);
+        p.log.info('Restart your AI client app so it reloads MCP config changes.');
         p.outro(results.some(r => r.status === 'failed') ? color.yellow('Bootstrap finished with errors') : color.green('Bootstrap successful'));
     }
 
@@ -1686,7 +1720,7 @@ Usage:
              [--create-context=<name>] [--dashboard-query[=k=v&...]]
              [--skip-service] [--skip-bootstrap]
   0ctx install [--clients=all|claude,cursor,windsurf] [--json] [--skip-bootstrap]
-  0ctx bootstrap [--dry-run] [--clients=...] [--json]
+  0ctx bootstrap [--dry-run] [--clients=...] [--entrypoint=/path/to/mcp-server.js] [--json]
   0ctx doctor [--json] [--clients=...]
   0ctx status
   0ctx repair [--clients=...]

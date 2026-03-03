@@ -50,13 +50,24 @@ function getAppDataDir(homeDir: string, options?: Pick<BootstrapOptions, 'appDat
     return options?.appDataDir || process.env.APPDATA || path.join(homeDir, 'AppData', 'Roaming');
 }
 
+function isMcpRuntimeDir(dirPath: string): boolean {
+    const normalized = dirPath.replace(/\\/g, '/').toLowerCase();
+    return normalized.includes('/packages/mcp/dist')
+        || normalized.includes('/@0ctx/mcp/dist')
+        || normalized.endsWith('/mcp/dist');
+}
+
 function resolveEntrypoint(customEntrypoint?: string): string {
-    if (customEntrypoint) return path.resolve(customEntrypoint);
+    if (customEntrypoint) {
+        const resolved = path.resolve(customEntrypoint);
+        if (fs.existsSync(resolved)) return resolved;
+        throw new Error(`Configured MCP entrypoint does not exist: ${resolved}`);
+    }
 
     const candidates = [
-        path.resolve(__dirname, 'index.js'),
         path.resolve(process.cwd(), 'packages', 'mcp', 'dist', 'index.js'),
-        path.resolve(process.cwd(), 'dist', 'index.js')
+        path.resolve(process.cwd(), 'dist', 'index.js'),
+        ...(isMcpRuntimeDir(__dirname) ? [path.resolve(__dirname, 'index.js')] : [])
     ];
 
     for (const candidate of candidates) {
@@ -65,7 +76,7 @@ function resolveEntrypoint(customEntrypoint?: string): string {
         }
     }
 
-    throw new Error('Could not resolve MCP entrypoint. Run `npm run build` first.');
+    throw new Error('Could not resolve MCP entrypoint. Run `npm run build` or pass --entrypoint=/absolute/path/to/index.js.');
 }
 
 function getCandidatePaths(

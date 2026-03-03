@@ -71,4 +71,23 @@ await esbuild.build({
   logLevel: 'info',
 });
 
-console.log('✓ dist/index.js ready');
+console.log('→ Bundling @0ctx/mcp server runtime for CLI package...');
+
+await esbuild.build({
+  entryPoints: [resolve(root, 'packages/mcp/src/index.ts')],
+  bundle: true,
+  platform: 'node',
+  target: 'node18',
+  format: 'cjs',
+  outfile: resolve(__dirname, 'dist/mcp-server.js'),
+  alias,
+  external: [
+    'better-sqlite3',
+    'cross-keychain',
+    '@napi-rs/keyring',
+  ],
+  sourcemap: 'inline',
+  logLevel: 'info',
+});
+
+console.log('✓ dist/index.js and dist/mcp-server.js ready');

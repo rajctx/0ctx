@@ -64,6 +64,15 @@ async function getDaemonData(): Promise<Record<string, unknown>> {
     }
 }
 
+async function getAuditEntries(limit = 100): Promise<unknown[]> {
+    try {
+        const result = await sendToDaemon('listAuditEvents', { limit });
+        return Array.isArray(result) ? result : [];
+    } catch {
+        return [];
+    }
+}
+
 export interface LogsServerHandle {
     port: number;
     close(): Promise<void>;
@@ -117,6 +126,15 @@ export async function startLogsServer(): Promise<LogsServerHandle> {
         // Ops log
         if (p === '/api/ops') {
             const entries = readCliOpsLog(200).reverse(); // newest first
+            jsonOk(res, { entries });
+            return;
+        }
+
+        // Daemon audit history
+        if (p === '/api/audit') {
+            const rawLimit = Number(url.searchParams.get('limit') ?? '100');
+            const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(500, Math.floor(rawLimit)) : 100;
+            const entries = await getAuditEntries(limit);
             jsonOk(res, { entries });
             return;
         }

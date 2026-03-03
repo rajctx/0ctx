@@ -90,4 +90,31 @@ describe('bootstrapMcpRegistration', () => {
 
         expect(results[0].status).toBe('skipped');
     });
+
+    it('resolves entrypoint from cwd dist when no explicit entrypoint is provided', () => {
+        const root = createTempRoot('0ctx-mcp-bootstrap-');
+        const previousCwd = process.cwd();
+        const homeDir = path.join(root, 'home');
+        const appDataDir = path.join(root, 'AppData', 'Roaming');
+        const claudeDir = path.join(appDataDir, 'Claude');
+        const distDir = path.join(root, 'dist');
+        fs.mkdirSync(claudeDir, { recursive: true });
+        fs.mkdirSync(distDir, { recursive: true });
+        fs.writeFileSync(path.join(distDir, 'index.js'), 'console.log("mcp");\n', 'utf8');
+
+        try {
+            process.chdir(root);
+            const results = bootstrapMcpRegistration({
+                clients: ['claude'],
+                platform: 'win32',
+                homeDir,
+                appDataDir
+            });
+
+            expect(results).toHaveLength(1);
+            expect(results[0].status).toBe('created');
+        } finally {
+            process.chdir(previousCwd);
+        }
+    });
 });
