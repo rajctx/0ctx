@@ -94,8 +94,15 @@ const CLI_VERSION = (() => {
     }
 })();
 
+function normalizeCommandAlias(command: string): string {
+    const normalized = command.trim().toLowerCase();
+    if (normalized === 'deamon') return 'daemon';
+    return normalized;
+}
+
 function parseArgs(argv: string[]): ParsedArgs {
-    const [command = 'help', maybeSubcommand, ...rest] = argv;
+    const [rawCommand = 'help', maybeSubcommand, ...rest] = argv;
+    const command = normalizeCommandAlias(rawCommand);
     const hasSubcommand = command === 'daemon'
         || command === 'auth'
         || command === 'config'
@@ -2229,7 +2236,7 @@ async function main(): Promise<number> {
             }
             case 'connector':
                 if (parsed.subcommand === 'service') {
-                    return commandConnector(parsed.serviceAction, parsed.flags);
+                    return commandDaemonService(parsed.serviceAction);
                 }
                 if (parsed.subcommand === 'queue') {
                     return commandConnectorQueue(parsed.positionalArgs[0], parsed.flags);
