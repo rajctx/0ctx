@@ -43,6 +43,10 @@ npm run cli -- setup --clients=all --no-open
 # Daemon health and capability status
 0ctx status
 
+# CLI version
+0ctx version
+0ctx --version
+
 # Bootstrap MCP registrations for supported clients
 0ctx bootstrap --clients=claude,cursor,windsurf
 0ctx bootstrap --clients=all --json
@@ -51,7 +55,7 @@ npm run cli -- setup --clients=all --no-open
 # Open hosted dashboard URL
 0ctx dashboard
 
-# Open local logs UI
+# Open local logs UI (command activity, daemon audit, queue, connector state)
 0ctx logs
 
 # Check connector posture

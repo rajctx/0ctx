@@ -34,6 +34,8 @@ npm run dev:control-plane
 0ctx connector queue status --json
 0ctx sync policy get --context-id=<contextId>
 0ctx sync policy set metadata_only --context-id=<contextId>
+0ctx version
+0ctx --version
 0ctx logs
 0ctx connector queue drain --wait --strict --timeout-ms=120000
 0ctx connector queue logs --limit=50
@@ -45,7 +47,7 @@ npm run dev:control-plane
 Drain troubleshooting:
 - Use `0ctx connector queue drain --wait --json` and inspect `wait.reason`.
 - Common reasons: `drained`, `timeout`, `max_batches`, `bridge_unsupported`, `single_pass`.
-- For local runtime/audit visibility, use `0ctx logs`.
+- For local command activity + runtime/audit visibility, use `0ctx logs`.
 - For queue operation history, use `0ctx connector queue logs --limit=50`.
 - To clear local ops log safely, use `0ctx connector queue logs --clear --dry-run` first, then `--confirm`.
 

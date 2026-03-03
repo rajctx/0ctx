@@ -38,7 +38,7 @@ import {
     stopService as stopServiceLinux,
     restartService as restartServiceLinux,
 } from './service-linux';
-import { commandAuthLogin, commandAuthLogout, commandAuthStatus, commandAuthRotate, checkTokenExpiryWarning, resolveToken, isTokenExpired, refreshAccessToken, getEnvToken } from './auth';
+import { commandAuthLogin, commandAuthLogout, commandAuthStatus, commandAuthRotate, resolveToken, isTokenExpired, refreshAccessToken, getEnvToken } from './auth';
 import { getConnectorStatePath, readConnectorState, registerConnector, writeConnectorState } from './connector';
 import { fetchConnectorCapabilities, registerConnectorInCloud, sendConnectorEvents, sendConnectorHeartbeat } from './cloud';
 import { runConnectorRuntime } from './connector-runtime';
@@ -84,6 +84,15 @@ const SOCKET_PATH = os.platform() === 'win32'
     : path.join(os.homedir(), '.0ctx', '0ctx.sock');
 
 const SUPPORTED_CLIENTS: SupportedClient[] = ['claude', 'cursor', 'windsurf'];
+const CLI_VERSION = (() => {
+    try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const pkg = require('../package.json') as { version?: string };
+        return typeof pkg.version === 'string' ? pkg.version : 'unknown';
+    } catch {
+        return 'unknown';
+    }
+})();
 
 function parseArgs(argv: string[]): ParsedArgs {
     const [command = 'help', maybeSubcommand, ...rest] = argv;
@@ -634,6 +643,11 @@ async function commandReleasePublish(flags: Record<string, string | boolean>): P
     return result.ok ? 0 : 1;
 }
 
+function commandVersion(): number {
+    console.log(CLI_VERSION);
+    return 0;
+}
+
 function parsePositiveNumberFlag(value: string | boolean | undefined, fallback: number): number {
     if (typeof value !== 'string') return fallback;
     const parsed = Number(value);
@@ -1013,15 +1027,11 @@ async function commandConnectorQueue(action: string | undefined, flags: Record<s
 }
 
 async function commandConnector(action: string | undefined, flags: Record<string, string | boolean>): Promise<number> {
-    const validActions = ['install', 'enable', 'disable', 'uninstall', 'status', 'start', 'stop', 'restart', 'verify', 'register', 'run', 'queue', 'logs'];
+    const validActions = ['install', 'enable', 'disable', 'uninstall', 'status', 'start', 'stop', 'restart', 'verify', 'register', 'run', 'logs'];
     if (!action || !validActions.includes(action)) {
         console.error(`Unknown connector action: '${action ?? ''}'`);
         console.error(`Valid actions: ${validActions.join(', ')}`);
         return 1;
-    }
-
-    if (action === 'queue') {
-        return commandConnectorQueue(undefined, flags);
     }
 
     if (action === 'run') {
@@ -1714,6 +1724,8 @@ function printHelp(): void {
 Usage:
   0ctx                    First run: auto setup + auth. Afterwards: interactive shell.
   0ctx shell
+  0ctx version
+  0ctx --version | -v
   0ctx setup [--clients=all|claude,cursor,windsurf] [--no-open] [--json]
              [--require-cloud] [--wait-cloud-ready]
              [--cloud-wait-timeout-ms=60000] [--cloud-wait-interval-ms=2000]
@@ -1995,8 +2007,86 @@ async function commandDaemonService(action: string | undefined): Promise<number>
     }
 }
 
+function normalizeVersionCommandArgs(argv: string[]): string[] {
+    if (argv.length === 1 && (argv[0] === '--version' || argv[0] === '-v')) {
+        return ['version'];
+    }
+    return argv;
+}
+
+function resolveCommandOperation(parsed: ParsedArgs): string {
+    if (parsed.command === 'auth') {
+        return parsed.subcommand ? `cli.auth.${parsed.subcommand}` : 'cli.auth';
+    }
+    if (parsed.command === 'config') {
+        return parsed.subcommand ? `cli.config.${parsed.subcommand}` : 'cli.config.list';
+    }
+    if (parsed.command === 'sync') {
+        if (parsed.subcommand === 'policy') {
+            const action = parsed.positionalArgs[0] || 'unknown';
+            return `cli.sync.policy.${action}`;
+        }
+        return parsed.subcommand ? `cli.sync.${parsed.subcommand}` : 'cli.sync.status';
+    }
+    if (parsed.command === 'connector') {
+        if (parsed.subcommand === 'service') {
+            const action = parsed.serviceAction || 'unknown';
+            return `cli.connector.service.${action}`;
+        }
+        if (parsed.subcommand === 'queue') {
+            const action = parsed.positionalArgs[0] || 'status';
+            return `cli.connector.queue.${action}`;
+        }
+        return parsed.subcommand ? `cli.connector.${parsed.subcommand}` : 'cli.connector';
+    }
+    if (parsed.command === 'daemon') {
+        if (parsed.subcommand === 'service') {
+            const action = parsed.serviceAction || 'unknown';
+            return `cli.daemon.service.${action}`;
+        }
+        return parsed.subcommand ? `cli.daemon.${parsed.subcommand}` : 'cli.daemon';
+    }
+    if (parsed.command === 'release') {
+        return parsed.subcommand ? `cli.release.${parsed.subcommand}` : 'cli.release';
+    }
+    return `cli.${parsed.command}`;
+}
+
+async function runCommandWithOpsSummary(
+    operation: string,
+    action: () => Promise<number> | number,
+    details: Record<string, unknown> = {}
+): Promise<number> {
+    const startedAt = Date.now();
+    try {
+        const exitCode = await Promise.resolve(action());
+        appendCliOpsLogEntry({
+            operation,
+            status: exitCode === 0 ? 'success' : 'error',
+            details: {
+                ...details,
+                exitCode,
+                durationMs: Date.now() - startedAt
+            }
+        });
+        return exitCode;
+    } catch (error) {
+        appendCliOpsLogEntry({
+            operation,
+            status: 'error',
+            details: {
+                ...details,
+                exitCode: 1,
+                durationMs: Date.now() - startedAt,
+                error: error instanceof Error ? error.message : String(error)
+            }
+        });
+        throw error;
+    }
+}
+
 async function main(): Promise<number> {
-    const argv = process.argv.slice(2);
+    const argv = normalizeVersionCommandArgs(process.argv.slice(2));
 
     let deviceId: string | undefined;
     try {
@@ -2008,8 +2098,10 @@ async function main(): Promise<number> {
     if (argv.length === 0) {
         if (process.env.CTX_SHELL_MODE === '1') {
             captureEvent('cli_command_executed', { command: 'help' });
-            printHelp();
-            return 0;
+            return runCommandWithOpsSummary('cli.help', () => {
+                printHelp();
+                return 0;
+            }, { command: 'help', interactive: true });
         }
         if (process.stdin.isTTY && process.stdout.isTTY) {
             // Auto-run setup if this machine hasn't been fully configured yet.
@@ -2021,7 +2113,7 @@ async function main(): Promise<number> {
             if (!tokenStore) {
                 console.log(color.bold('\nWelcome to 0ctx!'));
                 console.log(color.dim("Looks like this is your first time. Let's get you set up.\n"));
-                return commandSetup({});
+                return runCommandWithOpsSummary('cli.setup', () => commandSetup({}), { command: 'setup', interactive: true });
             }
 
             // If the stored token is expired, attempt a silent refresh.
@@ -2039,7 +2131,11 @@ async function main(): Promise<number> {
                 if (!refreshed) {
                     console.log(color.bold('\nYour session has expired.'));
                     console.log(color.dim('Logging you back in...\n'));
-                    const loginCode = await commandAuthLogin({});
+                    const loginCode = await runCommandWithOpsSummary(
+                        'cli.auth.login',
+                        () => commandAuthLogin({}),
+                        { command: 'auth', subcommand: 'login', interactive: true }
+                    );
                     if (loginCode !== 0) return loginCode;
                 }
             }
@@ -2048,115 +2144,125 @@ async function main(): Promise<number> {
                 console.log(color.bold('\nAlmost there!'));
                 console.log(color.dim("This machine isn't registered yet. Running setup to connect it...\n"));
                 captureEvent('cli_command_executed', { command: 'setup', interactive: true });
-                return commandSetup({});
+                return runCommandWithOpsSummary('cli.setup', () => commandSetup({}), { command: 'setup', interactive: true });
             }
 
             captureEvent('cli_command_executed', { command: 'shell', interactive: true });
-            return commandShell();
+            return runCommandWithOpsSummary('cli.shell', () => commandShell(), { command: 'shell', interactive: true });
         }
         captureEvent('cli_command_executed', { command: 'help' });
-        printHelp();
-        return 0;
+        return runCommandWithOpsSummary('cli.help', () => {
+            printHelp();
+            return 0;
+        }, { command: 'help', interactive: false });
     }
 
     const parsed = parseArgs(argv);
     captureEvent('cli_command_executed', { command: parsed.command, subcommand: parsed.subcommand });
-
-    switch (parsed.command) {
-        case 'setup':
-            return commandSetup(parsed.flags);
-        case 'install':
-            return commandInstall(parsed.flags);
-        case 'bootstrap':
-            return commandBootstrap(parsed.flags);
-        case 'doctor':
-            return commandDoctor(parsed.flags);
-        case 'status':
-            return commandStatus();
-        case 'repair':
-            return commandRepair(parsed.flags);
-        case 'auth': {
-            const sub = parsed.subcommand;
-            if (sub === 'login') return commandAuthLogin(parsed.flags);
-            if (sub === 'logout') return Promise.resolve(commandAuthLogout());
-            if (sub === 'status') return Promise.resolve(commandAuthStatus(parsed.flags));
-            if (sub === 'rotate') return commandAuthRotate(parsed.flags);
-            console.log(`\nAuthentication commands:\n`);
-            console.log(`  auth login    Start device-code login flow`);
-            console.log(`  auth logout   Clear stored credentials`);
-            console.log(`  auth status   Show current auth state\n`);
-            return sub ? 1 : 0;
-        }
-        case 'daemon':
-            if (parsed.subcommand === 'start') {
-                try {
-                    startDaemonDetached();
-                } catch (error) {
-                    console.error(error instanceof Error ? error.message : String(error));
-                    return 1;
+    const operation = resolveCommandOperation(parsed);
+    return runCommandWithOpsSummary(operation, async () => {
+        switch (parsed.command) {
+            case 'setup':
+                return commandSetup(parsed.flags);
+            case 'install':
+                return commandInstall(parsed.flags);
+            case 'bootstrap':
+                return commandBootstrap(parsed.flags);
+            case 'doctor':
+                return commandDoctor(parsed.flags);
+            case 'status':
+                return commandStatus();
+            case 'repair':
+                return commandRepair(parsed.flags);
+            case 'version':
+                return commandVersion();
+            case 'auth': {
+                const sub = parsed.subcommand;
+                if (sub === 'login') return commandAuthLogin(parsed.flags);
+                if (sub === 'logout') return Promise.resolve(commandAuthLogout());
+                if (sub === 'status') return Promise.resolve(commandAuthStatus(parsed.flags));
+                if (sub === 'rotate') return commandAuthRotate(parsed.flags);
+                console.log(`\nAuthentication commands:\n`);
+                console.log(`  auth login    Start device-code login flow`);
+                console.log(`  auth logout   Clear stored credentials`);
+                console.log(`  auth status   Show current auth state\n`);
+                return sub ? 1 : 0;
+            }
+            case 'daemon':
+                if (parsed.subcommand === 'start') {
+                    try {
+                        startDaemonDetached();
+                    } catch (error) {
+                        console.error(error instanceof Error ? error.message : String(error));
+                        return 1;
+                    }
+                    const ok = await waitForDaemon();
+                    console.log(ok ? 'daemon started' : 'daemon start timeout');
+                    return ok ? 0 : 1;
                 }
-                const ok = await waitForDaemon();
-                console.log(ok ? 'daemon started' : 'daemon start timeout');
-                return ok ? 0 : 1;
-            }
-            if (parsed.subcommand === 'service') {
-                return commandDaemonService(parsed.serviceAction);
-            }
-            printHelp();
-            return 1;
-        case 'config': {
-            const sub = parsed.subcommand;
-            if (sub === 'list' || !sub) return commandConfigList();
-            if (sub === 'get') return commandConfigGet(parsed.positionalArgs[0]);
-            if (sub === 'set') return commandConfigSet(parsed.positionalArgs[0], parsed.positionalArgs[1]);
-            printHelp();
-            return 1;
-        }
-        case 'sync': {
-            const sub = parsed.subcommand;
-            if (sub === 'status' || !sub) return commandSyncStatus();
-            if (sub === 'policy') {
-                const action = parsed.positionalArgs[0];
-                if (action === 'get') return commandSyncPolicyGet(parsed.flags);
-                if (action === 'set') return commandSyncPolicySet(parsed.positionalArgs[1], parsed.flags);
-                console.error('Usage: 0ctx sync policy get --context-id=<contextId>');
-                console.error('   or: 0ctx sync policy set <local_only|metadata_only|full_sync> --context-id=<contextId>');
+                if (parsed.subcommand === 'service') {
+                    return commandDaemonService(parsed.serviceAction);
+                }
+                printHelp();
+                return 1;
+            case 'config': {
+                const sub = parsed.subcommand;
+                if (sub === 'list' || !sub) return commandConfigList();
+                if (sub === 'get') return commandConfigGet(parsed.positionalArgs[0]);
+                if (sub === 'set') return commandConfigSet(parsed.positionalArgs[0], parsed.positionalArgs[1]);
+                printHelp();
                 return 1;
             }
-            printHelp();
-            return 1;
+            case 'sync': {
+                const sub = parsed.subcommand;
+                if (sub === 'status' || !sub) return commandSyncStatus();
+                if (sub === 'policy') {
+                    const action = parsed.positionalArgs[0];
+                    if (action === 'get') return commandSyncPolicyGet(parsed.flags);
+                    if (action === 'set') return commandSyncPolicySet(parsed.positionalArgs[1], parsed.flags);
+                    console.error('Usage: 0ctx sync policy get --context-id=<contextId>');
+                    console.error('   or: 0ctx sync policy set <local_only|metadata_only|full_sync> --context-id=<contextId>');
+                    return 1;
+                }
+                printHelp();
+                return 1;
+            }
+            case 'connector':
+                if (parsed.subcommand === 'service') {
+                    return commandConnector(parsed.serviceAction, parsed.flags);
+                }
+                if (parsed.subcommand === 'queue') {
+                    return commandConnectorQueue(parsed.positionalArgs[0], parsed.flags);
+                }
+                return commandConnector(parsed.subcommand, parsed.flags);
+            case 'logs':
+                return commandLogs(parsed.flags);
+            case 'dashboard':
+                return commandDashboard(parsed.flags);
+            case 'shell':
+                return commandShell();
+            case 'release':
+                if (parsed.subcommand === 'publish') {
+                    return commandReleasePublish(parsed.flags);
+                }
+                printHelp();
+                return 1;
+            case 'ui':
+                console.error('`0ctx ui` has been removed from the end-user flow.');
+                console.error('Use `0ctx setup` and then open the hosted dashboard URL (or run `0ctx dashboard`).');
+                return 1;
+            case 'help':
+                printHelp();
+                return 0;
+            default:
+                printHelp();
+                return 1;
         }
-        case 'connector':
-            if (parsed.subcommand === 'service') {
-                return commandConnector(parsed.serviceAction, parsed.flags);
-            }
-            if (parsed.subcommand === 'queue') {
-                return commandConnectorQueue(parsed.positionalArgs[0], parsed.flags);
-            }
-            return commandConnector(parsed.subcommand, parsed.flags);
-        case 'logs':
-            return commandLogs(parsed.flags);
-        case 'dashboard':
-            return commandDashboard(parsed.flags);
-        case 'shell':
-            return commandShell();
-        case 'release':
-            if (parsed.subcommand === 'publish') {
-                return commandReleasePublish(parsed.flags);
-            }
-            printHelp();
-            return 1;
-        case 'ui':
-            console.error('`0ctx ui` has been removed from the end-user flow.');
-            console.error('Use `0ctx setup` and then open the hosted dashboard URL (or run `0ctx dashboard`).');
-            return 1;
-        case 'help':
-            printHelp();
-            return 0;
-        default:
-            printHelp();
-            return 1;
-    }
+    }, {
+        command: parsed.command,
+        subcommand: parsed.subcommand ?? null,
+        interactive: Boolean(process.stdin.isTTY && process.stdout.isTTY)
+    });
 }
 
 main()

@@ -59,6 +59,7 @@ function getCompletionCandidates(): string[] {
         'bootstrap',
         'doctor',
         'status',
+        'version',
         'repair',
         'dashboard',
         'shell',
@@ -83,7 +84,7 @@ function getCompletionCandidates(): string[] {
         'daemon start',
         'daemon service status',
     ];
-    const builtins = ['/help', '/clear', '/history', '/exit', '/present-option'];
+    const builtins = ['/help', '/clear', '/history', '/exit'];
     // Also expose slash-prefixed variants of every command so `/auth login` autocompletes
     const slashVariants = commands.map(c => `/${c}`);
     return [...builtins, ...commands, ...slashVariants];
@@ -124,7 +125,6 @@ async function printShellHelp(): Promise<void> {
     console.log(`  ${color.magenta('/history'.padEnd(20))} ${color.dim('Show command history')}`);
     console.log(`  ${color.magenta('/clear'.padEnd(20))} ${color.dim('Clear terminal')}`);
     console.log(`  ${color.magenta('/exit'.padEnd(20))} ${color.dim('Exit shell')}`);
-    console.log(`  ${color.magenta('/present-option'.padEnd(20))} ${color.dim('Present UI options overlay')}`);
 
     console.log(`\n${color.bold('Get started')}`);
     console.log(`  ${color.green('>')} ${color.cyan('status'.padEnd(35))} ${color.dim('(check daemon and system health)')}`);
@@ -338,12 +338,6 @@ export async function runInteractiveShell(options: ShellOptions): Promise<number
                 snapshot.forEach((entry, idx) => {
                     console.log(`${idx + 1}. ${entry}`);
                 });
-                continue;
-            }
-
-            if (line.startsWith('/present-option')) {
-                const args = line.split(' ').slice(1).join(' ');
-                console.log(color.magenta(`[UI Overlay] Presenting options for: ${args || '(defaults)'}`));
                 continue;
             }
 
