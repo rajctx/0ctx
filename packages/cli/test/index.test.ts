@@ -31,8 +31,8 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("0ctx setup [--clients=all|claude,cursor,windsurf] [--no-open] [--json]");
         expect(source).toContain("[--skip-service] [--skip-bootstrap]");
         expect(source).toContain("[--dashboard-query[=k=v&...]]");
-        expect(source).toContain("0ctx status [--json]");
-        expect(source).toContain("0ctx repair [--clients=...] [--deep]");
+        expect(source).toContain("0ctx status [--json] [--compact]");
+        expect(source).toContain("0ctx repair [--clients=...] [--deep] [--json]");
         expect(source).toContain("0ctx logs [--no-open] [--snapshot] [--limit=50]");
         expect(source).toContain("0ctx bootstrap [--dry-run] [--clients=...] [--entrypoint=/path/to/mcp-server.js] [--json]");
         expect(source).toContain("0ctx install [--clients=all|claude,cursor,windsurf] [--json] [--skip-bootstrap]");

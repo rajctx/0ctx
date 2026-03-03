@@ -69,6 +69,14 @@ interface DoctorCheck {
     details?: Record<string, unknown>;
 }
 
+interface RepairStep {
+    id: string;
+    status: CheckStatus;
+    code: number;
+    message: string;
+    details?: Record<string, unknown>;
+}
+
 interface ParsedArgs {
     command: string;
     subcommand?: string;
@@ -325,7 +333,8 @@ async function printBootstrapResults(results: BootstrapResult[], dryRun: boolean
 
 async function commandStatus(flags: Record<string, string | boolean> = {}): Promise<number> {
     const asJson = Boolean(flags.json);
-    const p = asJson ? null : await import('@clack/prompts');
+    const compact = Boolean(flags.compact);
+    const p = (asJson || compact) ? null : await import('@clack/prompts');
     const s = p ? p.spinner() : null;
 
     if (p && s) {
@@ -398,6 +407,19 @@ async function commandStatus(flags: Record<string, string | boolean> = {}): Prom
 
     if (asJson) {
         console.log(JSON.stringify(payload, null, 2));
+        return payload.ok ? 0 : 1;
+    }
+    if (compact) {
+        const methodCount = payload.capabilities?.methodCount ?? 0;
+        const missing = payload.capabilities?.missingFeatures ?? [];
+        const sync = payload.daemon.health?.sync as { enabled?: boolean; running?: boolean } | null | undefined;
+        const syncState = sync
+            ? `enabled=${Boolean(sync.enabled)} running=${Boolean(sync.running)}`
+            : 'enabled=false running=false';
+        const reason = payload.daemon.running
+            ? (missing.length > 0 ? `missing=${missing.join(',')}` : 'healthy')
+            : `error=${payload.daemon.error ?? 'unknown'}`;
+        console.log(`status=${payload.ok ? 'ok' : 'degraded'} daemon=${payload.daemon.running ? 'running' : 'offline'} methods=${methodCount} sync=\"${syncState}\" reason=${reason}`);
         return payload.ok ? 0 : 1;
     }
     if (!p) {
@@ -537,7 +559,10 @@ async function commandInstall(flags: Record<string, string | boolean>): Promise<
     return checks.ok ? 0 : 1;
 }
 
-async function commandDoctor(flags: Record<string, string | boolean>): Promise<number> {
+async function collectDoctorChecks(flags: Record<string, string | boolean>): Promise<{
+    checks: DoctorCheck[];
+    daemon: { ok: boolean; error?: string; health?: any };
+}> {
     const checks: DoctorCheck[] = [];
     const daemon = await isDaemonReachable();
 
@@ -596,41 +621,147 @@ async function commandDoctor(flags: Record<string, string | boolean>): Promise<n
         details: { results: dryRunResults }
     });
 
+    return { checks, daemon };
+}
+
+async function commandDoctor(flags: Record<string, string | boolean>): Promise<number> {
+    const { checks, daemon } = await collectDoctorChecks(flags);
+    const hasFailures = checks.some(check => check.status === 'fail');
     const asJson = Boolean(flags.json);
     if (asJson) {
         console.log(JSON.stringify({ checks }, null, 2));
-    } else {
-        const p = await import('@clack/prompts');
-        p.intro(color.bgCyan(color.black(' 0ctx doctor ')));
-
-        for (const check of checks) {
-            if (check.status === 'pass') {
-                p.log.success(`${color.bold(check.id)}: ${color.dim(check.message)}`);
-            } else if (check.status === 'warn') {
-                p.log.warn(`${color.bold(check.id)}: ${color.yellow(check.message)}`);
-            } else {
-                p.log.error(`${color.bold(check.id)}: ${color.red(check.message)}`);
-            }
-        }
-
-        if (!daemon.ok) {
-            const recovery = inferDaemonRecoverySteps(daemon.error);
-            console.log('\nDaemon recovery steps:');
-            for (const [idx, step] of recovery.entries()) {
-                console.log(`  ${idx + 1}. ${step}`);
-            }
-            console.log('');
-        }
-
-        const hasFailures = checks.some(c => c.status === 'fail');
-        p.outro(hasFailures ? color.red('Doctor found issues requiring attention.') : color.green('All systems go!'));
+        return hasFailures ? 1 : 0;
     }
 
-    return checks.some(check => check.status === 'fail') ? 1 : 0;
+    const p = await import('@clack/prompts');
+    p.intro(color.bgCyan(color.black(' 0ctx doctor ')));
+
+    for (const check of checks) {
+        if (check.status === 'pass') {
+            p.log.success(`${color.bold(check.id)}: ${color.dim(check.message)}`);
+        } else if (check.status === 'warn') {
+            p.log.warn(`${color.bold(check.id)}: ${color.yellow(check.message)}`);
+        } else {
+            p.log.error(`${color.bold(check.id)}: ${color.red(check.message)}`);
+        }
+    }
+
+    if (!daemon.ok) {
+        const recovery = inferDaemonRecoverySteps(daemon.error);
+        console.log('\nDaemon recovery steps:');
+        for (const [idx, step] of recovery.entries()) {
+            console.log(`  ${idx + 1}. ${step}`);
+        }
+        console.log('');
+    }
+
+    p.outro(hasFailures ? color.red('Doctor found issues requiring attention.') : color.green('All systems go!'));
+    return hasFailures ? 1 : 0;
 }
 
 async function commandRepair(flags: Record<string, string | boolean>): Promise<number> {
     const deep = Boolean(flags.deep);
+    const asJson = Boolean(flags.json);
+
+    if (asJson) {
+        const steps: RepairStep[] = [];
+        const daemon = await isDaemonReachable();
+
+        if (!daemon.ok) {
+            try {
+                startDaemonDetached();
+            } catch (error) {
+                steps.push({
+                    id: 'daemon_start',
+                    status: 'fail',
+                    code: 1,
+                    message: 'Failed to start daemon.',
+                    details: { error: error instanceof Error ? error.message : String(error) }
+                });
+                console.log(JSON.stringify({ ok: false, steps }, null, 2));
+                return 1;
+            }
+
+            const ready = await waitForDaemon();
+            steps.push({
+                id: 'daemon_start',
+                status: ready ? 'pass' : 'fail',
+                code: ready ? 0 : 1,
+                message: ready ? 'Daemon started successfully.' : 'Daemon start timeout.',
+                details: { priorError: daemon.error ?? null }
+            });
+
+            if (!ready) {
+                console.log(JSON.stringify({ ok: false, steps }, null, 2));
+                return 1;
+            }
+        } else {
+            steps.push({
+                id: 'daemon_start',
+                status: 'pass',
+                code: 0,
+                message: 'Daemon already running.'
+            });
+        }
+
+        const bootstrapCode = await commandBootstrap({ ...flags, quiet: true, json: false });
+        steps.push({
+            id: 'bootstrap',
+            status: bootstrapCode === 0 ? 'pass' : 'fail',
+            code: bootstrapCode,
+            message: bootstrapCode === 0 ? 'Bootstrap completed.' : 'Bootstrap failed.'
+        });
+        if (bootstrapCode !== 0) {
+            console.log(JSON.stringify({ ok: false, steps }, null, 2));
+            return bootstrapCode;
+        }
+
+        if (deep) {
+            let capabilities: { methods?: string[] } | null = null;
+            let capabilityError: string | null = null;
+            try {
+                capabilities = await sendToDaemon('getCapabilities', {}) as { methods?: string[] } | null;
+            } catch (error) {
+                capabilityError = error instanceof Error ? error.message : String(error);
+            }
+
+            const methods = Array.isArray(capabilities?.methods) ? capabilities.methods : [];
+            const recallReady = methods.includes('recall');
+            steps.push({
+                id: 'deep_capabilities',
+                status: recallReady ? 'pass' : 'fail',
+                code: recallReady ? 0 : 1,
+                message: recallReady
+                    ? 'Daemon capability check passed.'
+                    : 'Daemon capabilities are stale (recall missing).',
+                details: {
+                    capabilityError,
+                    methodCount: methods.length,
+                    recoverySteps: recallReady ? [] : ['0ctx daemon start', '0ctx connector service restart', '0ctx recall --start']
+                }
+            });
+
+            if (!recallReady) {
+                console.log(JSON.stringify({ ok: false, steps }, null, 2));
+                return 1;
+            }
+        }
+
+        const { checks } = await collectDoctorChecks({ ...flags, json: false });
+        const doctorFail = checks.some(check => check.status === 'fail');
+        steps.push({
+            id: 'doctor',
+            status: doctorFail ? 'fail' : 'pass',
+            code: doctorFail ? 1 : 0,
+            message: doctorFail ? 'Doctor checks found failures.' : 'Doctor checks passed.',
+            details: { checks }
+        });
+
+        const ok = steps.every(step => step.status !== 'fail');
+        console.log(JSON.stringify({ ok, steps }, null, 2));
+        return ok ? 0 : 1;
+    }
+
     const p = await import('@clack/prompts');
     p.intro(color.bgCyan(color.black(' 0ctx repair ')));
 
@@ -2094,8 +2225,8 @@ Usage:
   0ctx install [--clients=all|claude,cursor,windsurf] [--json] [--skip-bootstrap]
   0ctx bootstrap [--dry-run] [--clients=...] [--entrypoint=/path/to/mcp-server.js] [--json]
   0ctx doctor [--json] [--clients=...]
-  0ctx status [--json]
-  0ctx repair [--clients=...] [--deep]
+  0ctx status [--json] [--compact]
+  0ctx repair [--clients=...] [--deep] [--json]
   0ctx logs [--no-open] [--snapshot] [--limit=50]
   0ctx recall [--mode=auto|temporal|topic|graph] [--query="..."] [--since-hours=24] [--limit=10] [--depth=2] [--max-nodes=30] [--start] [--json]
   0ctx dashboard [--no-open] [--dashboard-query=k=v&...]
