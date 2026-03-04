@@ -367,6 +367,34 @@ function getHostedDashboardUrl(): string {
     return normalizeDashboardBaseUrl('https://www.0ctx.com/dashboard/workspace');
 }
 
+async function buildDefaultDashboardQuery(): Promise<string | undefined> {
+    const params = new URLSearchParams();
+    const state = readConnectorState();
+
+    if (state?.machineId) params.set('machineId', state.machineId);
+    if (state?.tenantId) params.set('tenantId', state.tenantId);
+
+    try {
+        const active = await sendToDaemon('getActiveContext', {}) as { id?: string; name?: string } | null;
+        if (active?.id) {
+            params.set('contextId', active.id);
+            if (active.name) params.set('contextName', active.name);
+        } else {
+            const contexts = await sendToDaemon('listContexts', {}) as Array<{ id?: string; name?: string }>;
+            const first = Array.isArray(contexts) ? contexts[0] : null;
+            if (first?.id) {
+                params.set('contextId', first.id);
+                if (first.name) params.set('contextName', first.name);
+            }
+        }
+    } catch {
+        // best effort; dashboard can still open with machine-only query
+    }
+
+    const query = params.toString();
+    return query.length > 0 ? query : undefined;
+}
+
 function openUrl(url: string): void {
     try {
         const platform = os.platform();
@@ -1031,7 +1059,9 @@ async function commandRepair(flags: Record<string, string | boolean>): Promise<n
 }
 
 async function commandDashboard(flags: Record<string, string | boolean>): Promise<number> {
-    const url = applyDashboardQuery(getHostedDashboardUrl(), flags['dashboard-query']);
+    const explicitQuery = parseOptionalStringFlag(flags['dashboard-query']);
+    const fallbackQuery = explicitQuery ?? await buildDefaultDashboardQuery();
+    const url = applyDashboardQuery(getHostedDashboardUrl(), fallbackQuery);
     console.log(`dashboard_url: ${url}`);
 
     if (Boolean(flags['no-open'])) {
