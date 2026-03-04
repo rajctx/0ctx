@@ -329,10 +329,10 @@ export async function getAuthStatus(): Promise<AuthStatusSnapshot | null> {
   }
 }
 
-export async function getContexts(machineId?: string | null): Promise<ContextItem[]> {
+export async function getContexts(machineId?: string | null): Promise<ContextItem[] | null> {
   const res = await bffPost<ContextItem[]>('/api/v1/runtime/command', { method: 'listContexts', machineId: machineId ?? undefined });
   if (res.ok && Array.isArray(res.data)) return res.data;
-  return [];
+  return null;
 }
 
 export async function getGraphData(contextId: string, machineId?: string | null): Promise<GraphPayload> {

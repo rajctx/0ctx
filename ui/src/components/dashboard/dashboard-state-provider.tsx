@@ -91,6 +91,10 @@ export function DashboardStateProvider({ children }: { children: ReactNode }) {
       setIsContextLoading(true);
       try {
         const contextList = await getContexts(selectedMachineId);
+        if (!contextList) {
+          // Keep previous state on transient bridge/API failures.
+          return;
+        }
         setContexts(contextList);
         setActiveContextId(previous => {
           if (contextList.length === 0) return null;

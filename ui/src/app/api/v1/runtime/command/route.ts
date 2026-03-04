@@ -7,6 +7,8 @@ import {
 } from '@/lib/bff';
 import { getStore } from '@/lib/store';
 
+const RUNTIME_COMMAND_TIMEOUT_MS = 45_000;
+
 const ALLOWED_COMMAND_METHODS = new Set([
   'listContexts',
   'getGraphData',
@@ -74,7 +76,7 @@ export async function POST(request: Request) {
     const result = await storeExecCommand(machineId, method, body, {
       tenantId,
       contextId: typeof body.contextId === 'string' ? body.contextId : undefined,
-      timeoutMs: 15_000
+      timeoutMs: RUNTIME_COMMAND_TIMEOUT_MS
     });
 
     if (!result.ok) {
@@ -91,4 +93,3 @@ export async function POST(request: Request) {
     );
   }
 }
-
