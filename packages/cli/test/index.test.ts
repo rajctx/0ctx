@@ -51,6 +51,8 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("0ctx recall feedback list|stats [--context-id=<id>] [--node-id=<id>] [--helpful|--not-helpful] [--limit=50] [--json]");
         expect(source).toContain("if (Boolean(flags.validate))");
         expect(source).toContain("const mcpProfile = parseOptionalStringFlag(flags['mcp-profile'] ?? flags.profile) ?? undefined;");
+        expect(source).toContain("path.resolve(__dirname, 'daemon.js')");
+        expect(source).toContain("reinstall/repair the CLI package");
         expect(source).toContain("result.status === 'failed'");
         expect(source).toContain("Restart your AI client app so it reloads MCP config changes.");
         expect(source).toContain("ops_log_writable");

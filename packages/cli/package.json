@@ -1,6 +1,6 @@
 {
   "name": "@0ctx/cli",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "description": "0ctx product CLI – install, bootstrap, doctor, and service management",
   "main": "dist/index.js",
   "bin": {
@@ -8,6 +8,7 @@
   },
   "files": [
     "dist/index.js",
+    "dist/daemon.js",
     "dist/mcp-server.js",
     "build.mjs"
   ],

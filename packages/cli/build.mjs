@@ -90,4 +90,23 @@ await esbuild.build({
   logLevel: 'info',
 });
 
-console.log('✓ dist/index.js and dist/mcp-server.js ready');
+console.log('→ Bundling @0ctx/daemon runtime for CLI package...');
+
+await esbuild.build({
+  entryPoints: [resolve(root, 'packages/daemon/src/index.ts')],
+  bundle: true,
+  platform: 'node',
+  target: 'node18',
+  format: 'cjs',
+  outfile: resolve(__dirname, 'dist/daemon.js'),
+  alias,
+  external: [
+    'better-sqlite3',
+    'cross-keychain',
+    '@napi-rs/keyring',
+  ],
+  sourcemap: 'inline',
+  logLevel: 'info',
+});
+
+console.log('✓ dist/index.js, dist/mcp-server.js, and dist/daemon.js ready');

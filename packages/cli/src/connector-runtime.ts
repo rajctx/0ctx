@@ -217,6 +217,7 @@ const CLOUD_COMMAND_METHOD_ALLOWLIST = new Set([
 
 function resolveDaemonEntrypoint(): string {
     const candidates = [
+        path.resolve(__dirname, 'daemon.js'),
         path.resolve(process.cwd(), 'packages', 'daemon', 'dist', 'index.js'),
         path.resolve(__dirname, '..', '..', 'daemon', 'dist', 'index.js'),
         (() => {
@@ -232,7 +233,9 @@ function resolveDaemonEntrypoint(): string {
         if (fs.existsSync(candidate)) return candidate;
     }
 
-    throw new Error('Could not resolve daemon entrypoint. Run `npm run build` first.');
+    throw new Error(
+        'Could not resolve daemon entrypoint. Run `npm run build` (repo) or reinstall/repair the CLI package.'
+    );
 }
 
 export function getHostedDashboardUrl(): string {
