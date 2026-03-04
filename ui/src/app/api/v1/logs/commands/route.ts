@@ -23,7 +23,11 @@ export async function GET(request: Request) {
     const queues = await Promise.all(
       connectors
         .filter(c => !filterMachineId || c.machineId === filterMachineId)
-        .map(c => store.getQueue(c.machineId, tenantId, 0, 500))
+        .map(c => store.listCommands(c.machineId, tenantId, {
+          afterCursor: 0,
+          limit: 500,
+          status: ['pending', 'applied', 'failed']
+        }))
     );
 
     let allCommands = queues.flat();

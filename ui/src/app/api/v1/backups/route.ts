@@ -2,10 +2,11 @@ import {
   storeExecCommand,
   errorResponse,
   jsonResponse,
-  requireTenantSession
+  requireTenantSession,
+  resolveTenantMachineId
 } from '@/lib/bff';
 
-export async function GET() {
+export async function GET(request: Request) {
   const [, claims, authErr] = await requireTenantSession();
   if (authErr) return authErr;
 
@@ -14,7 +15,12 @@ export async function GET() {
     return errorResponse(403, 'no_tenant', 'No tenant associated with this account.');
   }
 
-  const machineId = claims.sub; // target the user's own machine via sub as fallback
+  const url = new URL(request.url);
+  const requestedMachineId = url.searchParams.get('machineId');
+  const machineId = await resolveTenantMachineId(claims, requestedMachineId);
+  if (!machineId) {
+    return errorResponse(404, 'no_connector', 'No connector available for this tenant.');
+  }
 
   try {
     const result = await storeExecCommand(machineId, 'listBackups', {}, { tenantId });
@@ -50,17 +56,42 @@ export async function POST(request: Request) {
     return errorResponse(400, 'invalid_body', 'Request body must be valid JSON');
   }
 
-  const machineId = typeof body.machineId === 'string' ? body.machineId : null;
-  const contextId = body.contextId as string;
-
+  const action = typeof body.action === 'string' ? body.action : 'create';
+  const requestedMachineId = typeof body.machineId === 'string' ? body.machineId : null;
+  const machineId = await resolveTenantMachineId(claims, requestedMachineId);
   if (!machineId) {
-    return errorResponse(400, 'invalid_request', 'machineId is required');
-  }
-  if (!contextId) {
-    return errorResponse(400, 'invalid_request', 'contextId is required');
+    return errorResponse(404, 'no_connector', 'No connector available for this tenant.');
   }
 
   try {
+    if (action === 'restore') {
+      const fileName = typeof body.fileName === 'string' ? body.fileName : '';
+      if (!fileName) {
+        return errorResponse(400, 'invalid_request', 'fileName is required for restore action');
+      }
+
+      const result = await storeExecCommand(
+        machineId,
+        'restoreBackup',
+        {
+          fileName,
+          name: body.name ?? undefined
+        },
+        { tenantId }
+      );
+
+      if (!result.ok) {
+        return errorResponse(502, 'backup_restore_failed', result.error ?? 'Failed to restore backup', true);
+      }
+
+      return jsonResponse(result.result);
+    }
+
+    const contextId = typeof body.contextId === 'string' ? body.contextId : null;
+    if (!contextId) {
+      return errorResponse(400, 'invalid_request', 'contextId is required');
+    }
+
     const result = await storeExecCommand(
       machineId,
       'createBackup',
@@ -86,3 +117,4 @@ export async function POST(request: Request) {
     );
   }
 }
+

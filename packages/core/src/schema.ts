@@ -63,6 +63,7 @@ export type AuditAction =
     | 'create_backup'
     | 'restore_backup'
     | 'set_sync_policy'
+    | 'sync_merge'
     | 'recall_feedback';
 
 export interface AuditMetadata {

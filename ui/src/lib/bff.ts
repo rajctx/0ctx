@@ -277,3 +277,35 @@ export function resolveMachineId(): string {
     'dev-machine'
   );
 }
+
+/**
+ * Resolve a tenant-scoped machine id.
+ * If `requestedMachineId` is provided, it must exist for this tenant.
+ * Otherwise picks claims.sub when present in connector list, then freshest heartbeat.
+ */
+export async function resolveTenantMachineId(
+  claims: TokenClaims,
+  requestedMachineId?: string | null
+): Promise<string | null> {
+  if (!claims.tenantId) return null;
+  const store = getStore();
+
+  if (requestedMachineId) {
+    const connector = await store.getConnector(requestedMachineId, claims.tenantId);
+    return connector ? requestedMachineId : null;
+  }
+
+  const connectors = await store.getConnectorsByTenant(claims.tenantId);
+  if (connectors.length === 0) return null;
+  if (claims.sub && connectors.some(connector => connector.machineId === claims.sub)) {
+    return claims.sub;
+  }
+
+  const sorted = [...connectors].sort((a, b) => {
+    const aTs = typeof a.lastHeartbeatAt === 'number' ? a.lastHeartbeatAt : 0;
+    const bTs = typeof b.lastHeartbeatAt === 'number' ? b.lastHeartbeatAt : 0;
+    if (bTs !== aTs) return bTs - aTs;
+    return a.machineId.localeCompare(b.machineId);
+  });
+  return sorted[0]?.machineId ?? null;
+}

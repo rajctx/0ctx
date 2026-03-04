@@ -38,7 +38,7 @@ function compactText(value: string, maxLength = 64): string {
 }
 
 export default function DashboardAuditPage() {
-  const { activeContextId } = useDashboardState();
+  const { activeContextId, selectedMachineId } = useDashboardState();
   const [auditScope, setAuditScope] = useState<'active' | 'all'>('active');
   const [eventFilter, setEventFilter] = useState<'all' | 'feedback'>('all');
   const [auditEvents, setAuditEvents] = useState<AuditEventEntry[]>([]);
@@ -68,8 +68,8 @@ export default function DashboardAuditPage() {
       const contextId = auditScope === 'active' ? activeContextId : null;
       const [events, feedback, graph] = await Promise.all([
         listAuditEventsAction(contextId, 80),
-        listRecallFeedbackAction({ contextId, limit: 80 }),
-        activeContextId ? getGraphData(activeContextId) : Promise.resolve({ nodes: [], edges: [] })
+        listRecallFeedbackAction({ contextId, limit: 80, machineId: selectedMachineId }),
+        activeContextId ? getGraphData(activeContextId, selectedMachineId) : Promise.resolve({ nodes: [], edges: [] })
       ]);
       setAuditEvents(events);
       setFeedbackSummary(feedback);
@@ -82,7 +82,7 @@ export default function DashboardAuditPage() {
       setNodesLoading(false);
       setLoading(false);
     }
-  }, [activeContextId, auditScope]);
+  }, [activeContextId, auditScope, selectedMachineId]);
 
   useEffect(() => {
     void refreshAudit();
@@ -138,7 +138,8 @@ export default function DashboardAuditPage() {
                 nodeId,
                 helpful: feedbackHelpful,
                 reason: feedbackReason,
-                contextId: activeContextId ?? undefined
+                contextId: activeContextId ?? undefined,
+                machineId: selectedMachineId
               });
               if (!result?.ok) {
                 setFeedbackError('Failed to submit feedback to daemon.');

@@ -194,9 +194,21 @@ export interface ConnectorRuntimeDependencies {
 const DEFAULT_INTERVAL_MS = 30_000;
 const MIN_INTERVAL_MS = 5_000;
 const CLOUD_COMMAND_METHOD_ALLOWLIST = new Set([
+    'listContexts',
+    'getGraphData',
+    'createContext',
+    'deleteContext',
     'addNode',
     'updateNode',
     'deleteNode',
+    'listRecallFeedback',
+    'recallFeedback',
+    'evaluateCompletion',
+    'listAuditEvents',
+    'getSyncPolicy',
+    'listBackups',
+    'createBackup',
+    'restoreBackup',
     'addEdge',
     'saveCheckpoint',
     'resolveGate',

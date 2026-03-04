@@ -1,6 +1,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { resolveMcpToolProfile } from './tools';
 
 type SupportedClient = 'claude' | 'cursor' | 'windsurf';
 
@@ -14,6 +15,7 @@ interface BootstrapOptions {
     dryRun?: boolean;
     entrypoint?: string;
     serverName?: string;
+    profile?: string;
     platform?: NodeJS.Platform;
     homeDir?: string;
     appDataDir?: string;
@@ -176,10 +178,11 @@ export function bootstrapMcpRegistration(options: BootstrapOptions): BootstrapRe
     const appDataDir = getAppDataDir(homeDir, options);
     const serverName = options.serverName || '0ctx';
     const entrypoint = resolveEntrypoint(options.entrypoint);
+    const profile = resolveMcpToolProfile(options.profile);
 
     const registration: Registration = {
         command: process.execPath,
-        args: [entrypoint]
+        args: profile.all ? [entrypoint] : [entrypoint, '--profile', profile.normalized]
     };
 
     const results: BootstrapResult[] = [];
@@ -260,12 +263,14 @@ export function runBootstrapFromCli(): number {
     const clients = parseClients(parseArgValue('--clients') || parseArgValue('--client'));
     const serverName = parseArgValue('--server-name') || '0ctx';
     const entrypoint = parseArgValue('--entrypoint');
+    const profile = parseArgValue('--profile') || parseArgValue('--mcp-profile') || undefined;
 
     const results = bootstrapMcpRegistration({
         clients,
         dryRun,
         serverName,
-        entrypoint
+        entrypoint,
+        profile
     });
 
     printSummary(results, dryRun);

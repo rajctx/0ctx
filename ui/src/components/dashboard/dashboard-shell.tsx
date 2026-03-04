@@ -81,6 +81,9 @@ export function DashboardShell({ children }: { children: ReactNode }) {
     connectorRegistered,
     connectorBridgeHealthy,
     connectorCloudConnected,
+    availableMachines,
+    selectedMachineId,
+    setSelectedMachineId,
     lastHealthCheckAt,
     refreshDashboardData,
     createNewContext
@@ -274,6 +277,22 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={selectedMachineId ?? ''}
+                  onChange={event => setSelectedMachineId(event.target.value || null)}
+                  className="h-8 min-w-[170px] rounded-md border border-[var(--border-muted)] bg-[var(--surface-raised)] px-2 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)] focus:ring-2 focus:ring-[var(--focus-ring)]"
+                  title="Active machine target for write operations"
+                >
+                  {availableMachines.length === 0 ? (
+                    <option value="">No machine</option>
+                  ) : (
+                    availableMachines.map(machine => (
+                      <option key={machine.machineId} value={machine.machineId}>
+                        {machine.machineId} ({machine.posture})
+                      </option>
+                    ))
+                  )}
+                </select>
                 <Badge muted={!daemonOnline}>
                   <span
                     className={cn(

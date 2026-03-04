@@ -105,7 +105,7 @@ function buildNodeStats(items: RecallFeedbackItem[]): NodeFeedbackStat[] {
 }
 
 export default function DashboardRecallPage() {
-  const { activeContext, activeContextId } = useDashboardState();
+  const { activeContext, activeContextId, selectedMachineId } = useDashboardState();
   const [scope, setScope] = useState<RecallScope>('active');
   const [helpfulFilter, setHelpfulFilter] = useState<HelpfulFilter>('all');
   const [nodeFilter, setNodeFilter] = useState('');
@@ -130,9 +130,10 @@ export default function DashboardRecallPage() {
           contextId,
           nodeId: nodeFilter || undefined,
           helpful,
-          limit: 250
+          limit: 250,
+          machineId: selectedMachineId
         }),
-        activeContextId ? getGraphData(activeContextId) : Promise.resolve({ nodes: [], edges: [] })
+        activeContextId ? getGraphData(activeContextId, selectedMachineId) : Promise.resolve({ nodes: [], edges: [] })
       ]);
       setSummary(nextSummary);
       const nextNodes = [...(graph?.nodes ?? [])].sort((a, b) => b.createdAt - a.createdAt);
@@ -146,7 +147,7 @@ export default function DashboardRecallPage() {
     } finally {
       setLoading(false);
     }
-  }, [activeContextId, helpfulFilter, nodeFilter, scope]);
+  }, [activeContextId, helpfulFilter, nodeFilter, scope, selectedMachineId]);
 
   useEffect(() => {
     void refreshRecall();

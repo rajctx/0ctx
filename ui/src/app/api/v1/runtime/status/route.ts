@@ -24,12 +24,23 @@ export async function GET() {
     const bridgeHealthy = connectors.length > 0;
     const capabilities = connectors.flatMap(c => c.capabilities ?? []);
     const uniqueCapabilities = [...new Set(capabilities)];
+    const sortedConnectors = [...connectors].sort((a, b) => {
+      const aTs = typeof a.lastHeartbeatAt === 'number' ? a.lastHeartbeatAt : 0;
+      const bTs = typeof b.lastHeartbeatAt === 'number' ? b.lastHeartbeatAt : 0;
+      if (bTs !== aTs) return bTs - aTs;
+      return a.machineId.localeCompare(b.machineId);
+    });
+    const defaultMachineId = connectors.some(c => c.machineId === claims.sub)
+      ? claims.sub
+      : (sortedConnectors[0]?.machineId ?? null);
 
     return jsonResponse({
       posture,
       bridgeHealthy,
       cloudConnected: true, // In-process — always reachable
       capabilities: uniqueCapabilities,
+      viewerMachineId: claims.sub || null,
+      defaultMachineId,
       connectors: connectors.map(c => ({
         machineId: c.machineId,
         posture: c.posture ?? 'offline',

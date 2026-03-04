@@ -9,16 +9,10 @@ import type { ContextItem, GraphNode, GraphPayload } from '@/lib/graph';
 // ---------------------------------------------------------------------------
 
 const SUPPORTED_CLIENTS = ['claude', 'cursor', 'windsurf'] as const;
-const INTEGRATION_POLICY_CONFIG_KEYS = [
-  'integration.chatgpt.enabled',
-  'integration.chatgpt.requireApproval',
-  'integration.autoBootstrap'
-] as const;
 
 export type SupportedClient = (typeof SUPPORTED_CLIENTS)[number];
 export type CheckStatus = 'pass' | 'warn' | 'fail';
 export type SyncPolicy = 'local_only' | 'metadata_only' | 'full_sync';
-export type IntegrationPolicyConfigKey = (typeof INTEGRATION_POLICY_CONFIG_KEYS)[number];
 
 export interface HealthSnapshot {
   ok?: boolean;
@@ -52,6 +46,15 @@ export interface RuntimeStatusSnapshot {
   cloudConnected: boolean;
   capabilities: string[];
   cloud: Record<string, unknown> | null;
+  connectors: RuntimeConnectorSnapshot[];
+  defaultMachineId?: string | null;
+  viewerMachineId?: string | null;
+}
+
+export interface RuntimeConnectorSnapshot {
+  machineId: string;
+  posture: string;
+  lastHeartbeatAt: number | null;
 }
 
 export interface CliRunResult {
@@ -66,29 +69,6 @@ export interface CliRunResult {
   durationMs: number;
 }
 
-export interface BootstrapResultEntry {
-  client: string;
-  status: string;
-  configPath: string;
-  message?: string;
-}
-
-export interface BootstrapWorkflowResult extends CliRunResult {
-  dryRun: boolean;
-  clients: SupportedClient[];
-  results: BootstrapResultEntry[];
-}
-
-export interface BootstrapJsonPayload {
-  dryRun: boolean;
-  clients: SupportedClient[];
-  results: BootstrapResultEntry[];
-}
-
-export interface BootstrapJsonWorkflowResult extends CliRunResult {
-  payload: BootstrapJsonPayload | null;
-}
-
 export interface StatusWorkflowResult extends CliRunResult {
   summary: Record<string, string>;
 }
@@ -98,22 +78,6 @@ export interface DoctorWorkflowResult extends CliRunResult {
 }
 
 export interface ConnectorStatusWorkflowResult extends CliRunResult {
-  payload: Record<string, unknown> | null;
-}
-
-export interface ConnectorQueueStatusWorkflowResult extends CliRunResult {
-  payload: Record<string, unknown> | null;
-}
-
-export interface ConnectorQueueDrainWorkflowResult extends CliRunResult {
-  payload: Record<string, unknown> | null;
-}
-
-export interface ConnectorQueuePurgeWorkflowResult extends CliRunResult {
-  payload: Record<string, unknown> | null;
-}
-
-export interface ConnectorQueueLogsWorkflowResult extends CliRunResult {
   payload: Record<string, unknown> | null;
 }
 
@@ -135,22 +99,8 @@ export interface SyncPolicySnapshot {
   syncPolicy: SyncPolicy;
 }
 
-export interface IntegrationPolicyConfigSnapshot {
-  ok: boolean;
-  values: Record<IntegrationPolicyConfigKey, boolean>;
-  errors: Partial<Record<IntegrationPolicyConfigKey, string>>;
-}
-
-export interface IntegrationPolicyConfigSetResult extends IntegrationPolicyConfigSnapshot {
-  updatedKeys: IntegrationPolicyConfigKey[];
-}
-
 export interface WorkflowOptions {
   clients?: SupportedClient[];
-}
-
-export interface BootstrapWorkflowOptions extends WorkflowOptions {
-  dryRun?: boolean;
 }
 
 export interface AuditEventEntry {
@@ -293,6 +243,8 @@ export async function getOperationalSnapshot(): Promise<{
   };
 
   const now = Date.now();
+  const primaryMachineId = status.defaultMachineId
+    ?? (Array.isArray(status.connectors) && status.connectors.length > 0 ? status.connectors[0].machineId : null);
   const connectorStatus: ConnectorStatusWorkflowResult = {
     ok: true, command: 'bff', args: ['connector-status'],
     exitCode: 0, stdout: JSON.stringify(status), stderr: '',
@@ -300,10 +252,13 @@ export async function getOperationalSnapshot(): Promise<{
     payload: {
       posture: status.posture,
       daemon: { running: status.bridgeHealthy },
-      registration: { registered: status.bridgeHealthy, machineId: 'hosted' },
+      registration: { registered: status.bridgeHealthy, machineId: primaryMachineId },
       bridge: { healthy: status.bridgeHealthy },
       cloud: { connected: status.cloudConnected },
-      runtime: { eventBridgeSupported: true, commandBridgeSupported: true, queue: { pending: 0, backoff: 0 } },
+      connectors: status.connectors,
+      defaultMachineId: status.defaultMachineId ?? null,
+      viewerMachineId: status.viewerMachineId ?? null,
+      runtime: { eventBridgeSupported: true, commandBridgeSupported: true, queue: { pending: 0, backoff: 0 } }
     },
   };
 
@@ -374,55 +329,55 @@ export async function getAuthStatus(): Promise<AuthStatusSnapshot | null> {
   }
 }
 
-export async function getContexts(): Promise<ContextItem[]> {
-  const res = await bffPost<ContextItem[]>('/api/v1/runtime/doctor', { method: 'listContexts' });
+export async function getContexts(machineId?: string | null): Promise<ContextItem[]> {
+  const res = await bffPost<ContextItem[]>('/api/v1/runtime/command', { method: 'listContexts', machineId: machineId ?? undefined });
   if (res.ok && Array.isArray(res.data)) return res.data;
   return [];
 }
 
-export async function getGraphData(contextId: string): Promise<GraphPayload> {
+export async function getGraphData(contextId: string, machineId?: string | null): Promise<GraphPayload> {
   try {
-    const res = await bffPost<GraphPayload>('/api/v1/runtime/doctor', { method: 'getGraphData', contextId });
+    const res = await bffPost<GraphPayload>('/api/v1/runtime/command', { method: 'getGraphData', contextId, machineId: machineId ?? undefined });
     if (res.ok && res.data) return res.data;
   } catch { /* fall through */ }
   return { nodes: [], edges: [] };
 }
 
-export async function updateNodeData(id: string, updates: { content?: string; tags?: string[] }): Promise<unknown> {
-  const res = await bffPost('/api/v1/runtime/doctor', { method: 'updateNode', id, updates });
+export async function updateNodeData(
+  id: string,
+  updates: { content?: string; tags?: string[] },
+  machineId?: string | null
+): Promise<unknown> {
+  const res = await bffPost('/api/v1/runtime/command', { method: 'updateNode', id, updates, machineId: machineId ?? undefined });
   return res.data;
 }
 
-export async function createContext(name: string, paths: string[] = []): Promise<unknown> {
-  const res = await bffPost('/api/v1/runtime/doctor', { method: 'createContext', name, paths });
+export async function createContext(name: string, paths: string[] = [], machineId?: string | null): Promise<unknown> {
+  const res = await bffPost('/api/v1/runtime/command', { method: 'createContext', name, paths, machineId: machineId ?? undefined });
   return res.data;
 }
 
-export async function deleteContextAction(id: string): Promise<unknown> {
-  const res = await bffPost('/api/v1/runtime/doctor', { method: 'deleteContext', id });
+export async function deleteContextAction(id: string, machineId?: string | null): Promise<unknown> {
+  const res = await bffPost('/api/v1/runtime/command', { method: 'deleteContext', id, machineId: machineId ?? undefined });
   return res.data;
 }
 
-export async function deleteNodeAction(contextId: string, id: string): Promise<unknown> {
-  const res = await bffPost('/api/v1/runtime/doctor', { method: 'deleteNode', contextId, id });
+export async function deleteNodeAction(contextId: string, id: string, machineId?: string | null): Promise<unknown> {
+  const res = await bffPost('/api/v1/runtime/command', { method: 'deleteNode', contextId, id, machineId: machineId ?? undefined });
   return res.data;
 }
 
 export async function addNodeAction(
   contextId: string,
-  data: { type: string; content: string; tags?: string[]; key?: string }
+  data: { type: string; content: string; tags?: string[]; key?: string },
+  machineId?: string | null
 ): Promise<GraphNode | null> {
-  const res = await bffPost<GraphNode>('/api/v1/runtime/doctor', {
+  const res = await bffPost<GraphNode>('/api/v1/runtime/command', {
     method: 'addNode', contextId, type: data.type, content: data.content,
-    tags: data.tags ?? [], key: data.key || undefined, source: 'dashboard'
+    tags: data.tags ?? [], key: data.key || undefined, source: 'dashboard',
+    machineId: machineId ?? undefined
   });
   return res.data ?? null;
-}
-
-export async function runInstallWorkflow(options: WorkflowOptions = {}): Promise<CliRunResult> {
-  const clients = normalizeClients(options.clients);
-  const res = await bffPost<unknown>('/api/v1/integrations/bootstrap', { clients, dryRun: false });
-  return bffToCliResult(res, 'install');
 }
 
 export async function runStatusWorkflow(): Promise<StatusWorkflowResult> {
@@ -439,33 +394,9 @@ export async function runStatusWorkflow(): Promise<StatusWorkflowResult> {
 
 export async function runDoctorWorkflow(options: WorkflowOptions = {}): Promise<DoctorWorkflowResult> {
   const clients = normalizeClients(options.clients);
-  const res = await bffPost<{ checks?: DoctorCheck[] }>('/api/v1/runtime/doctor', { clients });
+  const res = await bffPost<{ checks?: DoctorCheck[] }>('/api/v1/runtime/command', { method: 'doctor', clients });
   const base = bffToCliResult(res, 'doctor');
   return { ...base, checks: Array.isArray(res.data?.checks) ? res.data!.checks : [] };
-}
-
-export async function runBootstrapWorkflow(options: BootstrapWorkflowOptions = {}): Promise<BootstrapWorkflowResult> {
-  const clients = normalizeClients(options.clients);
-  const res = await bffPost<{ results?: BootstrapResultEntry[] }>('/api/v1/integrations/bootstrap', {
-    clients, dryRun: options.dryRun ?? false
-  });
-  const base = bffToCliResult(res, 'bootstrap');
-  return { ...base, dryRun: Boolean(options.dryRun), clients, results: Array.isArray(res.data?.results) ? res.data!.results : [] };
-}
-
-export async function runBootstrapJsonWorkflow(options: BootstrapWorkflowOptions = {}): Promise<BootstrapJsonWorkflowResult> {
-  const clients = normalizeClients(options.clients);
-  const res = await bffPost<BootstrapJsonPayload>('/api/v1/integrations/bootstrap', {
-    clients, dryRun: options.dryRun ?? false
-  });
-  const base = bffToCliResult(res, 'bootstrap-json');
-  return { ...base, payload: res.data ?? null };
-}
-
-export async function runRepairWorkflow(options: WorkflowOptions = {}): Promise<CliRunResult> {
-  const clients = normalizeClients(options.clients);
-  const res = await bffPost<unknown>('/api/v1/runtime/repair', { clients });
-  return bffToCliResult(res, 'repair');
 }
 
 export async function runConnectorStatusWorkflow(options: {
@@ -475,12 +406,18 @@ export async function runConnectorStatusWorkflow(options: {
   const res = await bffGet<Record<string, unknown>>('/api/v1/runtime/status');
   const base = bffToCliResult(res, 'connector-status');
   const data = res.data;
+  const connectors = Array.isArray(data?.connectors) ? data.connectors as Array<Record<string, unknown>> : [];
+  const primaryMachineId = typeof data?.defaultMachineId === 'string'
+    ? data.defaultMachineId as string
+    : (connectors.length > 0 && typeof connectors[0].machineId === 'string' ? connectors[0].machineId : null);
   const payload: Record<string, unknown> | null = data ? {
     posture: data.posture,
     daemon: { running: data.bridgeHealthy },
-    registration: { registered: data.bridgeHealthy, machineId: 'hosted' },
+    registration: { registered: data.bridgeHealthy, machineId: primaryMachineId },
     bridge: { healthy: data.bridgeHealthy },
     cloud: { connected: data.cloudConnected },
+    connectors,
+    defaultMachineId: primaryMachineId,
     runtime: { eventBridgeSupported: true, commandBridgeSupported: true, queue: { pending: 0, backoff: 0 } }
   } : null;
   return { ...base, payload };
@@ -496,38 +433,6 @@ export async function runConnectorRegisterWorkflow(options: { requireCloud?: boo
   return { ...base, payload: res.data ?? null };
 }
 
-export async function runConnectorQueueStatusWorkflow(): Promise<ConnectorQueueStatusWorkflowResult> {
-  const res = await bffGet<Record<string, unknown>>('/api/v1/connector/queue/status');
-  const base = bffToCliResult(res, 'connector-queue-status');
-  return { ...base, payload: res.data ?? null };
-}
-
-export async function runConnectorQueueDrainWorkflow(options: {
-  timeoutMs?: number; strict?: boolean; failOnRetry?: boolean;
-} = {}): Promise<ConnectorQueueDrainWorkflowResult> {
-  const res = await bffPost<Record<string, unknown>>('/api/v1/connector/queue/drain', {
-    timeoutMs: options.timeoutMs ?? 120_000, strict: options.strict ?? false
-  });
-  const base = bffToCliResult(res, 'connector-queue-drain');
-  return { ...base, payload: res.data ?? null };
-}
-
-export async function runConnectorQueuePurgeWorkflow(options: {
-  all?: boolean; olderThanHours?: number; minAttempts?: number; dryRun?: boolean;
-} = {}): Promise<ConnectorQueuePurgeWorkflowResult> {
-  const res = await bffPost<Record<string, unknown>>('/api/v1/connector/queue/purge', options);
-  const base = bffToCliResult(res, 'connector-queue-purge');
-  return { ...base, payload: res.data ?? null };
-}
-
-export async function runConnectorQueueLogsWorkflow(options: {
-  limit?: number; clear?: boolean; dryRun?: boolean;
-} = {}): Promise<ConnectorQueueLogsWorkflowResult> {
-  const res = await bffGet<Record<string, unknown>>('/api/v1/connector/queue/logs', { params: options as Record<string, string> });
-  const base = bffToCliResult(res, 'connector-queue-logs');
-  return { ...base, payload: res.data ?? null };
-}
-
 export async function listAuditEventsAction(contextId?: string | null, limit = 50): Promise<AuditEventEntry[]> {
   const params: Record<string, string> = { limit: String(limit) };
   if (contextId) params.contextId = contextId;
@@ -540,6 +445,7 @@ export async function listRecallFeedbackAction(options: {
   nodeId?: string | null;
   helpful?: boolean;
   limit?: number;
+  machineId?: string | null;
 } = {}): Promise<RecallFeedbackSummary | null> {
   const payload: Record<string, unknown> = {
     method: 'listRecallFeedback',
@@ -548,8 +454,9 @@ export async function listRecallFeedbackAction(options: {
   if (options.contextId) payload.contextId = options.contextId;
   if (options.nodeId) payload.nodeId = options.nodeId;
   if (typeof options.helpful === 'boolean') payload.helpful = options.helpful;
+  if (options.machineId) payload.machineId = options.machineId;
 
-  const res = await bffPost<RecallFeedbackSummary>('/api/v1/runtime/doctor', payload);
+  const res = await bffPost<RecallFeedbackSummary>('/api/v1/runtime/command', payload);
   if (!res.ok || !res.data) return null;
 
   return {
@@ -567,6 +474,7 @@ export async function submitRecallFeedbackAction(input: {
   helpful: boolean;
   reason?: string;
   contextId?: string | null;
+  machineId?: string | null;
 }): Promise<{ ok: boolean } | null> {
   if (!input.nodeId.trim()) return null;
   const payload: Record<string, unknown> = {
@@ -575,69 +483,86 @@ export async function submitRecallFeedbackAction(input: {
     helpful: input.helpful
   };
   if (input.contextId) payload.contextId = input.contextId;
+  if (input.machineId) payload.machineId = input.machineId;
   const reason = input.reason?.trim();
   if (reason) payload.reason = reason;
 
-  const res = await bffPost<{ ok?: boolean }>('/api/v1/runtime/doctor', payload);
+  const res = await bffPost<{ ok?: boolean }>('/api/v1/runtime/command', payload);
   if (!res.ok) return null;
   return { ok: Boolean(res.data?.ok) };
 }
 
-export async function listBackupsAction(): Promise<BackupManifestEntry[]> {
-  const res = await bffGet<BackupManifestEntry[]>('/api/v1/backups');
+export async function listBackupsAction(machineId?: string | null): Promise<BackupManifestEntry[]> {
+  const params: Record<string, string> = {};
+  if (machineId) params.machineId = machineId;
+  const res = await bffGet<BackupManifestEntry[]>('/api/v1/backups', { params });
   return Array.isArray(res.data) ? res.data : [];
 }
 
-export async function createBackupAction(contextId: string, options: { name?: string; encrypted?: boolean } = {}): Promise<BackupManifestEntry | null> {
+export async function createBackupAction(
+  contextId: string,
+  options: { name?: string; encrypted?: boolean } = {},
+  machineId?: string | null
+): Promise<BackupManifestEntry | null> {
   if (!contextId) return null;
-  const res = await bffPost<BackupManifestEntry>('/api/v1/backups', { contextId, name: options.name, encrypted: options.encrypted ?? true });
-  return res.data ?? null;
-}
-
-export async function restoreBackupAction(fileName: string, options: { name?: string } = {}): Promise<RestoreBackupResult | null> {
-  if (!fileName) return null;
-  const res = await bffPost<RestoreBackupResult>('/api/v1/backups', { action: 'restore', fileName, name: options.name });
-  return res.data ?? null;
-}
-
-export async function evaluateCompletionAction(contextId: string, options: { cooldownMs?: number; requiredGates?: string[] } = {}): Promise<CompletionEvaluation | null> {
-  if (!contextId) return null;
-  const res = await bffPost<CompletionEvaluation>('/api/v1/runtime/doctor', {
-    method: 'evaluateCompletion', contextId, cooldownMs: options.cooldownMs, requiredGates: options.requiredGates
+  const res = await bffPost<BackupManifestEntry>('/api/v1/backups', {
+    action: 'create',
+    contextId,
+    machineId: machineId ?? undefined,
+    name: options.name,
+    encrypted: options.encrypted ?? true
   });
   return res.data ?? null;
 }
 
-export async function getSyncPolicyAction(contextId: string): Promise<SyncPolicySnapshot | null> {
-  if (!contextId) return null;
-  const res = await bffGet<SyncPolicySnapshot>(`/api/v1/contexts/${encodeURIComponent(contextId)}/sync-policy`);
+export async function restoreBackupAction(
+  fileName: string,
+  options: { name?: string } = {},
+  machineId?: string | null
+): Promise<RestoreBackupResult | null> {
+  if (!fileName) return null;
+  const res = await bffPost<RestoreBackupResult>('/api/v1/backups', {
+    action: 'restore',
+    fileName,
+    machineId: machineId ?? undefined,
+    name: options.name
+  });
   return res.data ?? null;
 }
 
-export async function setSyncPolicyAction(contextId: string, syncPolicy: SyncPolicy): Promise<SyncPolicySnapshot | null> {
+export async function evaluateCompletionAction(
+  contextId: string,
+  options: { cooldownMs?: number; requiredGates?: string[]; machineId?: string | null } = {}
+): Promise<CompletionEvaluation | null> {
   if (!contextId) return null;
-  const res = await bffPut<SyncPolicySnapshot>(`/api/v1/contexts/${encodeURIComponent(contextId)}/sync-policy`, { syncPolicy });
+  const res = await bffPost<CompletionEvaluation>('/api/v1/runtime/command', {
+    method: 'evaluateCompletion',
+    contextId,
+    cooldownMs: options.cooldownMs,
+    requiredGates: options.requiredGates,
+    machineId: options.machineId ?? undefined
+  });
   return res.data ?? null;
 }
 
-export async function getIntegrationPolicyConfigAction(): Promise<IntegrationPolicyConfigSnapshot> {
-  const defaultValues: Record<IntegrationPolicyConfigKey, boolean> = {
-    'integration.chatgpt.enabled': false,
-    'integration.chatgpt.requireApproval': true,
-    'integration.autoBootstrap': true
-  };
-  const res = await bffPost<Record<string, unknown>>('/api/v1/runtime/doctor', { method: 'getIntegrationPolicyConfig' });
-  if (res.ok && res.data) {
-    const values = res.data.values as Record<IntegrationPolicyConfigKey, boolean> | undefined;
-    return { ok: true, values: values ?? defaultValues, errors: {} };
-  }
-  return { ok: true, values: defaultValues, errors: {} };
+export async function getSyncPolicyAction(contextId: string, machineId?: string | null): Promise<SyncPolicySnapshot | null> {
+  if (!contextId) return null;
+  const params: Record<string, string> = {};
+  if (machineId) params.machineId = machineId;
+  const res = await bffGet<SyncPolicySnapshot>(`/api/v1/contexts/${encodeURIComponent(contextId)}/sync-policy`, { params });
+  return res.data ?? null;
 }
 
-export async function setIntegrationPolicyConfigAction(
-  updates: Partial<Record<IntegrationPolicyConfigKey, boolean>> = {}
-): Promise<IntegrationPolicyConfigSetResult> {
-  await bffPost('/api/v1/runtime/doctor', { method: 'setIntegrationPolicyConfig', updates });
-  const snapshot = await getIntegrationPolicyConfigAction();
-  return { ...snapshot, updatedKeys: Object.keys(updates) as IntegrationPolicyConfigKey[] };
+export async function setSyncPolicyAction(
+  contextId: string,
+  syncPolicy: SyncPolicy,
+  machineId?: string | null
+): Promise<SyncPolicySnapshot | null> {
+  if (!contextId) return null;
+  const res = await bffPut<SyncPolicySnapshot>(`/api/v1/contexts/${encodeURIComponent(contextId)}/sync-policy`, {
+    syncPolicy,
+    machineId: machineId ?? undefined
+  });
+  return res.data ?? null;
 }
+

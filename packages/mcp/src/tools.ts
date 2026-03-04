@@ -409,3 +409,159 @@ export const tools = [
         },
     }
 ];
+
+type ToolScope = 'core' | 'recall' | 'ops';
+export type McpToolProfile = 'all' | ToolScope;
+export type McpToolDefinition = (typeof tools)[number];
+
+const ALL_TOOL_SCOPES: ToolScope[] = ['core', 'recall', 'ops'];
+
+const TOOL_SCOPE_BY_NAME: Record<string, ToolScope> = {
+    // Core graph context workflows
+    ctx_list_contexts: 'core',
+    ctx_create_context: 'core',
+    ctx_switch_context: 'core',
+    ctx_set: 'core',
+    ctx_get: 'core',
+    ctx_query: 'core',
+    ctx_search: 'core',
+    ctx_supersede: 'core',
+    ctx_checkpoint: 'core',
+    ctx_rewind: 'core',
+    ctx_runtime_status: 'core',
+
+    // Recall workflows
+    ctx_recall: 'recall',
+    ctx_recall_temporal: 'recall',
+    ctx_recall_topic: 'recall',
+    ctx_recall_graph: 'recall',
+
+    // Ops / governance / runtime control
+    ctx_health: 'ops',
+    ctx_metrics: 'ops',
+    ctx_sync_policy_get: 'ops',
+    ctx_sync_policy_set: 'ops',
+    ctx_audit_recent: 'ops',
+    ctx_backup_create: 'ops',
+    ctx_backup_list: 'ops',
+    ctx_backup_restore: 'ops',
+    ctx_blackboard_subscribe: 'ops',
+    ctx_blackboard_poll: 'ops',
+    ctx_blackboard_ack: 'ops',
+    ctx_blackboard_state: 'ops',
+    ctx_blackboard_completion: 'ops',
+    ctx_task_claim: 'ops',
+    ctx_task_release: 'ops',
+    ctx_gate_resolve: 'ops',
+    ctx_auth_status: 'ops',
+    ctx_sync_status: 'ops',
+    ctx_sync_now: 'ops',
+};
+
+const PROFILE_SCOPE_EXPANSION: Record<ToolScope, ToolScope[]> = {
+    core: ['core'],
+    recall: ['core', 'recall'],
+    ops: ['core', 'ops'],
+};
+
+export interface ResolvedMcpToolProfile {
+    requested: string;
+    all: boolean;
+    profiles: ToolScope[];
+    scopes: ToolScope[];
+    normalized: string;
+    invalidTokens: string[];
+}
+
+export function resolveMcpToolProfile(raw: string | null | undefined): ResolvedMcpToolProfile {
+    const requested = (raw ?? '').trim();
+    if (requested.length === 0) {
+        return {
+            requested: 'all',
+            all: true,
+            profiles: [],
+            scopes: [...ALL_TOOL_SCOPES],
+            normalized: 'all',
+            invalidTokens: []
+        };
+    }
+
+    const tokens = requested
+        .split(',')
+        .map(token => token.trim().toLowerCase())
+        .filter(token => token.length > 0);
+
+    const profiles = new Set<ToolScope>();
+    const scopes = new Set<ToolScope>();
+    const invalidTokens: string[] = [];
+    let all = false;
+
+    for (const token of tokens) {
+        if (token === 'all') {
+            all = true;
+            continue;
+        }
+        if (token === 'core' || token === 'recall' || token === 'ops') {
+            profiles.add(token);
+            for (const scope of PROFILE_SCOPE_EXPANSION[token]) {
+                scopes.add(scope);
+            }
+            continue;
+        }
+        invalidTokens.push(token);
+    }
+
+    if (all || (profiles.size === 0 && invalidTokens.length > 0)) {
+        return {
+            requested,
+            all: true,
+            profiles: [],
+            scopes: [...ALL_TOOL_SCOPES],
+            normalized: 'all',
+            invalidTokens
+        };
+    }
+
+    if (profiles.size === 0) {
+        return {
+            requested,
+            all: true,
+            profiles: [],
+            scopes: [...ALL_TOOL_SCOPES],
+            normalized: 'all',
+            invalidTokens
+        };
+    }
+
+    return {
+        requested,
+        all: false,
+        profiles: Array.from(profiles).sort(),
+        scopes: Array.from(scopes).sort(),
+        normalized: Array.from(profiles).sort().join(','),
+        invalidTokens
+    };
+}
+
+function toResolvedProfile(profile: ResolvedMcpToolProfile | string | null | undefined): ResolvedMcpToolProfile {
+    if (typeof profile === 'string' || profile === null || profile === undefined) {
+        return resolveMcpToolProfile(profile);
+    }
+    return profile;
+}
+
+export function isToolEnabledForProfile(
+    toolName: string,
+    profile: ResolvedMcpToolProfile | string | null | undefined
+): boolean {
+    const resolved = toResolvedProfile(profile);
+    if (resolved.all) return true;
+    const scope = TOOL_SCOPE_BY_NAME[toolName] ?? 'core';
+    return resolved.scopes.includes(scope);
+}
+
+export function getToolsForProfile(profile: ResolvedMcpToolProfile | string | null | undefined): McpToolDefinition[] {
+    const resolved = toResolvedProfile(profile);
+    if (resolved.all) return [...tools];
+    return tools.filter(tool => isToolEnabledForProfile(tool.name, resolved));
+}

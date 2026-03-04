@@ -34,8 +34,9 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("0ctx status [--json] [--compact]");
         expect(source).toContain("0ctx repair [--clients=...] [--deep] [--json]");
         expect(source).toContain("0ctx logs [--no-open] [--snapshot] [--limit=50] [--since-hours=N] [--grep=text] [--errors-only]");
-        expect(source).toContain("0ctx bootstrap [--dry-run] [--clients=...] [--entrypoint=/path/to/mcp-server.js] [--json]");
-        expect(source).toContain("0ctx install [--clients=all|claude,cursor,windsurf] [--json] [--skip-bootstrap]");
+        expect(source).toContain("0ctx bootstrap [--dry-run] [--clients=...] [--entrypoint=/path/to/mcp-server.js]");
+        expect(source).toContain("[--mcp-profile=all|core|recall|ops] [--json]");
+        expect(source).toContain("0ctx install [--clients=all|claude,cursor,windsurf] [--json] [--skip-bootstrap] [--mcp-profile=all|core|recall|ops]");
         expect(source).toContain("0ctx connector service install|enable|disable|uninstall|status|start|stop|restart");
         expect(source).toContain("0ctx connector status [--json] [--cloud] [--require-bridge]");
         expect(source).toContain("0ctx connector verify [--require-cloud] [--json]");
@@ -49,6 +50,7 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("0ctx recall feedback --node-id=<id> (--helpful|--not-helpful)");
         expect(source).toContain("0ctx recall feedback list|stats [--context-id=<id>] [--node-id=<id>] [--helpful|--not-helpful] [--limit=50] [--json]");
         expect(source).toContain("if (Boolean(flags.validate))");
+        expect(source).toContain("const mcpProfile = parseOptionalStringFlag(flags['mcp-profile'] ?? flags.profile) ?? undefined;");
         expect(source).toContain("result.status === 'failed'");
         expect(source).toContain("Restart your AI client app so it reloads MCP config changes.");
         expect(source).toContain("ops_log_writable");

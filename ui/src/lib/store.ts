@@ -93,6 +93,11 @@ export interface Store {
 
   // Commands
   getQueue(machineId: string, tenantId: string, afterCursor?: number, limit?: number): Promise<Command[]>;
+  listCommands(
+    machineId: string,
+    tenantId: string,
+    options?: { afterCursor?: number; limit?: number; status?: Array<Command['status']> }
+  ): Promise<Command[]>;
   getCommand(commandId: string): Promise<Command | null>;
   enqueueCommand(
     machineId: string,
@@ -178,6 +183,24 @@ export class MemoryStore implements Store {
     const queue = this.commandQueues.get(connectorKey(machineId, tenantId)) ?? [];
     return queue
       .filter(cmd => cmd.status === 'pending' && cmd.cursor > afterCursor)
+      .slice(0, limit);
+  }
+
+  async listCommands(
+    machineId: string,
+    tenantId: string,
+    options: { afterCursor?: number; limit?: number; status?: Array<Command['status']> } = {}
+  ): Promise<Command[]> {
+    const afterCursor = options.afterCursor ?? 0;
+    const limit = options.limit ?? 200;
+    const statuses = options.status && options.status.length > 0
+      ? new Set(options.status)
+      : null;
+    const queue = this.commandQueues.get(connectorKey(machineId, tenantId)) ?? [];
+    return queue
+      .filter(cmd => cmd.cursor > afterCursor)
+      .filter(cmd => (statuses ? statuses.has(cmd.status) : true))
+      .sort((a, b) => a.cursor - b.cursor)
       .slice(0, limit);
   }
 
@@ -443,6 +466,28 @@ export class PrismaStore implements Store {
       },
       orderBy: { cursor: 'asc' },
       take: limit
+    });
+    return rows.map(r => this.toCommand(r));
+  }
+
+  async listCommands(
+    machineId: string,
+    tenantId: string,
+    options: { afterCursor?: number; limit?: number; status?: Array<Command['status']> } = {}
+  ): Promise<Command[]> {
+    const afterCursor = options.afterCursor ?? 0;
+    const limit = options.limit ?? 200;
+    const rows = await this.getClient().command.findMany({
+      where: {
+        machineId,
+        tenantId,
+        ...(options.status && options.status.length > 0
+          ? { status: { in: options.status } }
+          : {}),
+        cursor: { gt: BigInt(afterCursor) }
+      },
+      orderBy: { cursor: 'asc' },
+      take: Math.min(limit, 500)
     });
     return rows.map(r => this.toCommand(r));
   }

@@ -117,4 +117,32 @@ describe('bootstrapMcpRegistration', () => {
             process.chdir(previousCwd);
         }
     });
+
+    it('writes profile args into MCP registration when mcp profile is provided', () => {
+        const root = createTempRoot('0ctx-mcp-bootstrap-');
+        const homeDir = path.join(root, 'home');
+        const appDataDir = path.join(root, 'AppData', 'Roaming');
+        const claudeDir = path.join(appDataDir, 'Claude');
+        const entrypoint = createEntrypoint(root);
+        fs.mkdirSync(claudeDir, { recursive: true });
+
+        const results = bootstrapMcpRegistration({
+            clients: ['claude'],
+            entrypoint,
+            profile: 'ops',
+            platform: 'win32',
+            homeDir,
+            appDataDir
+        });
+
+        expect(results).toHaveLength(1);
+        expect(results[0].status).toBe('created');
+
+        const configPath = path.join(claudeDir, 'claude_desktop_config.json');
+        const config = JSON.parse(fs.readFileSync(configPath, 'utf8')) as {
+            mcpServers: Record<string, { command: string; args: string[] }>;
+        };
+        const server = config.mcpServers['0ctx'];
+        expect(server.args).toEqual([entrypoint, '--profile', 'ops']);
+    });
 });

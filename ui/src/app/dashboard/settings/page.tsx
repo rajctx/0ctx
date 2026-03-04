@@ -48,7 +48,7 @@ type ReadinessStep = {
 const SYNC_POLICY_OPTIONS: SyncPolicy[] = ['local_only', 'metadata_only', 'full_sync'];
 
 export default function SettingsPage() {
-  const { activeContextId, activeContext } = useDashboardState();
+  const { activeContextId, activeContext, selectedMachineId } = useDashboardState();
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [auth, setAuth] = useState<AuthStatusSnapshot | null>(null);
   const [authField, setAuthField] = useState<Record<string, unknown> | null>(null);
@@ -102,8 +102,8 @@ export default function SettingsPage() {
       setRuntimeError(null);
       try {
         const [completionSnapshot, policySnapshot] = await Promise.all([
-          evaluateCompletionAction(activeContextId, { cooldownMs: 30_000 }),
-          getSyncPolicyAction(activeContextId)
+          evaluateCompletionAction(activeContextId, { cooldownMs: 30_000, machineId: selectedMachineId }),
+          getSyncPolicyAction(activeContextId, selectedMachineId)
         ]);
         if (cancelled) return;
         setCompletion(completionSnapshot);
@@ -122,7 +122,7 @@ export default function SettingsPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeContextId]);
+  }, [activeContextId, selectedMachineId]);
 
   const authenticated = auth?.authenticated ?? Boolean(authField?.authenticated);
   const tokenExpired = auth?.tokenExpired ?? Boolean(authField?.tokenExpired);
@@ -228,6 +228,7 @@ export default function SettingsPage() {
         <div className="space-y-2">
           <Row label="Email" value={email ?? '-'} />
           <Row label="Tenant" value={tenantId ?? '-'} />
+          <Row label="Machine" value={selectedMachineId ?? '-'} mono />
           <Row label="Expires" value={expiresAt ? new Date(expiresAt).toLocaleString() : '-'} />
           <Row label="Token file" value="~/.0ctx/auth.json" mono />
         </div>
@@ -254,8 +255,8 @@ export default function SettingsPage() {
               setRuntimeError(null);
               try {
                 const [completionSnapshot, policySnapshot] = await Promise.all([
-                  evaluateCompletionAction(activeContextId, { cooldownMs: 30_000 }),
-                  getSyncPolicyAction(activeContextId)
+                  evaluateCompletionAction(activeContextId, { cooldownMs: 30_000, machineId: selectedMachineId }),
+                  getSyncPolicyAction(activeContextId, selectedMachineId)
                 ]);
                 setCompletion(completionSnapshot);
                 if (policySnapshot) {
@@ -339,7 +340,7 @@ export default function SettingsPage() {
                   setRuntimeError(null);
                   setRuntimeInfo(null);
                   try {
-                    const saved = await setSyncPolicyAction(activeContextId, syncPolicyDraft);
+                    const saved = await setSyncPolicyAction(activeContextId, syncPolicyDraft, selectedMachineId);
                     if (!saved) {
                       setRuntimeError('Failed to save sync policy.');
                       return;

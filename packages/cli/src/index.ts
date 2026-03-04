@@ -379,13 +379,15 @@ async function waitForDaemon(timeoutMs = 10000): Promise<boolean> {
 function runBootstrap(
     clients: SupportedClient[],
     dryRun: boolean,
-    explicitEntrypoint?: string
+    explicitEntrypoint?: string,
+    profile?: string
 ): ReturnType<typeof bootstrapMcpRegistration> {
     return bootstrapMcpRegistration({
         clients,
         dryRun,
         serverName: '0ctx',
-        entrypoint: resolveMcpEntrypointForBootstrap(explicitEntrypoint)
+        entrypoint: resolveMcpEntrypointForBootstrap(explicitEntrypoint),
+        profile
     });
 }
 
@@ -549,6 +551,7 @@ async function commandBootstrap(flags: Record<string, string | boolean>): Promis
     const clients = parseClients(flags.clients);
     const dryRun = Boolean(flags['dry-run']);
     const entrypoint = parseOptionalStringFlag(flags.entrypoint) ?? undefined;
+    const mcpProfile = parseOptionalStringFlag(flags['mcp-profile'] ?? flags.profile) ?? undefined;
 
     if (!Boolean(flags.quiet) && !Boolean(flags.json)) {
         p.intro(color.bgBlue(color.black(' 0ctx bootstrap ')));
@@ -557,7 +560,7 @@ async function commandBootstrap(flags: Record<string, string | boolean>): Promis
     const s = p.spinner();
     if (!Boolean(flags.quiet) && !Boolean(flags.json)) s.start('Applying MCP configurations');
 
-    const results = runBootstrap(clients, dryRun, entrypoint);
+    const results = runBootstrap(clients, dryRun, entrypoint, mcpProfile);
 
     if (!Boolean(flags.quiet) && !Boolean(flags.json)) {
         s.stop('Bootstrap complete');
@@ -567,7 +570,7 @@ async function commandBootstrap(flags: Record<string, string | boolean>): Promis
     }
 
     if (Boolean(flags.json)) {
-        console.log(JSON.stringify({ dryRun, clients, results }, null, 2));
+        console.log(JSON.stringify({ dryRun, clients, mcpProfile: mcpProfile ?? 'all', results }, null, 2));
     }
     return results.some((result: BootstrapResult) => result.status === 'failed') ? 1 : 0;
 }
@@ -2613,9 +2616,10 @@ Usage:
              [--require-cloud] [--wait-cloud-ready]
              [--cloud-wait-timeout-ms=60000] [--cloud-wait-interval-ms=2000]
              [--create-context=<name>] [--dashboard-query[=k=v&...]]
-             [--skip-service] [--skip-bootstrap]
-  0ctx install [--clients=all|claude,cursor,windsurf] [--json] [--skip-bootstrap]
-  0ctx bootstrap [--dry-run] [--clients=...] [--entrypoint=/path/to/mcp-server.js] [--json]
+             [--skip-service] [--skip-bootstrap] [--mcp-profile=all|core|recall|ops]
+  0ctx install [--clients=all|claude,cursor,windsurf] [--json] [--skip-bootstrap] [--mcp-profile=all|core|recall|ops]
+  0ctx bootstrap [--dry-run] [--clients=...] [--entrypoint=/path/to/mcp-server.js]
+                 [--mcp-profile=all|core|recall|ops] [--json]
   0ctx doctor [--json] [--clients=...]
   0ctx status [--json] [--compact]
   0ctx repair [--clients=...] [--deep] [--json]

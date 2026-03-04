@@ -1,6 +1,6 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { tools } from './tools';
+import { getToolsForProfile, isToolEnabledForProfile, resolveMcpToolProfile } from './tools';
 import { sendToDaemon } from './client';
 
 const server = new Server(
@@ -10,7 +10,38 @@ const server = new Server(
 
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 
-server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools }));
+function parseArgValue(flag: string): string | null {
+    const direct = process.argv.find(arg => arg.startsWith(`${flag}=`));
+    if (direct) return direct.slice(flag.length + 1);
+
+    const index = process.argv.findIndex(arg => arg === flag);
+    if (index !== -1 && process.argv[index + 1]) {
+        return process.argv[index + 1];
+    }
+
+    return null;
+}
+
+const requestedToolProfile =
+    parseArgValue('--profile')
+    ?? parseArgValue('--mcp-profile')
+    ?? process.env.CTX_MCP_PROFILE
+    ?? 'all';
+const resolvedToolProfile = resolveMcpToolProfile(requestedToolProfile);
+const activeTools = getToolsForProfile(resolvedToolProfile);
+
+if (resolvedToolProfile.invalidTokens.length > 0) {
+    console.error(
+        `[0ctx-mcp] Ignoring invalid profile tokens: ${resolvedToolProfile.invalidTokens.join(', ')}`
+    );
+}
+if (!resolvedToolProfile.all) {
+    console.error(
+        `[0ctx-mcp] Tool profile active: ${resolvedToolProfile.normalized} (${activeTools.length}/${getToolsForProfile('all').length} tools)`
+    );
+}
+
+server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: activeTools }));
 
 let sessionToken: string | null = null;
 let activeContextId: string | null = null;
@@ -43,6 +74,19 @@ async function callDaemon(method: string, params: Record<string, unknown> = {}):
 server.setRequestHandler(CallToolRequestSchema, async (req: any) => {
     const { name, arguments: rawArgs } = req.params;
     const args = (rawArgs ?? {}) as Record<string, unknown>;
+
+    if (!isToolEnabledForProfile(name, resolvedToolProfile)) {
+        return {
+            _meta: {},
+            toolResult: {
+                content: [{
+                    type: 'text',
+                    text: `Error: Tool '${name}' is disabled by MCP profile '${resolvedToolProfile.normalized}'.`
+                }],
+                isError: true
+            }
+        };
+    }
 
     try {
         switch (name) {

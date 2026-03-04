@@ -21,7 +21,7 @@ function formatBytes(size: number): string {
 }
 
 export default function DashboardBackupsPage() {
-  const { activeContextId, refreshDashboardData } = useDashboardState();
+  const { activeContextId, refreshDashboardData, selectedMachineId } = useDashboardState();
 
   const [backups, setBackups] = useState<BackupManifestEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -34,12 +34,12 @@ export default function DashboardBackupsPage() {
   const refreshBackups = useCallback(async () => {
     setLoading(true);
     try {
-      const next = await listBackupsAction();
+      const next = await listBackupsAction(selectedMachineId);
       setBackups(next);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedMachineId]);
 
   useEffect(() => {
     void refreshBackups();
@@ -67,16 +67,16 @@ export default function DashboardBackupsPage() {
         <Button
           variant="primary"
           size="sm"
-          disabled={!activeContextId || busyKey === 'create'}
+          disabled={!activeContextId || !selectedMachineId || busyKey === 'create'}
           onClick={async () => {
-            if (!activeContextId) return;
+            if (!activeContextId || !selectedMachineId) return;
             setBusyKey('create');
             setMessage(null);
             try {
               const backup = await createBackupAction(activeContextId, {
                 name: backupName.trim() || undefined,
                 encrypted: encryptBackup
-              });
+              }, selectedMachineId);
               if (!backup) {
                 setMessage('Backup creation failed.');
                 return;
@@ -97,6 +97,11 @@ export default function DashboardBackupsPage() {
       {message && (
         <div className="rounded-lg border border-[var(--border-muted)] bg-[var(--surface-subtle)] px-3 py-2 text-xs text-[var(--text-secondary)]">
           {message}
+        </div>
+      )}
+      {!selectedMachineId && (
+        <div className="rounded-lg border border-[var(--danger-border)] bg-[var(--danger-bg)] px-3 py-2 text-xs text-[var(--danger-fg)]">
+          Select an active machine to create or restore backups.
         </div>
       )}
 
@@ -135,7 +140,7 @@ export default function DashboardBackupsPage() {
                   <Button
                     variant="secondary"
                     size="sm"
-                    disabled={busyKey !== null}
+                    disabled={busyKey !== null || !selectedMachineId}
                     onClick={async () => {
                       const confirmRestore = window.confirm(
                         `Restore backup "${backup.fileName}" as a new context?`
@@ -146,7 +151,7 @@ export default function DashboardBackupsPage() {
                       try {
                         const restored = await restoreBackupAction(backup.fileName, {
                           name: restoreName.trim() || undefined
-                        });
+                        }, selectedMachineId);
                         if (!restored) {
                           setMessage(`Failed to restore ${backup.fileName}.`);
                           return;

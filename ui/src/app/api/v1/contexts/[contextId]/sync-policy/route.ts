@@ -2,7 +2,8 @@ import {
   storeExecCommand,
   errorResponse,
   jsonResponse,
-  requireTenantSession
+  requireTenantSession,
+  resolveTenantMachineId
 } from '@/lib/bff';
 import type { SyncPolicy } from '@/lib/bff';
 
@@ -26,9 +27,10 @@ export async function GET(
   }
 
   const url = new URL(request.url);
-  const machineId = url.searchParams.get('machineId');
+  const requestedMachineId = url.searchParams.get('machineId');
+  const machineId = await resolveTenantMachineId(claims, requestedMachineId);
   if (!machineId) {
-    return errorResponse(400, 'invalid_request', 'machineId query param is required');
+    return errorResponse(404, 'no_connector', 'No connector available for this tenant.');
   }
 
   try {
@@ -83,9 +85,10 @@ export async function PUT(
     return errorResponse(400, 'invalid_policy', `syncPolicy must be one of: ${VALID_POLICIES.join(', ')}`);
   }
 
-  const machineId = typeof body.machineId === 'string' ? body.machineId : null;
+  const requestedMachineId = typeof body.machineId === 'string' ? body.machineId : null;
+  const machineId = await resolveTenantMachineId(claims, requestedMachineId);
   if (!machineId) {
-    return errorResponse(400, 'invalid_request', 'machineId is required');
+    return errorResponse(404, 'no_connector', 'No connector available for this tenant.');
   }
 
   try {
@@ -110,3 +113,4 @@ export async function PUT(
     );
   }
 }
+

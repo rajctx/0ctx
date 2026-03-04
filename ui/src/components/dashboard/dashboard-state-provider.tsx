@@ -17,6 +17,7 @@ import {
   getOperationalSnapshot,
   HealthSnapshot,
   MetricsSnapshot,
+  RuntimeConnectorSnapshot
 } from '@/app/actions';
 import type { ContextItem } from '@/lib/graph';
 
@@ -38,6 +39,9 @@ interface DashboardStateValue {
   connectorRegistered: boolean;
   connectorBridgeHealthy: boolean;
   connectorCloudConnected: boolean;
+  availableMachines: RuntimeConnectorSnapshot[];
+  selectedMachineId: string | null;
+  setSelectedMachineId: (machineId: string | null) => void;
   lastHealthCheckAt: number | null;
   refreshTick: number;
   refreshDashboardData: () => Promise<void>;
@@ -77,6 +81,8 @@ export function DashboardStateProvider({ children }: { children: ReactNode }) {
   const [connectorRegistered, setConnectorRegistered] = useState(false);
   const [connectorBridgeHealthy, setConnectorBridgeHealthy] = useState(false);
   const [connectorCloudConnected, setConnectorCloudConnected] = useState(false);
+  const [availableMachines, setAvailableMachines] = useState<RuntimeConnectorSnapshot[]>([]);
+  const [selectedMachineId, setSelectedMachineId] = useState<string | null>(null);
   const [lastHealthCheckAt, setLastHealthCheckAt] = useState<number | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
 
@@ -84,7 +90,7 @@ export function DashboardStateProvider({ children }: { children: ReactNode }) {
     async (preference?: { contextId?: string | null; contextName?: string }) => {
       setIsContextLoading(true);
       try {
-        const contextList = await getContexts();
+        const contextList = await getContexts(selectedMachineId);
         setContexts(contextList);
         setActiveContextId(previous => {
           if (contextList.length === 0) return null;
@@ -107,7 +113,7 @@ export function DashboardStateProvider({ children }: { children: ReactNode }) {
         setIsContextLoading(false);
       }
     },
-    []
+    [selectedMachineId]
   );
 
   // Single API call replaces the previous 4 parallel calls to /api/v1/runtime/status
@@ -117,9 +123,37 @@ export function DashboardStateProvider({ children }: { children: ReactNode }) {
     const registration = asRecord(connectorPayload?.registration);
     const bridge = asRecord(connectorPayload?.bridge);
     const cloud = asRecord(connectorPayload?.cloud);
+    const defaultMachineId = typeof connectorPayload?.defaultMachineId === 'string'
+      ? connectorPayload.defaultMachineId
+      : null;
+    const connectorList = Array.isArray(connectorPayload?.connectors)
+      ? connectorPayload.connectors
+          .filter((item): item is RuntimeConnectorSnapshot => (
+            Boolean(item)
+            && typeof item === 'object'
+            && typeof (item as RuntimeConnectorSnapshot).machineId === 'string'
+          ))
+      : [];
     setHealth(snapshot.health);
     setMetrics(snapshot.metrics);
     setCapabilities(snapshot.capabilities);
+    setAvailableMachines(connectorList);
+    setSelectedMachineId(previous => {
+      if (previous && connectorList.some(connector => connector.machineId === previous)) {
+        return previous;
+      }
+      if (defaultMachineId && connectorList.some(connector => connector.machineId === defaultMachineId)) {
+        return defaultMachineId;
+      }
+      if (connectorList.length === 0) return null;
+      const sorted = [...connectorList].sort((a, b) => {
+        const aTs = typeof a.lastHeartbeatAt === 'number' ? a.lastHeartbeatAt : 0;
+        const bTs = typeof b.lastHeartbeatAt === 'number' ? b.lastHeartbeatAt : 0;
+        if (bTs !== aTs) return bTs - aTs;
+        return a.machineId.localeCompare(b.machineId);
+      });
+      return sorted[0].machineId;
+    });
     setConnectorPosture(typeof connectorPayload?.posture === 'string' ? connectorPayload.posture : 'unknown');
     setConnectorRegistered(registration?.registered === true);
     setConnectorBridgeHealthy(bridge?.healthy === true);
@@ -137,7 +171,7 @@ export function DashboardStateProvider({ children }: { children: ReactNode }) {
       const trimmed = name.trim();
       if (!trimmed) return;
 
-      const created = await createContextAction(trimmed);
+      const created = await createContextAction(trimmed, [], selectedMachineId);
       const contextId =
         created && typeof created === 'object' && 'id' in created && typeof created.id === 'string'
           ? created.id
@@ -152,7 +186,7 @@ export function DashboardStateProvider({ children }: { children: ReactNode }) {
       ]);
       setRefreshTick(current => current + 1);
     },
-    [refreshOperationalState, syncContexts]
+    [refreshOperationalState, selectedMachineId, syncContexts]
   );
 
   useEffect(() => {
@@ -218,6 +252,9 @@ export function DashboardStateProvider({ children }: { children: ReactNode }) {
       connectorRegistered,
       connectorBridgeHealthy,
       connectorCloudConnected,
+      availableMachines,
+      selectedMachineId,
+      setSelectedMachineId,
       lastHealthCheckAt,
       refreshTick,
       refreshDashboardData,
@@ -233,12 +270,14 @@ export function DashboardStateProvider({ children }: { children: ReactNode }) {
       connectorCloudConnected,
       connectorPosture,
       connectorRegistered,
+      availableMachines,
       health,
       isContextLoading,
       lastHealthCheckAt,
       metrics,
       refreshDashboardData,
-      refreshTick
+      refreshTick,
+      selectedMachineId
     ]
   );
 

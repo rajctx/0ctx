@@ -38,7 +38,11 @@ export async function GET(request: Request) {
 
     // Commands from all connectors
     const commandQueues = await Promise.all(
-      connectors.map(c => store.getQueue(c.machineId, tenantId, 0, 200))
+      connectors.map(c => store.listCommands(c.machineId, tenantId, {
+        afterCursor: 0,
+        limit: 200,
+        status: ['pending', 'applied', 'failed']
+      }))
     );
     const allCommands = commandQueues.flat();
 

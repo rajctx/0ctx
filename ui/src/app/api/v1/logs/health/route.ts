@@ -22,7 +22,11 @@ export async function GET() {
 
     // Aggregate command counts across all connectors
     const queueResults = await Promise.all(
-      connectors.map(c => store.getQueue(c.machineId, tenantId, 0, 500))
+      connectors.map(c => store.listCommands(c.machineId, tenantId, {
+        afterCursor: 0,
+        limit: 500,
+        status: ['pending', 'applied', 'failed']
+      }))
     );
     const allCmds = queueResults.flat();
 

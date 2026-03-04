@@ -56,6 +56,7 @@ export default function WorkspaceView() {
   const {
     activeContext,
     activeContextId,
+    selectedMachineId,
     daemonOnline,
     methodCount,
     refreshDashboardData,
@@ -98,7 +99,7 @@ export default function WorkspaceView() {
     setGraphLoading(true);
     setGraphError(null);
     try {
-      const data = await getGraphData(contextId);
+      const data = await getGraphData(contextId, selectedMachineId);
       setGraphData(data ?? INITIAL_GRAPH);
     } catch (error) {
       setGraphError(error instanceof Error ? error.message : 'Failed to fetch graph data.');
@@ -106,7 +107,7 @@ export default function WorkspaceView() {
     } finally {
       setGraphLoading(false);
     }
-  }, []);
+  }, [selectedMachineId]);
 
   useEffect(() => {
     if (!activeContextId) {
@@ -245,7 +246,7 @@ export default function WorkspaceView() {
         .split(',')
         .map(item => item.trim())
         .filter(Boolean);
-      await updateNodeData(activeNodeId, { content: editContent, tags });
+      await updateNodeData(activeNodeId, { content: editContent, tags }, selectedMachineId);
       if (activeContextId) await refreshGraph(activeContextId);
     } finally {
       setIsSaving(false);
@@ -259,18 +260,18 @@ export default function WorkspaceView() {
     );
     if (!confirmed) return;
 
-    await deleteContextAction(activeContext.id);
+    await deleteContextAction(activeContext.id, selectedMachineId);
     await refreshDashboardData();
-  }, [activeContext, refreshDashboardData]);
+  }, [activeContext, refreshDashboardData, selectedMachineId]);
 
   const handleDeleteNode = useCallback(async () => {
     if (!activeContextId || !activeNodeId) return;
     const confirmed = window.confirm('Delete selected node?');
     if (!confirmed) return;
-    await deleteNodeAction(activeContextId, activeNodeId);
+    await deleteNodeAction(activeContextId, activeNodeId, selectedMachineId);
     setActiveNodeId(null);
     await refreshGraph(activeContextId);
-  }, [activeContextId, activeNodeId, refreshGraph]);
+  }, [activeContextId, activeNodeId, refreshGraph, selectedMachineId]);
 
   const toggleTypeVisibility = useCallback((nodeType: NodeType) => {
     setTypeVisibility(previous => ({
@@ -289,7 +290,7 @@ export default function WorkspaceView() {
         content: newContent.trim(),
         tags: tags.length > 0 ? tags : undefined,
         key: newKey.trim() || undefined
-      });
+      }, selectedMachineId);
       if (created) {
         setActiveNodeId(created.id);
       }
@@ -302,7 +303,7 @@ export default function WorkspaceView() {
     } finally {
       setIsCreating(false);
     }
-  }, [activeContextId, newContent, newKey, newTags, newType, refreshGraph]);
+  }, [activeContextId, newContent, newKey, newTags, newType, refreshGraph, selectedMachineId]);
 
   const inspectorContent = (
     <div className="flex h-full flex-col">
