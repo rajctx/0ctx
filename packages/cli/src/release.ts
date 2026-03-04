@@ -1,4 +1,5 @@
 import { spawn } from 'child_process';
+import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
 
@@ -51,6 +52,34 @@ export function validateReleaseVersion(input: string): string {
         throw new Error(`Invalid version '${input}'. Expected vX.Y.Z or vX.Y.Z-prerelease.`);
     }
     return normalized;
+}
+
+const WORKSPACE_PACKAGES = ['core', 'daemon', 'mcp', 'cli'] as const;
+
+export interface VersionBumpResult {
+    bumped: string[];
+    version: string;
+}
+
+export function bumpAllPackageVersions(repoRoot: string, taggedVersion: string): VersionBumpResult {
+    const bareVersion = taggedVersion.startsWith('v') ? taggedVersion.slice(1) : taggedVersion;
+    const bumped: string[] = [];
+
+    for (const pkg of WORKSPACE_PACKAGES) {
+        const pkgJsonPath = path.join(repoRoot, 'packages', pkg, 'package.json');
+        if (!fs.existsSync(pkgJsonPath)) {
+            throw new Error(`Package file not found: ${pkgJsonPath}`);
+        }
+
+        const raw = fs.readFileSync(pkgJsonPath, 'utf-8');
+        const parsed = JSON.parse(raw);
+        const oldVersion = parsed.version;
+        parsed.version = bareVersion;
+        fs.writeFileSync(pkgJsonPath, JSON.stringify(parsed, null, 2) + '\n', 'utf-8');
+        bumped.push(`@0ctx/${pkg} ${oldVersion} → ${bareVersion}`);
+    }
+
+    return { bumped, version: bareVersion };
 }
 
 function getNpmCommand(): string {
@@ -192,6 +221,43 @@ export async function runReleasePublish(options: ReleasePublishOptions): Promise
         steps.push(result);
         return result.ok;
     };
+
+    // --- Version bump (first step) ---
+    {
+        const startedAt = Date.now();
+        try {
+            const bumpResult = bumpAllPackageVersions(repoRoot, version);
+            const stdout = `Bumped versions:\n${bumpResult.bumped.join('\n')}`;
+            if (outputMode === 'inherit') {
+                console.log('');
+                console.log('==> Version bump');
+                console.log(stdout);
+            }
+            steps.push({
+                id: 'version_bump',
+                ok: true,
+                command: 'bumpAllPackageVersions',
+                args: [version],
+                exitCode: 0,
+                stdout,
+                stderr: '',
+                durationMs: Date.now() - startedAt
+            });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            steps.push({
+                id: 'version_bump',
+                ok: false,
+                command: 'bumpAllPackageVersions',
+                args: [version],
+                exitCode: 1,
+                stdout: '',
+                stderr: message,
+                durationMs: Date.now() - startedAt
+            });
+            return { ok: false, repoRoot, version, tag, dryRun, steps };
+        }
+    }
 
     if (!options.skipValidate) {
         const validateArgs: string[] = [];
