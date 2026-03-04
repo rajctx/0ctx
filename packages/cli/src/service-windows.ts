@@ -5,9 +5,41 @@ import { execFileSync, execSync } from 'child_process';
 
 const SERVICE_ID = '0ctx-daemon';
 const SERVICE_DIR = path.join(os.homedir(), '.0ctx', 'service');
-const XML_TEMPLATE_PATH = path.resolve(__dirname, '../../../scripts/service/windows/0ctx-daemon.xml');
 const INSTALLED_XML_PATH = path.join(SERVICE_DIR, `${SERVICE_ID}.xml`);
 const INSTALLED_EXE_PATH = path.join(SERVICE_DIR, `${SERVICE_ID}.exe`);
+const DEFAULT_SERVICE_XML_TEMPLATE = `<service>
+  <!-- Windows Service definition for the 0ctx connector runtime -->
+  <!-- This fallback template is used when no local template file is found -->
+  <!-- The CLI replaces %NODE_PATH% and %CLI_ENTRY% before writing -->
+
+  <id>0ctx-daemon</id>
+  <name>0ctx Connector Runtime</name>
+  <description>0ctx connector runtime - cloud bridge and managed local daemon lifecycle</description>
+
+  <executable>%NODE_PATH%</executable>
+  <arguments>"%CLI_ENTRY%" connector run --quiet</arguments>
+
+  <startmode>Automatic</startmode>
+  <delayedAutoStart>false</delayedAutoStart>
+
+  <!-- Restart on failure: 3 attempts, 5 s delay each -->
+  <onfailure action="restart" delay="5 sec"/>
+  <onfailure action="restart" delay="10 sec"/>
+  <onfailure action="restart" delay="30 sec"/>
+  <resetfailure>1 hour</resetfailure>
+
+  <!-- Log output from the connector runtime process -->
+  <logpath>%USERPROFILE%\\.0ctx\\logs</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>5</keepFiles>
+  </log>
+
+  <!-- Environment passthrough -->
+  <env name="NODE_ENV" value="production"/>
+
+</service>
+`;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -19,6 +51,28 @@ function ensureServiceDir(): void {
 
 function resolveNodePath(): string {
     return process.execPath;
+}
+
+function loadServiceXmlTemplate(): string {
+    const candidates = [
+        // dev/dist in monorepo
+        path.resolve(__dirname, '..', '..', '..', 'scripts', 'service', 'windows', '0ctx-daemon.xml'),
+        path.resolve(process.cwd(), 'scripts', 'service', 'windows', '0ctx-daemon.xml'),
+        // npm package-local fallback if template is bundled next to dist
+        path.resolve(__dirname, '..', 'service', 'windows', '0ctx-daemon.xml'),
+    ];
+
+    for (const candidate of candidates) {
+        try {
+            if (fs.existsSync(candidate)) {
+                return fs.readFileSync(candidate, 'utf8');
+            }
+        } catch {
+            // keep searching
+        }
+    }
+
+    return DEFAULT_SERVICE_XML_TEMPLATE;
 }
 
 function resolveCliEntry(): string {
@@ -131,7 +185,7 @@ export function installService(): void {
     fs.copyFileSync(winswPath, INSTALLED_EXE_PATH);
 
     // Write substituted XML
-    let xml = fs.readFileSync(XML_TEMPLATE_PATH, 'utf8');
+    let xml = loadServiceXmlTemplate();
     xml = xml.replace(/%NODE_PATH%/g, nodePath.replace(/\\/g, '\\\\'));
     xml = xml.replace(/%CLI_ENTRY%/g, cliEntry.replace(/\\/g, '\\\\'));
     fs.writeFileSync(INSTALLED_XML_PATH, xml, 'utf8');

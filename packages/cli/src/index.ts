@@ -135,7 +135,9 @@ function parseArgs(argv: string[]): ParsedArgs {
         const token = tokens[i];
         if (!token.startsWith('--')) continue;
 
-        const [rawKey, rawValue] = token.split('=');
+        const equalsIndex = token.indexOf('=');
+        const rawKey = equalsIndex === -1 ? token : token.slice(0, equalsIndex);
+        const rawValue = equalsIndex === -1 ? undefined : token.slice(equalsIndex + 1);
         const key = rawKey.slice(2);
 
         if (rawValue !== undefined) {
@@ -339,11 +341,28 @@ function resolveCliEntrypoint(): string {
 }
 
 function getHostedDashboardUrl(): string {
+    const normalizeDashboardBaseUrl = (input: string): string => {
+        try {
+            const parsed = new URL(input);
+            const host = parsed.hostname.toLowerCase();
+            const isLegacyHost = host === '0ctx.com' || host === 'www.0ctx.com';
+            const isRootPath = parsed.pathname === '' || parsed.pathname === '/';
+            if (isLegacyHost && isRootPath) {
+                parsed.hostname = 'app.0ctx.com';
+                parsed.pathname = '/';
+                return parsed.toString();
+            }
+            return parsed.toString();
+        } catch {
+            return input;
+        }
+    };
+
     const configured = getConfigValue('ui.url');
     if (typeof configured === 'string' && configured.trim().length > 0) {
-        return configured.trim();
+        return normalizeDashboardBaseUrl(configured.trim());
     }
-    return 'https://app.0ctx.com';
+    return normalizeDashboardBaseUrl('https://app.0ctx.com');
 }
 
 function openUrl(url: string): void {
