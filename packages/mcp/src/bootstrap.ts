@@ -3,7 +3,8 @@ import os from 'os';
 import path from 'path';
 import { resolveMcpToolProfile } from './tools';
 
-type SupportedClient = 'claude' | 'cursor' | 'windsurf';
+type SupportedClient = 'claude' | 'cursor' | 'windsurf' | 'codex' | 'antigravity';
+const SUPPORTED_CLIENTS: SupportedClient[] = ['claude', 'cursor', 'windsurf', 'codex', 'antigravity'];
 
 interface Registration {
     command: string;
@@ -29,15 +30,15 @@ interface BootstrapResult {
 }
 
 function parseClients(raw: string | undefined): SupportedClient[] {
-    const source = (raw || 'claude,cursor,windsurf').trim().toLowerCase();
-    if (source === 'all') return ['claude', 'cursor', 'windsurf'];
+    const source = (raw || SUPPORTED_CLIENTS.join(',')).trim().toLowerCase();
+    if (source === 'all') return SUPPORTED_CLIENTS;
 
     const parsed = source
-        .split(',')
+        .split(/[,\s]+/)
         .map(item => item.trim())
-        .filter((item): item is SupportedClient => item === 'claude' || item === 'cursor' || item === 'windsurf');
+        .filter((item): item is SupportedClient => SUPPORTED_CLIENTS.includes(item as SupportedClient));
 
-    return parsed.length === 0 ? ['claude', 'cursor', 'windsurf'] : parsed;
+    return parsed.length === 0 ? SUPPORTED_CLIENTS : parsed;
 }
 
 function getPlatform(options?: Pick<BootstrapOptions, 'platform'>): NodeJS.Platform {
@@ -120,6 +121,23 @@ function getCandidatePaths(
                 path.join(homeDir, '.config', 'Windsurf', 'User', 'mcp.json'),
                 path.join(homeDir, '.windsurf', 'mcp.json')
             ];
+
+        case 'antigravity':
+            if (platform === 'win32') return [
+                path.join(appDataDir, 'Antigravity', 'User', 'mcp.json'),
+                path.join(homeDir, '.antigravity', 'mcp.json')
+            ];
+            if (platform === 'darwin') return [
+                path.join(homeDir, 'Library', 'Application Support', 'Antigravity', 'User', 'mcp.json'),
+                path.join(homeDir, '.antigravity', 'mcp.json')
+            ];
+            return [
+                path.join(homeDir, '.config', 'Antigravity', 'User', 'mcp.json'),
+                path.join(homeDir, '.antigravity', 'mcp.json')
+            ];
+
+        case 'codex':
+            return [path.join(homeDir, '.codex', 'config.toml')];
     }
 }
 
@@ -150,6 +168,16 @@ function writeJson(pathName: string, value: Record<string, unknown>): void {
     fs.writeFileSync(pathName, JSON.stringify(value, null, 2) + '\n', 'utf8');
 }
 
+function readText(pathName: string): string {
+    if (!fs.existsSync(pathName)) return '';
+    return fs.readFileSync(pathName, 'utf8');
+}
+
+function writeText(pathName: string, value: string): void {
+    fs.mkdirSync(path.dirname(pathName), { recursive: true });
+    fs.writeFileSync(pathName, value, 'utf8');
+}
+
 function upsertServerConfig(
     config: Record<string, unknown>,
     serverName: string,
@@ -170,6 +198,73 @@ function upsertServerConfig(
     nextConfig.mcpServers = servers;
 
     return { changed, nextConfig };
+}
+
+function escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function quoteTomlString(value: string): string {
+    return JSON.stringify(value);
+}
+
+function formatTomlKeySegment(value: string): string {
+    return /^[A-Za-z0-9_-]+$/.test(value) ? value : quoteTomlString(value);
+}
+
+function buildCodexServerBlock(serverName: string, registration: Registration, newline: string): string {
+    return [
+        `[mcp_servers.${formatTomlKeySegment(serverName)}]`,
+        `command = ${quoteTomlString(registration.command)}`,
+        `args = [${registration.args.map(arg => quoteTomlString(arg)).join(', ')}]`
+    ].join(newline);
+}
+
+function upsertCodexServerConfig(
+    rawConfig: string,
+    serverName: string,
+    registration: Registration
+): { changed: boolean; nextConfig: string } {
+    const newline = rawConfig.includes('\r\n') ? '\r\n' : '\n';
+    const lines = rawConfig.length > 0 ? rawConfig.split(/\r?\n/) : [];
+    const escapedServerName = escapeRegExp(serverName);
+    const serverSectionPattern = new RegExp(
+        `^\\s*\\[\\s*mcp_servers\\.(?:${escapedServerName}|"${escapedServerName}")\\s*\\]\\s*$`
+    );
+    const tablePattern = /^\s*\[[^\]]+\]\s*$/;
+    const blockLines = buildCodexServerBlock(serverName, registration, newline).split(newline);
+    let start = -1;
+
+    for (let idx = 0; idx < lines.length; idx += 1) {
+        if (serverSectionPattern.test(lines[idx])) {
+            start = idx;
+            break;
+        }
+    }
+
+    let nextLines: string[];
+    if (start === -1) {
+        nextLines = [...lines];
+        while (nextLines.length > 0 && nextLines[nextLines.length - 1].trim() === '') {
+            nextLines.pop();
+        }
+        if (nextLines.length > 0) {
+            nextLines.push('');
+        }
+        nextLines.push(...blockLines);
+    } else {
+        let end = lines.length;
+        for (let idx = start + 1; idx < lines.length; idx += 1) {
+            if (tablePattern.test(lines[idx])) {
+                end = idx;
+                break;
+            }
+        }
+        nextLines = [...lines.slice(0, start), ...blockLines, ...lines.slice(end)];
+    }
+
+    const nextConfig = nextLines.join(newline).replace(new RegExp(`${newline}*$`), '') + newline;
+    return { changed: nextConfig !== rawConfig, nextConfig };
 }
 
 export function bootstrapMcpRegistration(options: BootstrapOptions): BootstrapResult[] {
@@ -203,16 +298,29 @@ export function bootstrapMcpRegistration(options: BootstrapOptions): BootstrapRe
 
         try {
             const existedBefore = fs.existsSync(targetPath);
-            const current = readJson(targetPath);
-            const { changed, nextConfig } = upsertServerConfig(current, serverName, registration);
+            const isCodexClient = client === 'codex';
+            if (isCodexClient) {
+                const changedResult = upsertCodexServerConfig(readText(targetPath), serverName, registration);
 
-            if (!changed) {
-                results.push({ client, configPath: targetPath, status: 'unchanged' });
-                continue;
-            }
+                if (!changedResult.changed) {
+                    results.push({ client, configPath: targetPath, status: 'unchanged' });
+                    continue;
+                }
 
-            if (!options.dryRun) {
-                writeJson(targetPath, nextConfig);
+                if (!options.dryRun) {
+                    writeText(targetPath, changedResult.nextConfig);
+                }
+            } else {
+                const changedResult = upsertServerConfig(readJson(targetPath), serverName, registration);
+
+                if (!changedResult.changed) {
+                    results.push({ client, configPath: targetPath, status: 'unchanged' });
+                    continue;
+                }
+
+                if (!options.dryRun) {
+                    writeJson(targetPath, changedResult.nextConfig);
+                }
             }
 
             results.push({

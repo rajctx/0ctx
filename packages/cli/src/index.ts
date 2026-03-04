@@ -58,7 +58,7 @@ import { runReleasePublish } from './release';
 import { startLogsServer } from './logs-server';
 import { initTelemetry, captureEvent, shutdownTelemetry } from './telemetry';
 
-type SupportedClient = 'claude' | 'cursor' | 'windsurf';
+type SupportedClient = 'claude' | 'cursor' | 'windsurf' | 'codex' | 'antigravity';
 type CheckStatus = 'pass' | 'warn' | 'fail';
 type BootstrapResult = { client: string; status: string; configPath: string; message?: string };
 
@@ -98,7 +98,7 @@ const SOCKET_PATH = os.platform() === 'win32'
     ? '\\\\.\\pipe\\0ctx.sock'
     : path.join(os.homedir(), '.0ctx', '0ctx.sock');
 
-const SUPPORTED_CLIENTS: SupportedClient[] = ['claude', 'cursor', 'windsurf'];
+const SUPPORTED_CLIENTS: SupportedClient[] = ['claude', 'cursor', 'windsurf', 'codex', 'antigravity'];
 const CLI_VERSION = (() => {
     try {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -124,6 +124,7 @@ function parseArgs(argv: string[]): ParsedArgs {
         || command === 'config'
         || command === 'sync'
         || command === 'connector'
+        || command === 'mcp'
         || command === 'release';
     const tokens = hasSubcommand
         ? rest
@@ -174,7 +175,7 @@ function parseClients(raw: string | boolean | undefined): SupportedClient[] {
     if (normalized === 'all') return SUPPORTED_CLIENTS;
 
     const parsed = normalized
-        .split(',')
+        .split(/[,\s]+/)
         .map(item => item.trim())
         .filter((item): item is SupportedClient => SUPPORTED_CLIENTS.includes(item as SupportedClient));
 
@@ -576,6 +577,119 @@ async function commandBootstrap(flags: Record<string, string | boolean>): Promis
         console.log(JSON.stringify({ dryRun, clients, mcpProfile: mcpProfile ?? 'all', results }, null, 2));
     }
     return results.some((result: BootstrapResult) => result.status === 'failed') ? 1 : 0;
+}
+
+async function commandMcp(subcommand: string | undefined, flags: Record<string, string | boolean>): Promise<number> {
+    const action = (subcommand ?? '').trim().toLowerCase();
+
+    if (action === 'bootstrap') {
+        return commandBootstrap(flags);
+    }
+    if (action === 'setup') {
+        return commandSetup({ ...flags, 'no-open': true });
+    }
+    if (action === 'validate') {
+        return commandSetup({ ...flags, validate: true, 'no-open': true });
+    }
+    if (action && action !== 'wizard') {
+        console.error(`Unknown mcp action: '${action}'`);
+        console.error('Usage: 0ctx mcp [setup|bootstrap|validate]');
+        return 1;
+    }
+
+    const asJson = Boolean(flags.json);
+    const quiet = Boolean(flags.quiet) || asJson;
+
+    // Non-interactive fallback: do a safe MCP bootstrap with sensible defaults.
+    if (quiet || !process.stdin.isTTY || !process.stdout.isTTY) {
+        const nextFlags: Record<string, string | boolean> = { ...flags };
+        if (!nextFlags.clients) nextFlags.clients = 'all';
+        if (!nextFlags['mcp-profile'] && !nextFlags.profile) nextFlags['mcp-profile'] = 'core';
+        return commandBootstrap(nextFlags);
+    }
+
+    const p = await import('@clack/prompts');
+    p.intro(color.bgBlue(color.black(' 0ctx mcp ')));
+
+    const flowChoice = await p.select({
+        message: 'Choose MCP action',
+        options: [
+            { value: 'setup', label: 'Full setup (Recommended)', hint: 'Login + daemon/service + bootstrap + verify' },
+            { value: 'bootstrap', label: 'Bootstrap only', hint: 'Write MCP config to selected AI clients' },
+            { value: 'validate', label: 'Validate', hint: 'Run setup validation checks only' }
+        ]
+    });
+    if (p.isCancel(flowChoice)) {
+        p.cancel('Cancelled.');
+        return 1;
+    }
+
+    const selectedAction = String(flowChoice);
+    const nextFlags: Record<string, string | boolean> = { ...flags };
+
+    const selectedClients = await p.multiselect({
+        message: 'Select AI clients',
+        required: true,
+        options: [
+            { value: 'claude', label: 'Claude Desktop' },
+            { value: 'cursor', label: 'Cursor' },
+            { value: 'windsurf', label: 'Windsurf' },
+            { value: 'codex', label: 'Codex CLI' },
+            { value: 'antigravity', label: 'Antigravity' }
+        ]
+    });
+    if (p.isCancel(selectedClients)) {
+        p.cancel('Cancelled.');
+        return 1;
+    }
+    const clients = (selectedClients as string[])
+        .filter((client): client is SupportedClient => SUPPORTED_CLIENTS.includes(client as SupportedClient));
+    nextFlags.clients = clients.length === SUPPORTED_CLIENTS.length ? 'all' : clients.join(',');
+
+    const selectedProfile = await p.select({
+        message: 'Select MCP tool profile',
+        initialValue: 'core',
+        options: [
+            { value: 'core', label: 'core (Recommended)', hint: 'Graph + context tools' },
+            { value: 'recall', label: 'recall', hint: 'core + recall tools' },
+            { value: 'ops', label: 'ops', hint: 'core + ops/runtime tools' },
+            { value: 'all', label: 'all', hint: 'All MCP tools' }
+        ]
+    });
+    if (p.isCancel(selectedProfile)) {
+        p.cancel('Cancelled.');
+        return 1;
+    }
+    nextFlags['mcp-profile'] = String(selectedProfile);
+
+    if (selectedAction === 'setup') {
+        const openDashboard = await p.confirm({
+            message: 'Open dashboard at end of setup?',
+            initialValue: true
+        });
+        if (p.isCancel(openDashboard)) {
+            p.cancel('Cancelled.');
+            return 1;
+        }
+        if (!openDashboard) {
+            nextFlags['no-open'] = true;
+        }
+    } else {
+        nextFlags['no-open'] = true;
+    }
+
+    const resultCode = selectedAction === 'setup'
+        ? await commandSetup(nextFlags)
+        : selectedAction === 'validate'
+            ? await commandSetup({ ...nextFlags, validate: true })
+            : await commandBootstrap(nextFlags);
+
+    if (resultCode === 0) {
+        p.outro(color.green('MCP command completed.'));
+    } else {
+        p.outro(color.yellow('MCP command finished with issues.'));
+    }
+    return resultCode;
 }
 
 async function commandInstall(flags: Record<string, string | boolean>): Promise<number> {
@@ -2615,14 +2729,19 @@ Usage:
   0ctx shell
   0ctx version [--verbose] [--json]
   0ctx --version | -v
-  0ctx setup [--clients=all|claude,cursor,windsurf] [--no-open] [--json] [--validate]
+  0ctx setup [--clients=all|claude,cursor,windsurf,codex,antigravity] [--no-open] [--json] [--validate]
              [--require-cloud] [--wait-cloud-ready]
              [--cloud-wait-timeout-ms=60000] [--cloud-wait-interval-ms=2000]
              [--create-context=<name>] [--dashboard-query[=k=v&...]]
              [--skip-service] [--skip-bootstrap] [--mcp-profile=all|core|recall|ops]
-  0ctx install [--clients=all|claude,cursor,windsurf] [--json] [--skip-bootstrap] [--mcp-profile=all|core|recall|ops]
+  0ctx install [--clients=all|claude,cursor,windsurf,codex,antigravity] [--json] [--skip-bootstrap] [--mcp-profile=all|core|recall|ops]
   0ctx bootstrap [--dry-run] [--clients=...] [--entrypoint=/path/to/mcp-server.js]
                  [--mcp-profile=all|core|recall|ops] [--json]
+  0ctx mcp [setup|bootstrap|validate]
+  0ctx mcp                     Interactive MCP setup/selection flow
+  0ctx mcp setup [--clients=all|claude,cursor,windsurf,codex,antigravity] [--mcp-profile=all|core|recall|ops] [--no-open]
+  0ctx mcp bootstrap [--dry-run] [--clients=...] [--mcp-profile=all|core|recall|ops]
+  0ctx mcp validate [--clients=...] [--mcp-profile=...]
   0ctx doctor [--json] [--clients=...]
   0ctx status [--json] [--compact]
   0ctx repair [--clients=...] [--deep] [--json]
@@ -2932,6 +3051,9 @@ function resolveCommandOperation(parsed: ParsedArgs): string {
         }
         return parsed.subcommand ? `cli.connector.${parsed.subcommand}` : 'cli.connector';
     }
+    if (parsed.command === 'mcp') {
+        return parsed.subcommand ? `cli.mcp.${parsed.subcommand}` : 'cli.mcp';
+    }
     if (parsed.command === 'daemon') {
         if (parsed.subcommand === 'service') {
             const action = parsed.serviceAction || 'unknown';
@@ -3078,6 +3200,8 @@ async function main(): Promise<number> {
                 return commandInstall(parsed.flags);
             case 'bootstrap':
                 return commandBootstrap(parsed.flags);
+            case 'mcp':
+                return commandMcp(parsed.subcommand, parsed.flags);
             case 'doctor':
                 return commandDoctor(parsed.flags);
             case 'status':

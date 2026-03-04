@@ -8,7 +8,7 @@ import type { ContextItem, GraphNode, GraphPayload } from '@/lib/graph';
 // Shared types (kept for backward compatibility with existing UI components)
 // ---------------------------------------------------------------------------
 
-const SUPPORTED_CLIENTS = ['claude', 'cursor', 'windsurf'] as const;
+const SUPPORTED_CLIENTS = ['claude', 'cursor', 'windsurf', 'codex', 'antigravity'] as const;
 
 export type SupportedClient = (typeof SUPPORTED_CLIENTS)[number];
 export type CheckStatus = 'pass' | 'warn' | 'fail';

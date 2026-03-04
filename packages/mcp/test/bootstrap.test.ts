@@ -145,4 +145,67 @@ describe('bootstrapMcpRegistration', () => {
         const server = config.mcpServers['0ctx'];
         expect(server.args).toEqual([entrypoint, '--profile', 'ops']);
     });
+
+    it('creates Antigravity config using VS Code style User mcp.json location', () => {
+        const root = createTempRoot('0ctx-mcp-bootstrap-');
+        const homeDir = path.join(root, 'home');
+        const appDataDir = path.join(root, 'AppData', 'Roaming');
+        const antigravityUserDir = path.join(appDataDir, 'Antigravity', 'User');
+        const entrypoint = createEntrypoint(root);
+        fs.mkdirSync(antigravityUserDir, { recursive: true });
+
+        const results = bootstrapMcpRegistration({
+            clients: ['antigravity'],
+            entrypoint,
+            platform: 'win32',
+            homeDir,
+            appDataDir
+        });
+
+        expect(results).toHaveLength(1);
+        expect(results[0].status).toBe('created');
+
+        const configPath = path.join(antigravityUserDir, 'mcp.json');
+        const config = JSON.parse(fs.readFileSync(configPath, 'utf8')) as {
+            mcpServers: Record<string, { command: string; args: string[] }>;
+        };
+        expect(config.mcpServers['0ctx']).toBeTruthy();
+        expect(config.mcpServers['0ctx'].args).toEqual([entrypoint]);
+    });
+
+    it('writes Codex MCP server block into ~/.codex/config.toml and stays idempotent', () => {
+        const root = createTempRoot('0ctx-mcp-bootstrap-');
+        const homeDir = path.join(root, 'home');
+        const codexDir = path.join(homeDir, '.codex');
+        const entrypoint = createEntrypoint(root);
+        fs.mkdirSync(codexDir, { recursive: true });
+        fs.writeFileSync(path.join(codexDir, 'config.toml'), 'model = "gpt-5"\n', 'utf8');
+
+        const first = bootstrapMcpRegistration({
+            clients: ['codex'],
+            entrypoint,
+            profile: 'ops',
+            platform: 'win32',
+            homeDir,
+            appDataDir: path.join(root, 'AppData', 'Roaming')
+        });
+        const second = bootstrapMcpRegistration({
+            clients: ['codex'],
+            entrypoint,
+            profile: 'ops',
+            platform: 'win32',
+            homeDir,
+            appDataDir: path.join(root, 'AppData', 'Roaming')
+        });
+
+        expect(first).toHaveLength(1);
+        expect(first[0].status).toBe('updated');
+        expect(second[0].status).toBe('unchanged');
+
+        const configToml = fs.readFileSync(path.join(codexDir, 'config.toml'), 'utf8');
+        expect(configToml).toContain('model = "gpt-5"');
+        expect(configToml).toContain('[mcp_servers.0ctx]');
+        expect(configToml).toContain(`command = ${JSON.stringify(process.execPath)}`);
+        expect(configToml).toContain(`args = [${JSON.stringify(entrypoint)}, "--profile", "ops"]`);
+    });
 });

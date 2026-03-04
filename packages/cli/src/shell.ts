@@ -58,6 +58,10 @@ function getCompletionCandidates(): string[] {
         'setup --validate',
         'install',
         'bootstrap',
+        'mcp',
+        'mcp setup',
+        'mcp bootstrap',
+        'mcp validate',
         'doctor',
         'status',
         'status --json',
@@ -139,6 +143,7 @@ async function printShellHelp(): Promise<void> {
 
     console.log(`\n${color.bold('Get started')}`);
     console.log(`  ${color.green('>')} ${color.cyan('status'.padEnd(35))} ${color.dim('(check daemon and system health)')}`);
+    console.log(`  ${color.green('>')} ${color.cyan('mcp'.padEnd(35))} ${color.dim('(interactive MCP setup flow)')}`);
     console.log(`  ${color.green('>')} ${color.cyan('setup --clients=all'.padEnd(35))} ${color.dim('(configure MCP clients)')}`);
     console.log(`  ${color.green('>')} ${color.cyan('connector status --cloud'.padEnd(35))} ${color.dim('(check cloud connection)')}`);
     console.log(`  ${color.green('>')} ${color.cyan('auth login'.padEnd(35))} ${color.dim('(authenticate with 0ctx)')}`);
@@ -367,7 +372,20 @@ export async function runInteractiveShell(options: ShellOptions): Promise<number
                 continue;
             }
 
-            lastExitCode = await runShellCommand(tokens, options);
+            // Hand terminal input ownership to the child command while it runs.
+            // Without this, nested interactive prompts (e.g. `mcp`) can get
+            // cancelled because both the shell readline instance and child
+            // process compete for stdin.
+            rl.pause();
+            process.stdin.off('keypress', keypressHandler);
+            try {
+                lastExitCode = await runShellCommand(tokens, options);
+            } finally {
+                if ((rl as any).closed !== true) {
+                    rl.resume();
+                    process.stdin.on('keypress', keypressHandler);
+                }
+            }
         }
     } finally {
         process.stdin.off('keypress', keypressHandler);

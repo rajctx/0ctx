@@ -12,6 +12,7 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("case 'doctor'");
         expect(source).toContain("case 'status'");
         expect(source).toContain("case 'version'");
+        expect(source).toContain("case 'mcp'");
         expect(source).toContain("case 'recall'");
         expect(source).toContain("case 'repair'");
         expect(source).toContain("case 'shell'");
@@ -28,7 +29,7 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("0ctx recall [--mode=auto|temporal|topic|graph]");
         expect(source).toContain("[--start] [--json]");
         expect(source).toContain("0ctx release publish --version vX.Y.Z [--tag latest|next] [--otp 123456] [--dry-run] [--json]");
-        expect(source).toContain("0ctx setup [--clients=all|claude,cursor,windsurf] [--no-open] [--json] [--validate]");
+        expect(source).toContain("0ctx setup [--clients=all|claude,cursor,windsurf,codex,antigravity] [--no-open] [--json] [--validate]");
         expect(source).toContain("[--skip-service] [--skip-bootstrap]");
         expect(source).toContain("[--dashboard-query[=k=v&...]]");
         expect(source).toContain("0ctx status [--json] [--compact]");
@@ -36,7 +37,10 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("0ctx logs [--no-open] [--snapshot] [--limit=50] [--since-hours=N] [--grep=text] [--errors-only]");
         expect(source).toContain("0ctx bootstrap [--dry-run] [--clients=...] [--entrypoint=/path/to/mcp-server.js]");
         expect(source).toContain("[--mcp-profile=all|core|recall|ops] [--json]");
-        expect(source).toContain("0ctx install [--clients=all|claude,cursor,windsurf] [--json] [--skip-bootstrap] [--mcp-profile=all|core|recall|ops]");
+        expect(source).toContain("0ctx mcp [setup|bootstrap|validate]");
+        expect(source).toContain("0ctx mcp                     Interactive MCP setup/selection flow");
+        expect(source).toContain("0ctx mcp setup [--clients=all|claude,cursor,windsurf,codex,antigravity] [--mcp-profile=all|core|recall|ops] [--no-open]");
+        expect(source).toContain("0ctx install [--clients=all|claude,cursor,windsurf,codex,antigravity] [--json] [--skip-bootstrap] [--mcp-profile=all|core|recall|ops]");
         expect(source).toContain("0ctx connector service install|enable|disable|uninstall|status|start|stop|restart");
         expect(source).toContain("0ctx connector status [--json] [--cloud] [--require-bridge]");
         expect(source).toContain("0ctx connector verify [--require-cloud] [--json]");
@@ -50,6 +54,7 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("0ctx recall feedback --node-id=<id> (--helpful|--not-helpful)");
         expect(source).toContain("0ctx recall feedback list|stats [--context-id=<id>] [--node-id=<id>] [--helpful|--not-helpful] [--limit=50] [--json]");
         expect(source).toContain("if (Boolean(flags.validate))");
+        expect(source).toContain("return commandMcp(parsed.subcommand, parsed.flags);");
         expect(source).toContain("const mcpProfile = parseOptionalStringFlag(flags['mcp-profile'] ?? flags.profile) ?? undefined;");
         expect(source).toContain("path.resolve(__dirname, 'daemon.js')");
         expect(source).toContain("reinstall/repair the CLI package");

@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     // Empty body is fine.
   }
 
-  const clients = Array.isArray(body.clients) ? body.clients : ['claude', 'cursor', 'windsurf'];
+  const clients = Array.isArray(body.clients) ? body.clients : ['claude', 'cursor', 'windsurf', 'codex', 'antigravity'];
 
   const store = getStore();
   const connectors = await store.getConnectorsByTenant(tenantId);

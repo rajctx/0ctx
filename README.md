@@ -48,7 +48,7 @@ npm run cli -- setup --clients=all --no-open
 0ctx --version
 
 # Bootstrap MCP registrations for supported clients
-0ctx bootstrap --clients=claude,cursor,windsurf
+0ctx bootstrap --clients=claude,cursor,windsurf,codex,antigravity
 0ctx bootstrap --clients=all --json
 0ctx bootstrap --clients=all --dry-run
 
