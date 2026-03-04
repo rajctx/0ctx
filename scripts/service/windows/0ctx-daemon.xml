@@ -20,7 +20,7 @@
   <resetfailure>1 hour</resetfailure>
 
   <!-- Log output from the connector runtime process -->
-  <logpath>%USERPROFILE%\.0ctx\logs</logpath>
+  <logpath>%LOG_PATH%</logpath>
   <log mode="roll-by-size">
     <sizeThreshold>10240</sizeThreshold>
     <keepFiles>5</keepFiles>
@@ -28,5 +28,7 @@
 
   <!-- Environment passthrough -->
   <env name="NODE_ENV" value="production"/>
+  <env name="USERPROFILE" value="%USER_HOME%"/>
+  <env name="HOME" value="%USER_HOME%"/>
 
 </service>

@@ -345,11 +345,13 @@ function getHostedDashboardUrl(): string {
         try {
             const parsed = new URL(input);
             const host = parsed.hostname.toLowerCase();
-            const isLegacyHost = host === '0ctx.com' || host === 'www.0ctx.com';
+            const isLegacyHost = host === '0ctx.com'
+                || host === 'www.0ctx.com'
+                || host === 'app.0ctx.com';
             const isRootPath = parsed.pathname === '' || parsed.pathname === '/';
             if (isLegacyHost && isRootPath) {
-                parsed.hostname = 'app.0ctx.com';
-                parsed.pathname = '/';
+                parsed.hostname = 'www.0ctx.com';
+                parsed.pathname = '/dashboard/workspace';
                 return parsed.toString();
             }
             return parsed.toString();
@@ -362,7 +364,7 @@ function getHostedDashboardUrl(): string {
     if (typeof configured === 'string' && configured.trim().length > 0) {
         return normalizeDashboardBaseUrl(configured.trim());
     }
-    return normalizeDashboardBaseUrl('https://app.0ctx.com');
+    return normalizeDashboardBaseUrl('https://www.0ctx.com/dashboard/workspace');
 }
 
 function openUrl(url: string): void {

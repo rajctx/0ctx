@@ -29,7 +29,7 @@ const DEFAULT_SERVICE_XML_TEMPLATE = `<service>
   <resetfailure>1 hour</resetfailure>
 
   <!-- Log output from the connector runtime process -->
-  <logpath>%USERPROFILE%\\.0ctx\\logs</logpath>
+  <logpath>%LOG_PATH%</logpath>
   <log mode="roll-by-size">
     <sizeThreshold>10240</sizeThreshold>
     <keepFiles>5</keepFiles>
@@ -37,6 +37,8 @@ const DEFAULT_SERVICE_XML_TEMPLATE = `<service>
 
   <!-- Environment passthrough -->
   <env name="NODE_ENV" value="production"/>
+  <env name="USERPROFILE" value="%USER_HOME%"/>
+  <env name="HOME" value="%USER_HOME%"/>
 
 </service>
 `;
@@ -180,19 +182,28 @@ export function installService(): void {
     const nodePath = resolveNodePath();
     const cliEntry = resolveCliEntry();
     const winswPath = resolveWinSW();
+    const userHome = os.homedir();
+    const logDir = path.join(userHome, '.0ctx', 'logs');
+    const escapedNodePath = nodePath.replace(/\\/g, '\\\\');
+    const escapedCliEntry = cliEntry.replace(/\\/g, '\\\\');
+    const escapedLogDir = logDir.replace(/\\/g, '\\\\');
+    const escapedUserHome = userHome.replace(/\\/g, '\\\\');
+
+    // Ensure log dir exists before service install/start.
+    if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
 
     // Copy winsw exe
     fs.copyFileSync(winswPath, INSTALLED_EXE_PATH);
 
     // Write substituted XML
     let xml = loadServiceXmlTemplate();
-    xml = xml.replace(/%NODE_PATH%/g, nodePath.replace(/\\/g, '\\\\'));
-    xml = xml.replace(/%CLI_ENTRY%/g, cliEntry.replace(/\\/g, '\\\\'));
+    xml = xml.replace(/%NODE_PATH%/g, escapedNodePath);
+    xml = xml.replace(/%CLI_ENTRY%/g, escapedCliEntry);
+    xml = xml.replace(/%LOG_PATH%/g, escapedLogDir);
+    xml = xml.replace(/%USER_HOME%/g, escapedUserHome);
+    // Backward compatibility for older templates before %LOG_PATH% existed.
+    xml = xml.split('%USERPROFILE%\\.0ctx\\logs').join(escapedLogDir);
     fs.writeFileSync(INSTALLED_XML_PATH, xml, 'utf8');
-
-    // Ensure log dir exists
-    const logDir = path.join(os.homedir(), '.0ctx', 'logs');
-    if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
 
     runWinSW(INSTALLED_EXE_PATH, ['install']);
     console.log(`Service '${SERVICE_ID}' installed.`);
