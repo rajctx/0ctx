@@ -42,24 +42,46 @@ function resolveCliEntry(): string {
     );
 }
 
+function findWinSWBinary(moduleRoot: string): string | null {
+    try {
+        const binDir = path.join(moduleRoot, 'winsw', 'bin');
+        if (!fs.existsSync(binDir)) return null;
+
+        const candidates = fs.readdirSync(binDir)
+            .filter(file => /^winsw.*\.exe$/i.test(file))
+            .map(file => path.join(binDir, file))
+            .filter(file => fs.existsSync(file));
+
+        return candidates[0] ?? null;
+    } catch {
+        return null;
+    }
+}
+
 function resolveWinSW(): string {
-    // winsw npm package places the exe at node_modules/.bin/winsw.exe or winsw
     const candidates = [
+        // npm global install with nvm/node tends to place @0ctx/cli in:
+        //   <prefix>/node_modules/@0ctx/cli/dist
+        // so ../../.. is the shared node_modules root.
+        findWinSWBinary(path.resolve(__dirname, '..', '..', '..')),
+        // monorepo/local install fallback
+        findWinSWBinary(path.resolve(process.cwd(), 'node_modules')),
         path.resolve(__dirname, '..', '..', '..', 'node_modules', '.bin', 'winsw.exe'),
-        path.resolve(__dirname, '..', '..', '..', 'node_modules', '.bin', 'winsw'),
-        // global npm bin
-        'winsw',
+        (() => {
+            try {
+                const npmRoot = execSync('npm root -g', { encoding: 'utf8', stdio: 'pipe' }).trim();
+                return npmRoot.length > 0 ? findWinSWBinary(npmRoot) : null;
+            } catch {
+                return null;
+            }
+        })(),
     ];
-    for (const c of candidates) {
+
+    for (const c of candidates.filter((candidate): candidate is string => Boolean(candidate))) {
         try {
-            if (c !== 'winsw' && fs.existsSync(c)) return c;
+            if (fs.existsSync(c)) return c;
         } catch { /* skip */ }
     }
-    // try PATH
-    try {
-        execFileSync('winsw', ['version'], { stdio: 'pipe' });
-        return 'winsw';
-    } catch { /* not in PATH */ }
 
     throw new Error(
         'winsw not found. Run: npm install -g winsw  or  npm install --save-optional winsw'
@@ -106,7 +128,7 @@ export function installService(): void {
     const winswPath = resolveWinSW();
 
     // Copy winsw exe
-    fs.copyFileSync(winswPath.endsWith('.exe') ? winswPath : winswPath, INSTALLED_EXE_PATH);
+    fs.copyFileSync(winswPath, INSTALLED_EXE_PATH);
 
     // Write substituted XML
     let xml = fs.readFileSync(XML_TEMPLATE_PATH, 'utf8');

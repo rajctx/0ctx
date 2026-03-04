@@ -3040,6 +3040,23 @@ async function main(): Promise<number> {
                 return runCommandWithOpsSummary('cli.setup', () => commandSetup({}), { command: 'setup', interactive: true });
             }
 
+            // Returning users can still land in a broken state (e.g. daemon
+            // not running, missing service registration after updates). Keep
+            // `0ctx` as a one-command entrypoint by attempting automatic
+            // setup/repair before opening the interactive shell.
+            const daemonPreflight = await isDaemonReachable();
+            if (!daemonPreflight.ok) {
+                console.log(color.bold('\nRuntime needs repair.'));
+                console.log(color.dim('Daemon is unreachable. Running setup automatically...\n'));
+                captureEvent('cli_command_executed', { command: 'setup', interactive: true, reason: 'daemon_unreachable' });
+                const setupCode = await runCommandWithOpsSummary(
+                    'cli.setup.auto_repair',
+                    () => commandSetup({ 'no-open': true }),
+                    { command: 'setup', interactive: true, reason: 'daemon_unreachable' }
+                );
+                if (setupCode !== 0) return setupCode;
+            }
+
             captureEvent('cli_command_executed', { command: 'shell', interactive: true });
             return runCommandWithOpsSummary('cli.shell', () => commandShell(), { command: 'shell', interactive: true });
         }
