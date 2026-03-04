@@ -77,6 +77,13 @@ interface RepairStep {
     details?: Record<string, unknown>;
 }
 
+interface SetupStep {
+    id: string;
+    status: CheckStatus;
+    code: number;
+    message: string;
+}
+
 interface ParsedArgs {
     command: string;
     subcommand?: string;
@@ -183,6 +190,76 @@ async function isDaemonReachable(): Promise<{ ok: boolean; error?: string; healt
             ok: false,
             error: error instanceof Error ? error.message : String(error)
         };
+    }
+}
+
+interface DaemonCapabilityCheck {
+    ok: boolean;
+    reachable: boolean;
+    apiVersion: string | null;
+    methods: string[];
+    missingMethods: string[];
+    error: string | null;
+    recoverySteps: string[];
+}
+
+async function checkDaemonCapabilities(requiredMethods: string[]): Promise<DaemonCapabilityCheck> {
+    const daemon = await isDaemonReachable();
+    if (!daemon.ok) {
+        return {
+            ok: false,
+            reachable: false,
+            apiVersion: null,
+            methods: [],
+            missingMethods: [...requiredMethods],
+            error: daemon.error ?? 'daemon_unreachable',
+            recoverySteps: inferDaemonRecoverySteps(daemon.error)
+        };
+    }
+
+    try {
+        const capabilities = await sendToDaemon('getCapabilities', {}) as { apiVersion?: string; methods?: string[] } | null;
+        const apiVersion = typeof capabilities?.apiVersion === 'string' ? capabilities.apiVersion : null;
+        const methods = Array.isArray(capabilities?.methods) ? capabilities.methods : [];
+        const missingMethods = requiredMethods.filter(method => !methods.includes(method));
+        const versionMismatch = apiVersion !== null && apiVersion !== '2';
+        const ok = !versionMismatch && missingMethods.length === 0;
+        return {
+            ok,
+            reachable: true,
+            apiVersion,
+            methods,
+            missingMethods,
+            error: versionMismatch ? `api_version_mismatch:${apiVersion}` : null,
+            recoverySteps: ['0ctx daemon start', '0ctx connector service restart']
+        };
+    } catch (error) {
+        return {
+            ok: false,
+            reachable: true,
+            apiVersion: null,
+            methods: [],
+            missingMethods: [...requiredMethods],
+            error: error instanceof Error ? error.message : String(error),
+            recoverySteps: ['0ctx daemon start', '0ctx connector service restart']
+        };
+    }
+}
+
+function printCapabilityMismatch(commandLabel: string, check: DaemonCapabilityCheck): void {
+    console.error(`${commandLabel}_unavailable: daemon capability check failed.`);
+    if (check.error) {
+        console.error(`reason: ${check.error}`);
+    }
+    if (check.apiVersion && check.apiVersion !== '2') {
+        console.error(`api_version: ${check.apiVersion} (expected 2)`);
+    }
+    if (check.missingMethods.length > 0) {
+        console.error(`missing_methods: ${check.missingMethods.join(', ')}`);
+    }
+    console.error('Restart daemon/service after updating binaries:');
+    for (const step of check.recoverySteps) {
+        console.error(`  ${step}`);
     }
 }
 
@@ -717,16 +794,8 @@ async function commandRepair(flags: Record<string, string | boolean>): Promise<n
         }
 
         if (deep) {
-            let capabilities: { methods?: string[] } | null = null;
-            let capabilityError: string | null = null;
-            try {
-                capabilities = await sendToDaemon('getCapabilities', {}) as { methods?: string[] } | null;
-            } catch (error) {
-                capabilityError = error instanceof Error ? error.message : String(error);
-            }
-
-            const methods = Array.isArray(capabilities?.methods) ? capabilities.methods : [];
-            const recallReady = methods.includes('recall');
+            const check = await checkDaemonCapabilities(['recall']);
+            const recallReady = check.ok;
             steps.push({
                 id: 'deep_capabilities',
                 status: recallReady ? 'pass' : 'fail',
@@ -735,9 +804,9 @@ async function commandRepair(flags: Record<string, string | boolean>): Promise<n
                     ? 'Daemon capability check passed.'
                     : 'Daemon capabilities are stale (recall missing).',
                 details: {
-                    capabilityError,
-                    methodCount: methods.length,
-                    recoverySteps: recallReady ? [] : ['0ctx daemon start', '0ctx connector service restart', '0ctx recall --start']
+                    capabilityError: check.error,
+                    methodCount: check.methods.length,
+                    recoverySteps: check.recoverySteps
                 }
             });
 
@@ -799,21 +868,14 @@ async function commandRepair(flags: Record<string, string | boolean>): Promise<n
 
     if (deep) {
         p.log.step('Running deep daemon capability checks');
-
-        let capabilities: { methods?: string[] } | null = null;
-        try {
-            capabilities = await sendToDaemon('getCapabilities', {}) as { methods?: string[] } | null;
-        } catch (error) {
-            p.log.warn(`capabilities_check_failed: ${error instanceof Error ? error.message : String(error)}`);
-        }
-
-        const methods = Array.isArray(capabilities?.methods) ? capabilities.methods : [];
-        if (!methods.includes('recall')) {
+        const check = await checkDaemonCapabilities(['recall']);
+        if (!check.ok) {
             p.log.warn('Daemon is running but recall APIs are missing.');
             console.log('\nDeep repair steps:\n');
             console.log('  1. Restart daemon/service so latest daemon binary is active');
-            console.log('     - 0ctx daemon start');
-            console.log('     - or 0ctx connector service restart');
+            for (const step of check.recoverySteps) {
+                console.log(`     - ${step}`);
+            }
             console.log('  2. Re-run: 0ctx status');
             console.log('  3. Verify: 0ctx recall --start\n');
             p.outro(color.yellow('Repair partial (daemon capabilities stale)'));
@@ -844,20 +906,27 @@ async function commandDashboard(flags: Record<string, string | boolean>): Promis
 async function commandLogs(flags: Record<string, string | boolean>): Promise<number> {
     if (Boolean(flags.snapshot)) {
         const limit = parsePositiveIntegerFlag(flags.limit, 50);
+        const sinceHours = parseOptionalPositiveNumberFlag(flags['since-hours']);
+        const grep = parseOptionalStringFlag(flags.grep)?.toLowerCase() ?? null;
+        const errorsOnly = Boolean(flags['errors-only']);
+        const now = Date.now();
+        const sinceCutoff = sinceHours ? now - (sinceHours * 60 * 60 * 1000) : null;
         const daemon = await isDaemonReachable();
-        const queueItems = listQueuedConnectorEvents().slice(0, limit);
+        const queueItemsRaw = listQueuedConnectorEvents();
         const queueStats = getConnectorQueueStats();
-        const opsEntries = readCliOpsLog(limit).reverse();
-        let auditEntries: unknown[] = [];
+        const opsEntriesRaw = readCliOpsLog(Math.max(limit * 3, limit)).reverse();
+        let auditEntriesRaw: Array<Record<string, unknown>> = [];
         let capabilities: unknown = null;
         let syncStatus: unknown = null;
 
         if (daemon.ok) {
             try {
                 const auditResult = await sendToDaemon('listAuditEvents', { limit });
-                auditEntries = Array.isArray(auditResult) ? auditResult : [];
+                auditEntriesRaw = Array.isArray(auditResult)
+                    ? auditResult.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object')
+                    : [];
             } catch {
-                auditEntries = [];
+                auditEntriesRaw = [];
             }
             try {
                 capabilities = await sendToDaemon('getCapabilities', {});
@@ -871,8 +940,61 @@ async function commandLogs(flags: Record<string, string | boolean>): Promise<num
             }
         }
 
+        const matchesSince = (value: number | null): boolean => {
+            if (!sinceCutoff) return true;
+            if (value === null) return false;
+            return value >= sinceCutoff;
+        };
+        const matchesGrep = (entry: unknown): boolean => {
+            if (!grep) return true;
+            try {
+                return JSON.stringify(entry).toLowerCase().includes(grep);
+            } catch {
+                return false;
+            }
+        };
+        const isOpError = (entry: Record<string, unknown>): boolean => {
+            const status = typeof entry.status === 'string' ? entry.status.toLowerCase() : '';
+            return status === 'error' || status === 'fail' || status === 'failed';
+        };
+        const isAuditError = (entry: Record<string, unknown>): boolean => {
+            const result = entry.result;
+            if (!result || typeof result !== 'object') return false;
+            const typed = result as Record<string, unknown>;
+            if (typed.success === false) return true;
+            return typeof typed.error === 'string' && typed.error.length > 0;
+        };
+        const queueItems = queueItemsRaw
+            .filter(item => {
+                if (!matchesSince(typeof item.enqueuedAt === 'number' ? item.enqueuedAt : null)) return false;
+                if (errorsOnly && !(item.lastError || item.attempts > 0)) return false;
+                return matchesGrep(item);
+            })
+            .slice(0, limit);
+        const opsEntries = opsEntriesRaw
+            .filter(entry => {
+                if (!matchesSince(typeof entry.timestamp === 'number' ? entry.timestamp : null)) return false;
+                if (errorsOnly && !isOpError(entry as unknown as Record<string, unknown>)) return false;
+                return matchesGrep(entry);
+            })
+            .slice(0, limit);
+        const auditEntries = auditEntriesRaw
+            .filter(entry => {
+                const createdAt = typeof entry.createdAt === 'number' ? entry.createdAt : null;
+                if (!matchesSince(createdAt)) return false;
+                if (errorsOnly && !isAuditError(entry)) return false;
+                return matchesGrep(entry);
+            })
+            .slice(0, limit);
+
         console.log(JSON.stringify({
             timestamp: new Date().toISOString(),
+            filters: {
+                limit,
+                sinceHours,
+                grep,
+                errorsOnly
+            },
             daemon: {
                 reachable: daemon.ok,
                 error: daemon.ok ? null : (daemon.error ?? 'unknown'),
@@ -886,13 +1008,19 @@ async function commandLogs(flags: Record<string, string | boolean>): Promise<num
                 queuePath: getConnectorQueuePath(),
                 queue: {
                     stats: queueStats,
-                    sample: queueItems
+                    sample: queueItems,
+                    filteredCount: queueItems.length,
+                    totalCount: queueItemsRaw.length
                 }
             },
             logs: {
                 opsPath: getCliOpsLogPath(),
                 opsEntries,
-                auditEntries
+                auditEntries,
+                filtered: {
+                    opsCount: opsEntries.length,
+                    auditCount: auditEntries.length
+                }
             }
         }, null, 2));
         return 0;
@@ -918,7 +1046,130 @@ async function commandLogs(flags: Record<string, string | boolean>): Promise<num
     return 0;
 }
 
-async function commandRecall(flags: Record<string, string | boolean>): Promise<number> {
+async function commandRecallFeedback(flags: Record<string, string | boolean>, positionalArgs: string[] = []): Promise<number> {
+    const action = (positionalArgs[1] ?? '').toLowerCase();
+    const asJson = Boolean(flags.json);
+    const contextId = getContextIdFlag(flags);
+    const nodeIdFilter = parseOptionalStringFlag(flags['node-id'] ?? flags.nodeId);
+    const helpfulFlag = Boolean(flags.helpful);
+    const notHelpfulFlag = Boolean(flags['not-helpful']);
+
+    if (action === 'list' || action === 'ls' || action === 'stats' || Boolean(flags.list) || Boolean(flags.stats)) {
+        if (helpfulFlag && notHelpfulFlag) {
+            console.error("Use only one feedback filter: '--helpful' or '--not-helpful'.");
+            return 1;
+        }
+
+        const helpfulFilter = helpfulFlag ? true : (notHelpfulFlag ? false : undefined);
+        const limit = parsePositiveIntegerFlag(flags.limit, 50);
+        const check = await checkDaemonCapabilities(['listRecallFeedback']);
+        if (!check.ok) {
+            printCapabilityMismatch('recall_feedback_list', check);
+            return 1;
+        }
+
+        try {
+            const result = await sendToDaemon('listRecallFeedback', {
+                contextId,
+                limit,
+                nodeId: nodeIdFilter,
+                helpful: helpfulFilter
+            }) as {
+                contextId?: string | null;
+                total?: number;
+                helpfulCount?: number;
+                notHelpfulCount?: number;
+                nodeSummary?: Array<{ nodeId: string; helpful: number; notHelpful: number; netScore: number; lastFeedbackAt: number }>;
+                items?: Array<{ nodeId: string; helpful: boolean; reason?: string | null; createdAt?: number }>;
+            };
+
+            if (asJson) {
+                console.log(JSON.stringify(result, null, 2));
+                return 0;
+            }
+
+            const statsOnly = action === 'stats' || Boolean(flags.stats);
+            console.log('\nRecall Feedback List\n');
+            console.log(`  context_id:    ${String(result.contextId ?? contextId ?? 'active/global')}`);
+            console.log(`  total:         ${result.total ?? 0}`);
+            console.log(`  helpful:       ${result.helpfulCount ?? 0}`);
+            console.log(`  not_helpful:   ${result.notHelpfulCount ?? 0}`);
+            if (!statsOnly && Array.isArray(result.items) && result.items.length > 0) {
+                console.log('\n  recent_feedback:');
+                for (const item of result.items.slice(0, 10)) {
+                    const ts = typeof item.createdAt === 'number' ? new Date(item.createdAt).toISOString() : 'n/a';
+                    console.log(`    node=${item.nodeId} helpful=${item.helpful} at=${ts}`);
+                }
+            }
+            if (Array.isArray(result.nodeSummary) && result.nodeSummary.length > 0) {
+                console.log('\n  top_nodes:');
+                for (const node of result.nodeSummary.slice(0, 10)) {
+                    const ts = typeof node.lastFeedbackAt === 'number' ? new Date(node.lastFeedbackAt).toISOString() : 'n/a';
+                    console.log(`    node=${node.nodeId} net=${node.netScore} helpful=${node.helpful} not_helpful=${node.notHelpful} last=${ts}`);
+                }
+            }
+            console.log('');
+            return 0;
+        } catch (error) {
+            console.error('recall_feedback_list_failed:', error instanceof Error ? error.message : String(error));
+            return 1;
+        }
+    }
+
+    const nodeId = nodeIdFilter;
+    if (!nodeId) {
+        console.error("Missing required '--node-id' for recall feedback.");
+        return 1;
+    }
+    if (helpfulFlag === notHelpfulFlag) {
+        console.error("Provide exactly one of '--helpful' or '--not-helpful' for recall feedback.");
+        return 1;
+    }
+
+    const reason = parseOptionalStringFlag(flags.reason);
+    const helpful = helpfulFlag && !notHelpfulFlag;
+
+    const check = await checkDaemonCapabilities(['recallFeedback']);
+    if (!check.ok) {
+        printCapabilityMismatch('recall_feedback', check);
+        return 1;
+    }
+
+    try {
+        const result = await sendToDaemon('recallFeedback', {
+            contextId,
+            nodeId,
+            helpful,
+            reason
+        }) as Record<string, unknown>;
+
+        if (asJson) {
+            console.log(JSON.stringify(result, null, 2));
+        } else {
+            console.log('\nRecall Feedback\n');
+            console.log(`  node_id:      ${String(result.nodeId ?? nodeId)}`);
+            console.log(`  helpful:      ${String(result.helpful ?? helpful)}`);
+            if (reason) {
+                console.log(`  reason:       ${reason}`);
+            }
+            if (contextId) {
+                console.log(`  context_id:   ${contextId}`);
+            }
+            console.log(`  recorded_at:  ${typeof result.recordedAt === 'number' ? new Date(result.recordedAt).toISOString() : 'n/a'}`);
+            console.log('');
+        }
+        return 0;
+    } catch (error) {
+        console.error('recall_feedback_failed:', error instanceof Error ? error.message : String(error));
+        return 1;
+    }
+}
+
+async function commandRecall(flags: Record<string, string | boolean>, positionalArgs: string[] = []): Promise<number> {
+    if ((positionalArgs[0] ?? '').toLowerCase() === 'feedback') {
+        return commandRecallFeedback(flags, positionalArgs);
+    }
+
     const modeRaw = parseOptionalStringFlag(flags.mode) ?? 'auto';
     const mode = modeRaw.toLowerCase();
     const validModes = new Set(['auto', 'temporal', 'topic', 'graph']);
@@ -938,13 +1189,9 @@ async function commandRecall(flags: Record<string, string | boolean>): Promise<n
     const effectiveMode = startBrief ? 'auto' : mode;
 
     try {
-        const capabilities = await sendToDaemon('getCapabilities', {}) as { methods?: string[] } | null;
-        const methods = Array.isArray(capabilities?.methods) ? capabilities?.methods : [];
-        if (!methods.includes('recall')) {
-            console.error('recall_unavailable: connected daemon does not support recall methods.');
-            console.error('Restart daemon/service after updating binaries:');
-            console.error('  0ctx daemon start');
-            console.error('  or 0ctx connector service restart');
+        const check = await checkDaemonCapabilities(['recall']);
+        if (!check.ok) {
+            printCapabilityMismatch('recall', check);
             return 1;
         }
 
@@ -1049,10 +1296,15 @@ async function commandRecall(flags: Record<string, string | boolean>): Promise<n
     } catch (error) {
         const text = error instanceof Error ? error.message : String(error);
         if (text.includes('Unknown method: recall')) {
-            console.error('recall_unavailable: daemon does not recognize recall APIs.');
-            console.error('Restart daemon/service after build/update and retry.');
-            console.error('  0ctx daemon start');
-            console.error('  or 0ctx connector service restart');
+            printCapabilityMismatch('recall', {
+                ok: false,
+                reachable: true,
+                apiVersion: null,
+                methods: [],
+                missingMethods: ['recall'],
+                error: text,
+                recoverySteps: ['0ctx daemon start', '0ctx connector service restart']
+            });
             return 1;
         }
         console.error('recall_failed:', text);
@@ -1135,6 +1387,13 @@ function parsePositiveNumberFlag(value: string | boolean | undefined, fallback: 
     if (typeof value !== 'string') return fallback;
     const parsed = Number(value);
     if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+    return parsed;
+}
+
+function parseOptionalPositiveNumberFlag(value: string | boolean | undefined): number | null {
+    if (typeof value !== 'string') return null;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed <= 0) return null;
     return parsed;
 }
 
@@ -1973,7 +2232,145 @@ async function commandConnector(action: string | undefined, flags: Record<string
     return commandDaemonService(action);
 }
 
+function statusToCode(status: CheckStatus): number {
+    return status === 'fail' ? 1 : 0;
+}
+
+async function commandSetupValidate(flags: Record<string, string | boolean>): Promise<number> {
+    const asJson = Boolean(flags.json);
+    const quiet = Boolean(flags.quiet) || asJson;
+    const requireCloud = Boolean(flags['require-cloud']);
+    const waitCloudReady = Boolean(flags['wait-cloud-ready']);
+    const cloudWaitTimeoutMs = parsePositiveIntegerFlag(flags['cloud-wait-timeout-ms'], 60_000);
+    const cloudWaitIntervalMs = parsePositiveIntegerFlag(flags['cloud-wait-interval-ms'], 2_000);
+    const steps: SetupStep[] = [];
+
+    const token = resolveToken();
+    steps.push({
+        id: 'auth_login',
+        status: token ? 'pass' : 'fail',
+        code: token ? 0 : 1,
+        message: token ? 'Authentication available.' : 'No active authentication session found.'
+    });
+
+    const registration = readConnectorState();
+    steps.push({
+        id: 'connector_state',
+        status: registration ? 'pass' : 'warn',
+        code: 0,
+        message: registration
+            ? 'Connector registration state exists.'
+            : 'Connector registration state not found (setup will need to register this machine).'
+    });
+
+    try {
+        const { checks } = await collectDoctorChecks({ ...flags, json: false });
+        for (const check of checks) {
+            steps.push({
+                id: `doctor_${check.id}`,
+                status: check.status,
+                code: statusToCode(check.status),
+                message: check.message
+            });
+        }
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        steps.push({
+            id: 'doctor_checks',
+            status: 'fail',
+            code: 1,
+            message: `Doctor checks failed to execute: ${message}`
+        });
+    }
+
+    const verifyFlags = {
+        ...flags,
+        quiet: true,
+        json: false,
+        'require-cloud': requireCloud,
+        cloud: requireCloud
+    };
+    const verifyCode = await commandConnector('verify', verifyFlags);
+    steps.push({
+        id: 'connector_verify',
+        status: verifyCode === 0 ? 'pass' : 'fail',
+        code: verifyCode,
+        message: verifyCode === 0 ? 'Connector verification passed.' : 'Connector verification failed.'
+    });
+
+    if (waitCloudReady || requireCloud) {
+        if (!token || !registration) {
+            steps.push({
+                id: 'cloud_ready',
+                status: 'fail',
+                code: 1,
+                message: 'Cloud-ready validation requires both authentication and connector registration.'
+            });
+        } else {
+            const waitStartedAt = Date.now();
+            let attempts = 0;
+            let ready = false;
+            while (Date.now() - waitStartedAt < cloudWaitTimeoutMs) {
+                attempts += 1;
+                const cloudVerifyCode = await commandConnector('verify', {
+                    ...flags,
+                    quiet: true,
+                    json: false,
+                    'require-cloud': true,
+                    cloud: true
+                });
+                if (cloudVerifyCode === 0) {
+                    ready = true;
+                    break;
+                }
+                await sleepMs(cloudWaitIntervalMs);
+            }
+
+            const elapsedMs = Date.now() - waitStartedAt;
+            steps.push({
+                id: 'cloud_ready',
+                status: ready ? 'pass' : 'fail',
+                code: ready ? 0 : 1,
+                message: ready
+                    ? `Cloud-ready posture confirmed after ${attempts} attempt(s) in ${elapsedMs}ms.`
+                    : `Cloud-ready posture not confirmed within ${elapsedMs}ms (${attempts} attempt(s)).`
+            });
+        }
+    }
+
+    const ok = steps.every(step => step.status !== 'fail');
+    const dashboardUrl = getHostedDashboardUrl();
+
+    if (asJson) {
+        console.log(JSON.stringify({
+            ok,
+            mode: 'validate',
+            steps,
+            dashboardUrl
+        }, null, 2));
+        return ok ? 0 : 1;
+    }
+
+    if (!quiet) {
+        console.log('\nSetup Validation\n');
+        for (const step of steps) {
+            console.log(`  ${step.status.padEnd(4)} ${step.id}: ${step.message}`);
+        }
+        console.log('');
+        if (!ok) {
+            console.log('Validation failed. Fix the failed checks, then run: 0ctx setup');
+            console.log('');
+        }
+    }
+
+    return ok ? 0 : 1;
+}
+
 async function commandSetup(flags: Record<string, string | boolean>): Promise<number> {
+    if (Boolean(flags.validate)) {
+        return commandSetupValidate(flags);
+    }
+
     const asJson = Boolean(flags.json);
     const quiet = Boolean(flags.quiet) || asJson;
     const skipService = Boolean(flags['skip-service']);
@@ -1984,12 +2381,7 @@ async function commandSetup(flags: Record<string, string | boolean>): Promise<nu
     const cloudWaitIntervalMs = parsePositiveIntegerFlag(flags['cloud-wait-interval-ms'], 2_000);
     const createContextName = parseOptionalStringFlag(flags['create-context']);
     const dashboardQueryInput = flags['dashboard-query'];
-    const steps: Array<{
-        id: string;
-        status: 'pass' | 'warn' | 'fail';
-        code: number;
-        message: string;
-    }> = [];
+    const steps: SetupStep[] = [];
 
     if (!quiet) {
         console.log('Running setup workflow...');
@@ -2217,7 +2609,7 @@ Usage:
   0ctx shell
   0ctx version [--verbose] [--json]
   0ctx --version | -v
-  0ctx setup [--clients=all|claude,cursor,windsurf] [--no-open] [--json]
+  0ctx setup [--clients=all|claude,cursor,windsurf] [--no-open] [--json] [--validate]
              [--require-cloud] [--wait-cloud-ready]
              [--cloud-wait-timeout-ms=60000] [--cloud-wait-interval-ms=2000]
              [--create-context=<name>] [--dashboard-query[=k=v&...]]
@@ -2227,8 +2619,10 @@ Usage:
   0ctx doctor [--json] [--clients=...]
   0ctx status [--json] [--compact]
   0ctx repair [--clients=...] [--deep] [--json]
-  0ctx logs [--no-open] [--snapshot] [--limit=50]
+  0ctx logs [--no-open] [--snapshot] [--limit=50] [--since-hours=N] [--grep=text] [--errors-only]
   0ctx recall [--mode=auto|temporal|topic|graph] [--query="..."] [--since-hours=24] [--limit=10] [--depth=2] [--max-nodes=30] [--start] [--json]
+  0ctx recall feedback --node-id=<id> (--helpful|--not-helpful) [--reason="..."] [--context-id=<id>] [--json]
+  0ctx recall feedback list|stats [--context-id=<id>] [--node-id=<id>] [--helpful|--not-helpful] [--limit=50] [--json]
   0ctx dashboard [--no-open] [--dashboard-query=k=v&...]
   0ctx release publish --version vX.Y.Z [--tag latest|next] [--otp 123456] [--dry-run] [--json]
   0ctx daemon start
@@ -2263,7 +2657,7 @@ Connector:
   0ctx connector queue drain [--max-batches=10] [--batch-size=200] [--wait] [--strict|--fail-on-retry] [--timeout-ms=120000] [--poll-ms=1000] [--json]
   0ctx connector queue purge [--all|--older-than-hours=N|--min-attempts=N] [--dry-run|--confirm] [--json]
   0ctx connector queue logs [--limit=50] [--json] [--clear --confirm|--dry-run]
-  0ctx connector logs [--service|--system] [--no-open] [--snapshot] [--limit=50]
+  0ctx connector logs [--service|--system] [--no-open] [--snapshot] [--limit=50] [--since-hours=N] [--grep=text] [--errors-only]
 
 Service management compatibility (requires Admin on Windows):
   Both command paths manage the same underlying OS service.
@@ -2669,7 +3063,7 @@ async function main(): Promise<number> {
             case 'version':
                 return commandVersion(parsed.flags);
             case 'recall':
-                return commandRecall(parsed.flags);
+                return commandRecall(parsed.flags, parsed.positionalArgs);
             case 'auth': {
                 const sub = parsed.subcommand;
                 if (sub === 'login') return commandAuthLogin(parsed.flags);

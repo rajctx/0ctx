@@ -219,6 +219,62 @@ describe('daemon request handling', () => {
         }
     });
 
+    it('records recall feedback as an audit event', () => {
+        const { db, graph } = createGraph();
+        try {
+            const session = handleRequest(graph, 'conn-feedback', { method: 'createSession' }, runtime()) as { sessionToken: string };
+            const context = handleRequest(graph, 'conn-feedback', {
+                method: 'createContext',
+                sessionToken: session.sessionToken,
+                params: { name: 'recall-feedback-context' }
+            }, runtime()) as { id: string };
+
+            const node = handleRequest(graph, 'conn-feedback', {
+                method: 'addNode',
+                sessionToken: session.sessionToken,
+                params: { type: 'artifact', content: 'Recall target node for feedback' }
+            }, runtime()) as { id: string };
+
+            const feedback = handleRequest(graph, 'conn-feedback', {
+                method: 'recallFeedback',
+                sessionToken: session.sessionToken,
+                params: {
+                    contextId: context.id,
+                    nodeId: node.id,
+                    helpful: true,
+                    reason: 'top result matched user intent'
+                }
+            }, runtime()) as { ok: boolean; nodeId: string; helpful: boolean };
+
+            const audit = handleRequest(graph, 'conn-feedback', {
+                method: 'listAuditEvents',
+                sessionToken: session.sessionToken,
+                params: { contextId: context.id, limit: 20 }
+            }, runtime()) as Array<{ action: string; payload?: Record<string, unknown> }>;
+            const listed = handleRequest(graph, 'conn-feedback', {
+                method: 'listRecallFeedback',
+                sessionToken: session.sessionToken,
+                params: { contextId: context.id, limit: 10 }
+            }, runtime()) as {
+                total: number;
+                helpfulCount: number;
+                notHelpfulCount: number;
+                items: Array<{ nodeId: string; helpful: boolean }>;
+            };
+
+            expect(feedback.ok).toBe(true);
+            expect(feedback.nodeId).toBe(node.id);
+            expect(feedback.helpful).toBe(true);
+            expect(audit.some(event => event.action === 'recall_feedback')).toBe(true);
+            expect(listed.total).toBeGreaterThanOrEqual(1);
+            expect(listed.helpfulCount).toBeGreaterThanOrEqual(1);
+            expect(listed.notHelpfulCount).toBe(0);
+            expect(listed.items.some(item => item.nodeId === node.id && item.helpful)).toBe(true);
+        } finally {
+            db.close();
+        }
+    });
+
     it('records and polls blackboard events via subscriptions', () => {
         const { db, graph } = createGraph();
         const events = new EventRuntime();

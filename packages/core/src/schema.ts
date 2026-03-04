@@ -62,7 +62,8 @@ export type AuditAction =
     | 'rewind'
     | 'create_backup'
     | 'restore_backup'
-    | 'set_sync_policy';
+    | 'set_sync_policy'
+    | 'recall_feedback';
 
 export interface AuditMetadata {
     actor?: string | null;

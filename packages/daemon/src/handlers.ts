@@ -1,4 +1,4 @@
-import type { Graph, AuditAction, AuditMetadata, SearchResult } from '@0ctx/core';
+import type { Graph, AuditAction, AuditMetadata, AuditEntry, SearchResult } from '@0ctx/core';
 import type { DaemonRequest } from './protocol';
 import {
     clearConnectionContext,
@@ -150,6 +150,77 @@ function parseDepth(value: unknown, fallback = 2): number {
     return Math.max(1, Math.min(5, Math.floor(value)));
 }
 
+interface RecallFeedbackSignal {
+    nodeId: string;
+    helpful: boolean;
+    reason: string | null;
+    createdAt: number;
+    contextId: string | null;
+    actor: string | null;
+    source: string | null;
+}
+
+function parseRecallFeedbackSignal(entry: AuditEntry): RecallFeedbackSignal | null {
+    if (entry.action !== 'recall_feedback') return null;
+    if (!entry.payload || typeof entry.payload !== 'object') return null;
+
+    const payload = entry.payload as Record<string, unknown>;
+    const payloadParams = payload.params && typeof payload.params === 'object'
+        ? payload.params as Record<string, unknown>
+        : payload;
+    const nodeId = typeof payloadParams.nodeId === 'string' ? payloadParams.nodeId.trim() : '';
+    if (!nodeId) return null;
+    const helpful = typeof payloadParams.helpful === 'boolean' ? payloadParams.helpful : null;
+    if (helpful === null) return null;
+    const reason = typeof payloadParams.reason === 'string' && payloadParams.reason.trim().length > 0
+        ? payloadParams.reason.trim()
+        : null;
+
+    return {
+        nodeId,
+        helpful,
+        reason,
+        createdAt: entry.createdAt,
+        contextId: entry.contextId ?? null,
+        actor: entry.actor ?? null,
+        source: entry.source ?? null
+    };
+}
+
+function collectRecallFeedbackSignals(
+    graph: Graph,
+    contextId: string,
+    limit = 500
+): Map<string, { helpful: number; notHelpful: number; netAdjustment: number; lastFeedbackAt: number }> {
+    const events = graph.listAuditEvents(contextId, limit);
+    const map = new Map<string, { helpful: number; notHelpful: number; netAdjustment: number; lastFeedbackAt: number }>();
+
+    for (const event of events) {
+        const parsed = parseRecallFeedbackSignal(event);
+        if (!parsed) continue;
+
+        const existing = map.get(parsed.nodeId) ?? {
+            helpful: 0,
+            notHelpful: 0,
+            netAdjustment: 0,
+            lastFeedbackAt: 0
+        };
+        if (parsed.helpful) {
+            existing.helpful += 1;
+        } else {
+            existing.notHelpful += 1;
+        }
+        existing.lastFeedbackAt = Math.max(existing.lastFeedbackAt, parsed.createdAt);
+
+        // Stronger penalty for negative feedback to avoid repeating bad recalls.
+        const rawNet = (existing.helpful * 6) - (existing.notHelpful * 9);
+        existing.netAdjustment = Math.max(-30, Math.min(24, rawNet));
+        map.set(parsed.nodeId, existing);
+    }
+
+    return map;
+}
+
 function extractAuditTargetId(entry: { payload?: Record<string, unknown>; result?: Record<string, unknown> | null }): string | null {
     const payload = (entry.payload && typeof entry.payload === 'object') ? entry.payload : {};
     const result = (entry.result && typeof entry.result === 'object') ? entry.result : {};
@@ -262,25 +333,45 @@ function getTopicHits(
     limit: number,
     sinceHours: number
 ): SearchResult[] {
+    const feedbackByNode = collectRecallFeedbackSignals(graph, contextId);
+    const applyFeedback = (hits: SearchResult[]): SearchResult[] => {
+        if (hits.length === 0 || feedbackByNode.size === 0) return hits;
+        const rescored = hits.map(hit => {
+            const signal = feedbackByNode.get(hit.node.id);
+            if (!signal) return hit;
+            return {
+                ...hit,
+                score: Math.max(0, Number((hit.score + signal.netAdjustment).toFixed(2)))
+            };
+        });
+        rescored.sort((a, b) => {
+            if (b.score !== a.score) return b.score - a.score;
+            return b.node.createdAt - a.node.createdAt;
+        });
+        return rescored.slice(0, limit);
+    };
+
     const withAdvanced = graph as Graph & {
         searchAdvanced?: (contextId: string, query: string, options?: { limit?: number; sinceMs?: number; includeSuperseded?: boolean }) => SearchResult[];
     };
 
     if (typeof withAdvanced.searchAdvanced === 'function') {
-        return withAdvanced.searchAdvanced(contextId, query, {
+        const hits = withAdvanced.searchAdvanced(contextId, query, {
             limit,
             sinceMs: sinceHours * 60 * 60 * 1000,
             includeSuperseded: false
         });
+        return applyFeedback(hits);
     }
 
     const legacyNodes = graph.search(contextId, query, limit);
-    return legacyNodes.map((node, idx) => ({
+    const hits: SearchResult[] = legacyNodes.map((node, idx): SearchResult => ({
         node,
         score: Math.max(0, 100 - idx * 10),
         matchReason: 'exact_term',
         matchedTerms: query.toLowerCase().match(/[a-z0-9_]+/g) ?? []
     }));
+    return applyFeedback(hits);
 }
 
 function buildGraphRecall(
@@ -414,18 +505,18 @@ export function handleRequest(
     if (req.method === 'getCapabilities') {
         return {
             apiVersion: '2',
-            features: ['sessions', 'health', 'capabilities', 'audit_logs', 'audit_verify', 'metrics', 'backup_restore', 'auth', 'sync', 'sync_policies', 'blackboard_events', 'task_leases', 'quality_gates', 'recall'],
+            features: ['sessions', 'health', 'capabilities', 'audit_logs', 'audit_verify', 'metrics', 'backup_restore', 'auth', 'sync', 'sync_policies', 'blackboard_events', 'task_leases', 'quality_gates', 'recall', 'recall_feedback'],
             methods: [
                 'listContexts', 'createContext', 'deleteContext', 'switchContext', 'getActiveContext',
                 'addNode', 'getNode', 'updateNode', 'getByKey', 'deleteNode',
                 'addEdge', 'getSubgraph', 'search', 'getGraphData',
                 'saveCheckpoint', 'rewind', 'listCheckpoints',
                 'createSession', 'refreshSession', 'health', 'getCapabilities', 'metricsSnapshot',
-                'listAuditEvents', 'createBackup', 'listBackups', 'restoreBackup',
+                'listAuditEvents', 'listRecallFeedback', 'createBackup', 'listBackups', 'restoreBackup',
                 'auth/status', 'syncStatus', 'syncNow', 'getSyncPolicy', 'setSyncPolicy',
                 'subscribeEvents', 'unsubscribeEvents', 'listSubscriptions', 'pollEvents', 'ackEvent',
                 'getBlackboardState', 'evaluateCompletion', 'claimTask', 'releaseTask', 'resolveGate',
-                'recallTemporal', 'recallTopic', 'recallGraph', 'recall'
+                'recallTemporal', 'recallTopic', 'recallGraph', 'recall', 'recallFeedback'
             ]
         };
     }
@@ -647,6 +738,66 @@ export function handleRequest(
         return graph.listAuditEvents(explicitContextId ?? undefined, limit);
     }
 
+    if (req.method === 'listRecallFeedback') {
+        const explicitContextId = getContextIdFromParams(params);
+        const feedbackContextId = explicitContextId ?? contextId ?? undefined;
+        const limit = parsePositiveInt(params.limit, 50, 500);
+        const nodeIdFilter = typeof params.nodeId === 'string' && params.nodeId.trim().length > 0
+            ? params.nodeId.trim()
+            : null;
+        const helpfulFilter = typeof params.helpful === 'boolean' ? params.helpful : null;
+
+        const events = graph
+            .listAuditEvents(feedbackContextId, Math.max(limit * 10, 200))
+            .filter(event => event.action === 'recall_feedback');
+
+        const items = events
+            .map(event => parseRecallFeedbackSignal(event))
+            .filter((signal): signal is RecallFeedbackSignal => Boolean(signal))
+            .filter(signal => (nodeIdFilter ? signal.nodeId === nodeIdFilter : true))
+            .filter(signal => (helpfulFilter === null ? true : signal.helpful === helpfulFilter))
+            .slice(0, limit);
+
+        const nodeSummary = new Map<string, {
+            nodeId: string;
+            helpful: number;
+            notHelpful: number;
+            netScore: number;
+            lastFeedbackAt: number;
+        }>();
+        for (const item of items) {
+            const current = nodeSummary.get(item.nodeId) ?? {
+                nodeId: item.nodeId,
+                helpful: 0,
+                notHelpful: 0,
+                netScore: 0,
+                lastFeedbackAt: 0
+            };
+            if (item.helpful) {
+                current.helpful += 1;
+            } else {
+                current.notHelpful += 1;
+            }
+            current.netScore = current.helpful - current.notHelpful;
+            current.lastFeedbackAt = Math.max(current.lastFeedbackAt, item.createdAt);
+            nodeSummary.set(item.nodeId, current);
+        }
+
+        const helpfulCount = items.filter(item => item.helpful).length;
+        const notHelpfulCount = items.length - helpfulCount;
+
+        return {
+            contextId: feedbackContextId ?? null,
+            total: items.length,
+            helpfulCount,
+            notHelpfulCount,
+            nodeSummary: Array.from(nodeSummary.values())
+                .sort((a, b) => b.netScore - a.netScore || b.lastFeedbackAt - a.lastFeedbackAt)
+                .slice(0, 20),
+            items
+        };
+    }
+
     if (req.method === 'recallTemporal') {
         const sinceHours = parsePositiveHours(params.sinceHours, 24);
         const limit = parsePositiveInt(params.limit, 10, 100);
@@ -793,6 +944,51 @@ export function handleRequest(
             topic,
             graph: graphRecall,
             recommendations
+        };
+    }
+
+    if (req.method === 'recallFeedback') {
+        const nodeId = typeof params.nodeId === 'string' ? params.nodeId.trim() : '';
+        if (!nodeId) {
+            throw new Error("Missing required 'nodeId' for recallFeedback.");
+        }
+        const helpful = typeof params.helpful === 'boolean' ? params.helpful : null;
+        if (helpful === null) {
+            throw new Error("Missing required boolean 'helpful' for recallFeedback.");
+        }
+        const reason = typeof params.reason === 'string' && params.reason.trim().length > 0
+            ? params.reason.trim()
+            : null;
+        const feedbackContextId = getContextIdFromParams(params) ?? contextId;
+        const metadata = toAuditMetadata(connectionId, req, params);
+        const recordedAt = Date.now();
+
+        graph.recordAuditEvent({
+            action: 'recall_feedback',
+            contextId: feedbackContextId,
+            payload: {
+                method: req.method,
+                params: {
+                    nodeId,
+                    helpful,
+                    reason,
+                    contextId: feedbackContextId
+                }
+            },
+            result: {
+                accepted: true,
+                recordedAt
+            },
+            metadata
+        });
+
+        return {
+            ok: true,
+            nodeId,
+            helpful,
+            reason,
+            contextId: feedbackContextId,
+            recordedAt
         };
     }
 

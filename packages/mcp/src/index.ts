@@ -332,7 +332,13 @@ server.setRequestHandler(CallToolRequestSchema, async (req: any) => {
         }
     } catch (e: any) {
         const message = String(e?.message ?? e);
-        if (message.includes('Unknown method: recall') || message.includes('Unknown method: recallTopic') || message.includes('Unknown method: recallTemporal') || message.includes('Unknown method: recallGraph')) {
+        if (
+            message.includes('Unknown method: recall')
+            || message.includes('Unknown method: recallTopic')
+            || message.includes('Unknown method: recallTemporal')
+            || message.includes('Unknown method: recallGraph')
+            || message.includes('Unknown method: recallFeedback')
+        ) {
             return {
                 _meta: {},
                 toolResult: {

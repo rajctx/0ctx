@@ -55,6 +55,7 @@ function getBestSuggestion(line: string, completions: string[]): string {
 function getCompletionCandidates(): string[] {
     const commands = [
         'setup',
+        'setup --validate',
         'install',
         'bootstrap',
         'doctor',
@@ -63,9 +64,14 @@ function getCompletionCandidates(): string[] {
         'status --compact',
         'version',
         'recall',
+        'recall feedback --node-id=',
+        'recall feedback list',
+        'recall feedback stats',
         'repair',
         'repair --deep',
         'repair --json',
+        'logs --snapshot',
+        'logs --snapshot --errors-only',
         'dashboard',
         'shell',
         'release publish',
