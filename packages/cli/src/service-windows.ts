@@ -142,8 +142,8 @@ function resolveWinSW(): string {
     );
 }
 
-function runWinSW(winswPath: string, args: string[]): void {
-    execFileSync(winswPath, [INSTALLED_EXE_PATH, ...args], { stdio: 'inherit' });
+function runWinSW(serviceExePath: string, args: string[]): void {
+    execFileSync(serviceExePath, args, { stdio: 'inherit' });
 }
 
 function scQuery(): string {
