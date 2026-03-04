@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CheckCircle2,
   Gauge,
@@ -18,6 +18,9 @@ import {
   evaluateCompletionAction,
   getAuthStatus,
   getHealth,
+  runConnectorVerifyWorkflow,
+  runDoctorWorkflow,
+  runStatusWorkflow,
   getSyncPolicyAction,
   setSyncPolicyAction,
   SyncPolicy
@@ -26,6 +29,7 @@ import { useDashboardState } from '@/components/dashboard/dashboard-state-provid
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Panel } from '@/components/ui/panel';
+import { cn } from '@/lib/ui';
 
 type AuthStatusSnapshot = {
   authenticated: boolean;
@@ -33,6 +37,12 @@ type AuthStatusSnapshot = {
   tenantId: string | null;
   expiresAt: number | null;
   tokenExpired: boolean;
+};
+
+type ReadinessStep = {
+  id: string;
+  status: 'pass' | 'warn' | 'fail';
+  message: string;
 };
 
 const SYNC_POLICY_OPTIONS: SyncPolicy[] = ['local_only', 'metadata_only', 'full_sync'];
@@ -50,6 +60,8 @@ export default function SettingsPage() {
   const [syncPolicyBusy, setSyncPolicyBusy] = useState(false);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
   const [runtimeInfo, setRuntimeInfo] = useState<string | null>(null);
+  const [readinessBusy, setReadinessBusy] = useState(false);
+  const [readinessSteps, setReadinessSteps] = useState<ReadinessStep[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -123,6 +135,56 @@ export default function SettingsPage() {
     () => (completion?.reasons && completion.reasons.length > 0 ? completion.reasons[0] : null),
     [completion?.reasons]
   );
+
+  const runReadinessCheck = useCallback(async () => {
+    setReadinessBusy(true);
+    setReadinessSteps([]);
+    try {
+      const [authSnapshot, statusResult, doctorResult, connectorResult] = await Promise.all([
+        getAuthStatus(),
+        runStatusWorkflow(),
+        runDoctorWorkflow(),
+        runConnectorVerifyWorkflow({ requireCloud: true })
+      ]);
+
+      const steps: ReadinessStep[] = [];
+      steps.push({
+        id: 'auth',
+        status: authSnapshot?.authenticated ? 'pass' : 'fail',
+        message: authSnapshot?.authenticated
+          ? `Authenticated as ${authSnapshot.email ?? 'user'}`
+          : 'Not authenticated'
+      });
+
+      const posture = statusResult.summary?.posture ?? 'unknown';
+      steps.push({
+        id: 'runtime',
+        status: posture === 'connected' ? 'pass' : (posture === 'degraded' ? 'warn' : 'fail'),
+        message: `Runtime posture: ${posture}`
+      });
+
+      const failedChecks = doctorResult.checks.filter(check => check.status === 'fail').length;
+      const warnedChecks = doctorResult.checks.filter(check => check.status === 'warn').length;
+      steps.push({
+        id: 'doctor',
+        status: failedChecks > 0 ? 'fail' : (warnedChecks > 0 ? 'warn' : 'pass'),
+        message: `Doctor checks: ${doctorResult.checks.length} total, ${failedChecks} fail, ${warnedChecks} warn`
+      });
+
+      const connectorPayload = connectorResult.payload ?? {};
+      const cloud = connectorPayload.cloud as Record<string, unknown> | undefined;
+      const cloudConnected = Boolean(cloud?.connected);
+      steps.push({
+        id: 'cloud',
+        status: cloudConnected ? 'pass' : 'warn',
+        message: cloudConnected ? 'Connector cloud bridge connected' : 'Connector cloud bridge not connected'
+      });
+
+      setReadinessSteps(steps);
+    } finally {
+      setReadinessBusy(false);
+    }
+  }, []);
 
   return (
     <div className="space-y-6 p-4 md:p-6">
@@ -311,6 +373,51 @@ export default function SettingsPage() {
         )}
       </Panel>
 
+      <Panel className="space-y-3 p-5">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Gauge className="h-4 w-4 text-[var(--text-muted)]" />
+            <p className="text-sm font-semibold text-[var(--text-primary)]">Readiness Check</p>
+          </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={readinessBusy}
+            onClick={() => {
+              void runReadinessCheck();
+            }}
+          >
+            {readinessBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            Run Check
+          </Button>
+        </div>
+
+        {readinessSteps.length === 0 ? (
+          <p className="text-xs text-[var(--text-muted)]">
+            Run a one-click check for auth, daemon posture, doctor checks, and cloud bridge health.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {readinessSteps.map(step => (
+              <div
+                key={step.id}
+                className={cn(
+                  'rounded-lg border px-3 py-2 text-xs',
+                  step.status === 'pass'
+                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+                    : step.status === 'warn'
+                      ? 'border-amber-500/30 bg-amber-500/10 text-amber-200'
+                      : 'border-rose-500/30 bg-rose-500/10 text-rose-200'
+                )}
+              >
+                <span className="mr-2 uppercase tracking-[0.08em]">{step.id}</span>
+                {step.message}
+              </div>
+            ))}
+          </div>
+        )}
+      </Panel>
+
       <Panel className="p-5">
         <div className="mb-4 flex items-center gap-2">
           <Terminal className="h-4 w-4 text-[var(--text-muted)]" />
@@ -318,10 +425,12 @@ export default function SettingsPage() {
         </div>
         <div className="space-y-2 rounded-xl bg-[var(--surface-subtle)] p-4 font-mono text-sm">
           <CliLine cmd="0ctx auth login" comment="# device-code login flow" />
+          <CliLine cmd="0ctx setup --validate --json" comment="# preflight runtime validation" />
           <CliLine cmd="0ctx auth status --json" comment="# machine-readable auth state" />
           <CliLine cmd="0ctx sync policy get --context-id=<id>" comment="# inspect policy" />
           <CliLine cmd="0ctx sync policy set metadata_only --context-id=<id>" comment="# update policy" />
           <CliLine cmd="0ctx connector status --cloud --json" comment="# connector posture" />
+          <CliLine cmd="0ctx recall feedback list --json --limit=20" comment="# ranking feedback summary" />
         </div>
       </Panel>
 

@@ -167,6 +167,30 @@ export interface AuditEventEntry {
   createdAt: number;
 }
 
+export interface RecallFeedbackItem {
+  nodeId: string;
+  helpful: boolean;
+  reason?: string | null;
+  createdAt?: number;
+}
+
+export interface RecallFeedbackNodeSummary {
+  nodeId: string;
+  helpful: number;
+  notHelpful: number;
+  netScore: number;
+  lastFeedbackAt: number;
+}
+
+export interface RecallFeedbackSummary {
+  contextId?: string | null;
+  total: number;
+  helpfulCount: number;
+  notHelpfulCount: number;
+  nodeSummary: RecallFeedbackNodeSummary[];
+  items: RecallFeedbackItem[];
+}
+
 export interface BackupManifestEntry {
   fileName: string;
   filePath: string;
@@ -509,6 +533,54 @@ export async function listAuditEventsAction(contextId?: string | null, limit = 5
   if (contextId) params.contextId = contextId;
   const res = await bffGet<AuditEventEntry[]>('/api/v1/audit', { params });
   return Array.isArray(res.data) ? res.data : [];
+}
+
+export async function listRecallFeedbackAction(options: {
+  contextId?: string | null;
+  nodeId?: string | null;
+  helpful?: boolean;
+  limit?: number;
+} = {}): Promise<RecallFeedbackSummary | null> {
+  const payload: Record<string, unknown> = {
+    method: 'listRecallFeedback',
+    limit: options.limit ?? 50
+  };
+  if (options.contextId) payload.contextId = options.contextId;
+  if (options.nodeId) payload.nodeId = options.nodeId;
+  if (typeof options.helpful === 'boolean') payload.helpful = options.helpful;
+
+  const res = await bffPost<RecallFeedbackSummary>('/api/v1/runtime/doctor', payload);
+  if (!res.ok || !res.data) return null;
+
+  return {
+    contextId: res.data.contextId ?? null,
+    total: Number(res.data.total ?? 0),
+    helpfulCount: Number(res.data.helpfulCount ?? 0),
+    notHelpfulCount: Number(res.data.notHelpfulCount ?? 0),
+    nodeSummary: Array.isArray(res.data.nodeSummary) ? res.data.nodeSummary : [],
+    items: Array.isArray(res.data.items) ? res.data.items : []
+  };
+}
+
+export async function submitRecallFeedbackAction(input: {
+  nodeId: string;
+  helpful: boolean;
+  reason?: string;
+  contextId?: string | null;
+}): Promise<{ ok: boolean } | null> {
+  if (!input.nodeId.trim()) return null;
+  const payload: Record<string, unknown> = {
+    method: 'recallFeedback',
+    nodeId: input.nodeId.trim(),
+    helpful: input.helpful
+  };
+  if (input.contextId) payload.contextId = input.contextId;
+  const reason = input.reason?.trim();
+  if (reason) payload.reason = reason;
+
+  const res = await bffPost<{ ok?: boolean }>('/api/v1/runtime/doctor', payload);
+  if (!res.ok) return null;
+  return { ok: Boolean(res.data?.ok) };
 }
 
 export async function listBackupsAction(): Promise<BackupManifestEntry[]> {

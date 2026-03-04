@@ -36,8 +36,15 @@ const ROUTE_ITEMS = [
     href: '/dashboard/audit',
     id: 'audit',
     label: 'Audit',
-    subtitle: 'Audit Events',
+    subtitle: 'Audit + Feedback',
     icon: History
+  },
+  {
+    href: '/dashboard/recall',
+    id: 'recall',
+    label: 'Recall',
+    subtitle: 'Trends + Ranking',
+    icon: Activity
   },
   {
     href: '/dashboard/backups',
