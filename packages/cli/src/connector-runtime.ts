@@ -151,6 +151,7 @@ export interface ConnectorRuntimeDependencies {
             commandId: string;
             cursor: number;
             status: 'applied' | 'failed';
+            result?: unknown;
             error?: string;
         }
     ): Promise<{ ok: boolean; error?: string; statusCode: number }>;
@@ -777,6 +778,7 @@ export async function runConnectorRuntimeCycle(
                                 ?? (typeof command.params?.contextId === 'string' ? command.params.contextId : null);
                             let status: 'applied' | 'failed' = 'applied';
                             let errorText: string | undefined;
+                            let commandResult: unknown;
 
                             if (!isMethodAllowedForCloudCommand(command.method)) {
                                 status = 'failed';
@@ -791,7 +793,7 @@ export async function runConnectorRuntimeCycle(
                                     errorText = 'command_blocked_by_sync_policy_local_only';
                                 } else {
                                     try {
-                                        await deps.applyDaemonCommand(daemonSessionToken, command.method, command.params ?? {});
+                                        commandResult = await deps.applyDaemonCommand(daemonSessionToken, command.method, command.params ?? {});
                                     } catch (error) {
                                         status = 'failed';
                                         errorText = error instanceof Error ? error.message : String(error);
@@ -805,6 +807,7 @@ export async function runConnectorRuntimeCycle(
                                 commandId: command.commandId,
                                 cursor: command.cursor,
                                 status,
+                                ...(status === 'applied' ? { result: commandResult } : {}),
                                 ...(errorText ? { error: errorText } : {})
                             });
 

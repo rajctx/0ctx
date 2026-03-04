@@ -104,6 +104,7 @@ export interface ConnectorCommandAckPayload {
     commandId: string;
     cursor: number;
     status: 'applied' | 'failed';
+    result?: unknown;
     error?: string;
 }
 

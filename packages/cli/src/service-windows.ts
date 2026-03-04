@@ -173,6 +173,12 @@ function requireAdmin(): void {
     }
 }
 
+function sleepSync(ms: number): void {
+    // Cross-shell pause without invoking platform-specific timeout binaries.
+    const lock = new Int32Array(new SharedArrayBuffer(4));
+    Atomics.wait(lock, 0, 0, ms);
+}
+
 // ─── Public API (called from CLI index.ts) ────────────────────────────────────
 
 export function installService(): void {
@@ -263,7 +269,7 @@ export function restartService(): void {
         execSync(`sc stop "${SERVICE_ID}"`, { stdio: 'pipe' });
     } catch { /* may already be stopped */ }
     // Brief pause to allow the service to stop
-    execSync('timeout /t 2 /nobreak', { stdio: 'pipe' });
+    sleepSync(2000);
     execSync(`sc start "${SERVICE_ID}"`, { stdio: 'inherit' });
     console.log(`Service '${SERVICE_ID}' restarted.`);
 }

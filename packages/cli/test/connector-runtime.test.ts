@@ -370,7 +370,7 @@ describe('connector runtime cycle', () => {
 
     it('fetches and applies cloud commands, then advances command cursor', async () => {
         let appliedMethods: string[] = [];
-        let acked: Array<{ commandId: string; status: string }> = [];
+        let acked: Array<{ commandId: string; status: string; result?: unknown }> = [];
         let stored: ConnectorState | null = null;
         const deps = createBaseDeps({
             readConnectorState: () => ({
@@ -419,10 +419,10 @@ describe('connector runtime cycle', () => {
             }),
             applyDaemonCommand: async (_session, method) => {
                 appliedMethods.push(method);
-                return { ok: true };
+                return { ok: true, method };
             },
             ackConnectorCommand: async (_token, payload) => {
-                acked.push({ commandId: payload.commandId, status: payload.status });
+                acked.push({ commandId: payload.commandId, status: payload.status, result: payload.result });
                 return { ok: true, statusCode: 200 };
             },
             writeConnectorState: (state) => {
@@ -434,8 +434,8 @@ describe('connector runtime cycle', () => {
         expect(summary.posture).toBe('connected');
         expect(appliedMethods).toEqual(['addNode', 'setSyncPolicy']);
         expect(acked).toEqual([
-            { commandId: 'cmd-4', status: 'applied' },
-            { commandId: 'cmd-5', status: 'applied' }
+            { commandId: 'cmd-4', status: 'applied', result: { ok: true, method: 'addNode' } },
+            { commandId: 'cmd-5', status: 'applied', result: { ok: true, method: 'setSyncPolicy' } }
         ]);
         expect(stored?.runtime.lastCommandCursor).toBe(5);
         expect(stored?.runtime.commandBridgeError).toBeNull();
