@@ -17,7 +17,7 @@ const DEFAULT_SERVICE_XML_TEMPLATE = `<service>
   <description>0ctx connector runtime - cloud bridge and managed local daemon lifecycle</description>
 
   <executable>%NODE_PATH%</executable>
-  <arguments>"%CLI_ENTRY%" connector run --quiet</arguments>
+  <arguments>"%CLI_ENTRY%" connector run --quiet --interval-ms=5000</arguments>
 
   <startmode>Automatic</startmode>
   <delayedAutoStart>false</delayedAutoStart>

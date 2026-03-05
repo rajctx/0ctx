@@ -5,7 +5,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=%NODE_PATH% %CLI_ENTRY% connector run --quiet
+ExecStart=%NODE_PATH% %CLI_ENTRY% connector run --quiet --interval-ms=5000
 Restart=on-failure
 RestartSec=5s
 # Escalating restart delays

@@ -192,8 +192,9 @@ export interface ConnectorRuntimeDependencies {
     pruneQueue(now: number): { removed: number; remaining: number };
 }
 
-const DEFAULT_INTERVAL_MS = 30_000;
-const MIN_INTERVAL_MS = 5_000;
+// Keep connector command/event bridge responsive for dashboard UX.
+const DEFAULT_INTERVAL_MS = 5_000;
+const MIN_INTERVAL_MS = 1_000;
 const CLOUD_COMMAND_METHOD_ALLOWLIST = new Set([
     'listContexts',
     'getGraphData',

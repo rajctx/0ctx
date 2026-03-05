@@ -2829,7 +2829,7 @@ Connector:
   0ctx connector status [--json] [--cloud] [--require-bridge]
   0ctx connector verify [--require-cloud] [--json]
   0ctx connector register [--force] [--local-only] [--require-cloud] [--json]
-  0ctx connector run [--once] [--interval-ms=30000] [--no-daemon-autostart]
+  0ctx connector run [--once] [--interval-ms=5000] [--no-daemon-autostart]
   0ctx connector queue status [--json]
   0ctx connector queue drain [--max-batches=10] [--batch-size=200] [--wait] [--strict|--fail-on-retry] [--timeout-ms=120000] [--poll-ms=1000] [--json]
   0ctx connector queue purge [--all|--older-than-hours=N|--min-attempts=N] [--dry-run|--confirm] [--json]

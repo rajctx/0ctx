@@ -242,9 +242,9 @@ export async function storeExecCommand(
     options.contextId ?? null
   );
 
-  // Connector runtime ticks every 30s by default; use a timeout long enough
-  // to survive one full cadence plus bridge/network jitter.
-  const pollTimeoutMs = Math.min(options.timeoutMs ?? 45_000, 120_000);
+  // Connector runtime defaults to a short cadence; keep timeout bounded so
+  // failed bridge calls surface quickly in UI.
+  const pollTimeoutMs = Math.min(options.timeoutMs ?? 20_000, 120_000);
   const pollIntervalMs = 250;
   const deadline = Date.now() + pollTimeoutMs;
 

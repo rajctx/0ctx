@@ -206,9 +206,9 @@ export default function HomePage() {
               </p>
               <div className="terminal">
                 <div className="prompt">0ctx query "auth system"</div>
-                <div style={{ color: "var(--dim-color)", marginTop: "0.5rem" }}>&gt; Retrieving nodes: [Auth0, JWT, UserSchema]</div>
-                <div style={{ color: "var(--dim-color)" }}>&gt; Found constraint: "No 3rd party auth provider" (2023-09-12)</div>
-                <div style={{ color: "var(--dim-color)" }}>&gt; Context injected into prompt.</div>
+                <div style={{ color: "var(--text-secondary)", marginTop: "0.5rem" }}>&gt; Retrieving nodes: [Auth0, JWT, UserSchema]</div>
+                <div style={{ color: "var(--text-secondary)" }}>&gt; Found constraint: "No 3rd party auth provider" (2023-09-12)</div>
+                <div style={{ color: "var(--text-secondary)" }}>&gt; Context injected into prompt.</div>
                 <div className="prompt"><span className="cursor"></span></div>
               </div>
             </div>
@@ -265,9 +265,9 @@ export default function HomePage() {
         <footer>
           <div>
             <div style={{ fontWeight: "bold", marginBottom: "0.5rem" }}>0CTX LABS</div>
-            <div style={{ fontSize: "0.7rem", color: "var(--dim-color)" }}>EST. 2024 // SF_CA</div>
+            <div style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>EST. 2024 // SF_CA</div>
           </div>
-          <div style={{ fontSize: "0.7rem", color: "var(--dim-color)", textAlign: "right" }}>
+          <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", textAlign: "right" }}>
             SYSTEM OPTIMAL<br />
             NO COOKIES DETECTED
           </div>

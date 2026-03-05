@@ -72,7 +72,7 @@ npm run cli -- setup --clients=all --no-open
 0ctx sync policy set full_sync --context-id=<contextId>
 
 # Run connector control loop in foreground (service target mode)
-0ctx connector run --interval-ms=30000
+0ctx connector run --interval-ms=5000
 
 # (Dev) Run local reference control-plane APIs
 npm run dev:control-plane

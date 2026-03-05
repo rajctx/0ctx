@@ -147,7 +147,7 @@
     margin-bottom: 1rem;
     display: flex;
     gap: 2rem;
-    color: var(--dim-color);
+    color: var(--text-muted);
 }
 
 #landing-page .hero-description {

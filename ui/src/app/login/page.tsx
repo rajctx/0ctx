@@ -17,7 +17,7 @@ export default function LoginPage() {
             --panel: #0a0a0a;
             --border: #1e1e1e;
             --text: #e5e5e5;
-            --muted: #666;
+            --muted: #9a9a9a;
             --accent: #f97316;
             --accent-dim: rgba(249,115,22,0.12);
             --font-mono: 'SF Mono','Segoe UI Mono','Fira Code','Roboto Mono',monospace;

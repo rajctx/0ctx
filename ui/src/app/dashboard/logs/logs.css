@@ -7,8 +7,8 @@
     --l-bg: #030303;
     --l-bg-card: #080808;
     --l-text: #e0e0e0;
-    --l-text-dim: #666666;
-    --l-text-muted: #999999;
+    --l-text-dim: #929292;
+    --l-text-muted: #bcbcbc;
     --l-accent-red: #8a1c1c;
     --l-accent-pink: #d44c9c;
     --l-accent-white: #ffffff;
@@ -28,7 +28,7 @@
     grid-template-columns: 220px 1fr;
     font-size: 13px;
     line-height: 1.4;
-    -webkit-font-smoothing: none;
+    -webkit-font-smoothing: antialiased;
 }
 
 /* ─── Scrollbars ─────────────────────────────────────────────────────────────── */

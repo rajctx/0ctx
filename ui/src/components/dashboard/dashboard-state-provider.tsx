@@ -21,7 +21,7 @@ import {
 } from '@/app/actions';
 import type { ContextItem } from '@/lib/graph';
 
-const STATUS_REFRESH_INTERVAL_MS = 30_000;
+const STATUS_REFRESH_INTERVAL_MS = 5_000;
 
 interface DashboardStateValue {
   contexts: ContextItem[];

@@ -7,7 +7,7 @@
   /* Dashboard Structure Variables mapped to new design */
   --bg-color: #030303;
   --fg-color: #e5e5e5;
-  --dim-color: #333333;
+  --dim-color: #505050;
   --accent-color: #f97316;
   --grid-line: #2a2a2a;
 
@@ -24,8 +24,8 @@
   --surface-overlay: rgba(0, 0, 0, 0.9);
 
   --text-primary: var(--fg-color);
-  --text-secondary: #666666;
-  --text-muted: var(--dim-color);
+  --text-secondary: #b8b8b8;
+  --text-muted: #989898;
   --text-inverse: var(--bg-color);
 
   --border-muted: var(--grid-line);
