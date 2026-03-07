@@ -75,7 +75,7 @@
       </button>
       <button class="nav-btn utility-btn" data-view="setup" type="button">
         <span class="nav-dot setup"></span>
-        <span>Setup</span>
+        <span>Support</span>
       </button>
     </div>
   </aside>
@@ -111,7 +111,7 @@
       </div>
       <div class="banner-actions">
         <button id="runtimeBannerRefresh" class="btn tertiary" type="button">Refresh</button>
-        <button id="runtimeBannerSetup" class="btn tertiary" type="button">Open setup</button>
+        <button id="runtimeBannerSetup" class="btn tertiary" type="button">Open support</button>
       </div>
     </section>
 
@@ -487,22 +487,22 @@
         <section class="view" data-view="setup">
           <div class="page-shell utility-page">
             <header class="page-head compact-head">
-              <p class="page-kicker">Setup utility</p>
-              <h1>Setup and repair</h1>
-              <p id="setupPageMeta" class="page-copy">Install integrations, run a smoke test, or recover the local runtime when something is off.</p>
+              <p class="page-kicker">Support utility</p>
+              <h1>Enable and repair</h1>
+              <p id="setupPageMeta" class="page-copy">Enable this repo, install the integrations you actually use, or repair the local runtime when something is off.</p>
             </header>
             <div class="utility-layout setup-layout">
               <aside class="panel rail-panel utility-rail">
                 <div class="section-row">
                   <div>
-                    <p class="section-label">Setup commands</p>
-                    <h2>Machine and workspace actions</h2>
+                    <p class="section-label">Support commands</p>
+                    <h2>Repo and machine actions</h2>
                   </div>
                 </div>
                 <div class="command-grid">
                   <article class="command-card">
-                    <span>Machine setup</span>
-                    <code id="setupCommand">0ctx setup</code>
+                    <span>Repo enablement</span>
+                    <code id="setupCommand">0ctx enable --repo-root "&lt;repo-root&gt;"</code>
                   </article>
                   <article class="command-card">
                     <span>Install integrations for this workspace</span>
@@ -544,7 +544,7 @@
                     </div>
                   </div>
                   <div id="setupSupportList" class="info-list compact-info-list"></div>
-                  <p id="setupSupportCopy" class="page-copy compact-copy">Use setup only when you need to install integrations, smoke-test capture, or repair the runtime.</p>
+                  <p id="setupSupportCopy" class="page-copy compact-copy">Use support only when you need to enable a repo, install integrations, smoke-test capture, or repair the runtime.</p>
                 </section>
               </section>
             </div>

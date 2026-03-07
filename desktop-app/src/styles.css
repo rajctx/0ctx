@@ -241,7 +241,6 @@ pre,
 .sidebar-copy,
 .page-copy,
 .item-preview,
-.detail-copy-small,
 .banner-copy p:last-child,
 .command-card span,
 .info-list article p,
@@ -500,11 +499,6 @@ select:focus {
   border-color: rgba(255, 255, 255, 0.08);
 }
 
-.chip-blue { color: var(--blue); background: var(--blue-soft); }
-.chip-green { color: var(--green); background: var(--green-soft); }
-.chip-purple { color: var(--purple); background: var(--purple-soft); }
-.chip-orange { color: var(--orange); background: var(--orange-soft); }
-.chip-beige { color: #d4d4d8; background: rgba(255, 255, 255, 0.08); }
 .chip-compact { min-height: 22px; padding-inline: 8px; }
 
 .banner {
@@ -574,7 +568,6 @@ select:focus {
 }
 
 .workspace-layout,
-.branches-layout,
 .checkpoints-layout {
   display: grid;
   grid-template-columns: 340px minmax(0, 1fr);
@@ -583,17 +576,9 @@ select:focus {
 }
 
 .workspace-main,
-.branch-story,
 .utility-stack {
   display: grid;
   gap: 22px;
-}
-
-.sessions-layout {
-  display: grid;
-  grid-template-columns: 280px 280px minmax(0, 1fr);
-  gap: 24px;
-  align-items: start;
 }
 
 .branches-page-grid,
@@ -842,15 +827,9 @@ select:focus {
 }
 
 .detail-panel,
-.reader-panel,
-.branch-detail-panel {
+.reader-panel {
   display: grid;
   gap: 18px;
-}
-
-.branch-story {
-  display: grid;
-  gap: 20px;
 }
 
 .lead-panel,
@@ -882,12 +861,6 @@ select:focus {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.branch-columns {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 20px;
-}
-
 .reader-actions {
   display: flex;
   flex-wrap: wrap;
@@ -897,11 +870,6 @@ select:focus {
 .reader-header-block {
   display: grid;
   gap: 8px;
-}
-
-.detail-copy-small {
-  max-width: 52ch;
-  line-height: 1.65;
 }
 
 .reader-body {
@@ -1116,10 +1084,6 @@ tbody td {
 }
 
 @media (max-width: 1380px) {
-  .sessions-layout {
-    grid-template-columns: 260px 260px minmax(0, 1fr);
-  }
-
   .branches-page-grid {
     grid-template-columns: 300px minmax(0, 1fr);
   }
@@ -1133,7 +1097,6 @@ tbody td {
   }
 
   .workspace-layout,
-  .branches-layout,
   .checkpoints-layout,
   .utility-layout {
     grid-template-columns: 320px minmax(0, 1fr);
@@ -1146,15 +1109,12 @@ tbody td {
   }
 
   .workspace-layout,
-  .branches-layout,
   .branches-page-grid,
   .checkpoints-layout,
   .utility-layout,
-  .sessions-layout,
   .sessions-page-grid,
   .branch-activity-grid,
   .session-reading-grid,
-  .branch-columns,
   .fact-grid,
   .meta-grid,
   .workspace-focus-grid {

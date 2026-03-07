@@ -31,8 +31,14 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("0ctx shell");
         expect(source).toContain("0ctx version [--verbose] [--json]");
         expect(source).toContain("0ctx --version | -v");
+        expect(source).toContain("0ctx                    Auto-enable inside a repo. Outside a repo, fall back to setup/support.");
         expect(source).toContain("0ctx enable [--repo-root=<path>] [--name=<workspace>] [--clients=all|claude,cursor,windsurf,codex,factory,antigravity]");
         expect(source).toContain("[--mcp-clients=none|all|claude,cursor,windsurf,codex,antigravity]");
+        expect(source).toContain("Recommended daily flow:");
+        expect(source).toContain("Support / legacy:");
+        expect(source).toContain("Capture support:");
+        expect(source).toContain("GA:      claude, factory, antigravity");
+        expect(source).toContain("Preview: codex (notify + archive), cursor, windsurf");
         expect(source).toContain("0ctx recall [--mode=auto|temporal|topic|graph]");
         expect(source).toContain("[--start] [--json]");
         expect(source).toContain("0ctx release publish --version vX.Y.Z [--tag latest|next] [--otp 123456] [--dry-run] [--json]");
@@ -94,5 +100,10 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("return commandRecall(parsed.flags, parsed.positionalArgs);");
         expect(source).toContain("if (normalized === 'log') return 'logs';");
         expect(source).toContain("console.log(`cli_path: ${payload.cliPath}`);");
+        expect(source).toContain("function findGitRepoRoot(input: string | null): string | null {");
+        expect(source).toContain("Detected git repo. Enabling 0ctx for");
+        expect(source).toContain("This repo is not enabled yet. Enabling 0ctx for");
+        expect(source).toContain("Daemon is unreachable. Re-enabling 0ctx for");
+        expect(source).toContain("Use `0ctx enable` inside a repo for the normal product flow. Use `0ctx dashboard` only for hosted support surfaces.");
     });
 });

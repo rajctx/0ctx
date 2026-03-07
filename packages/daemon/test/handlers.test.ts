@@ -114,6 +114,35 @@ describe('daemon request handling', () => {
         }
     });
 
+    it('reports GA and preview integration defaults honestly when no hook state exists yet', () => {
+        const { db, graph } = createGraph();
+        const hookStatePath = path.join(path.dirname(db.name), 'missing-hooks-state.json');
+        const previousHookStatePath = process.env.CTX_HOOK_STATE_PATH;
+        try {
+            process.env.CTX_HOOK_STATE_PATH = hookStatePath;
+
+            const hookHealth = handleRequest(graph, 'conn-hook-health', {
+                method: 'getHookHealth',
+                params: {}
+            }, runtime()) as { agents: Array<{ agent: string; notes: string | null }> };
+
+            const byAgent = new Map(hookHealth.agents.map((agent) => [agent.agent, agent.notes]));
+            expect(byAgent.get('claude')).toBe('supported');
+            expect(byAgent.get('factory')).toBe('supported');
+            expect(byAgent.get('antigravity')).toBe('supported');
+            expect(byAgent.get('codex')).toBe('preview-notify-archive');
+            expect(byAgent.get('cursor')).toBe('preview-hook');
+            expect(byAgent.get('windsurf')).toBe('preview-hook');
+        } finally {
+            if (previousHookStatePath === undefined) {
+                delete process.env.CTX_HOOK_STATE_PATH;
+            } else {
+                process.env.CTX_HOOK_STATE_PATH = previousHookStatePath;
+            }
+            db.close();
+        }
+    });
+
     it('gets and sets per-context sync policy with audit trail', () => {
         const { db, graph } = createGraph();
         try {

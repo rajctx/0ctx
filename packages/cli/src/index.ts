@@ -2509,15 +2509,25 @@ function readStdinPayload(): string {
     }
 }
 
-function resolveRepoRoot(input: string | null): string {
-    if (input) return path.resolve(input);
+function findGitRepoRoot(input: string | null): string | null {
+    const cwd = input ? path.resolve(input) : process.cwd();
     try {
-        const root = execSync('git rev-parse --show-toplevel', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
-        if (root.length > 0) return root;
+        const root = execSync('git rev-parse --show-toplevel', {
+            cwd,
+            stdio: ['ignore', 'pipe', 'ignore']
+        }).toString().trim();
+        return root.length > 0 ? root : null;
     } catch {
-        // Fall through to cwd
+        return null;
     }
-    return process.cwd();
+}
+
+function resolveRepoRoot(input: string | null): string {
+    if (input) {
+        const resolved = path.resolve(input);
+        return findGitRepoRoot(resolved) ?? resolved;
+    }
+    return findGitRepoRoot(null) ?? process.cwd();
 }
 
 function safeGitValue(repoRoot: string, args: string[]): string | null {
@@ -4203,13 +4213,17 @@ function printHelp(): void {
     console.log(`0ctx CLI
 
 Usage:
-  0ctx                    First run: auto setup + auth. Afterwards: interactive shell.
+  0ctx                    Auto-enable inside a repo. Outside a repo, fall back to setup/support.
   0ctx shell
   0ctx version [--verbose] [--json]
   0ctx --version | -v
+
+Recommended daily flow:
   0ctx enable [--repo-root=<path>] [--name=<workspace>] [--clients=all|claude,cursor,windsurf,codex,factory,antigravity]
               [--mcp-clients=none|all|claude,cursor,windsurf,codex,antigravity]
               [--skip-bootstrap] [--skip-hooks] [--mcp-profile=all|core|recall|ops] [--json]
+
+Support / legacy:
   0ctx setup [--clients=all|claude,cursor,windsurf,codex,antigravity] [--no-open] [--json] [--validate]
              [--require-cloud] [--wait-cloud-ready]
              [--cloud-wait-timeout-ms=60000] [--cloud-wait-interval-ms=2000]
@@ -4246,6 +4260,10 @@ Usage:
   0ctx dashboard [--no-open] [--dashboard-query=k=v&...]
   0ctx release publish --version vX.Y.Z [--tag latest|next] [--otp 123456] [--dry-run] [--json]
   0ctx daemon start
+
+Capture support:
+  GA:      claude, factory, antigravity
+  Preview: codex (notify + archive), cursor, windsurf
 
 Authentication:
   0ctx auth login    Start device-code login flow
@@ -4409,8 +4427,7 @@ function getContextIdFlag(flags: Record<string, string | boolean>): string | nul
 }
 
 async function resolveCommandContextId(
-    flags: Record<string, string | boolean>,
-    options: { allowActiveFallback?: boolean } = {}
+    flags: Record<string, string | boolean>
 ): Promise<string | null> {
     const explicit = getContextIdFlag(flags);
     if (explicit) return explicit;
@@ -4422,11 +4439,6 @@ async function resolveCommandContextId(
             const repoRoot = resolveRepoRoot(requestedRepoRoot);
             const byRepo = selectHookContextId(contexts, repoRoot, null);
             if (byRepo) return byRepo;
-        }
-
-        if (options.allowActiveFallback === true) {
-            const active = await sendToDaemon('getActiveContext', {}) as { id?: string } | null;
-            return typeof active?.id === 'string' && active.id.trim().length > 0 ? active.id : null;
         }
     } catch {
         return null;
@@ -5047,16 +5059,29 @@ async function main(): Promise<number> {
             }, { command: 'help', interactive: true });
         }
         if (process.stdin.isTTY && process.stdout.isTTY) {
-            // Auto-run setup if this machine hasn't been fully configured yet.
+            // Auto-run repo enablement when possible, otherwise fall back to setup.
             // Checks: (1) no auth token, (2) expired token (try silent refresh first),
             // (3) no connector state on disk.
             const tokenStore = resolveToken();
             const connectorState = readConnectorState();
+            const detectedRepoRoot = findGitRepoRoot(null);
 
             if (!tokenStore) {
                 console.log(color.bold('\nWelcome to 0ctx!'));
+                if (detectedRepoRoot) {
+                    console.log(color.dim(`Detected git repo. Enabling 0ctx for ${detectedRepoRoot}.\n`));
+                    return runCommandWithOpsSummary(
+                        'cli.enable',
+                        () => commandEnable({ 'repo-root': detectedRepoRoot }),
+                        { command: 'enable', interactive: true, reason: 'first_run_repo' }
+                    );
+                }
                 console.log(color.dim("Looks like this is your first time. Let's get you set up.\n"));
-                return runCommandWithOpsSummary('cli.setup', () => commandSetup({}), { command: 'setup', interactive: true });
+                return runCommandWithOpsSummary(
+                    'cli.setup',
+                    () => commandSetup({}),
+                    { command: 'setup', interactive: true, reason: 'first_run_no_repo' }
+                );
             }
 
             // If the stored token is expired, attempt a silent refresh.
@@ -5084,10 +5109,24 @@ async function main(): Promise<number> {
             }
 
             if (!connectorState) {
+                if (detectedRepoRoot) {
+                    console.log(color.bold('\nAlmost there!'));
+                    console.log(color.dim(`This repo is not enabled yet. Enabling 0ctx for ${detectedRepoRoot}...\n`));
+                    captureEvent('cli_command_executed', { command: 'enable', interactive: true, reason: 'machine_unregistered_repo' });
+                    return runCommandWithOpsSummary(
+                        'cli.enable',
+                        () => commandEnable({ 'repo-root': detectedRepoRoot }),
+                        { command: 'enable', interactive: true, reason: 'machine_unregistered_repo' }
+                    );
+                }
                 console.log(color.bold('\nAlmost there!'));
                 console.log(color.dim("This machine isn't registered yet. Running setup to connect it...\n"));
-                captureEvent('cli_command_executed', { command: 'setup', interactive: true });
-                return runCommandWithOpsSummary('cli.setup', () => commandSetup({}), { command: 'setup', interactive: true });
+                captureEvent('cli_command_executed', { command: 'setup', interactive: true, reason: 'machine_unregistered_no_repo' });
+                return runCommandWithOpsSummary(
+                    'cli.setup',
+                    () => commandSetup({}),
+                    { command: 'setup', interactive: true, reason: 'machine_unregistered_no_repo' }
+                );
             }
 
             // Returning users can still land in a broken state (e.g. daemon
@@ -5097,14 +5136,25 @@ async function main(): Promise<number> {
             const daemonPreflight = await isDaemonReachable();
             if (!daemonPreflight.ok) {
                 console.log(color.bold('\nRuntime needs repair.'));
-                console.log(color.dim('Daemon is unreachable. Running setup automatically...\n'));
-                captureEvent('cli_command_executed', { command: 'setup', interactive: true, reason: 'daemon_unreachable' });
-                const setupCode = await runCommandWithOpsSummary(
-                    'cli.setup.auto_repair',
-                    () => commandSetup({ 'no-open': true }),
-                    { command: 'setup', interactive: true, reason: 'daemon_unreachable' }
-                );
-                if (setupCode !== 0) return setupCode;
+                if (detectedRepoRoot) {
+                    console.log(color.dim(`Daemon is unreachable. Re-enabling 0ctx for ${detectedRepoRoot}...\n`));
+                    captureEvent('cli_command_executed', { command: 'enable', interactive: true, reason: 'daemon_unreachable_repo' });
+                    const enableCode = await runCommandWithOpsSummary(
+                        'cli.enable.auto_repair',
+                        () => commandEnable({ 'repo-root': detectedRepoRoot }),
+                        { command: 'enable', interactive: true, reason: 'daemon_unreachable_repo' }
+                    );
+                    if (enableCode !== 0) return enableCode;
+                } else {
+                    console.log(color.dim('Daemon is unreachable. Running setup automatically...\n'));
+                    captureEvent('cli_command_executed', { command: 'setup', interactive: true, reason: 'daemon_unreachable_no_repo' });
+                    const setupCode = await runCommandWithOpsSummary(
+                        'cli.setup.auto_repair',
+                        () => commandSetup({ 'no-open': true }),
+                        { command: 'setup', interactive: true, reason: 'daemon_unreachable_no_repo' }
+                    );
+                    if (setupCode !== 0) return setupCode;
+                }
             }
 
             captureEvent('cli_command_executed', { command: 'shell', interactive: true });
@@ -5237,7 +5287,7 @@ async function main(): Promise<number> {
                 return 1;
             case 'ui':
                 console.error('`0ctx ui` has been removed from the end-user flow.');
-                console.error('Use `0ctx setup` and then open the hosted dashboard URL (or run `0ctx dashboard`).');
+                console.error('Use `0ctx enable` inside a repo for the normal product flow. Use `0ctx dashboard` only for hosted support surfaces.');
                 return 1;
             case 'help':
                 printHelp();

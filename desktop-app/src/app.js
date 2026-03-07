@@ -35,11 +35,11 @@ const VIEW_META = {
     primaryAction: 'toggle-hidden'
   },
   setup: {
-    eyebrow: 'Setup utility',
-    title: 'Setup and repair',
-    summary: 'Install integrations, run a smoke test, or recover the local runtime when something is off.',
-    primaryLabel: 'Copy install command',
-    primaryAction: 'copy-install'
+    eyebrow: 'Support utility',
+    title: 'Enable and repair',
+    summary: 'Enable this repo, install the integrations you actually use, or repair the local runtime when something is off.',
+    primaryLabel: 'Copy enable command',
+    primaryAction: 'copy-enable'
   }
 };
 
@@ -49,7 +49,7 @@ const SEARCH_HINTS = {
   checkpoints: 'Filter checkpoints, sessions, or commits',
   workspaces: 'Filter projects by name or repository path',
   knowledge: 'Filter reviewed insights and graph nodes',
-  setup: 'Filter agent integrations and setup state'
+  setup: 'Filter agent integrations and support actions'
 };
 
 const REQUIRED_RUNTIME_METHODS = [
@@ -626,6 +626,10 @@ function hookInstallCommand() {
   return `0ctx connector hook install --clients=${preferredClients()} --repo-root "${currentRepoRoot()}"`;
 }
 
+function enableCommand() {
+  return `0ctx enable --repo-root "${currentRepoRoot()}"`;
+}
+
 function hookIngestCommand() {
   return `0ctx connector hook ingest --agent=${preferredAgent()} --repo-root "${currentRepoRoot()}" --payload '{"session":{"id":"demo-session"},"turn":{"id":"demo-turn-1"},"role":"assistant","content":"hello"}' --json`;
 }
@@ -874,7 +878,7 @@ function renderRuntimeBanner() {
           <p>${esc(state.runtimeIssue.detail)}</p>
         <div class="row-actions">
           <button class="btn primary" data-banner-action="refresh">Refresh</button>
-          <button class="btn tertiary" data-banner-action="setup">Open setup</button>
+          <button class="btn tertiary" data-banner-action="setup">Open support</button>
         </div>
       </div>
     `;
@@ -1362,7 +1366,7 @@ function renderWorkspaces() {
 }
 
   function renderSetup() {
-    document.getElementById('setupCommand').textContent = '0ctx setup';
+    document.getElementById('setupCommand').textContent = enableCommand();
     document.getElementById('hookInstallCommand').textContent = hookInstallCommand();
     document.getElementById('hookIngestCommand').textContent = hookIngestCommand();
 
@@ -1374,8 +1378,8 @@ function renderWorkspaces() {
       setupPageMeta.textContent = state.runtimeIssue
         ? state.runtimeIssue.detail
         : installed.length > 0
-          ? `${installed.length} integration${installed.length === 1 ? '' : 's'} are installed on this machine. Use this screen only when you need to add another agent, run a smoke test, or repair the runtime.`
-    : 'Install the integrations you actually use, then leave this screen. Daily work should happen in workstreams, sessions, and checkpoints.';
+          ? `${installed.length} integration${installed.length === 1 ? '' : 's'} are installed on this machine. Use this screen only when you need to enable another repo, add another agent, run a smoke test, or repair the runtime.`
+          : 'Enable the repo, install the integrations you actually use, then leave this screen. Daily work should happen in workstreams, sessions, and checkpoints.';
     }
     document.getElementById('hookSummary').textContent = `${installed.length} installed / ${hooks.length}`;
     document.getElementById('hookList').innerHTML = filteredHooks.length > 0
@@ -1422,7 +1426,7 @@ function renderWorkspaces() {
     `).join('');
     document.getElementById('setupSupportCopy').textContent = state.runtimeIssue
       ? state.runtimeIssue.detail
-      : 'Use setup only when you need to install integrations, smoke-test capture, check updates, or repair the local runtime.';
+      : 'Use support only when you need to enable a repo, install integrations, smoke-test capture, check updates, or repair the local runtime.';
   }
 
 function renderAll() {
@@ -1982,9 +1986,12 @@ async function performHeroAction(action) {
       await loadGraph();
       renderAll();
       return;
-    case 'copy-install':
-      await copyText(hookInstallCommand());
-      return;
+      case 'copy-enable':
+        await copyText(enableCommand());
+        return;
+      case 'copy-install':
+        await copyText(hookInstallCommand());
+        return;
     case 'create-checkpoint':
       await createCheckpointFromActiveSession();
       return;
