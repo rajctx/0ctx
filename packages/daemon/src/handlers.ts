@@ -7,7 +7,8 @@ import type {
     BranchLaneSummary,
     AgentSessionSummary,
     CheckpointSummary,
-    WorkstreamBrief
+    WorkstreamBrief,
+    WorkstreamComparison
 } from '@0ctx/core';
 import { spawnSync } from 'child_process';
 import fs from 'fs';
@@ -38,6 +39,7 @@ const CONTEXT_REQUIRED_METHODS = new Set([
     'listChatTurns',
     'listBranchLanes',
     'getWorkstreamBrief',
+    'compareWorkstreams',
     'listBranchSessions',
     'listSessionMessages',
     'listBranchCheckpoints',
@@ -422,6 +424,167 @@ function buildWorkstreamBrief(
         recentSessions,
         latestCheckpoints,
         contextText: lines.join('\n')
+    };
+}
+
+function compareAgentSets(source: string[], target: string[]): {
+    sharedAgents: string[];
+    sourceOnlyAgents: string[];
+    targetOnlyAgents: string[];
+} {
+    const sourceSet = new Set(source.filter(Boolean));
+    const targetSet = new Set(target.filter(Boolean));
+    const sharedAgents = [...sourceSet].filter((agent) => targetSet.has(agent)).sort();
+    const sourceOnlyAgents = [...sourceSet].filter((agent) => !targetSet.has(agent)).sort();
+    const targetOnlyAgents = [...targetSet].filter((agent) => !sourceSet.has(agent)).sort();
+    return { sharedAgents, sourceOnlyAgents, targetOnlyAgents };
+}
+
+function compareWorkstreams(
+    graph: Graph,
+    contextId: string,
+    options: {
+        sourceBranch: string;
+        targetBranch: string;
+        sourceWorktreePath?: string | null;
+        targetWorktreePath?: string | null;
+        sessionLimit?: number;
+        checkpointLimit?: number;
+    }
+): WorkstreamComparison {
+    const source = buildWorkstreamBrief(graph, contextId, {
+        branch: options.sourceBranch,
+        worktreePath: options.sourceWorktreePath ?? null,
+        sessionLimit: options.sessionLimit,
+        checkpointLimit: options.checkpointLimit
+    });
+    const target = buildWorkstreamBrief(graph, contextId, {
+        branch: options.targetBranch,
+        worktreePath: options.targetWorktreePath ?? null,
+        sessionLimit: options.sessionLimit,
+        checkpointLimit: options.checkpointLimit
+    });
+
+    const sameRepository = Boolean(
+        source.repositoryRoot
+        && target.repositoryRoot
+        && path.resolve(source.repositoryRoot) === path.resolve(target.repositoryRoot)
+    );
+
+    let sourceAheadCount: number | null = null;
+    let targetAheadCount: number | null = null;
+    let mergeBaseSha: string | null = null;
+    let comparable = false;
+
+    if (
+        sameRepository
+        && source.branch
+        && target.branch
+        && source.branch !== target.branch
+        && source.repositoryRoot
+    ) {
+        const countText = safeGit(source.repositoryRoot, ['rev-list', '--left-right', '--count', `${source.branch}...${target.branch}`]);
+        const counts = countText
+            ? countText.split(/\s+/).map((entry) => Number(entry)).filter((entry) => Number.isFinite(entry))
+            : [];
+        sourceAheadCount = counts.length >= 2 ? counts[0] : null;
+        targetAheadCount = counts.length >= 2 ? counts[1] : null;
+        mergeBaseSha = safeGit(source.repositoryRoot, ['merge-base', source.branch, target.branch]);
+        comparable = sourceAheadCount !== null && targetAheadCount !== null;
+    } else if (
+        sameRepository
+        && source.branch
+        && target.branch
+        && source.branch === target.branch
+    ) {
+        comparable = true;
+        sourceAheadCount = 0;
+        targetAheadCount = 0;
+        mergeBaseSha = source.mergeBaseSha ?? target.mergeBaseSha ?? null;
+    }
+
+    const newerSide = source.lastActivityAt && target.lastActivityAt
+        ? source.lastActivityAt === target.lastActivityAt
+            ? 'same'
+            : source.lastActivityAt > target.lastActivityAt
+                ? 'source'
+                : 'target'
+        : source.lastActivityAt
+            ? 'source'
+            : target.lastActivityAt
+                ? 'target'
+                : 'unknown';
+
+    const { sharedAgents, sourceOnlyAgents, targetOnlyAgents } = compareAgentSets(
+        [
+            ...(source.recentSessions.map((session) => session.agent ?? '').filter(Boolean)),
+            ...(source.latestCheckpoints.flatMap((checkpoint) => checkpoint.agentSet ?? []))
+        ],
+        [
+            ...(target.recentSessions.map((session) => session.agent ?? '').filter(Boolean)),
+            ...(target.latestCheckpoints.flatMap((checkpoint) => checkpoint.agentSet ?? []))
+        ]
+    );
+
+    const lines = [
+        `Workstream comparison for ${source.workspaceName}`,
+        `Source: ${source.branch ?? 'unknown branch'}`,
+        `Target: ${target.branch ?? 'unknown branch'}`
+    ];
+
+    if (!sameRepository) {
+        lines.push('These workstreams do not resolve to the same repository root, so git divergence cannot be compared directly.');
+    } else if (!source.branch || !target.branch) {
+        lines.push('One or both workstreams have no branch name, so git divergence cannot be compared directly.');
+    } else if (source.branch === target.branch) {
+        lines.push('Both selections point to the same branch name. Treat this as a same-workstream comparison.');
+    } else if (comparable && typeof sourceAheadCount === 'number' && typeof targetAheadCount === 'number') {
+        const gitSummary = sourceAheadCount === 0 && targetAheadCount === 0
+            ? `${source.branch} and ${target.branch} are in sync from the same merge base.`
+            : sourceAheadCount > 0 && targetAheadCount === 0
+                ? `${source.branch} is ${sourceAheadCount} commit${sourceAheadCount === 1 ? '' : 's'} ahead of ${target.branch}.`
+                : sourceAheadCount === 0 && targetAheadCount > 0
+                    ? `${target.branch} is ${targetAheadCount} commit${targetAheadCount === 1 ? '' : 's'} ahead of ${source.branch}.`
+                    : `${source.branch} is ${sourceAheadCount} ahead and ${target.branch} is ${targetAheadCount} ahead from merge base ${mergeBaseSha ? mergeBaseSha.slice(0, 8) : 'unknown'}.`;
+        lines.push(gitSummary);
+    } else {
+        lines.push('Git divergence could not be computed for these workstreams.');
+    }
+
+    lines.push(
+        `Activity: ${source.branch ?? 'source'} has ${source.sessionCount} sessions / ${source.checkpointCount} checkpoints; ${target.branch ?? 'target'} has ${target.sessionCount} sessions / ${target.checkpointCount} checkpoints.`
+    );
+
+    if (sharedAgents.length > 0) {
+        lines.push(`Shared agents: ${sharedAgents.join(', ')}.`);
+    }
+    if (sourceOnlyAgents.length > 0) {
+        lines.push(`Only on ${source.branch ?? 'source'}: ${sourceOnlyAgents.join(', ')}.`);
+    }
+    if (targetOnlyAgents.length > 0) {
+        lines.push(`Only on ${target.branch ?? 'target'}: ${targetOnlyAgents.join(', ')}.`);
+    }
+    if (newerSide === 'source') {
+        lines.push(`${source.branch ?? 'Source'} has the newer captured activity.`);
+    } else if (newerSide === 'target') {
+        lines.push(`${target.branch ?? 'Target'} has the newer captured activity.`);
+    }
+
+    return {
+        contextId,
+        workspaceName: source.workspaceName,
+        source,
+        target,
+        comparable,
+        sameRepository,
+        sourceAheadCount,
+        targetAheadCount,
+        mergeBaseSha,
+        newerSide,
+        sharedAgents,
+        sourceOnlyAgents,
+        targetOnlyAgents,
+        comparisonText: lines.join('\n')
     };
 }
 
@@ -872,7 +1035,7 @@ export function handleRequest(
                 'addNode', 'getNode', 'updateNode', 'getByKey', 'deleteNode',
                 'addEdge', 'getSubgraph', 'search', 'getGraphData',
                   'listChatSessions', 'listChatTurns', 'getNodePayload', 'getHookHealth',
-                  'listBranchLanes', 'getWorkstreamBrief', 'listBranchSessions', 'listSessionMessages',
+                  'listBranchLanes', 'getWorkstreamBrief', 'compareWorkstreams', 'listBranchSessions', 'listSessionMessages',
                   'listBranchCheckpoints', 'getSessionDetail', 'getCheckpointDetail',
                   'getHandoffTimeline', 'previewSessionKnowledge', 'previewCheckpointKnowledge',
                   'extractSessionKnowledge', 'extractCheckpointKnowledge',
@@ -1490,6 +1653,24 @@ export function handleRequest(
                 sessionLimit: params.sessionLimit as number | undefined,
                 checkpointLimit: params.checkpointLimit as number | undefined
             });
+        case 'compareWorkstreams': {
+            const sourceBranch = typeof params.sourceBranch === 'string' ? params.sourceBranch.trim() : '';
+            const targetBranch = typeof params.targetBranch === 'string' ? params.targetBranch.trim() : '';
+            if (!sourceBranch) {
+                throw new Error("Missing required 'sourceBranch' for compareWorkstreams.");
+            }
+            if (!targetBranch) {
+                throw new Error("Missing required 'targetBranch' for compareWorkstreams.");
+            }
+            return compareWorkstreams(graph, contextId!, {
+                sourceBranch,
+                targetBranch,
+                sourceWorktreePath: typeof params.sourceWorktreePath === 'string' ? params.sourceWorktreePath : null,
+                targetWorktreePath: typeof params.targetWorktreePath === 'string' ? params.targetWorktreePath : null,
+                sessionLimit: params.sessionLimit as number | undefined,
+                checkpointLimit: params.checkpointLimit as number | undefined
+            });
+        }
         case 'listBranchSessions': {
             const branch = typeof params.branch === 'string' ? params.branch : null;
             if (!branch || branch.trim().length === 0) {

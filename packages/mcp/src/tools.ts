@@ -114,6 +114,23 @@ export const tools = [
         },
     },
     {
+        name: 'ctx_compare_workstreams',
+        description: 'Compare two workstreams in the same workspace. Returns git divergence, activity differences, shared agents, and a compact comparison summary.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                sourceBranch: { type: 'string', description: 'Source branch name for the comparison.' },
+                sourceWorktreePath: { type: 'string', description: 'Optional worktree path for the source workstream.' },
+                targetBranch: { type: 'string', description: 'Target branch name for the comparison.' },
+                targetWorktreePath: { type: 'string', description: 'Optional worktree path for the target workstream.' },
+                sessionLimit: { type: 'number', description: 'Maximum number of recent sessions to include per side (default 3).' },
+                checkpointLimit: { type: 'number', description: 'Maximum number of checkpoints to include per side (default 2).' },
+                contextId: { type: 'string', description: 'Optional explicit context ID override for this operation.' },
+            },
+            required: ['sourceBranch', 'targetBranch'],
+        },
+    },
+    {
         name: 'ctx_list_workstream_sessions',
         description: 'List sessions captured on a specific workstream.',
         inputSchema: {
@@ -613,6 +630,7 @@ const TOOL_SCOPE_BY_NAME: Record<string, ToolScope> = {
     ctx_search: 'core',
     ctx_list_workstreams: 'core',
     ctx_get_workstream_brief: 'core',
+    ctx_compare_workstreams: 'core',
     ctx_list_workstream_sessions: 'core',
     ctx_get_session: 'core',
     ctx_list_session_messages: 'core',

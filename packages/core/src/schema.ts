@@ -229,6 +229,23 @@ export interface WorkstreamBrief {
     contextText: string;
 }
 
+export interface WorkstreamComparison {
+    contextId: string;
+    workspaceName: string;
+    source: WorkstreamBrief;
+    target: WorkstreamBrief;
+    comparable: boolean;
+    sameRepository: boolean;
+    sourceAheadCount: number | null;
+    targetAheadCount: number | null;
+    mergeBaseSha: string | null;
+    newerSide: 'source' | 'target' | 'same' | 'unknown';
+    sharedAgents: string[];
+    sourceOnlyAgents: string[];
+    targetOnlyAgents: string[];
+    comparisonText: string;
+}
+
 export interface SessionDetail {
     session: AgentSessionSummary | null;
     messages: SessionMessage[];

@@ -567,59 +567,40 @@ select:focus {
   max-width: 640px;
 }
 
+.page-grid,
 .workspace-layout,
-.checkpoints-layout {
+.utility-layout {
   display: grid;
   grid-template-columns: 340px minmax(0, 1fr);
   gap: 28px;
   align-items: start;
 }
 
+.page-grid-branches,
+.page-grid-sessions,
+.page-grid-checkpoints {
+  grid-template-columns: 320px minmax(0, 1fr);
+}
+
+.page-main-stack,
 .workspace-main,
 .utility-stack {
   display: grid;
   gap: 22px;
 }
 
-.branches-page-grid,
-.sessions-page-grid {
+.page-card-grid {
   display: grid;
   gap: 28px;
   align-items: start;
 }
 
-.branches-page-grid {
-  grid-template-columns: 320px minmax(0, 1fr);
-}
-
-.sessions-page-grid {
-  grid-template-columns: 300px minmax(0, 1fr);
-}
-
-.branch-main-grid,
-.session-main-grid {
-  display: grid;
-  gap: 22px;
-}
-
-.branch-activity-grid,
-.session-reading-grid {
-  display: grid;
-  gap: 22px;
-}
-
-.branch-activity-grid {
+.page-card-grid.two-up {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.session-reading-grid {
-  grid-template-columns: 320px minmax(0, 1fr);
-}
-
-.utility-layout {
-  display: grid;
-  grid-template-columns: 360px minmax(0, 1fr);
-  gap: 24px;
+.sessions-overview-grid {
+  align-items: start;
 }
 
 .panel {
@@ -639,22 +620,17 @@ select:focus {
   gap: 18px;
 }
 
-.editorial-rail {
+.editorial-rail,
+.side-focus-panel {
   position: sticky;
   top: 24px;
   align-self: start;
 }
 
-.branch-summary-rail,
-.session-list-rail {
+.detail-stack,
+.action-stack {
   display: grid;
-  gap: 18px;
-}
-
-.branch-summary-body,
-.session-summary-panel {
-  display: grid;
-  gap: 18px;
+  gap: 14px;
 }
 
 .page-block {
@@ -744,6 +720,10 @@ select:focus {
   overflow: visible;
 }
 
+.compact-list-surface {
+  max-height: 360px;
+}
+
 .list {
   display: grid;
   gap: 10px;
@@ -761,6 +741,21 @@ select:focus {
 
 .compact-list {
   overflow: visible;
+}
+
+.compact-meta-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  border-top: 1px solid var(--line);
+}
+
+.compact-meta-grid article {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.compact-meta-grid article:nth-last-child(-n+2) {
+  border-bottom: 0;
 }
 
 .list-item {
@@ -867,6 +862,10 @@ select:focus {
   gap: 8px;
 }
 
+.action-stack .btn {
+  justify-content: center;
+}
+
 .reader-header-block {
   display: grid;
   gap: 8px;
@@ -922,6 +921,12 @@ select:focus {
   background: rgba(255, 255, 255, 0.02);
   color: var(--text-muted);
   text-align: center;
+}
+
+.page-grid-branches .empty-state,
+.page-grid-sessions .empty-state,
+.page-grid-checkpoints .empty-state {
+  min-height: 96px;
 }
 
 .empty-flow {
@@ -1084,20 +1089,14 @@ tbody td {
 }
 
 @media (max-width: 1380px) {
-  .branches-page-grid {
+  .page-grid-branches,
+  .page-grid-sessions,
+  .page-grid-checkpoints {
     grid-template-columns: 300px minmax(0, 1fr);
   }
 
-  .sessions-page-grid {
-    grid-template-columns: 280px minmax(0, 1fr);
-  }
-
-  .session-reading-grid {
-    grid-template-columns: 300px minmax(0, 1fr);
-  }
-
+  .page-grid,
   .workspace-layout,
-  .checkpoints-layout,
   .utility-layout {
     grid-template-columns: 320px minmax(0, 1fr);
   }
@@ -1108,15 +1107,13 @@ tbody td {
     grid-template-columns: 280px minmax(0, 1fr);
   }
 
+  .page-grid,
   .workspace-layout,
-  .branches-page-grid,
-  .checkpoints-layout,
   .utility-layout,
-  .sessions-page-grid,
-  .branch-activity-grid,
-  .session-reading-grid,
+  .page-card-grid.two-up,
   .fact-grid,
   .meta-grid,
+  .compact-meta-grid,
   .workspace-focus-grid {
     grid-template-columns: 1fr;
   }

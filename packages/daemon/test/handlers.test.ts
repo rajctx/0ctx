@@ -540,6 +540,124 @@ describe('daemon request handling', () => {
         }
     });
 
+    it('compares workstreams with real git divergence and activity context', () => {
+        if (!gitAvailable()) return;
+        const { db, graph } = createGraph();
+        try {
+            const repoRoot = path.join(os.tmpdir(), `0ctx-workstream-compare-${Date.now()}`);
+            tempDirs.push(repoRoot);
+
+            spawnSync('git', ['init', '--initial-branch', 'main', repoRoot], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', repoRoot, 'config', 'user.email', 'test@example.com'], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', repoRoot, 'config', 'user.name', '0ctx test'], { encoding: 'utf8', windowsHide: true });
+            spawnSync('powershell', ['-NoProfile', '-Command', `Set-Content -Path '${path.join(repoRoot, 'notes.txt')}' -Value 'base'`], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', repoRoot, 'add', '.'], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', repoRoot, 'commit', '-m', 'base'], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', repoRoot, 'checkout', '-b', 'feature/runtime-compare'], { encoding: 'utf8', windowsHide: true });
+            spawnSync('powershell', ['-NoProfile', '-Command', `Set-Content -Path '${path.join(repoRoot, 'notes.txt')}' -Value 'feature'`], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', repoRoot, 'add', '.'], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', repoRoot, 'commit', '-m', 'feature'], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', repoRoot, 'checkout', 'main'], { encoding: 'utf8', windowsHide: true });
+
+            const session = handleRequest(graph, 'conn-compare', { method: 'createSession' }, runtime()) as { sessionToken: string };
+            const context = handleRequest(graph, 'conn-compare', {
+                method: 'createContext',
+                sessionToken: session.sessionToken,
+                params: { name: 'compare-context', paths: [repoRoot] }
+            }, runtime()) as { id: string };
+
+            const now = Date.now();
+            const addCapturedMessage = (thread: string, branch: string, agent: string, occurredAt: number) => {
+                handleRequest(graph, 'conn-compare', {
+                    method: 'addNode',
+                    sessionToken: session.sessionToken,
+                    params: {
+                        contextId: context.id,
+                        type: 'artifact',
+                        hidden: true,
+                        thread,
+                        key: `chat_session:${agent}:${thread}`,
+                        content: `${branch} summary`,
+                        tags: ['chat_session', `agent:${agent}`],
+                        rawPayload: {
+                            sessionId: thread,
+                            branch,
+                            agent,
+                            worktreePath: repoRoot,
+                            repositoryRoot: repoRoot
+                        }
+                    }
+                }, runtime());
+
+                handleRequest(graph, 'conn-compare', {
+                    method: 'addNode',
+                    sessionToken: session.sessionToken,
+                    params: {
+                        contextId: context.id,
+                        type: 'artifact',
+                        hidden: true,
+                        thread,
+                        key: `chat_turn:${agent}:${thread}:msg-1`,
+                        content: `${branch} captured turn`,
+                        tags: ['chat_turn', 'role:assistant'],
+                        rawPayload: {
+                            sessionId: thread,
+                            messageId: 'msg-1',
+                            role: 'assistant',
+                            branch,
+                            agent,
+                            worktreePath: repoRoot,
+                            repositoryRoot: repoRoot,
+                            occurredAt
+                        }
+                    }
+                }, runtime());
+            };
+
+            addCapturedMessage('session-main-1', 'main', 'factory', now - 60_000);
+            addCapturedMessage('session-feature-1', 'feature/runtime-compare', 'claude', now);
+
+            const comparison = handleRequest(graph, 'conn-compare', {
+                method: 'compareWorkstreams',
+                sessionToken: session.sessionToken,
+                params: {
+                    contextId: context.id,
+                    sourceBranch: 'main',
+                    targetBranch: 'feature/runtime-compare'
+                }
+            }, runtime()) as {
+                sameRepository: boolean;
+                comparable: boolean;
+                sourceAheadCount: number | null;
+                targetAheadCount: number | null;
+                mergeBaseSha: string | null;
+                source: { sessionCount: number; branch: string | null };
+                target: { sessionCount: number; branch: string | null };
+                sourceOnlyAgents: string[];
+                targetOnlyAgents: string[];
+                comparisonText: string;
+                newerSide: string;
+            };
+
+            expect(comparison.sameRepository).toBe(true);
+            expect(comparison.comparable).toBe(true);
+            expect(comparison.sourceAheadCount).toBe(0);
+            expect(comparison.targetAheadCount).toBe(1);
+            expect(comparison.mergeBaseSha).toBeTruthy();
+            expect(comparison.source.branch).toBe('main');
+            expect(comparison.target.branch).toBe('feature/runtime-compare');
+            expect(comparison.source.sessionCount).toBe(1);
+            expect(comparison.target.sessionCount).toBe(1);
+            expect(comparison.sourceOnlyAgents).toEqual(['factory']);
+            expect(comparison.targetOnlyAgents).toEqual(['claude']);
+            expect(comparison.newerSide).toBe('target');
+            expect(comparison.comparisonText).toContain('Source: main');
+            expect(comparison.comparisonText).toContain('Target: feature/runtime-compare');
+        } finally {
+            db.close();
+        }
+    });
+
     it('extracts visible knowledge nodes from sessions and checkpoints through daemon methods', () => {
         const { db, graph } = createGraph();
         try {

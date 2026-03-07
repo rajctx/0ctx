@@ -142,6 +142,19 @@ server.setRequestHandler(CallToolRequestSchema, async (req: any) => {
                 });
                 return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(brief, null, 2) }] } };
             }
+            case 'ctx_compare_workstreams': {
+                const contextId = pickContextId(args);
+                const comparison = await callDaemon('compareWorkstreams', {
+                    contextId,
+                    sourceBranch: args.sourceBranch,
+                    sourceWorktreePath: args.sourceWorktreePath,
+                    targetBranch: args.targetBranch,
+                    targetWorktreePath: args.targetWorktreePath,
+                    sessionLimit: args.sessionLimit,
+                    checkpointLimit: args.checkpointLimit
+                });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(comparison, null, 2) }] } };
+            }
             case 'ctx_list_workstream_sessions': {
                 const contextId = pickContextId(args);
                 const sessions = await callDaemon('listBranchSessions', {

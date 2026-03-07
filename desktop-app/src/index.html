@@ -179,192 +179,191 @@
         <section class="view" data-view="branches">
           <div class="page-shell page-branches">
             <header class="page-head">
-                    <p class="page-kicker">Workstreams</p>
+              <p class="page-kicker">Workstreams</p>
               <h1>Workstreams and handoffs</h1>
-          <p id="branchesPageMeta" class="page-copy">Inspect workstreams, see which agent touched them, and follow the handoff path.</p>
+              <p id="branchesPageMeta" class="page-copy">Inspect workstreams, see which agent touched them, and follow the handoff path.</p>
             </header>
 
-              <div class="branches-page-grid">
-                <aside id="branchDetailPanel" class="panel editorial-rail branch-summary-rail">
-                        <div id="branchDetailEmpty" class="empty-state">Select a workstream to inspect cross-agent activity and checkpoint coverage.</div>
-
-                  <div id="branchDetailBody" class="branch-summary-body hidden">
-                    <div>
-                      <p class="section-label">Current workstream</p>
-                            <h3 id="branchDetailTitle">Choose a workstream</h3>
-                    </div>
-                    <p id="branchLeadCopy" class="lead-copy"></p>
-                    <div id="branchMeta" class="fact-grid editorial-facts"></div>
-                    <div class="row-actions">
-                      <button class="btn tertiary" data-nav="sessions" type="button">Open message stream</button>
-                    </div>
+            <div class="page-grid page-grid-branches">
+              <aside id="branchDetailPanel" class="panel side-focus-panel editorial-rail">
+                <div class="section-row">
+                  <div>
+                    <p class="section-label">Current workstream</p>
+                    <h3 id="branchDetailTitle">Choose a workstream</h3>
                   </div>
-                </aside>
+                  <button class="btn tertiary" data-nav="sessions" type="button">Open sessions</button>
+                </div>
+                <div id="branchDetailEmpty" class="empty-state">Select a workstream to inspect cross-agent activity and checkpoint coverage.</div>
 
-                <section class="branch-main-grid">
-                  <section class="panel page-block">
-                    <div class="section-row">
-                      <div>
-                <p class="section-label">Workstreams</p>
-                        <h2>Workstreams</h2>
-                      </div>
-                      <span id="branchHeadline" class="chip">0 workstreams</span>
+                <div id="branchDetailBody" class="detail-stack hidden">
+                  <p id="branchLeadCopy" class="lead-copy"></p>
+                  <div id="branchMeta" class="meta-grid compact-meta-grid"></div>
+                </div>
+              </aside>
+
+              <section class="page-main-stack">
+                <section class="panel">
+                  <div class="section-row">
+                    <div>
+                      <p class="section-label">Workstream library</p>
+                      <h2>Tracked workstreams</h2>
                     </div>
-                    <div id="branchList" class="list stack-list"></div>
+                    <span id="branchHeadline" class="chip">0 workstreams</span>
+                  </div>
+                  <div id="branchList" class="list stack-list compact-list-surface"></div>
+                </section>
+
+                <div class="page-card-grid two-up">
+                  <section class="panel">
+                    <div class="section-row small">
+                      <div>
+                        <p class="section-label">Recent sessions</p>
+                        <h4>Activity on this workstream</h4>
+                      </div>
+                      <span id="branchSessionCount" class="chip">0 sessions</span>
+                    </div>
+                    <div id="branchSessionList" class="list stack-list compact-list-surface"></div>
                   </section>
 
-                  <div class="branch-activity-grid">
-                    <section class="panel page-block">
-                      <div class="section-row small">
-                        <div>
-                          <p class="section-label">Recent sessions</p>
-                          <h4>Activity on this workstream</h4>
-                        </div>
-                        <span id="branchSessionCount" class="chip">0 sessions</span>
+                  <section class="panel">
+                    <div class="section-row small">
+                      <div>
+                        <p class="section-label">Handoff timeline</p>
+                        <h4>Agent continuity</h4>
                       </div>
-                      <div id="branchSessionList" class="list stack-list"></div>
-                    </section>
-
-                    <section class="panel page-block">
-                      <div class="section-row small">
-                        <div>
-                          <p class="section-label">Handoff timeline</p>
-                          <h4>Agent continuity</h4>
-                        </div>
-                      </div>
-                      <div id="handoffList" class="list stack-list"></div>
-                    </section>
-                  </div>
-                </section>
-              </div>
+                    </div>
+                    <div id="handoffList" class="list stack-list compact-list-surface"></div>
+                  </section>
+                </div>
+              </section>
             </div>
-          </section>
+          </div>
+        </section>
 
         <section class="view" data-view="sessions">
-            <div class="page-shell page-sessions">
+          <div class="page-shell page-sessions">
             <header class="page-head">
               <p class="page-kicker">Captured sessions</p>
               <h1>Read the message stream</h1>
               <p id="sessionsPageMeta" class="page-copy">Choose a session, read its messages, and only open raw payload when you need the underlying capture.</p>
             </header>
 
-              <div class="sessions-page-grid">
-                <aside class="panel editorial-rail session-list-rail">
-                  <div class="section-row">
-                    <div>
-                      <p class="section-label">Conversation</p>
-                      <h2>Sessions</h2>
-                    </div>
-                    <span id="sessionHeadline" class="chip">0 sessions</span>
+            <div class="page-grid page-grid-sessions">
+              <aside class="panel side-focus-panel editorial-rail">
+                <div class="section-row">
+                  <div>
+                    <p class="section-label">Current session</p>
+                    <h3 id="sessionFocusTitle">Choose a session</h3>
                   </div>
-                  <div id="sessionList" class="list stack-list"></div>
-                </aside>
+                </div>
+                <p id="sessionFocusMeta" class="page-copy compact-copy">Pick a workstream, then choose a session to read the message stream and capture a checkpoint.</p>
+                <div class="action-stack">
+                  <button id="createCheckpointBtn" class="btn primary wide" type="button">Create checkpoint</button>
+                  <button id="togglePayload" class="btn tertiary wide" type="button">Show raw payload</button>
+                </div>
+                <div class="utility-inline">
+                  <button id="previewSessionKnowledgeBtn" class="btn quiet" type="button">Preview insights</button>
+                  <button id="extractSessionKnowledgeBtn" class="btn quiet" type="button">Save selected insights</button>
+                </div>
+              </aside>
 
-                <section class="session-main-grid">
-                  <section class="panel session-summary-panel">
+              <section class="page-main-stack">
+                <div class="page-card-grid two-up sessions-overview-grid">
+                  <section class="panel">
                     <div class="section-row">
                       <div>
-                        <p class="section-label">Current session</p>
-                        <h3 id="sessionFocusTitle">Choose a session</h3>
-                    <p id="sessionFocusMeta" class="page-copy compact-copy">Pick a workstream, then choose a session to read the message stream and capture a checkpoint.</p>
+                        <p class="section-label">Conversation</p>
+                        <h2>Sessions</h2>
                       </div>
-                      <div class="reader-actions">
-                        <button id="createCheckpointBtn" class="btn primary" type="button">Create checkpoint</button>
-                        <button id="togglePayload" class="btn tertiary" type="button">Show raw payload</button>
-                      </div>
+                      <span id="sessionHeadline" class="chip">0 sessions</span>
                     </div>
-
-                    <div class="utility-inline">
-                      <button id="previewSessionKnowledgeBtn" class="btn quiet" type="button">Preview insights</button>
-                      <button id="extractSessionKnowledgeBtn" class="btn quiet" type="button">Save selected insights</button>
-                    </div>
+                    <div id="sessionList" class="list stack-list compact-list-surface"></div>
                   </section>
 
-                  <div class="session-reading-grid">
-                    <section class="panel page-block messages-panel">
-                      <div class="section-row">
-                        <div>
-                          <p class="section-label">Messages</p>
-                          <h2>Message stream</h2>
-                        </div>
-                        <span id="turnCount" class="chip">0 messages</span>
+                  <section class="panel">
+                    <div class="section-row">
+                      <div>
+                        <p class="section-label">Messages</p>
+                        <h2>Message stream</h2>
                       </div>
-                      <div id="turnList" class="list stack-list"></div>
+                      <span id="turnCount" class="chip">0 messages</span>
+                    </div>
+                    <div id="turnList" class="list stack-list compact-list-surface"></div>
+                  </section>
+                </div>
+
+                <section class="panel reader-panel">
+                  <div id="turnDetailEmpty" class="empty-state">Select a message to inspect its text, companion context, and raw payload when needed.</div>
+
+                  <div id="turnDetailBody" class="reader-body hidden">
+                    <div class="reader-header-block">
+                      <p class="section-label">Selected message</p>
+                      <h4 id="turnDetailTitle">Choose a message</h4>
+                      <div id="turnLeadMeta" class="meta-line"></div>
+                    </div>
+
+                    <div class="reader-document">
+                      <section class="reader-block">
+                        <p id="turnPrimaryLabel" class="detail-label">Message</p>
+                        <p id="turnPrompt" class="detail-copy detail-primary"></p>
+                      </section>
+
+                      <section class="reader-block secondary">
+                        <p id="turnSecondaryLabel" class="detail-label">Related context</p>
+                        <p id="turnReply" class="detail-copy"></p>
+                      </section>
+                    </div>
+
+                    <div id="turnMeta" class="fact-grid reader-facts"></div>
+
+                    <section id="sessionKnowledgePreviewPanel" class="panel subpanel hidden">
+                      <div class="section-row small">
+                        <div>
+                          <p class="section-label">Insights preview</p>
+                          <h4>Review extracted candidates</h4>
+                        </div>
+                        <div class="row-actions">
+                          <span id="sessionKnowledgePreviewBadge" class="chip">0 selected</span>
+                          <button class="btn tertiary" type="button" data-preview-action="all" data-preview-scope="session">All</button>
+                          <button class="btn tertiary" type="button" data-preview-action="new" data-preview-scope="session">New</button>
+                          <button class="btn tertiary" type="button" data-preview-action="none" data-preview-scope="session">None</button>
+                        </div>
+                      </div>
+                      <div id="sessionKnowledgePreviewList" class="list preview-list"></div>
                     </section>
 
-                    <section class="panel reader-panel">
-                      <div id="turnDetailEmpty" class="empty-state">Select a message to inspect its text, companion context, and raw payload when needed.</div>
+                    <details class="technical-details">
+                      <summary>Technical details</summary>
+                      <div id="turnTechnical" class="meta-grid tech-grid"></div>
+                    </details>
 
-                      <div id="turnDetailBody" class="reader-body hidden">
-                        <div class="reader-header-block">
-                          <p class="section-label">Selected message</p>
-                          <h4 id="turnDetailTitle">Choose a message</h4>
-                          <div id="turnLeadMeta" class="meta-line"></div>
+                    <section id="payloadPanel" class="panel subpanel hidden">
+                      <div class="section-row small">
+                        <div>
+                          <p class="section-label">Raw payload</p>
+                          <h4 id="payloadTitle">Captured sidecar payload</h4>
                         </div>
-
-                        <div class="reader-document">
-                          <section class="reader-block">
-                            <p id="turnPrimaryLabel" class="detail-label">Message</p>
-                            <p id="turnPrompt" class="detail-copy detail-primary"></p>
-                          </section>
-
-                          <section class="reader-block secondary">
-                            <p id="turnSecondaryLabel" class="detail-label">Related context</p>
-                            <p id="turnReply" class="detail-copy"></p>
-                          </section>
-                        </div>
-
-                        <div id="turnMeta" class="fact-grid reader-facts"></div>
-
-                        <section id="sessionKnowledgePreviewPanel" class="panel subpanel hidden">
-                          <div class="section-row small">
-                            <div>
-                  <p class="section-label">Insights preview</p>
-                              <h4>Review extracted candidates</h4>
-                            </div>
-                            <div class="row-actions">
-                              <span id="sessionKnowledgePreviewBadge" class="chip">0 selected</span>
-                              <button class="btn tertiary" type="button" data-preview-action="all" data-preview-scope="session">All</button>
-                              <button class="btn tertiary" type="button" data-preview-action="new" data-preview-scope="session">New</button>
-                              <button class="btn tertiary" type="button" data-preview-action="none" data-preview-scope="session">None</button>
-                            </div>
-                          </div>
-                          <div id="sessionKnowledgePreviewList" class="list preview-list"></div>
-                        </section>
-
-                        <details class="technical-details">
-                          <summary>Technical details</summary>
-                          <div id="turnTechnical" class="meta-grid tech-grid"></div>
-                        </details>
-
-                        <section id="payloadPanel" class="panel subpanel hidden">
-                          <div class="section-row small">
-                            <div>
-                              <p class="section-label">Raw payload</p>
-                              <h4 id="payloadTitle">Captured sidecar payload</h4>
-                            </div>
-                            <span id="payloadBadge" class="chip">none</span>
-                          </div>
-                          <pre id="payloadText">Select a message in Sessions to inspect payload.</pre>
-                        </section>
+                        <span id="payloadBadge" class="chip">none</span>
                       </div>
+                      <pre id="payloadText">Select a message in Sessions to inspect payload.</pre>
                     </section>
                   </div>
                 </section>
-              </div>
+              </section>
             </div>
-          </section>
+          </div>
+        </section>
 
         <section class="view" data-view="checkpoints">
           <div class="page-shell page-checkpoints">
             <header class="page-head">
               <p class="page-kicker">Checkpoints</p>
               <h1>Restore points and explanations</h1>
-          <p id="checkpointsPageMeta" class="page-copy">Use checkpoints to explain a workstream state or rewind a workspace to a known snapshot.</p>
+              <p id="checkpointsPageMeta" class="page-copy">Use checkpoints to explain a workstream state or rewind a workspace to a known snapshot.</p>
             </header>
 
-            <div class="checkpoints-layout">
-              <aside class="panel rail-panel">
+            <div class="page-grid page-grid-checkpoints">
+              <aside class="panel side-focus-panel">
                 <div class="section-row">
                   <div>
                     <p class="section-label">Checkpoints</p>
@@ -372,11 +371,12 @@
                   </div>
                   <span id="checkpointHeadline" class="chip">0 checkpoints</span>
                 </div>
-                <div id="checkpointList" class="list stack-list"></div>
+                <div id="checkpointList" class="list stack-list compact-list-surface"></div>
               </aside>
 
-              <section class="panel detail-panel">
-                <header class="detail-head">
+              <section class="page-main-stack">
+                <section class="panel detail-panel">
+                  <header class="detail-head">
                   <div>
                     <p class="section-label">Selected checkpoint</p>
                     <h3 id="checkpointDetailTitle">Choose a checkpoint</h3>
@@ -385,49 +385,60 @@
                     <button id="explainCheckpointBtn" class="btn primary" type="button">Explain checkpoint</button>
                     <button id="rewindCheckpointBtn" class="btn tertiary" type="button">Rewind</button>
                   </div>
-                </header>
+                  </header>
 
-                <div class="utility-inline">
-                <button id="previewCheckpointKnowledgeBtn" class="btn quiet" type="button">Preview insights</button>
-                <button id="extractCheckpointKnowledgeBtn" class="btn quiet" type="button">Save selected insights</button>
-                </div>
+                  <div class="utility-inline">
+                    <button id="previewCheckpointKnowledgeBtn" class="btn quiet" type="button">Preview insights</button>
+                    <button id="extractCheckpointKnowledgeBtn" class="btn quiet" type="button">Save selected insights</button>
+                  </div>
 
-                <div id="checkpointDetailEmpty" class="empty-state">Choose a checkpoint to inspect its summary, linked branch or session, and stored snapshot shape.</div>
+                  <div id="checkpointDetailEmpty" class="empty-state">Choose a checkpoint to inspect its summary, linked branch or session, and stored snapshot shape.</div>
 
-                <div id="checkpointDetailBody" class="reader-body hidden">
-                  <section class="panel subpanel lead-panel">
-                    <p id="checkpointLeadCopy" class="lead-copy"></p>
-                    <div id="checkpointFactStrip" class="fact-grid editorial-facts"></div>
-                  </section>
+                  <div id="checkpointDetailBody" class="reader-body hidden">
+                    <section class="panel subpanel lead-panel">
+                      <p id="checkpointLeadCopy" class="lead-copy"></p>
+                      <div id="checkpointFactStrip" class="fact-grid editorial-facts"></div>
+                    </section>
 
-                  <section class="panel subpanel">
-                    <div class="section-row small">
-                      <div>
-                        <p class="section-label">Linked session</p>
-                        <h4>Source conversation</h4>
-                      </div>
+                    <div class="page-card-grid two-up">
+                      <section class="panel subpanel">
+                        <div class="section-row small">
+                          <div>
+                            <p class="section-label">Linked session</p>
+                            <h4>Source conversation</h4>
+                          </div>
+                        </div>
+                        <div id="checkpointSessionCard" class="list compact-list compact-list-surface"></div>
+                      </section>
+
+                      <section class="panel subpanel">
+                        <div class="section-row small">
+                          <div>
+                            <p class="section-label">Checkpoint facts</p>
+                            <h4>Stored snapshot shape</h4>
+                          </div>
+                        </div>
+                        <div id="checkpointMeta" class="meta-grid compact-meta-grid"></div>
+                      </section>
                     </div>
-                    <div id="checkpointSessionCard" class="list compact-list"></div>
-                  </section>
 
-                  <div id="checkpointMeta" class="meta-grid"></div>
-
-                  <section id="checkpointKnowledgePreviewPanel" class="panel subpanel hidden">
-                    <div class="section-row small">
-                      <div>
-                  <p class="section-label">Insights preview</p>
-                        <h4>Review extracted candidates</h4>
+                    <section id="checkpointKnowledgePreviewPanel" class="panel subpanel hidden">
+                      <div class="section-row small">
+                        <div>
+                          <p class="section-label">Insights preview</p>
+                          <h4>Review extracted candidates</h4>
+                        </div>
+                        <div class="row-actions">
+                          <span id="checkpointKnowledgePreviewBadge" class="chip">0 selected</span>
+                          <button class="btn tertiary" type="button" data-preview-action="all" data-preview-scope="checkpoint">All</button>
+                          <button class="btn tertiary" type="button" data-preview-action="new" data-preview-scope="checkpoint">New</button>
+                          <button class="btn tertiary" type="button" data-preview-action="none" data-preview-scope="checkpoint">None</button>
+                        </div>
                       </div>
-                      <div class="row-actions">
-                        <span id="checkpointKnowledgePreviewBadge" class="chip">0 selected</span>
-                        <button class="btn tertiary" type="button" data-preview-action="all" data-preview-scope="checkpoint">All</button>
-                        <button class="btn tertiary" type="button" data-preview-action="new" data-preview-scope="checkpoint">New</button>
-                        <button class="btn tertiary" type="button" data-preview-action="none" data-preview-scope="checkpoint">None</button>
-                      </div>
-                    </div>
-                    <div id="checkpointKnowledgePreviewList" class="list preview-list"></div>
-                  </section>
-                </div>
+                      <div id="checkpointKnowledgePreviewList" class="list preview-list"></div>
+                    </section>
+                  </div>
+                </section>
               </section>
             </div>
           </div>
