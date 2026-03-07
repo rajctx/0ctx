@@ -130,7 +130,7 @@ function defaultHookAgents(now: number): HookAgentState[] {
         installed: false,
         command: null,
         updatedAt: now,
-        notes: 'supported'
+        notes: agent === 'codex' ? 'preview-notify-archive' : 'supported'
     }));
 }
 
@@ -1062,6 +1062,8 @@ export function installHooks(options: {
     }
     if (selectedClients.has('codex') && !codexNotify.configured) {
         warnings.push(`Codex notify was not configured: ${codexNotify.reason ?? 'unknown reason'}.`);
+    } else if (selectedClients.has('codex') && codexNotify.configured) {
+        warnings.push('Codex capture is preview-grade: notify triggers ingestion, and 0ctx reconstructs sessions from the local Codex archive.');
     }
 
     const agents = defaultHookAgents(now).map((agent): HookAgentState => {
@@ -1073,9 +1075,9 @@ export function installHooks(options: {
         const nextStatus: HookAgentState['status'] = installed ? 'Supported' : 'Skipped';
         const nextCommand = installed ? buildHookCommand(supportedAgent, projectRoot, cliCommand, contextId) : null;
         const nextNotes = !selected
-            ? 'not-selected'
+            ? (supportedAgent === 'codex' ? 'preview-not-selected' : 'not-selected')
             : installed
-                ? 'installed'
+                ? (supportedAgent === 'codex' ? 'preview-installed' : 'installed')
                 : `not-installed: ${installResult.reason ?? 'hook-config-failed'}`;
         const unchanged = previous
             && previous.status === nextStatus

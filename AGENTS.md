@@ -245,10 +245,4 @@ Local state under `~/.0ctx/`:
 - Do not keep nested git repositories inside packages.
 - If nested git is detected (for example `packages/ui/.git`), migrate with:
   - `scripts/repo/adopt-ui-monorepo.ps1` (or npm scripts above)
-- Governance references:
-  - `docs/INDEX.md`
-  - `docs/ENV_REFERENCE.md`
-  - `docs/SEMANTIC_BLACKBOARD_ARCHITECTURE.md`
-  - `docs/HYBRID_STORAGE_AND_SYNC_MODEL.md`
-  - `docs/CONNECTOR_SERVICE_ARCHITECTURE.md`
-  - `docs/RELEASE.md`
+- Documentation is intentionally pruned right now. Use `README.md`, `AGENTS.md`, CLI help, and the source code as the current ground truth until the docs set is rewritten.

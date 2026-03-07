@@ -108,15 +108,8 @@ npm run dev:control-plane
 ## Documentation
 
 - `AGENTS.md`: implementation guidance and architecture.
-- `docs/INDEX.md`: canonical docs entrypoint.
-- `docs/ENV_REFERENCE.md`: canonical environment/config reference.
-- `docs/SEMANTIC_BLACKBOARD_ARCHITECTURE.md`: hybrid blackboard runtime architecture.
-- `docs/HYBRID_STORAGE_AND_SYNC_MODEL.md`: local/cloud storage contract and sync modes.
-- `docs/CONNECTOR_SERVICE_ARCHITECTURE.md`: always-on local connector service design.
-- `docs/INSTALL.md`: install and environment setup.
-- `docs/QUICKSTART.md`: first-run workflow.
-- `docs/RELEASE.md`: release checklist and tagging.
-- `docs/ONBOARDING.md`: maintainer/contributor onboarding.
+- `docs/INDEX.md`: temporary placeholder while the full docs set is being rewritten.
+- CLI help and in-product setup flows are the current source of truth for usage details.
 
 ## Repository Policy
 

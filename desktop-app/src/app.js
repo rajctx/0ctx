@@ -510,7 +510,19 @@ function integrationType(agent) {
 
 function integrationLabel(agent) {
   const base = humanizeLabel(agent);
-  return agent === 'codex' ? `${base} notify` : `${base} hook`;
+  return agent === 'codex' ? `${base} notify (preview)` : `${base} hook`;
+}
+
+function formatIntegrationNote(note) {
+  const value = String(note || '').trim().toLowerCase();
+  if (!value) return '';
+  if (value === 'preview-notify-archive') return 'Preview: notify + archive';
+  if (value === 'preview-installed') return 'Preview installed';
+  if (value === 'preview-not-selected') return 'Preview optional';
+  if (value === 'installed') return 'Installed';
+  if (value === 'supported') return 'Supported';
+  if (value === 'not-selected') return 'Not selected';
+  return humanizeLabel(value);
 }
 
 function methodSupported(method) {
@@ -583,7 +595,7 @@ function preferredClients() {
   if (agents.length > 0) {
     return [...new Set(agents)].join(',');
   }
-  return 'factory,antigravity,claude,codex';
+  return 'factory,antigravity,claude';
 }
 
 function preferredAgent() {
@@ -1446,7 +1458,7 @@ function renderSetup() {
           <h4>${esc(integrationLabel(hook.agent))}</h4>
           <p>${esc(`${hook.status} | ${hook.installed ? `${integrationType(hook.agent)} installed` : `${integrationType(hook.agent)} not installed`}`)}</p>
           <div class="list-row">
-            ${hook.notes ? renderChip(hook.notes, 'beige') : ''}
+            ${hook.notes ? renderChip(formatIntegrationNote(hook.notes), 'beige') : ''}
             ${hook.command ? renderChip(`${integrationType(hook.agent)} command ready`, hook.installed ? 'green' : 'orange') : ''}
           </div>
           ${hook.command ? `<p>${esc(short(hook.command, 180))}</p>` : ''}

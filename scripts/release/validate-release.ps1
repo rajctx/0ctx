@@ -44,7 +44,6 @@ try {
 
     $requiredPaths = @(
         "CHANGELOG.md",
-        "docs/RELEASE.md",
         "scripts/release/prepare-changelog.ps1",
         "scripts/release/tag-preview.ps1"
     )

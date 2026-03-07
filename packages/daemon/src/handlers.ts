@@ -297,7 +297,7 @@ function readHookHealth(): {
     const defaults: HookHealthAgent[] = [
         { agent: 'claude', status: 'Skipped', installed: false, command: null, updatedAt: null, notes: 'supported' },
         { agent: 'windsurf', status: 'Skipped', installed: false, command: null, updatedAt: null, notes: 'supported' },
-        { agent: 'codex', status: 'Skipped', installed: false, command: null, updatedAt: null, notes: 'supported' },
+        { agent: 'codex', status: 'Skipped', installed: false, command: null, updatedAt: null, notes: 'preview-notify-archive' },
         { agent: 'cursor', status: 'Skipped', installed: false, command: null, updatedAt: null, notes: 'supported' },
         { agent: 'factory', status: 'Skipped', installed: false, command: null, updatedAt: null, notes: 'supported' },
         { agent: 'antigravity', status: 'Skipped', installed: false, command: null, updatedAt: null, notes: 'supported' }

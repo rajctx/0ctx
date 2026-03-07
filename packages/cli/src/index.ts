@@ -147,6 +147,7 @@ const SOCKET_PATH = os.platform() === 'win32'
 
 const SUPPORTED_CLIENTS: SupportedClient[] = ['claude', 'cursor', 'windsurf', 'codex', 'antigravity'];
 const SUPPORTED_HOOK_INSTALL_CLIENTS: HookInstallClient[] = ['claude', 'cursor', 'windsurf', 'codex', 'factory', 'antigravity'];
+const DEFAULT_HOOK_INSTALL_CLIENTS: HookInstallClient[] = ['claude', 'cursor', 'windsurf', 'factory', 'antigravity'];
 const CLI_VERSION = (() => {
     try {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -233,7 +234,7 @@ function parseClients(raw: string | boolean | undefined): SupportedClient[] {
 }
 
 function parseHookClients(raw: string | boolean | undefined): HookInstallClient[] {
-    if (!raw || typeof raw !== 'string') return SUPPORTED_HOOK_INSTALL_CLIENTS;
+    if (!raw || typeof raw !== 'string') return DEFAULT_HOOK_INSTALL_CLIENTS;
     const normalized = raw.trim().toLowerCase();
     if (normalized === 'all') return SUPPORTED_HOOK_INSTALL_CLIENTS;
 
@@ -242,7 +243,7 @@ function parseHookClients(raw: string | boolean | undefined): HookInstallClient[
         .map(item => item.trim())
         .filter((item): item is HookInstallClient => item === 'factory' || SUPPORTED_CLIENTS.includes(item as SupportedClient));
 
-    return parsed.length > 0 ? parsed : SUPPORTED_HOOK_INSTALL_CLIENTS;
+    return parsed.length > 0 ? parsed : DEFAULT_HOOK_INSTALL_CLIENTS;
 }
 
 async function isDaemonReachable(): Promise<{ ok: boolean; error?: string; health?: any }> {
@@ -870,7 +871,7 @@ async function commandMcp(subcommand: string | undefined, flags: Record<string, 
             { value: 'claude', label: 'Claude Desktop' },
             { value: 'cursor', label: 'Cursor' },
             { value: 'windsurf', label: 'Windsurf' },
-            { value: 'codex', label: 'Codex CLI' },
+            { value: 'codex', label: 'Codex CLI (Preview)' },
             { value: 'antigravity', label: 'Antigravity' }
         ]
     });
