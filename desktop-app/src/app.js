@@ -66,6 +66,28 @@ const REQUIRED_RUNTIME_METHODS = [
   'extractCheckpointKnowledge'
 ];
 
+const MUTATION_EVENT_TYPES = new Set([
+  'ContextCreated',
+  'ContextDeleted',
+  'ContextSwitched',
+  'NodeAdded',
+  'NodeUpdated',
+  'NodeDeleted',
+  'EdgeAdded',
+  'CheckpointSaved',
+  'CheckpointRewound',
+  'BackupCreated',
+  'BackupRestored',
+  'Mutation'
+]);
+
+const EVENT_POLL_MS = 2500;
+const HEALTH_REFRESH_MS = 60000;
+
+let eventPollTimer = null;
+let healthRefreshTimer = null;
+let eventPollInFlight = false;
+
 function initialView() {
   if (typeof window === 'undefined') {
     return 'workspaces';
@@ -110,8 +132,8 @@ const state = {
   payloadNodeId: null,
   payloadExpanded: false,
   subscriptionId: null,
+  subscriptionContextId: null,
   lastSeq: 0,
-  events: [],
   storage: {}
 };
 
@@ -722,6 +744,172 @@ async function requestDaemonStatus(retries = 2) {
     }
   }
   throw lastError;
+}
+
+function hasRelevantMutation(events) {
+  return Array.isArray(events) && events.some((event) => {
+    const type = String(event?.type || '').trim();
+    if (MUTATION_EVENT_TYPES.has(type)) {
+      return true;
+    }
+    const method = String(event?.payload?.method || '').trim();
+    return method.length > 0;
+  });
+}
+
+async function clearEventSubscription(options = {}) {
+  const quiet = options.quiet === true;
+  const subscriptionId = state.subscriptionId;
+  state.subscriptionId = null;
+  state.subscriptionContextId = null;
+  state.lastSeq = 0;
+  if (!subscriptionId || !bridge) {
+    return;
+  }
+  try {
+    await invoke('unsubscribe_events', { subscriptionId });
+  } catch (error) {
+    if (!quiet) {
+      setStatus(`Event subscription cleanup failed: ${String(error)}`);
+    }
+  }
+}
+
+async function ensureEventSubscription(options = {}) {
+  if (!bridge || state.runtimeIssue) {
+    return;
+  }
+  const force = options.force === true;
+  const targetContextId = state.activeContextId || null;
+  if (!force && state.subscriptionId && state.subscriptionContextId === targetContextId) {
+    return;
+  }
+
+  await clearEventSubscription({ quiet: true });
+  const payload = {};
+  if (targetContextId) {
+    payload.contextId = targetContextId;
+  }
+  const result = await invoke('subscribe_events', payload);
+  state.subscriptionId = result?.subscriptionId || null;
+  state.subscriptionContextId = targetContextId;
+  state.lastSeq = Number(result?.lastAckedSequence || 0) || 0;
+}
+
+async function refreshRuntimeHealth() {
+  try {
+    const status = await requestDaemonStatus(0);
+    state.health = status?.health || {};
+    state.caps = Array.isArray(status?.capabilities?.methods) ? status.capabilities.methods : [];
+    state.storage = status?.storage || {};
+    const contexts = Array.isArray(status?.contexts) ? status.contexts : [];
+    const activeStillExists = state.activeContextId && contexts.some((context) => context.id === state.activeContextId);
+    state.contexts = contexts;
+
+    if (!activeStillExists) {
+      state.activeContextId = contexts[0]?.id || null;
+      state.activeBranchKey = null;
+      resetBranchScopedState();
+      state.branches = [];
+      await ensureEventSubscription({ force: true });
+      await refreshAll({ quiet: true });
+      return;
+    }
+
+    const missingMethods = missingRequiredMethods();
+    if (missingMethods.length > 0) {
+      setRuntimeIssue(
+        'Runtime update required',
+        `This desktop build requires a newer local runtime. Reinstall or restart 0ctx, then reopen the app. Missing methods: ${missingMethods.join(', ')}.`
+      );
+    } else {
+      state.runtimeIssue = null;
+    }
+
+    renderChrome();
+    renderRuntimeBanner();
+  } catch (error) {
+    if (!state.runtimeIssue) {
+      setRuntimeIssue(
+        'Runtime unavailable',
+        'The desktop app could not reach the local daemon. Start or repair 0ctx, then reopen the app if the issue remains.'
+      );
+    }
+    renderChrome();
+    renderRuntimeBanner();
+  }
+}
+
+async function pollEventSubscription() {
+  if (!bridge || state.loading || eventPollInFlight || state.runtimeIssue) {
+    return;
+  }
+  if (!state.subscriptionId) {
+    try {
+      await ensureEventSubscription();
+    } catch {
+      return;
+    }
+  }
+  if (!state.subscriptionId) {
+    return;
+  }
+
+  eventPollInFlight = true;
+  try {
+    const result = await invoke('poll_events', {
+      subscriptionId: state.subscriptionId,
+      afterSequence: state.lastSeq,
+      limit: 100
+    });
+    const cursor = Number(result?.cursor || state.lastSeq) || state.lastSeq;
+    const events = Array.isArray(result?.events) ? result.events : [];
+    if (cursor > state.lastSeq) {
+      state.lastSeq = cursor;
+      try {
+        await invoke('ack_event', {
+          subscriptionId: state.subscriptionId,
+          sequence: cursor
+        });
+      } catch {
+        // The app can continue using the local cursor even if explicit ack fails.
+      }
+    }
+    if (hasRelevantMutation(events)) {
+      await refreshAll({ quiet: true });
+    }
+  } catch (error) {
+    const message = String(error || '');
+    if (
+      message.includes('Subscription')
+      || message.includes('not found')
+      || message.includes('No event subscription')
+    ) {
+      state.subscriptionId = null;
+      state.subscriptionContextId = null;
+      state.lastSeq = 0;
+      try {
+        await ensureEventSubscription({ force: true });
+      } catch {
+        // Leave recovery to the next poll or manual refresh.
+      }
+    }
+  } finally {
+    eventPollInFlight = false;
+  }
+}
+
+function startBackgroundRefreshLoops() {
+  if (!eventPollTimer) {
+    eventPollTimer = setInterval(() => {
+      void pollEventSubscription();
+    }, EVENT_POLL_MS);
+  }
+  if (!healthRefreshTimer) {
+    healthRefreshTimer = setInterval(() => {
+      void refreshRuntimeHealth();
+    }, HEALTH_REFRESH_MS);
+  }
 }
 
 function setView(view) {
@@ -1442,8 +1630,12 @@ function renderAll() {
 }
 async function selectContext(id, silent = false) {
   if (!id) return;
+  const changed = state.activeContextId !== id;
   state.activeContextId = id;
   await daemon('switchContext', { contextId: id });
+  if (changed) {
+    await ensureEventSubscription({ force: true });
+  }
   if (!silent) {
     setStatus(`Switched workspace ${id}`);
   }
@@ -1641,7 +1833,8 @@ async function loadHook() {
   }
 }
 
-async function refreshAll() {
+async function refreshAll(options = {}) {
+  const quiet = options.quiet === true;
   if (state.loading) return;
   state.loading = true;
   try {
@@ -1675,8 +1868,11 @@ async function refreshAll() {
         'Runtime update required',
         `This desktop build requires a newer local runtime. Reinstall or restart 0ctx, then reopen the app. Missing methods: ${missingMethods.join(', ')}.`
       );
+      await clearEventSubscription({ quiet: true });
       renderAll();
-      setStatus(`Runtime contract mismatch: ${missingMethods.join(', ')}`);
+      if (!quiet) {
+        setStatus(`Runtime contract mismatch: ${missingMethods.join(', ')}`);
+      }
       return;
     }
     const issues = [];
@@ -1732,10 +1928,13 @@ async function refreshAll() {
       state.graphNodes = [];
       state.graphEdges = [];
     });
+    await ensureEventSubscription();
     renderAll();
     if (issues.length > 0) {
-      setStatus(`Loaded with partial data: ${issues[0]}`);
-    } else {
+      if (!quiet) {
+        setStatus(`Loaded with partial data: ${issues[0]}`);
+      }
+    } else if (!quiet) {
       setStatus('Refreshed local desktop data.');
     }
   } catch (error) {
@@ -1745,6 +1944,7 @@ async function refreshAll() {
         'The desktop app could not reach the local daemon. Start or repair 0ctx, then reopen the app if the issue remains.'
       );
     }
+    await clearEventSubscription({ quiet: true });
     renderAll();
     setStatus(`Bridge error: ${String(error)}`);
   } finally {
@@ -2269,9 +2469,7 @@ async function boot() {
   renderAll();
   setStatus('Booting desktop dashboard...');
   await refreshAll();
-  setInterval(() => {
-    void refreshAll();
-  }, 15000);
+  startBackgroundRefreshLoops();
 }
 
 void boot();

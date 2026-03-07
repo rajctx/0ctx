@@ -635,6 +635,41 @@ async fn poll_events(
     daemon_call_with_session(state.inner().clone(), "pollEvents", params).await
 }
 
+#[tauri::command]
+async fn ack_event(
+    subscription_id: Option<String>,
+    sequence: Option<u64>,
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+) -> Result<Value, String> {
+    let subscription = subscription_id.or_else(|| state.inner().lock().unwrap().event_subscription_id.clone());
+    let Some(subscription_id) = subscription else {
+        return Err("No event subscription available. Call subscribe_events first.".to_string());
+    };
+
+    let mut params = json!({ "subscriptionId": subscription_id });
+    if let Some(cursor) = sequence {
+        params["sequence"] = json!(cursor);
+    }
+    daemon_call_with_session(state.inner().clone(), "ackEvent", params).await
+}
+
+#[tauri::command]
+async fn unsubscribe_events(
+    subscription_id: Option<String>,
+    state: tauri::State<'_, Arc<Mutex<AppState>>>,
+) -> Result<Value, String> {
+    let subscription = subscription_id.or_else(|| state.inner().lock().unwrap().event_subscription_id.clone());
+    let Some(subscription_id) = subscription else {
+        state.inner().lock().unwrap().event_subscription_id = None;
+        return Ok(json!({ "removed": false }));
+    };
+
+    let params = json!({ "subscriptionId": subscription_id });
+    let result = daemon_call_with_session(state.inner().clone(), "unsubscribeEvents", params).await?;
+    state.inner().lock().unwrap().event_subscription_id = None;
+    Ok(result)
+}
+
 // ── Background posture polling ────────────────────────────────────────────────
 
 async fn poll_health(app: AppHandle, state: Arc<Mutex<AppState>>) {
@@ -752,7 +787,9 @@ pub fn run() {
             daemon_call,
             daemon_status,
             subscribe_events,
-            poll_events
+            poll_events,
+            ack_event,
+            unsubscribe_events
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
