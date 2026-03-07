@@ -18,10 +18,15 @@ export interface ContextItem {
 
 export interface GraphNode {
   id: string;
+  contextId?: string;
+  thread?: string;
   type: NodeType | string;
   content: string;
+  key?: string | null;
   createdAt: number;
   tags?: string[];
+  source?: string | null;
+  hidden?: boolean;
 }
 
 export interface GraphEdge {
@@ -34,6 +39,46 @@ export interface GraphEdge {
 export interface GraphPayload {
   nodes: GraphNode[];
   edges: GraphEdge[];
+}
+
+export interface ChatSessionSummary {
+  sessionId: string;
+  sessionNodeId: string | null;
+  summary: string;
+  startedAt: number;
+  lastTurnAt: number;
+  turnCount: number;
+  branch: string | null;
+  commitSha: string | null;
+}
+
+export interface ChatTurnSummary {
+  nodeId: string;
+  contextId: string;
+  sessionId: string;
+  key: string | null;
+  type: NodeType | string;
+  content: string;
+  tags: string[];
+  source: string | null;
+  hidden: boolean;
+  createdAt: number;
+  role: string | null;
+  branch: string | null;
+  commitSha: string | null;
+  hasPayload: boolean;
+  payloadBytes: number | null;
+}
+
+export interface NodePayloadRecord {
+  nodeId: string;
+  contextId: string;
+  contentType: string;
+  compression: 'gzip' | 'none';
+  byteLength: number;
+  payload: unknown;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export const NODE_TYPE_META: Record<
@@ -90,4 +135,3 @@ export function asNodeType(value: string): NodeType {
   }
   return 'artifact';
 }
-

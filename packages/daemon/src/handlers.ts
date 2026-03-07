@@ -1,4 +1,7 @@
 import type { Graph, AuditAction, AuditMetadata, AuditEntry, SearchResult } from '@0ctx/core';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import type { DaemonRequest } from './protocol';
 import {
     clearConnectionContext,
@@ -20,8 +23,23 @@ const CONTEXT_REQUIRED_METHODS = new Set([
     'getByKey',
     'search',
     'getGraphData',
+    'listChatSessions',
+    'listChatTurns',
+    'listBranchLanes',
+    'listBranchSessions',
+    'listSessionMessages',
+    'listBranchCheckpoints',
+    'getSessionDetail',
+    'getCheckpointDetail',
+    'getHandoffTimeline',
+    'previewSessionKnowledge',
+    'extractSessionKnowledge',
     'saveCheckpoint',
+    'createSessionCheckpoint',
     'listCheckpoints',
+    'resumeSession',
+    'rewindCheckpoint',
+    'explainCheckpoint',
     'createBackup',
     'getSyncPolicy',
     'setSyncPolicy'
@@ -45,7 +63,9 @@ const MUTATING_ACTIONS: Record<string, AuditAction> = {
     deleteNode: 'delete_node',
     addEdge: 'add_edge',
     saveCheckpoint: 'save_checkpoint',
+    createSessionCheckpoint: 'save_checkpoint',
     rewind: 'rewind',
+    rewindCheckpoint: 'rewind',
     createBackup: 'create_backup',
     restoreBackup: 'restore_backup'
 };
@@ -98,6 +118,7 @@ function recordMutationAudit(
 ): void {
     const payload = { ...params };
     delete payload.content;
+    delete payload.rawPayload;
 
     graph.recordAuditEvent({
         action,
@@ -120,6 +141,7 @@ function toEventSource(connectionId: string, req: DaemonRequest): string {
 function toEventPayload(params: RequestParams, result: unknown): Record<string, unknown> {
     const sanitizedParams = { ...params };
     delete sanitizedParams.content;
+    delete sanitizedParams.rawPayload;
     return {
         params: sanitizedParams,
         result: result && typeof result === 'object'
@@ -143,6 +165,18 @@ function parsePositiveInt(value: unknown, fallback: number, max = 500): number {
 function parsePositiveHours(value: unknown, fallbackHours: number): number {
     if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return fallbackHours;
     return value;
+}
+
+function parseStringArray(value: unknown): string[] | undefined {
+    if (Array.isArray(value)) {
+        const entries = value.map((entry) => String(entry ?? '').trim()).filter(Boolean);
+        return entries.length > 0 ? entries : [];
+    }
+    if (typeof value === 'string') {
+        const entries = value.split(',').map((entry) => entry.trim()).filter(Boolean);
+        return entries.length > 0 ? entries : [];
+    }
+    return undefined;
 }
 
 function parseDepth(value: unknown, fallback = 2): number {
@@ -230,6 +264,91 @@ function extractAuditTargetId(entry: { payload?: Record<string, unknown>; result
     return resultId;
 }
 
+function isHiddenAuditEvent(entry: AuditEntry): boolean {
+    const payload = (entry.payload && typeof entry.payload === 'object') ? entry.payload as Record<string, unknown> : {};
+    const payloadParams = payload.params && typeof payload.params === 'object'
+        ? payload.params as Record<string, unknown>
+        : payload;
+    const result = (entry.result && typeof entry.result === 'object') ? entry.result as Record<string, unknown> : {};
+    return payloadParams.hidden === true || result.hidden === true;
+}
+
+type HookHealthAgent = {
+    agent: string;
+    status: 'Supported' | 'Planned' | 'Skipped';
+    installed: boolean;
+    command: string | null;
+    updatedAt: number | null;
+    notes: string | null;
+};
+
+function getHookStatePath(): string {
+    return process.env.CTX_HOOK_STATE_PATH || path.join(os.homedir(), '.0ctx', 'hooks-state.json');
+}
+
+function readHookHealth(): {
+    statePath: string;
+    projectRoot: string | null;
+    contextId: string | null;
+    projectConfigPath: string | null;
+    updatedAt: number | null;
+    agents: HookHealthAgent[];
+} {
+    const defaults: HookHealthAgent[] = [
+        { agent: 'claude', status: 'Skipped', installed: false, command: null, updatedAt: null, notes: 'supported' },
+        { agent: 'windsurf', status: 'Skipped', installed: false, command: null, updatedAt: null, notes: 'supported' },
+        { agent: 'codex', status: 'Skipped', installed: false, command: null, updatedAt: null, notes: 'supported' },
+        { agent: 'cursor', status: 'Skipped', installed: false, command: null, updatedAt: null, notes: 'supported' },
+        { agent: 'factory', status: 'Skipped', installed: false, command: null, updatedAt: null, notes: 'supported' },
+        { agent: 'antigravity', status: 'Skipped', installed: false, command: null, updatedAt: null, notes: 'supported' }
+    ];
+
+    const statePath = getHookStatePath();
+    if (!fs.existsSync(statePath)) {
+        return {
+            statePath,
+            projectRoot: null,
+            contextId: null,
+            projectConfigPath: null,
+            updatedAt: null,
+            agents: defaults
+        };
+    }
+
+    try {
+        const parsed = JSON.parse(fs.readFileSync(statePath, 'utf8')) as Record<string, unknown>;
+        const agents = Array.isArray(parsed.agents)
+            ? (parsed.agents as Array<Record<string, unknown>>).map((entry): HookHealthAgent => ({
+                agent: typeof entry.agent === 'string' ? entry.agent : 'unknown',
+                status: entry.status === 'Supported' || entry.status === 'Planned' || entry.status === 'Skipped'
+                    ? entry.status
+                    : 'Skipped',
+                installed: entry.installed === true,
+                command: typeof entry.command === 'string' ? entry.command : null,
+                updatedAt: typeof entry.updatedAt === 'number' ? entry.updatedAt : null,
+                notes: typeof entry.notes === 'string' ? entry.notes : null
+            }))
+            : defaults;
+        return {
+            statePath,
+            projectRoot: typeof parsed.projectRoot === 'string' ? parsed.projectRoot : null,
+            contextId: typeof parsed.contextId === 'string' ? parsed.contextId : null,
+            projectConfigPath: typeof parsed.projectConfigPath === 'string' ? parsed.projectConfigPath : null,
+            updatedAt: typeof parsed.updatedAt === 'number' ? parsed.updatedAt : null,
+            agents
+        };
+    } catch {
+        return {
+            statePath,
+            projectRoot: null,
+            contextId: null,
+            projectConfigPath: null,
+            updatedAt: null,
+            agents: defaults
+        };
+    }
+}
+
 function buildTemporalRecall(
     graph: Graph,
     contextId: string | null,
@@ -255,6 +374,7 @@ function buildTemporalRecall(
     const windowed = graph
         .listAuditEvents(contextId ?? undefined, Math.max(limit * 10, 100))
         .filter(event => event.createdAt >= minCreatedAt)
+        .filter(event => !isHiddenAuditEvent(event))
         .slice(0, Math.max(limit * 5, limit));
 
     const sessions = new Map<string, Array<{
@@ -505,12 +625,17 @@ export function handleRequest(
     if (req.method === 'getCapabilities') {
         return {
             apiVersion: '2',
-            features: ['sessions', 'health', 'capabilities', 'audit_logs', 'audit_verify', 'metrics', 'backup_restore', 'auth', 'sync', 'sync_policies', 'blackboard_events', 'task_leases', 'quality_gates', 'recall', 'recall_feedback'],
+            features: ['sessions', 'health', 'capabilities', 'audit_logs', 'audit_verify', 'metrics', 'backup_restore', 'auth', 'sync', 'sync_policies', 'blackboard_events', 'task_leases', 'quality_gates', 'recall', 'recall_feedback', 'chat_payloads', 'hook_health'],
             methods: [
                 'listContexts', 'createContext', 'deleteContext', 'switchContext', 'getActiveContext',
                 'addNode', 'getNode', 'updateNode', 'getByKey', 'deleteNode',
                 'addEdge', 'getSubgraph', 'search', 'getGraphData',
-                'saveCheckpoint', 'rewind', 'listCheckpoints',
+                  'listChatSessions', 'listChatTurns', 'getNodePayload', 'getHookHealth',
+                  'listBranchLanes', 'listBranchSessions', 'listSessionMessages',
+                  'listBranchCheckpoints', 'getSessionDetail', 'getCheckpointDetail',
+                  'getHandoffTimeline', 'previewSessionKnowledge', 'previewCheckpointKnowledge',
+                  'extractSessionKnowledge', 'extractCheckpointKnowledge',
+                  'saveCheckpoint', 'createSessionCheckpoint', 'rewind', 'rewindCheckpoint', 'listCheckpoints', 'resumeSession', 'explainCheckpoint',
                 'createSession', 'refreshSession', 'health', 'getCapabilities', 'metricsSnapshot',
                 'listAuditEvents', 'listRecallFeedback', 'createBackup', 'listBackups', 'restoreBackup',
                 'auth/status', 'syncStatus', 'syncNow', 'getSyncPolicy', 'setSyncPolicy',
@@ -720,6 +845,10 @@ export function handleRequest(
 
     if (req.method === 'listContexts') {
         return graph.listContexts();
+    }
+
+    if (req.method === 'getHookHealth') {
+        return readHookHealth();
     }
 
     const contextId = resolveContextId(connectionId, params, sessionContextId);
@@ -1066,7 +1195,9 @@ export function handleRequest(
             return result;
         }
         case 'getByKey':
-            return graph.getByKey(contextId!, params.key as string);
+            return graph.getByKey(contextId!, params.key as string, {
+                includeHidden: params.includeHidden === true
+            });
         case 'deleteNode': {
             graph.deleteNode(params.id as string);
             const result = { success: true };
@@ -1085,15 +1216,225 @@ export function handleRequest(
         case 'getSubgraph':
             return graph.getSubgraph(params.rootId as string, params.depth as number | undefined, params.maxNodes as number | undefined);
         case 'search':
-            return graph.search(contextId!, params.query as string, params.limit as number | undefined);
+            return graph.search(
+                contextId!,
+                params.query as string,
+                params.limit as number | undefined,
+                { includeHidden: params.includeHidden === true }
+            );
         case 'getGraphData':
-            return graph.getGraphData(contextId!);
+            return graph.getGraphData(contextId!, { includeHidden: params.includeHidden === true });
+        case 'listChatSessions':
+            return graph.listChatSessions(contextId!, params.limit as number | undefined);
+        case 'listChatTurns': {
+            const sessionId = typeof params.sessionId === 'string' ? params.sessionId : null;
+            if (!sessionId || sessionId.trim().length === 0) {
+                throw new Error("Missing required 'sessionId' for listChatTurns.");
+            }
+            return graph.listChatTurns(contextId!, sessionId, params.limit as number | undefined);
+        }
+        case 'listBranchLanes':
+            return graph.listBranchLanes(contextId!, params.limit as number | undefined);
+        case 'listBranchSessions': {
+            const branch = typeof params.branch === 'string' ? params.branch : null;
+            if (!branch || branch.trim().length === 0) {
+                throw new Error("Missing required 'branch' for listBranchSessions.");
+            }
+            return graph.listBranchSessions(contextId!, branch, {
+                worktreePath: typeof params.worktreePath === 'string' ? params.worktreePath : null,
+                limit: params.limit as number | undefined
+            });
+        }
+        case 'listSessionMessages': {
+            const sessionId = typeof params.sessionId === 'string' ? params.sessionId : null;
+            if (!sessionId || sessionId.trim().length === 0) {
+                throw new Error("Missing required 'sessionId' for listSessionMessages.");
+            }
+            return graph.listSessionMessages(contextId!, sessionId, params.limit as number | undefined);
+        }
+        case 'listBranchCheckpoints': {
+            const branch = typeof params.branch === 'string' ? params.branch : null;
+            if (!branch || branch.trim().length === 0) {
+                throw new Error("Missing required 'branch' for listBranchCheckpoints.");
+            }
+            return graph.listBranchCheckpoints(contextId!, branch, {
+                worktreePath: typeof params.worktreePath === 'string' ? params.worktreePath : null,
+                limit: params.limit as number | undefined
+            });
+        }
+        case 'getSessionDetail': {
+            const sessionId = typeof params.sessionId === 'string' ? params.sessionId : null;
+            if (!sessionId || sessionId.trim().length === 0) {
+                throw new Error("Missing required 'sessionId' for getSessionDetail.");
+            }
+            return graph.getSessionDetail(contextId!, sessionId);
+        }
+        case 'getCheckpointDetail': {
+            const checkpointId = typeof params.checkpointId === 'string' ? params.checkpointId : null;
+            if (!checkpointId || checkpointId.trim().length === 0) {
+                throw new Error("Missing required 'checkpointId' for getCheckpointDetail.");
+            }
+            return graph.getCheckpointDetail(checkpointId);
+        }
+        case 'getHandoffTimeline':
+            return graph.getHandoffTimeline(
+                contextId!,
+                typeof params.branch === 'string' ? params.branch : undefined,
+                typeof params.worktreePath === 'string' ? params.worktreePath : null,
+                params.limit as number | undefined
+            );
+        case 'previewSessionKnowledge': {
+            const sessionId = typeof params.sessionId === 'string' ? params.sessionId : null;
+            if (!sessionId || sessionId.trim().length === 0) {
+                throw new Error("Missing required 'sessionId' for previewSessionKnowledge.");
+            }
+            return graph.previewKnowledgeFromSession(contextId!, sessionId, {
+                checkpointId: typeof params.checkpointId === 'string' ? params.checkpointId : null,
+                maxNodes: params.maxNodes as number | undefined,
+                source: params.source === 'checkpoint' ? 'checkpoint' : 'session'
+            });
+        }
+        case 'extractSessionKnowledge': {
+            const sessionId = typeof params.sessionId === 'string' ? params.sessionId : null;
+            if (!sessionId || sessionId.trim().length === 0) {
+                throw new Error("Missing required 'sessionId' for extractSessionKnowledge.");
+            }
+            const result = graph.extractKnowledgeFromSession(contextId!, sessionId, {
+                checkpointId: typeof params.checkpointId === 'string' ? params.checkpointId : null,
+                maxNodes: params.maxNodes as number | undefined,
+                source: params.source === 'checkpoint' ? 'checkpoint' : 'session',
+                allowedKeys: parseStringArray(params.candidateKeys)
+            });
+            recordMutationAudit(graph, req, 'extract_knowledge', contextId, params, {
+                sessionId,
+                checkpointId: result.checkpointId,
+                createdCount: result.createdCount,
+                reusedCount: result.reusedCount,
+                nodeCount: result.nodeCount
+            }, auditMetadata);
+            recordMutationEvent(runtime, connectionId, req, contextId, params, {
+                sessionId,
+                checkpointId: result.checkpointId,
+                createdCount: result.createdCount,
+                reusedCount: result.reusedCount,
+                nodeCount: result.nodeCount
+              });
+              runtime.syncEngine?.enqueue(contextId!);
+              return result;
+          }
+        case 'previewCheckpointKnowledge': {
+            const checkpointId = typeof params.checkpointId === 'string' ? params.checkpointId : null;
+            if (!checkpointId || checkpointId.trim().length === 0) {
+                throw new Error("Missing required 'checkpointId' for previewCheckpointKnowledge.");
+            }
+            return graph.previewKnowledgeFromCheckpoint(checkpointId, {
+                maxNodes: params.maxNodes as number | undefined
+            });
+        }
+        case 'extractCheckpointKnowledge': {
+            const checkpointId = typeof params.checkpointId === 'string' ? params.checkpointId : null;
+            if (!checkpointId || checkpointId.trim().length === 0) {
+                throw new Error("Missing required 'checkpointId' for extractCheckpointKnowledge.");
+            }
+            const result = graph.extractKnowledgeFromCheckpoint(checkpointId, {
+                maxNodes: params.maxNodes as number | undefined,
+                allowedKeys: parseStringArray(params.candidateKeys)
+            });
+            recordMutationAudit(graph, req, 'extract_knowledge', result.contextId, params, {
+                sessionId: result.sessionId,
+                checkpointId,
+                createdCount: result.createdCount,
+                reusedCount: result.reusedCount,
+                nodeCount: result.nodeCount
+            }, auditMetadata);
+            recordMutationEvent(runtime, connectionId, req, result.contextId, params, {
+                sessionId: result.sessionId,
+                checkpointId,
+                createdCount: result.createdCount,
+                reusedCount: result.reusedCount,
+                nodeCount: result.nodeCount
+            });
+            runtime.syncEngine?.enqueue(result.contextId);
+            return result;
+        }
+        case 'getNodePayload': {
+            const nodeId = typeof params.nodeId === 'string' ? params.nodeId : null;
+            if (!nodeId || nodeId.trim().length === 0) {
+                throw new Error("Missing required 'nodeId' for getNodePayload.");
+            }
+            return graph.getNodePayload(nodeId);
+        }
         case 'saveCheckpoint': {
             const result = graph.saveCheckpoint(contextId!, params.name as string);
             recordMutationAudit(graph, req, 'save_checkpoint', contextId, params, { id: result.id }, auditMetadata);
             recordMutationEvent(runtime, connectionId, req, contextId, params, { id: result.id });
+            const extracted = graph.extractKnowledgeFromCheckpoint(result.id);
+            if (extracted.nodeCount > 0) {
+                recordMutationAudit(graph, req, 'extract_knowledge', contextId, {
+                    checkpointId: result.id,
+                    source: 'checkpoint:auto'
+                }, {
+                    sessionId: extracted.sessionId,
+                    checkpointId: result.id,
+                    createdCount: extracted.createdCount,
+                    reusedCount: extracted.reusedCount,
+                    nodeCount: extracted.nodeCount
+                }, auditMetadata);
+                recordMutationEvent(runtime, connectionId, req, contextId, {
+                    checkpointId: result.id,
+                    source: 'checkpoint:auto'
+                }, {
+                    sessionId: extracted.sessionId,
+                    checkpointId: result.id,
+                    createdCount: extracted.createdCount,
+                    reusedCount: extracted.reusedCount,
+                    nodeCount: extracted.nodeCount
+                });
+            }
             runtime.syncEngine?.enqueue(contextId!);
-            return result;
+            return { ...result, knowledge: extracted };
+        }
+        case 'createSessionCheckpoint': {
+            const sessionId = typeof params.sessionId === 'string' ? params.sessionId : null;
+            if (!sessionId || sessionId.trim().length === 0) {
+                throw new Error("Missing required 'sessionId' for createSessionCheckpoint.");
+            }
+            const result = graph.createSessionCheckpoint(contextId!, sessionId, {
+                name: typeof params.name === 'string' ? params.name : undefined,
+                summary: typeof params.summary === 'string' ? params.summary : undefined,
+                kind: params.kind === 'manual' || params.kind === 'session' || params.kind === 'legacy'
+                    ? params.kind
+                    : undefined
+            });
+            recordMutationAudit(graph, req, 'save_checkpoint', contextId, params, { id: result.id }, auditMetadata);
+            recordMutationEvent(runtime, connectionId, req, contextId, params, { id: result.id });
+            const extracted = graph.extractKnowledgeFromCheckpoint(result.id);
+            if (extracted.nodeCount > 0) {
+                recordMutationAudit(graph, req, 'extract_knowledge', contextId, {
+                    checkpointId: result.id,
+                    sessionId,
+                    source: 'checkpoint:auto'
+                }, {
+                    sessionId: extracted.sessionId,
+                    checkpointId: result.id,
+                    createdCount: extracted.createdCount,
+                    reusedCount: extracted.reusedCount,
+                    nodeCount: extracted.nodeCount
+                }, auditMetadata);
+                recordMutationEvent(runtime, connectionId, req, contextId, {
+                    checkpointId: result.id,
+                    sessionId,
+                    source: 'checkpoint:auto'
+                }, {
+                    sessionId: extracted.sessionId,
+                    checkpointId: result.id,
+                    createdCount: extracted.createdCount,
+                    reusedCount: extracted.reusedCount,
+                    nodeCount: extracted.nodeCount
+                });
+            }
+            runtime.syncEngine?.enqueue(contextId!);
+            return { ...result, knowledge: extracted };
         }
         case 'rewind': {
             graph.rewind(params.checkpointId as string);
@@ -1103,8 +1444,51 @@ export function handleRequest(
             if (contextId) runtime.syncEngine?.enqueue(contextId);
             return result;
         }
+        case 'rewindCheckpoint': {
+            const checkpointId = typeof params.checkpointId === 'string' ? params.checkpointId : null;
+            if (!checkpointId || checkpointId.trim().length === 0) {
+                throw new Error("Missing required 'checkpointId' for rewindCheckpoint.");
+            }
+            const detail = graph.rewindCheckpoint(checkpointId);
+            recordMutationAudit(graph, req, 'rewind', detail.checkpoint.contextId, params, { checkpointId }, auditMetadata);
+            recordMutationEvent(runtime, connectionId, req, detail.checkpoint.contextId, params, { checkpointId });
+            runtime.syncEngine?.enqueue(detail.checkpoint.contextId);
+            return detail;
+        }
         case 'listCheckpoints':
             return graph.listCheckpoints(contextId!);
+        case 'resumeSession': {
+            const sessionId = typeof params.sessionId === 'string' ? params.sessionId : null;
+            if (!sessionId || sessionId.trim().length === 0) {
+                throw new Error("Missing required 'sessionId' for resumeSession.");
+            }
+            const detail = graph.resumeSession(contextId!, sessionId);
+            recordMutationAudit(graph, req, 'resume_session', contextId, params, {
+                sessionId,
+                checkpointCount: detail.checkpointCount
+            }, auditMetadata);
+            recordMutationEvent(runtime, connectionId, req, contextId, params, {
+                sessionId,
+                checkpointCount: detail.checkpointCount
+            });
+            return detail;
+        }
+        case 'explainCheckpoint': {
+            const checkpointId = typeof params.checkpointId === 'string' ? params.checkpointId : null;
+            if (!checkpointId || checkpointId.trim().length === 0) {
+                throw new Error("Missing required 'checkpointId' for explainCheckpoint.");
+            }
+            const detail = graph.explainCheckpoint(checkpointId);
+            recordMutationAudit(graph, req, 'explain_checkpoint', detail?.checkpoint.contextId ?? contextId, params, {
+                checkpointId,
+                found: Boolean(detail)
+            }, auditMetadata);
+            recordMutationEvent(runtime, connectionId, req, detail?.checkpoint.contextId ?? contextId, params, {
+                checkpointId,
+                found: Boolean(detail)
+            });
+            return detail;
+        }
         case 'getSyncPolicy': {
             const policy = graph.getContextSyncPolicy(contextId!);
             if (!policy) {

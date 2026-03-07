@@ -11,9 +11,10 @@ import type { SyncEnvelope } from '@0ctx/core';
 import { getConfigValue } from '@0ctx/core';
 
 const TIMEOUT_MS = 30_000;
+const MAX_REDIRECTS = 5;
 
 function getSyncEndpoint(): string {
-    return getConfigValue('sync.endpoint').replace(/\/$/, '');
+    return normalize0ctxHostedUrl(getConfigValue('sync.endpoint')).replace(/\/$/, '');
 }
 
 // ─── HTTP helpers ────────────────────────────────────────────────────────────
@@ -22,7 +23,8 @@ function request(
     method: 'POST' | 'GET',
     url: string,
     token: string,
-    body?: string
+    body?: string,
+    redirectsRemaining = MAX_REDIRECTS
 ): Promise<{ status: number; body: string }> {
     return new Promise((resolve, reject) => {
         const parsed = new URL(url);
@@ -45,9 +47,23 @@ function request(
                 const chunks: Buffer[] = [];
                 res.on('data', (chunk: Buffer) => chunks.push(chunk));
                 res.on('end', () => {
+                    const status = res.statusCode ?? 0;
+                    const responseBody = Buffer.concat(chunks).toString('utf8');
+                    const location = res.headers.location;
+                    if (location && [301, 302, 303, 307, 308].includes(status)) {
+                        if (redirectsRemaining <= 0) {
+                            reject(new Error(`Too many redirects while requesting ${url}`));
+                            return;
+                        }
+                        const nextUrl = new URL(location, url).toString();
+                        const nextMethod = status === 303 ? 'GET' : method;
+                        const nextBody = nextMethod === 'GET' ? undefined : body;
+                        resolve(request(nextMethod, nextUrl, token, nextBody, redirectsRemaining - 1));
+                        return;
+                    }
                     resolve({
-                        status: res.statusCode ?? 0,
-                        body: Buffer.concat(chunks).toString('utf8')
+                        status,
+                        body: responseBody
                     });
                 });
             }
@@ -61,6 +77,18 @@ function request(
         if (body) req.write(body);
         req.end();
     });
+}
+
+function normalize0ctxHostedUrl(value: string): string {
+    try {
+        const parsed = new URL(value);
+        if (parsed.hostname === '0ctx.com') {
+            parsed.hostname = 'www.0ctx.com';
+        }
+        return parsed.toString();
+    } catch {
+        return value.replace(/^https:\/\/0ctx\.com(?=\/|$)/, 'https://www.0ctx.com');
+    }
 }
 
 // ─── Push ────────────────────────────────────────────────────────────────────

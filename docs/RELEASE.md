@@ -72,6 +72,18 @@ Validate the publish tarball contents (no registry writes):
 npm run release:publish:dry
 ```
 
+Run the clean-room GA agent capture gate:
+
+```powershell
+npm run release:e2e:ga
+```
+
+Build desktop release installers and collect signed artifact checksums into `releases/desktop/...`:
+
+```powershell
+npm run release:desktop:artifacts
+```
+
 Publish all packages in deterministic order (`core → daemon → mcp → cli`):
 
 ```powershell
@@ -93,6 +105,8 @@ The script enforces the correct publish order and verifies version consistency a
 - `CHANGELOG.md` contains a dated section for the target tag.
 - Docs are updated for user-facing behavior changes.
 - Migration notes are included for schema or protocol changes.
+- `npm run release:e2e:ga` passes on a clean temp runtime for Factory, Codex, and Antigravity.
+- `npm run desktop:smoke` passes so the desktop package/update surface is validated before publish.
 
 ## GitHub Actions release paths
 

@@ -129,6 +129,7 @@ describe('connector runtime cycle', () => {
 
         const summary = await runConnectorRuntimeCycle({}, deps);
         expect(summary.posture).toBe('connected');
+        expect(summary.recoveryState).toBe('healthy');
         expect(summary.cloudConnected).toBe(true);
         expect(summary.registrationMode).toBe('cloud');
         expect(stored?.registrationMode).toBe('cloud');
@@ -151,6 +152,7 @@ describe('connector runtime cycle', () => {
 
         const summary = await runConnectorRuntimeCycle({ autoStartDaemon: false }, deps);
         expect(summary.posture).toBe('offline');
+        expect(summary.recoveryState).toBe('blocked');
         expect(summary.auth).toBe(false);
         expect(summary.registrationMode).toBe('none');
         expect(summary.lastError).toBe('daemon_unreachable');
@@ -177,6 +179,21 @@ describe('connector runtime cycle', () => {
         expect(summary.daemonRunning).toBe(true);
         expect(summary.posture).toBe('degraded');
         expect(summary.lastError).toBeNull();
+    });
+
+    it('treats sync-disabled runtime as connected when connector health is otherwise good', async () => {
+        const deps = createBaseDeps({
+            getSyncStatus: async () => ({
+                enabled: false,
+                running: false,
+                lastError: null,
+                queue: { pending: 0, inFlight: 0, failed: 0, done: 0 }
+            })
+        });
+
+        const summary = await runConnectorRuntimeCycle({}, deps);
+        expect(summary.posture).toBe('connected');
+        expect(summary.recoveryState).toBe('healthy');
     });
 
     it('keeps degraded posture when cloud checks fail for cloud registration mode', async () => {
@@ -207,9 +224,11 @@ describe('connector runtime cycle', () => {
 
         const summary = await runConnectorRuntimeCycle({}, deps);
         expect(summary.posture).toBe('degraded');
+        expect(summary.recoveryState).toBe('backoff');
         expect(summary.cloudConnected).toBe(false);
         expect(summary.lastError).toBe('heartbeat_failed');
         expect(stored?.cloud.lastError).toBe('heartbeat_failed');
+        expect(stored?.runtime.recoveryState).toBe('backoff');
     });
 
     it('polls and ingests daemon blackboard events then advances cursor on success', async () => {

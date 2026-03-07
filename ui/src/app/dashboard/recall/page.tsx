@@ -108,6 +108,7 @@ export default function DashboardRecallPage() {
   const { activeContext, activeContextId, selectedMachineId } = useDashboardState();
   const [scope, setScope] = useState<RecallScope>('active');
   const [helpfulFilter, setHelpfulFilter] = useState<HelpfulFilter>('all');
+  const [includeChatDumps, setIncludeChatDumps] = useState(false);
   const [nodeFilter, setNodeFilter] = useState('');
   const [summary, setSummary] = useState<RecallFeedbackSummary | null>(null);
   const [contextNodes, setContextNodes] = useState<GraphNode[]>([]);
@@ -133,7 +134,9 @@ export default function DashboardRecallPage() {
           limit: 250,
           machineId: selectedMachineId
         }),
-        activeContextId ? getGraphData(activeContextId, selectedMachineId) : Promise.resolve({ nodes: [], edges: [] })
+        activeContextId
+          ? getGraphData(activeContextId, selectedMachineId, { includeHidden: includeChatDumps })
+          : Promise.resolve({ nodes: [], edges: [] })
       ]);
       setSummary(nextSummary);
       const nextNodes = [...(graph?.nodes ?? [])].sort((a, b) => b.createdAt - a.createdAt);
@@ -147,7 +150,7 @@ export default function DashboardRecallPage() {
     } finally {
       setLoading(false);
     }
-  }, [activeContextId, helpfulFilter, nodeFilter, scope, selectedMachineId]);
+  }, [activeContextId, helpfulFilter, includeChatDumps, nodeFilter, scope, selectedMachineId]);
 
   useEffect(() => {
     void refreshRecall();
@@ -272,6 +275,33 @@ export default function DashboardRecallPage() {
               )}
             >
               Not helpful only
+            </button>
+          </div>
+
+          <div className="flex flex-wrap gap-1">
+            <button
+              type="button"
+              onClick={() => setIncludeChatDumps(false)}
+              className={cn(
+                'rounded-lg border px-2.5 py-1.5 text-xs transition-colors',
+                !includeChatDumps
+                  ? 'border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--text-primary)]'
+                  : 'border-[var(--border-muted)] bg-[var(--surface-subtle)] text-[var(--text-muted)]'
+              )}
+            >
+              Exclude chat dumps
+            </button>
+            <button
+              type="button"
+              onClick={() => setIncludeChatDumps(true)}
+              className={cn(
+                'rounded-lg border px-2.5 py-1.5 text-xs transition-colors',
+                includeChatDumps
+                  ? 'border-[var(--accent-border)] bg-[var(--accent-soft)] text-[var(--text-primary)]'
+                  : 'border-[var(--border-muted)] bg-[var(--surface-subtle)] text-[var(--text-muted)]'
+              )}
+            >
+              Include chat dumps
             </button>
           </div>
 

@@ -1,0 +1,133 @@
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { afterEach, describe, expect, it } from 'vitest';
+import {
+    appendHookEventLog,
+    getHookDumpDir,
+    getHookDumpRetentionDays,
+    persistHookDump,
+    pruneHookDumps,
+    persistHookTranscriptHistory,
+    persistHookTranscriptSnapshot
+} from '../src/hook-dumps';
+
+const tempDirs: string[] = [];
+const originalHookDumpDir = process.env.CTX_HOOK_DUMP_DIR;
+const originalHookDumpRetentionDays = process.env.CTX_HOOK_DUMP_RETENTION_DAYS;
+
+function createTempDir(): string {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), '0ctx-hook-dumps-'));
+    tempDirs.push(dir);
+    return dir;
+}
+
+afterEach(() => {
+    if (originalHookDumpDir === undefined) {
+        delete process.env.CTX_HOOK_DUMP_DIR;
+    } else {
+        process.env.CTX_HOOK_DUMP_DIR = originalHookDumpDir;
+    }
+    if (originalHookDumpRetentionDays === undefined) {
+        delete process.env.CTX_HOOK_DUMP_RETENTION_DAYS;
+    } else {
+        process.env.CTX_HOOK_DUMP_RETENTION_DAYS = originalHookDumpRetentionDays;
+    }
+    for (const dir of tempDirs.splice(0, tempDirs.length)) {
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
+});
+
+describe('hook dump persistence', () => {
+    it('writes a raw hook dump to the configured directory', () => {
+        const dumpRoot = createTempDir();
+        process.env.CTX_HOOK_DUMP_DIR = dumpRoot;
+        const transcriptDir = createTempDir();
+        const transcriptPath = path.join(transcriptDir, 'session.jsonl');
+        fs.writeFileSync(transcriptPath, '{"type":"session_start"}\n', 'utf8');
+        const transcriptSnapshotPath = persistHookTranscriptSnapshot({
+            agent: 'factory',
+            sessionId: 'demo-session',
+            transcriptPath
+        });
+        const transcriptHistoryPath = persistHookTranscriptHistory({
+            agent: 'factory',
+            sessionId: 'demo-session',
+            transcriptPath,
+            now: 1700000000000
+        });
+        const eventLogPath = appendHookEventLog({
+            agent: 'factory',
+            sessionId: 'demo-session',
+            rawText: '{"session_id":"demo-session"}'
+        });
+
+        const filePath = persistHookDump({
+            agent: 'factory',
+            contextId: 'ctx-1',
+            rawText: '{"session_id":"demo-session"}',
+            parsedPayload: { session_id: 'demo-session', value: 1 },
+            normalized: {
+                agent: 'factory',
+                sessionId: 'demo-session',
+                turnId: 'turn-1',
+                role: 'assistant',
+                summary: 'demo summary',
+                occurredAt: 1700000000000,
+                raw: { session_id: 'demo-session' }
+            },
+            repositoryRoot: 'C:\\repo',
+            eventLogPath,
+            transcriptSnapshotPath,
+            transcriptHistoryPath,
+            now: 1700000000000
+        });
+
+        expect(getHookDumpDir()).toBe(path.resolve(dumpRoot));
+        expect(filePath.startsWith(path.join(path.resolve(dumpRoot), 'factory'))).toBe(true);
+        expect(fs.existsSync(filePath)).toBe(true);
+        expect(fs.readFileSync(filePath, 'utf8')).toBe('{"session_id":"demo-session"}');
+
+        const metaPath = filePath.replace(/\.json$/i, '.meta.json');
+        expect(fs.existsSync(metaPath)).toBe(true);
+        const saved = JSON.parse(fs.readFileSync(metaPath, 'utf8')) as Record<string, any>;
+        expect(saved.agent).toBe('factory');
+        expect(saved.contextId).toBe('ctx-1');
+        expect(saved.repositoryRoot).toBe('C:\\repo');
+        expect(saved.rawPath).toBe(filePath);
+        expect(saved.eventLogPath).toBe(eventLogPath);
+        expect(saved.transcriptSnapshotPath).toBe(transcriptSnapshotPath);
+        expect(saved.transcriptHistoryPath).toBe(transcriptHistoryPath);
+        expect(saved.normalized.summary).toBe('demo summary');
+        expect(saved.payload.session_id).toBe('demo-session');
+        expect(transcriptSnapshotPath).toBe(path.join(path.resolve(dumpRoot), 'factory', 'transcripts', 'demo-session.jsonl'));
+        expect(transcriptHistoryPath).toBe(path.join(path.resolve(dumpRoot), 'factory', 'transcript-history', 'demo-session', '2023-11-14T22-13-20-000Z.jsonl'));
+        expect(fs.readFileSync(String(transcriptSnapshotPath), 'utf8')).toBe('{"type":"session_start"}\n');
+        expect(fs.readFileSync(String(transcriptHistoryPath), 'utf8')).toBe('{"type":"session_start"}\n');
+        expect(fs.readFileSync(String(eventLogPath), 'utf8')).toBe('{"session_id":"demo-session"}\n');
+    });
+
+    it('prunes old hook dump files using the configured retention window', () => {
+        const dumpRoot = createTempDir();
+        process.env.CTX_HOOK_DUMP_DIR = dumpRoot;
+        process.env.CTX_HOOK_DUMP_RETENTION_DAYS = '5';
+
+        const oldFile = path.join(dumpRoot, 'factory', 'events', 'old.ndjson');
+        const freshFile = path.join(dumpRoot, 'factory', 'events', 'fresh.ndjson');
+        fs.mkdirSync(path.dirname(oldFile), { recursive: true });
+        fs.writeFileSync(oldFile, 'old\n', 'utf8');
+        fs.writeFileSync(freshFile, 'fresh\n', 'utf8');
+        fs.utimesSync(oldFile, new Date('2024-01-01T00:00:00Z'), new Date('2024-01-01T00:00:00Z'));
+        fs.utimesSync(freshFile, new Date('2024-01-09T00:00:00Z'), new Date('2024-01-09T00:00:00Z'));
+
+        const result = pruneHookDumps({
+            now: Date.parse('2024-01-10T00:00:00Z')
+        });
+
+        expect(getHookDumpRetentionDays()).toBe(5);
+        expect(result.deletedFiles).toBe(1);
+        expect(result.prunedPaths).toContain(oldFile);
+        expect(fs.existsSync(oldFile)).toBe(false);
+        expect(fs.existsSync(freshFile)).toBe(true);
+    });
+});

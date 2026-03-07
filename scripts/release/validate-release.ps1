@@ -73,6 +73,8 @@ try {
         @{ Name = "Typecheck"; Command = "npm run typecheck" },
         @{ Name = "Build"; Command = "npm run build" },
         @{ Name = "Test"; Command = "npm run test" },
+        @{ Name = "GA agent e2e"; Command = "npm run release:e2e:ga" },
+        @{ Name = "Desktop smoke"; Command = "npm run desktop:smoke" },
         @{ Name = "Nested git check"; Command = "npm run repo:check-nested-git" }
     )
 

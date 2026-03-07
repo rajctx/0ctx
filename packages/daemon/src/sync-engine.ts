@@ -80,6 +80,20 @@ export interface SyncConfig {
 const DEFAULT_INTERVAL_MS = 30_000;
 const DEFAULT_BATCH_SIZE = 5;
 const MAX_SYNC_AUDIT_NODE_DIFFS = 25;
+const REDACTED_SECRET = '[REDACTED_SECRET]';
+const REDACTED_PATH = '[REDACTED_PATH]';
+const SECRET_KEY_PATTERN = /(token|secret|password|api[_-]?key|client[_-]?secret|access[_-]?key|private[_-]?key|bearer|authorization|cookie|session[_-]?token)/i;
+const PATH_KEY_PATTERN = /(path|cwd|repo|root|worktree|transcript|socket|dir)$/i;
+const SECRET_VALUE_PATTERNS = [
+    /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
+    /\bsk-[A-Za-z0-9]{20,}\b/g,
+    /\bghp_[A-Za-z0-9]{20,}\b/g,
+    /\bgithub_pat_[A-Za-z0-9_]{20,}\b/g,
+    /\bAIza[0-9A-Za-z\-_]{35}\b/g,
+    /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g,
+    /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g,
+    /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g
+];
 const MERGE_MUTATION_AUDIT_ACTIONS = [
     'create_context',
     'delete_context',
@@ -160,7 +174,7 @@ export interface SyncEngineStatus {
 }
 
 type EnvelopeBuildResult =
-    | { kind: 'send'; envelope: SyncEnvelope }
+    | { kind: 'send'; envelope: SyncEnvelope; summary: SyncContextSummary }
     | { kind: 'skip'; reason: string }
     | { kind: 'missing'; reason: string };
 
@@ -287,6 +301,27 @@ export class SyncEngine {
                     if (pushResult.ok) {
                         markDone(this.db, entry.id);
                         result.succeeded++;
+                        this.graph.recordAuditEvent({
+                            action: 'sync_upload',
+                            contextId: entry.contextId,
+                            payload: {
+                                queueEntryId: entry.id,
+                                syncPolicy: built.envelope.syncPolicy,
+                                envelope: {
+                                    version: built.envelope.version,
+                                    timestamp: built.envelope.timestamp,
+                                    encrypted: built.envelope.encrypted
+                                },
+                                context: built.summary
+                            },
+                            result: {
+                                uploaded: true
+                            },
+                            metadata: {
+                                actor: auth.userId || null,
+                                source: 'sync_push'
+                            }
+                        });
                     } else {
                         markFailed(this.db, entry.id, pushResult.error ?? 'Unknown push error');
                         result.failed++;
@@ -376,11 +411,13 @@ export class SyncEngine {
         try {
             const dump = this.graph.exportContextDump(contextId);
             const payload = policy === 'full_sync'
-                ? dump
+                ? this.buildFullSyncPayload(dump)
                 : this.buildMetadataOnlyPayload(dump);
+            const summary = this.summarizeContextDump(dump);
 
             return {
                 kind: 'send',
+                summary,
                 envelope: {
                     version: 1,
                     contextId,
@@ -577,7 +614,7 @@ export class SyncEngine {
                     || dump.context.syncPolicy === 'metadata_only'
                     || dump.context.syncPolicy === 'full_sync'
                     ? dump.context.syncPolicy
-                    : 'metadata_only';
+                    : 'full_sync';
 
             this.db.prepare(`
               INSERT INTO contexts (id, name, paths, syncPolicy, createdAt)
@@ -591,8 +628,8 @@ export class SyncEngine {
             });
 
             const insertNode = this.db.prepare(`
-              INSERT INTO nodes (id, contextId, thread, type, content, key, tags, source, createdAt, checkpointId)
-              VALUES (@id, @contextId, @thread, @type, @content, @key, @tags, @source, @createdAt, @checkpointId)
+              INSERT INTO nodes (id, contextId, thread, type, content, key, tags, source, hidden, createdAt, checkpointId)
+              VALUES (@id, @contextId, @thread, @type, @content, @key, @tags, @source, @hidden, @createdAt, @checkpointId)
             `);
             const insertNodeFts = this.db.prepare(`
               INSERT INTO nodes_fts (id, content, tags) VALUES (?, ?, ?)
@@ -612,6 +649,7 @@ export class SyncEngine {
                     key: node.key ?? null,
                     tags: JSON.stringify(tags),
                     source: node.source ?? null,
+                    hidden: node.hidden ? 1 : 0,
                     createdAt: node.createdAt,
                     checkpointId: node.checkpointId ?? null
                 });
@@ -649,6 +687,21 @@ export class SyncEngine {
                     nodeIds: JSON.stringify(checkpointNodeIds),
                     createdAt: checkpoint.createdAt
                 });
+            }
+
+            for (const payload of dump.nodePayloads ?? []) {
+                if (!nodeIds.has(payload.nodeId)) continue;
+                this.graph.setNodePayload(
+                    payload.nodeId,
+                    contextId,
+                    payload.payload,
+                    {
+                        contentType: payload.contentType,
+                        compression: payload.compression,
+                        createdAt: payload.createdAt,
+                        updatedAt: payload.updatedAt
+                    }
+                );
             }
         });
 
@@ -760,6 +813,7 @@ export class SyncEngine {
         if ((a.key ?? null) !== (b.key ?? null)) return false;
         if ((a.source ?? null) !== (b.source ?? null)) return false;
         if ((a.thread ?? null) !== (b.thread ?? null)) return false;
+        if (Boolean(a.hidden) !== Boolean(b.hidden)) return false;
 
         const aTags = Array.isArray(a.tags) ? a.tags : [];
         const bTags = Array.isArray(b.tags) ? b.tags : [];
@@ -776,13 +830,86 @@ export class SyncEngine {
         type: string;
         key: string | null;
         source: string | null;
+        hidden: boolean;
     } {
         return {
             content: node.content,
             tags: Array.isArray(node.tags) ? node.tags : [],
             type: node.type,
             key: node.key ?? null,
-            source: node.source ?? null
+            source: node.source ?? null,
+            hidden: Boolean(node.hidden)
+        };
+    }
+
+    private buildFullSyncPayload(dump: ContextDump): ContextDump {
+        const sanitize = (value: unknown, key: string | null = null): unknown => {
+            if (Array.isArray(value)) {
+                if (key === 'paths') {
+                    return [];
+                }
+                return value.map(entry => sanitize(entry, key));
+            }
+
+            if (value && typeof value === 'object') {
+                const source = value as Record<string, unknown>;
+                const out: Record<string, unknown> = {};
+                for (const [childKey, childValue] of Object.entries(source)) {
+                    if (childKey === 'paths') {
+                        out[childKey] = [];
+                        continue;
+                    }
+                    if (PATH_KEY_PATTERN.test(childKey)) {
+                        out[childKey] = childValue == null ? childValue : REDACTED_PATH;
+                        continue;
+                    }
+                    if (SECRET_KEY_PATTERN.test(childKey)) {
+                        out[childKey] = childValue == null ? childValue : REDACTED_SECRET;
+                        continue;
+                    }
+                    out[childKey] = sanitize(childValue, childKey);
+                }
+                return out;
+            }
+
+            if (typeof value === 'string') {
+                if (key && PATH_KEY_PATTERN.test(key)) {
+                    return REDACTED_PATH;
+                }
+                if (key && SECRET_KEY_PATTERN.test(key)) {
+                    return REDACTED_SECRET;
+                }
+
+                let redacted = value;
+                for (const pattern of SECRET_VALUE_PATTERNS) {
+                    redacted = redacted.replace(pattern, REDACTED_SECRET);
+                }
+                return redacted;
+            }
+
+            return value;
+        };
+
+        return {
+            ...dump,
+            context: {
+                ...dump.context,
+                paths: []
+            },
+            nodes: dump.nodes.map((node) => ({
+                ...node,
+                content: sanitize(node.content, 'content') as string
+            })),
+            checkpoints: dump.checkpoints.map((checkpoint) => ({
+                ...checkpoint,
+                name: sanitize(checkpoint.name, 'name') as string,
+                summary: sanitize(checkpoint.summary ?? null, 'summary') as string | null
+            })),
+            nodePayloads: (dump.nodePayloads ?? []).map((payload) => ({
+                ...payload,
+                payload: sanitize(payload.payload)
+            })),
+            checkpointPayloads: []
         };
     }
 

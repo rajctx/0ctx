@@ -93,6 +93,12 @@ describe('sync-engine policy enforcement', () => {
                 nodeCount: 1,
                 edgeCount: 0
             });
+
+            const audits = graph.listAuditEvents(context.id, 10).filter(event => event.action === 'sync_upload');
+            expect(audits).toHaveLength(1);
+            expect((audits[0].payload ?? {}) as Record<string, unknown>).toMatchObject({
+                syncPolicy: 'metadata_only'
+            });
         } finally {
             db.close();
         }
@@ -139,11 +145,30 @@ describe('sync-engine pull merge behavior', () => {
                         type: 'goal',
                         content: 'Ship tenant-wide machine routing',
                         tags: ['sync', 'ux'],
+                        hidden: true,
                         createdAt: now - 4_000
                     }
                 ],
                 edges: [],
-                checkpoints: []
+                checkpoints: [],
+                nodePayloads: [
+                    {
+                        nodeId: 'node-remote-1',
+                        contextId: 'ctx-remote-1',
+                        contentType: 'application/json',
+                        compression: 'gzip',
+                        byteLength: 42,
+                        payload: {
+                            branch: 'main',
+                            commitSha: 'abc123',
+                            meta: {
+                                role: 'assistant'
+                            }
+                        },
+                        createdAt: now - 4_000,
+                        updatedAt: now - 4_000
+                    }
+                ]
             };
 
             vi.mocked(pullEnvelopes).mockResolvedValueOnce({
@@ -157,11 +182,73 @@ describe('sync-engine pull merge behavior', () => {
             expect(result.received).toBe(1);
             expect(graph.getContext('ctx-remote-1')?.name).toBe('Remote Context');
             expect(graph.getNode('node-remote-1')?.content).toBe('Ship tenant-wide machine routing');
+            expect(graph.getNode('node-remote-1')?.hidden).toBe(true);
+            expect(graph.getNodePayload('node-remote-1')?.payload).toMatchObject({
+                branch: 'main',
+                commitSha: 'abc123'
+            });
 
             const audits = graph.listAuditEvents('ctx-remote-1', 10).filter(event => event.action === 'sync_merge');
             expect(audits.length).toBe(1);
             const payload = (audits[0].payload ?? {}) as Record<string, unknown>;
             expect(payload.decision).toBe('remote_create');
+        } finally {
+            db.close();
+        }
+    });
+
+    it('redacts secrets and local paths from full_sync cloud payloads without mutating local dumps', async () => {
+        const { db, graph } = createGraph();
+        try {
+            const context = graph.createContext('full-sync-redaction', ['C:/Users/Rajesh/development/0ctx-dev'], 'full_sync');
+            graph.addNode({
+                contextId: context.id,
+                type: 'artifact',
+                content: 'contains sk-123456789012345678901234567890 and local path C:/Users/Rajesh',
+                key: 'chat_turn:factory:session-1:turn-1',
+                hidden: true,
+                rawPayload: {
+                    apiKey: 'sk-123456789012345678901234567890',
+                    repositoryRoot: 'C:/Users/Rajesh/development/0ctx-dev',
+                    transcriptPath: 'C:/Users/Rajesh/.factory/session.jsonl',
+                    nested: {
+                        bearerToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signature'
+                    }
+                }
+            });
+
+            const checkpoint = graph.saveCheckpoint(context.id, 'release sk-123456789012345678901234567890');
+            const localDump = graph.exportContextDump(context.id);
+            expect(localDump.context.paths).toContain('C:/Users/Rajesh/development/0ctx-dev');
+            expect(JSON.stringify(localDump)).toContain('sk-123456789012345678901234567890');
+            expect(localDump.checkpointPayloads?.some((payload) => payload.checkpointId === checkpoint.id)).toBe(true);
+
+            const engine = new SyncEngine(graph, db, { enabled: true, intervalMs: 60_000 });
+            engine.enqueue(context.id);
+            const result = await engine.push();
+
+            expect(result.failed).toBe(0);
+            expect(result.succeeded).toBe(1);
+            expect(pushEnvelope).toHaveBeenCalledTimes(1);
+
+            const envelope = vi.mocked(pushEnvelope).mock.calls[0][1];
+            expect(envelope.syncPolicy).toBe('full_sync');
+            const payload = decryptJson<ContextDump>(envelope.payload as Parameters<typeof decryptJson>[0]);
+
+            expect(payload.context.paths).toEqual([]);
+            expect(payload.nodes[0].content).toContain('[REDACTED_SECRET]');
+            expect(payload.nodePayloads?.[0].payload).toMatchObject({
+                apiKey: '[REDACTED_SECRET]',
+                repositoryRoot: '[REDACTED_PATH]',
+                transcriptPath: '[REDACTED_PATH]'
+            });
+            expect(JSON.stringify(payload.nodePayloads)).toContain('[REDACTED_SECRET]');
+            expect(JSON.stringify(payload.nodePayloads)).not.toContain('C:/Users/Rajesh');
+            expect(payload.checkpointPayloads).toEqual([]);
+
+            const reloadedDump = graph.exportContextDump(context.id);
+            expect(reloadedDump.context.paths).toContain('C:/Users/Rajesh/development/0ctx-dev');
+            expect(JSON.stringify(reloadedDump)).toContain('sk-123456789012345678901234567890');
         } finally {
             db.close();
         }
@@ -212,6 +299,64 @@ describe('sync-engine pull merge behavior', () => {
             expect(payload.decision).toBe('remote_overwrite');
             const changes = (payload.changes ?? {}) as Record<string, unknown>;
             expect(Number(changes.updatedNodeCount ?? 0)).toBeGreaterThanOrEqual(1);
+        } finally {
+            db.close();
+        }
+    });
+
+    it('preserves hidden flags and payload sidecars when a newer remote dump overwrites a context', async () => {
+        const { db, graph } = createGraph();
+        try {
+            const context = graph.createContext('Payload Context', [], 'full_sync');
+            const localNode = graph.addNode({
+                contextId: context.id,
+                type: 'artifact',
+                content: 'old local payload',
+                key: 'chat_turn:test:session:turn',
+                hidden: false
+            });
+
+            const remoteDump: ContextDump = {
+                ...graph.exportContextDump(context.id),
+                exportedAt: Date.now() + 1_000,
+                nodes: [
+                    {
+                        ...graph.getNode(localNode.id)!,
+                        content: 'remote payload node',
+                        hidden: true
+                    }
+                ],
+                nodePayloads: [
+                    {
+                        nodeId: localNode.id,
+                        contextId: context.id,
+                        contentType: 'application/json',
+                        compression: 'gzip',
+                        byteLength: 64,
+                        payload: {
+                            branch: 'main',
+                            commitSha: 'remote-sha'
+                        },
+                        createdAt: Date.now(),
+                        updatedAt: Date.now()
+                    }
+                ]
+            };
+
+            vi.mocked(pullEnvelopes).mockResolvedValueOnce({
+                ok: true,
+                envelopes: [toFullSyncEnvelope(remoteDump, Date.now() + 5_000)]
+            });
+
+            const engine = new SyncEngine(graph, db, { enabled: true, intervalMs: 60_000 });
+            await engine.pull();
+
+            expect(graph.getNode(localNode.id)?.content).toBe('remote payload node');
+            expect(graph.getNode(localNode.id)?.hidden).toBe(true);
+            expect(graph.getNodePayload(localNode.id)?.payload).toMatchObject({
+                branch: 'main',
+                commitSha: 'remote-sha'
+            });
         } finally {
             db.close();
         }

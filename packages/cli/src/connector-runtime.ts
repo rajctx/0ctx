@@ -51,12 +51,14 @@ export interface ConnectorRuntimeOptions {
 
 export interface ConnectorRuntimeSummary {
     posture: 'connected' | 'degraded' | 'offline';
+    recoveryState: 'healthy' | 'recovering' | 'backoff' | 'blocked';
     daemonRunning: boolean;
     cloudConnected: boolean;
     registrationMode: 'none' | 'local' | 'cloud';
     auth: boolean;
     machineId: string | null;
     lastError: string | null;
+    consecutiveFailures: number;
 }
 
 export interface ConnectorRuntimeDependencies {
@@ -400,6 +402,31 @@ function redactEventForMetadataOnly(event: ConnectorEventPayload): ConnectorEven
 
 function isMethodAllowedForCloudCommand(method: string): boolean {
     return CLOUD_COMMAND_METHOD_ALLOWLIST.has(method);
+}
+
+function deriveRecoveryState(options: {
+    daemonOk: boolean;
+    token: TokenStore | null;
+    registration: ConnectorState | null;
+    cloudConnected: boolean;
+    lastError: string | null;
+}): 'healthy' | 'recovering' | 'backoff' | 'blocked' {
+    if (!options.daemonOk) {
+        return 'blocked';
+    }
+    if (!options.token || !options.registration) {
+        return 'recovering';
+    }
+    if (options.registration.runtime.eventQueueBackoff > 0
+        || Boolean(options.registration.runtime.eventBridgeError)
+        || Boolean(options.registration.runtime.commandBridgeError)
+        || Boolean(options.lastError)) {
+        return 'backoff';
+    }
+    if (options.registration.registrationMode === 'cloud' && !options.cloudConnected) {
+        return 'recovering';
+    }
+    return 'healthy';
 }
 
 function sleep(ms: number): Promise<void> {
@@ -842,6 +869,22 @@ export async function runConnectorRuntimeCycle(
             registration.runtime.eventQueueBackoff = queueStats.backoff;
         }
 
+        const recoveryState = deriveRecoveryState({
+            daemonOk: daemon.ok,
+            token,
+            registration,
+            cloudConnected,
+            lastError
+        });
+        registration.runtime.recoveryState = recoveryState;
+        registration.runtime.consecutiveFailures = recoveryState === 'healthy'
+            ? 0
+            : ((registration.runtime.consecutiveFailures ?? 0) + 1);
+        if (recoveryState === 'healthy') {
+            registration.runtime.lastHealthyAt = deps.now();
+        } else {
+            registration.runtime.lastRecoveryAt = deps.now();
+        }
         registration.updatedAt = deps.now();
         registration.cloud.lastError = lastError;
         deps.writeConnectorState(registration);
@@ -851,6 +894,18 @@ export async function runConnectorRuntimeCycle(
         registration.runtime.eventQueuePending = queueStats.pending;
         registration.runtime.eventQueueReady = queueStats.ready;
         registration.runtime.eventQueueBackoff = queueStats.backoff;
+        const recoveryState = deriveRecoveryState({
+            daemonOk: daemon.ok,
+            token,
+            registration,
+            cloudConnected,
+            lastError
+        });
+        registration.runtime.recoveryState = recoveryState;
+        registration.runtime.consecutiveFailures = recoveryState === 'healthy'
+            ? 0
+            : ((registration.runtime.consecutiveFailures ?? 0) + 1);
+        registration.runtime.lastRecoveryAt = deps.now();
         registration.updatedAt = deps.now();
         registration.cloud.lastError = 'auth_required';
         deps.writeConnectorState(registration);
@@ -866,16 +921,25 @@ export async function runConnectorRuntimeCycle(
                     || Boolean(registration.runtime.eventBridgeError)
                     || Boolean(registration.runtime.commandBridgeError)))
                 ? 'degraded'
-                : (sync?.enabled && sync?.running ? 'connected' : 'degraded');
+                : ((sync?.enabled === false || sync == null || sync?.running) ? 'connected' : 'degraded');
+    const recoveryState = deriveRecoveryState({
+        daemonOk: daemon.ok,
+        token,
+        registration,
+        cloudConnected,
+        lastError
+    });
 
     return {
         posture,
+        recoveryState,
         daemonRunning: daemon.ok,
         cloudConnected,
         registrationMode: registration ? registration.registrationMode : 'none',
         auth: Boolean(token),
         machineId: registration?.machineId ?? null,
-        lastError
+        lastError,
+        consecutiveFailures: registration?.runtime.consecutiveFailures ?? (recoveryState === 'healthy' ? 0 : 1)
     };
 }
 

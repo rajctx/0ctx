@@ -126,6 +126,301 @@ describe('Graph context isolation', () => {
             db.close();
         }
     });
+
+    it('excludes hidden nodes from default graph/search queries', () => {
+        const { db, graph } = createGraph();
+        try {
+            const ctx = graph.createContext('hidden-defaults');
+
+            const visible = graph.addNode({
+                contextId: ctx.id,
+                type: 'artifact',
+                content: 'Visible graph node',
+                tags: ['visible']
+            });
+            const hidden = graph.addNode({
+                contextId: ctx.id,
+                type: 'artifact',
+                content: 'Hidden chat dump node',
+                tags: ['chat_turn'],
+                hidden: true
+            });
+
+            const graphDefault = graph.getGraphData(ctx.id);
+            expect(graphDefault.nodes.map(node => node.id)).toContain(visible.id);
+            expect(graphDefault.nodes.map(node => node.id)).not.toContain(hidden.id);
+
+            const graphWithHidden = graph.getGraphData(ctx.id, { includeHidden: true });
+            expect(graphWithHidden.nodes.map(node => node.id)).toContain(hidden.id);
+
+            const searchDefault = graph.search(ctx.id, 'chat dump', 10);
+            expect(searchDefault.some(node => node.id === hidden.id)).toBe(false);
+
+            const searchWithHidden = graph.search(ctx.id, 'chat dump', 10, { includeHidden: true });
+            expect(searchWithHidden.some(node => node.id === hidden.id)).toBe(true);
+        } finally {
+            db.close();
+        }
+    });
+
+    it('stores compressed payload sidecar and lists chat sessions/turns', () => {
+        const { db, graph } = createGraph();
+        try {
+            const ctx = graph.createContext('chat-session-context');
+            graph.addNode({
+                contextId: ctx.id,
+                thread: 'session-1',
+                type: 'artifact',
+                content: 'what changed? -> Assistant proposed rollout plan',
+                key: 'chat_session:claude:session-1',
+                tags: ['chat_session', 'agent:claude'],
+                source: 'hook:claude',
+                hidden: true,
+                createdAtOverride: 1700000000000,
+                rawPayload: {
+                    sessionId: 'session-1',
+                    agent: 'claude',
+                    branch: 'main',
+                    commitSha: 'abc123def456',
+                    worktreePath: 'C:/repo',
+                    repositoryRoot: 'C:/repo'
+                }
+            });
+
+            const turn = graph.addNode({
+                contextId: ctx.id,
+                thread: 'session-1',
+                type: 'artifact',
+                content: 'Assistant proposed rollout plan',
+                key: 'chat_turn:claude:session-1:turn-1',
+                tags: ['chat_turn', 'role:assistant'],
+                source: 'hook:claude',
+                hidden: true,
+                createdAtOverride: 1700000001000,
+                rawPayload: {
+                    messageId: 'turn-1',
+                    parentId: 'user-1',
+                    role: 'assistant',
+                    agent: 'claude',
+                    branch: 'main',
+                    commitSha: 'abc123def456',
+                    occurredAt: 1700000001000,
+                    worktreePath: 'C:/repo',
+                    repositoryRoot: 'C:/repo',
+                    text: 'full raw dump'
+                }
+            });
+
+            const payload = graph.getNodePayload(turn.id);
+            expect(payload).not.toBeNull();
+            expect(payload?.compression).toBe('gzip');
+            expect((payload?.payload as Record<string, unknown>)?.branch).toBe('main');
+            expect((payload?.payload as Record<string, unknown>)?.commitSha).toBe('abc123def456');
+
+            const sessions = graph.listChatSessions(ctx.id);
+            expect(sessions).toHaveLength(1);
+            expect(sessions[0].sessionId).toBe('session-1');
+            expect(sessions[0].turnCount).toBe(1);
+            expect(sessions[0].summary).toBe('what changed? -> Assistant proposed rollout plan');
+            expect(sessions[0].branch).toBe('main');
+            expect(sessions[0].commitSha).toBe('abc123def456');
+            expect(sessions[0].agent).toBe('claude');
+            expect(sessions[0].worktreePath).toBe('C:/repo');
+
+            const turns = graph.listChatTurns(ctx.id, 'session-1');
+            expect(turns).toHaveLength(1);
+            expect(turns[0].nodeId).toBe(turn.id);
+            expect(turns[0].hasPayload).toBe(true);
+            expect(turns[0].role).toBe('assistant');
+            expect(turns[0].createdAt).toBe(1700000001000);
+            expect(turns[0].messageId).toBe('turn-1');
+            expect(turns[0].parentId).toBe('user-1');
+
+            const messages = graph.listSessionMessages(ctx.id, 'session-1');
+            expect(messages).toHaveLength(1);
+            expect(messages[0].agent).toBe('claude');
+            expect(messages[0].worktreePath).toBe('C:/repo');
+
+            const lanes = graph.listBranchLanes(ctx.id);
+            expect(lanes).toHaveLength(1);
+            expect(lanes[0].branch).toBe('main');
+            expect(lanes[0].lastAgent).toBe('claude');
+            expect(lanes[0].sessionCount).toBe(1);
+        } finally {
+            db.close();
+        }
+    });
+
+    it('extracts visible knowledge nodes from captured session messages', () => {
+        const { db, graph } = createGraph();
+        try {
+            const ctx = graph.createContext('knowledge-extract');
+            graph.addNode({
+                contextId: ctx.id,
+                thread: 'session-knowledge-1',
+                type: 'artifact',
+                content: 'knowledge extraction session',
+                key: 'chat_session:factory:session-knowledge-1',
+                tags: ['chat_session', 'agent:factory'],
+                source: 'hook:factory',
+                hidden: true,
+                rawPayload: {
+                    sessionId: 'session-knowledge-1',
+                    branch: 'feature/knowledge',
+                    commitSha: 'abc123def456',
+                    agent: 'factory'
+                }
+            });
+
+            const userTurn = graph.addNode({
+                contextId: ctx.id,
+                thread: 'session-knowledge-1',
+                type: 'artifact',
+                content: 'We need to ship a branch-first desktop workflow for local project memory.',
+                key: 'chat_turn:factory:session-knowledge-1:user-1',
+                tags: ['chat_turn', 'role:user'],
+                source: 'hook:factory',
+                hidden: true,
+                rawPayload: {
+                    sessionId: 'session-knowledge-1',
+                    messageId: 'user-1',
+                    role: 'user',
+                    branch: 'feature/knowledge',
+                    commitSha: 'abc123def456',
+                    occurredAt: 1700000001000
+                }
+            });
+
+            const assistantTurn = graph.addNode({
+                contextId: ctx.id,
+                thread: 'session-knowledge-1',
+                type: 'artifact',
+                content: 'We are going with a branch-first desktop flow. Hidden session nodes should stay out of the default graph.',
+                key: 'chat_turn:factory:session-knowledge-1:assistant-1',
+                tags: ['chat_turn', 'role:assistant'],
+                source: 'hook:factory',
+                hidden: true,
+                rawPayload: {
+                    sessionId: 'session-knowledge-1',
+                    messageId: 'assistant-1',
+                    role: 'assistant',
+                    branch: 'feature/knowledge',
+                    commitSha: 'abc123def456',
+                    occurredAt: 1700000002000
+                }
+            });
+
+            const preview = graph.previewKnowledgeFromSession(ctx.id, 'session-knowledge-1');
+            expect(preview.candidateCount).toBeGreaterThan(0);
+            expect(preview.createCount).toBe(preview.candidateCount);
+            expect(preview.candidates.some(candidate => candidate.type === 'goal')).toBe(true);
+            expect(graph.getGraphData(ctx.id).nodes.some(node => node.type !== 'artifact')).toBe(false);
+
+            const goalCandidate = preview.candidates.find(candidate => candidate.type === 'goal');
+            expect(goalCandidate?.key).toBeTruthy();
+
+            const filtered = graph.extractKnowledgeFromSession(ctx.id, 'session-knowledge-1', {
+                allowedKeys: goalCandidate ? [goalCandidate.key] : []
+            });
+            expect(filtered.nodeCount).toBe(1);
+            expect(filtered.nodes[0]?.type).toBe('goal');
+
+            const first = graph.extractKnowledgeFromSession(ctx.id, 'session-knowledge-1');
+            expect(first.createdCount).toBeGreaterThan(0);
+            expect(first.nodes.some(node => node.type === 'goal')).toBe(true);
+            expect(first.nodes.some(node => node.type === 'decision')).toBe(true);
+            expect(first.nodes.some(node => node.type === 'constraint')).toBe(true);
+
+            const visibleGraph = graph.getGraphData(ctx.id);
+            expect(visibleGraph.nodes.some(node => node.type !== 'artifact')).toBe(true);
+            const extractedEdges = graph.getEdges(first.nodes[0].id);
+            expect(extractedEdges.some(edge => edge.toId === userTurn.id || edge.toId === assistantTurn.id)).toBe(true);
+
+            const secondPreview = graph.previewKnowledgeFromSession(ctx.id, 'session-knowledge-1');
+            expect(secondPreview.reuseCount).toBeGreaterThan(0);
+
+            const second = graph.extractKnowledgeFromSession(ctx.id, 'session-knowledge-1');
+            expect(second.createdCount).toBe(0);
+            expect(second.reusedCount).toBeGreaterThan(0);
+        } finally {
+            db.close();
+        }
+    });
+
+    it('reuses extracted knowledge across sessions on the same branch lane', () => {
+        const { db, graph } = createGraph();
+        try {
+            const ctx = graph.createContext('knowledge-branch-scope');
+            for (const sessionId of ['session-knowledge-a', 'session-knowledge-b']) {
+                graph.addNode({
+                    contextId: ctx.id,
+                    thread: sessionId,
+                    type: 'artifact',
+                    content: `session ${sessionId}`,
+                    key: `chat_session:factory:${sessionId}`,
+                    tags: ['chat_session', 'agent:factory'],
+                    source: 'hook:factory',
+                    hidden: true,
+                    rawPayload: {
+                        sessionId,
+                        branch: 'feature/shared-memory',
+                        commitSha: 'abc123def456',
+                        agent: 'factory'
+                    }
+                });
+            }
+
+            graph.addNode({
+                contextId: ctx.id,
+                thread: 'session-knowledge-a',
+                type: 'artifact',
+                content: 'We decided to keep hidden session nodes out of the default graph.',
+                key: 'chat_turn:factory:session-knowledge-a:assistant-1',
+                tags: ['chat_turn', 'role:assistant'],
+                source: 'hook:factory',
+                hidden: true,
+                rawPayload: {
+                    sessionId: 'session-knowledge-a',
+                    messageId: 'assistant-1',
+                    role: 'assistant',
+                    branch: 'feature/shared-memory',
+                    commitSha: 'abc123def456',
+                    occurredAt: 1700000002000
+                }
+            });
+
+            graph.addNode({
+                contextId: ctx.id,
+                thread: 'session-knowledge-b',
+                type: 'artifact',
+                content: 'We decided to keep hidden session nodes out of the default graph.',
+                key: 'chat_turn:factory:session-knowledge-b:assistant-1',
+                tags: ['chat_turn', 'role:assistant'],
+                source: 'hook:factory',
+                hidden: true,
+                rawPayload: {
+                    sessionId: 'session-knowledge-b',
+                    messageId: 'assistant-1',
+                    role: 'assistant',
+                    branch: 'feature/shared-memory',
+                    commitSha: 'abc123def456',
+                    occurredAt: 1700000003000
+                }
+            });
+
+            const first = graph.extractKnowledgeFromSession(ctx.id, 'session-knowledge-a');
+            expect(first.createdCount).toBeGreaterThan(0);
+
+            const secondPreview = graph.previewKnowledgeFromSession(ctx.id, 'session-knowledge-b');
+            expect(secondPreview.reuseCount).toBeGreaterThan(0);
+
+            const second = graph.extractKnowledgeFromSession(ctx.id, 'session-knowledge-b');
+            expect(second.createdCount).toBe(0);
+            expect(second.reusedCount).toBeGreaterThan(0);
+        } finally {
+            db.close();
+        }
+    });
 });
 
 describe('Graph checkpoints', () => {
@@ -151,6 +446,145 @@ describe('Graph checkpoints', () => {
 
             expect(graph.getNode(keep.id)?.id).toBe(keep.id);
             expect(graph.getNode(remove.id)).toBeNull();
+        } finally {
+            db.close();
+        }
+    });
+
+    it('creates session checkpoints with branch metadata and restores from payload snapshot', () => {
+        const { db, graph } = createGraph();
+        try {
+            const context = graph.createContext('session-checkpoint-test');
+            graph.addNode({
+                contextId: context.id,
+                thread: 'session-1',
+                type: 'artifact',
+                content: 'ship checkpoint flow -> created checkpoint metadata',
+                key: 'chat_session:factory:session-1',
+                tags: ['chat_session', 'agent:factory'],
+                source: 'hook:factory',
+                hidden: true,
+                rawPayload: {
+                    sessionId: 'session-1',
+                    branch: 'feature/checkpoints',
+                    commitSha: 'def456abc123',
+                    agent: 'factory',
+                    worktreePath: 'C:/repo',
+                    repositoryRoot: 'C:/repo'
+                }
+            });
+            graph.addNode({
+                contextId: context.id,
+                thread: 'session-1',
+                type: 'artifact',
+                content: 'created checkpoint metadata',
+                key: 'chat_turn:factory:session-1:msg-1',
+                tags: ['chat_turn', 'role:assistant'],
+                source: 'hook:factory',
+                hidden: true,
+                rawPayload: {
+                    sessionId: 'session-1',
+                    messageId: 'msg-1',
+                    role: 'assistant',
+                    branch: 'feature/checkpoints',
+                    commitSha: 'def456abc123',
+                    agent: 'factory',
+                    occurredAt: 1700000002000
+                }
+            });
+
+            const checkpoint = graph.createSessionCheckpoint(context.id, 'session-1', {
+                summary: 'checkpoint summary'
+            });
+            expect(checkpoint.kind).toBe('session');
+            expect(checkpoint.sessionId).toBe('session-1');
+            expect(checkpoint.branch).toBe('feature/checkpoints');
+            expect(checkpoint.agentSet).toEqual(['factory']);
+
+            const detail = graph.getCheckpointDetail(checkpoint.id);
+            expect(detail?.payloadAvailable).toBe(true);
+            expect(detail?.snapshotNodeCount).toBeGreaterThan(0);
+
+            const remove = graph.addNode({
+                contextId: context.id,
+                type: 'assumption',
+                content: 'remove after rewind'
+            });
+
+            const rewound = graph.rewindCheckpoint(checkpoint.id);
+            expect(rewound.checkpoint.id).toBe(checkpoint.id);
+            expect(graph.getNode(remove.id)).toBeNull();
+
+            const branchCheckpoints = graph.listBranchCheckpoints(context.id, 'feature/checkpoints', {
+                worktreePath: 'C:/repo'
+            });
+            expect(branchCheckpoints).toHaveLength(1);
+            expect(branchCheckpoints[0].checkpointId).toBe(checkpoint.id);
+        } finally {
+            db.close();
+        }
+    });
+
+    it('extracts knowledge from a checkpoint-linked session', () => {
+        const { db, graph } = createGraph();
+        try {
+            const context = graph.createContext('checkpoint-knowledge');
+            graph.addNode({
+                contextId: context.id,
+                thread: 'session-k1',
+                type: 'artifact',
+                content: 'checkpoint extraction session',
+                key: 'chat_session:factory:session-k1',
+                tags: ['chat_session', 'agent:factory'],
+                source: 'hook:factory',
+                hidden: true,
+                rawPayload: {
+                    sessionId: 'session-k1',
+                    branch: 'feature/checkpoint-knowledge',
+                    agent: 'factory'
+                }
+            });
+            graph.addNode({
+                contextId: context.id,
+                thread: 'session-k1',
+                type: 'artifact',
+                content: 'What should stay visible in the graph?',
+                key: 'chat_turn:factory:session-k1:user-1',
+                tags: ['chat_turn', 'role:user'],
+                source: 'hook:factory',
+                hidden: true,
+                rawPayload: {
+                    sessionId: 'session-k1',
+                    messageId: 'user-1',
+                    role: 'user'
+                }
+            });
+            graph.addNode({
+                contextId: context.id,
+                thread: 'session-k1',
+                type: 'artifact',
+                content: 'We are going with visible decision nodes and hidden raw capture nodes.',
+                key: 'chat_turn:factory:session-k1:assistant-1',
+                tags: ['chat_turn', 'role:assistant'],
+                source: 'hook:factory',
+                hidden: true,
+                rawPayload: {
+                    sessionId: 'session-k1',
+                    messageId: 'assistant-1',
+                    role: 'assistant'
+                }
+            });
+
+            const checkpoint = graph.createSessionCheckpoint(context.id, 'session-k1', {
+                summary: 'Visible decision nodes',
+                name: 'checkpoint-knowledge'
+            });
+
+            const result = graph.extractKnowledgeFromCheckpoint(checkpoint.id);
+            expect(result.checkpointId).toBe(checkpoint.id);
+            expect(result.sessionId).toBe('session-k1');
+            expect(result.nodeCount).toBeGreaterThan(0);
+            expect(result.nodes.some(node => node.checkpointId === checkpoint.id)).toBe(true);
         } finally {
             db.close();
         }

@@ -2,25 +2,29 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  CalendarClock,
   CheckCircle2,
-  Command,
   Database,
+  Eye,
+  EyeOff,
+  GitBranch,
+  GitCommitHorizontal,
   Loader2,
-  Minus,
   Network,
   Plus,
   RefreshCw,
   Search,
   Trash2,
-  X,
-  ZoomIn,
-  ZoomOut
+  X
 } from 'lucide-react';
 import {
   addNodeAction,
   deleteContextAction,
   deleteNodeAction,
   getGraphData,
+  getNodePayloadAction,
+  listChatSessionsAction,
+  listChatTurnsAction,
   updateNodeData
 } from '@/app/actions';
 import ForceGraph, { GraphControls } from '@/app/dashboard/ForceGraph';
@@ -30,101 +34,105 @@ import { Button } from '@/components/ui/button';
 import { Panel } from '@/components/ui/panel';
 import {
   asNodeType,
-  GraphNode,
-  GraphPayload,
+  type ChatSessionSummary,
+  type ChatTurnSummary,
+  type GraphNode,
+  type GraphPayload,
+  type NodePayloadRecord,
   NODE_TYPE_META,
   NODE_TYPES,
-  NodeType
+  type NodeType
 } from '@/lib/graph';
 import { cn, formatTimestamp } from '@/lib/ui';
 
-const INITIAL_GRAPH: GraphPayload = { nodes: [], edges: [] };
-const INITIAL_VISIBILITY = NODE_TYPES.reduce(
-  (acc, type) => ({ ...acc, [type]: true }),
-  {} as Record<NodeType, boolean>
-);
+const EMPTY_GRAPH: GraphPayload = { nodes: [], edges: [] };
+const INITIAL_VISIBILITY = NODE_TYPES.reduce((acc, type) => ({ ...acc, [type]: true }), {} as Record<NodeType, boolean>);
 
-type CommandAction = {
-  id: string;
-  label: string;
-  hint: string;
-  run: () => void;
-};
+function compact(value: string, max = 90): string {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  return normalized.length > max ? `${normalized.slice(0, max - 3)}...` : normalized;
+}
 
 export default function WorkspaceView() {
   const graphControlsRef = useRef<GraphControls | null>(null);
-  const {
-    activeContext,
-    activeContextId,
-    selectedMachineId,
-    daemonOnline,
-    methodCount,
-    refreshDashboardData,
-    refreshTick,
-    requestCount
-  } = useDashboardState();
+  const { activeContext, activeContextId, selectedMachineId, daemonOnline, methodCount, requestCount, refreshDashboardData, refreshTick } = useDashboardState();
 
-  const [graphData, setGraphData] = useState<GraphPayload>(INITIAL_GRAPH);
-  const [graphLoading, setGraphLoading] = useState(true);
+  const [graphData, setGraphData] = useState<GraphPayload>(EMPTY_GRAPH);
+  const [graphLoading, setGraphLoading] = useState(false);
   const [graphError, setGraphError] = useState<string | null>(null);
+  const [showSessionNodes, setShowSessionNodes] = useState(false);
+  const [typeVisibility, setTypeVisibility] = useState<Record<NodeType, boolean>>(INITIAL_VISIBILITY);
 
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
   const [editTags, setEditTags] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  const [typeVisibility, setTypeVisibility] =
-    useState<Record<NodeType, boolean>>(INITIAL_VISIBILITY);
+  const [sessions, setSessions] = useState<ChatSessionSummary[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [turns, setTurns] = useState<ChatTurnSummary[]>([]);
+  const [turnsLoading, setTurnsLoading] = useState(false);
 
-  const [commandOpen, setCommandOpen] = useState(false);
-  const [commandQuery, setCommandQuery] = useState('');
+  const [selectedTurn, setSelectedTurn] = useState<ChatTurnSummary | null>(null);
+  const [payloadLoading, setPayloadLoading] = useState(false);
+  const [payload, setPayload] = useState<NodePayloadRecord | null>(null);
+  const [showRawPayload, setShowRawPayload] = useState(false);
 
-  // ── Layout state ──
-  const [layoutMode, setLayoutMode] = useState<'force' | 'hierarchical' | 'clustered'>('force');
-
-  // ── Node creation state ──
-  const [creatingNode, setCreatingNode] = useState(false);
-  const [newType, setNewType] = useState<NodeType>('decision');
-  const [newContent, setNewContent] = useState('');
-  const [newTags, setNewTags] = useState('');
-  const [newKey, setNewKey] = useState('');
-  const [isCreating, setIsCreating] = useState(false);
-
-  const activeNode = useMemo(
-    () => graphData.nodes.find(node => node.id === activeNodeId) ?? null,
-    [activeNodeId, graphData.nodes]
-  );
+  const activeNode = useMemo(() => graphData.nodes.find(node => node.id === activeNodeId) ?? null, [graphData.nodes, activeNodeId]);
 
   const refreshGraph = useCallback(async (contextId: string) => {
     setGraphLoading(true);
     setGraphError(null);
     try {
-      const data = await getGraphData(contextId, selectedMachineId);
-      setGraphData(data ?? INITIAL_GRAPH);
+      const next = await getGraphData(contextId, selectedMachineId, { includeHidden: showSessionNodes });
+      setGraphData(next);
     } catch (error) {
-      setGraphError(error instanceof Error ? error.message : 'Failed to fetch graph data.');
-      setGraphData(INITIAL_GRAPH);
+      setGraphError(error instanceof Error ? error.message : 'Failed to load graph');
+      setGraphData(EMPTY_GRAPH);
     } finally {
       setGraphLoading(false);
+    }
+  }, [selectedMachineId, showSessionNodes]);
+
+  const refreshSessions = useCallback(async (contextId: string) => {
+    setSessionsLoading(true);
+    try {
+      const next = await listChatSessionsAction(contextId, selectedMachineId);
+      setSessions(next);
+      setSelectedSessionId(prev => prev && next.some(item => item.sessionId === prev) ? prev : (next[0]?.sessionId ?? null));
+    } finally {
+      setSessionsLoading(false);
+    }
+  }, [selectedMachineId]);
+
+  const refreshTurns = useCallback(async (contextId: string, sessionId: string) => {
+    setTurnsLoading(true);
+    try {
+      setTurns(await listChatTurnsAction(contextId, sessionId, selectedMachineId));
+    } finally {
+      setTurnsLoading(false);
     }
   }, [selectedMachineId]);
 
   useEffect(() => {
     if (!activeContextId) {
-      setGraphData(INITIAL_GRAPH);
-      setGraphLoading(false);
-      setGraphError(null);
-      setActiveNodeId(null);
+      setGraphData(EMPTY_GRAPH);
+      setSessions([]);
+      setTurns([]);
+      setSelectedTurn(null);
       return;
     }
-    void refreshGraph(activeContextId);
-  }, [activeContextId, refreshGraph, refreshTick]);
+    void Promise.all([refreshGraph(activeContextId), refreshSessions(activeContextId)]);
+  }, [activeContextId, refreshGraph, refreshSessions, refreshTick]);
 
   useEffect(() => {
-    if (activeNodeId && !graphData.nodes.some(node => node.id === activeNodeId)) {
-      setActiveNodeId(null);
+    if (!activeContextId || !selectedSessionId) {
+      setTurns([]);
+      return;
     }
-  }, [activeNodeId, graphData.nodes]);
+    void refreshTurns(activeContextId, selectedSessionId);
+  }, [activeContextId, selectedSessionId, refreshTurns]);
 
   useEffect(() => {
     if (!activeNode) {
@@ -136,590 +144,190 @@ export default function WorkspaceView() {
     setEditTags((activeNode.tags ?? []).join(', '));
   }, [activeNode]);
 
-  useEffect(() => {
-    const handler = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
-        event.preventDefault();
-        setCommandOpen(current => !current);
-      }
-      if (event.key === 'Escape') {
-        setCommandOpen(false);
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, []);
-
   const filteredGraph = useMemo(() => {
-    const visibleNodes = graphData.nodes.filter(node => typeVisibility[asNodeType(node.type)]);
-    const visibleIds = new Set(visibleNodes.map(node => node.id));
-    const visibleEdges = graphData.edges.filter(
-      edge => visibleIds.has(edge.fromId) && visibleIds.has(edge.toId)
-    );
-    return {
-      nodes: visibleNodes,
-      edges: visibleEdges
-    };
-  }, [graphData.edges, graphData.nodes, typeVisibility]);
+    const nodes = graphData.nodes.filter(node => typeVisibility[asNodeType(node.type)]);
+    const visible = new Set(nodes.map(node => node.id));
+    return { nodes, edges: graphData.edges.filter(edge => visible.has(edge.fromId) && visible.has(edge.toId)) };
+  }, [graphData, typeVisibility]);
 
-  const isDirty = useMemo(() => {
-    if (!activeNode) return false;
-    const normalizedTags = (activeNode.tags ?? []).join(', ');
-    return editContent !== activeNode.content || editTags !== normalizedTags;
-  }, [activeNode, editContent, editTags]);
-
-  const commandActions = useMemo<CommandAction[]>(
-    () => [
-      {
-        id: 'fit-graph',
-        label: 'Fit graph to viewport',
-        hint: 'Canvas',
-        run: () => {
-          graphControlsRef.current?.fit();
-          setCommandOpen(false);
-        }
-      },
-      {
-        id: 'refresh-graph',
-        label: 'Refresh graph data',
-        hint: 'Sync',
-        run: () => {
-          if (activeContextId) {
-            void refreshGraph(activeContextId);
-          }
-          setCommandOpen(false);
-        }
-      },
-      {
-        id: 'refresh-dashboard',
-        label: 'Refresh dashboard state',
-        hint: 'Status',
-        run: () => {
-          void refreshDashboardData();
-          setCommandOpen(false);
-        }
-      },
-      {
-        id: 'clear-selection',
-        label: 'Clear selected node',
-        hint: 'Inspector',
-        run: () => {
-          setActiveNodeId(null);
-          setCommandOpen(false);
-        }
-      },
-      {
-        id: 'create-node',
-        label: 'Create new node',
-        hint: 'Graph',
-        run: () => {
-          setActiveNodeId(null);
-          setCreatingNode(true);
-          setCommandOpen(false);
-        }
-      }
-    ],
-    [activeContextId, refreshDashboardData, refreshGraph]
-  );
-
-  const nodeSearchHits = useMemo(() => {
-    const query = commandQuery.trim().toLowerCase();
-    if (!query) return [];
-
-    return graphData.nodes
-      .filter(node => {
-        const tagText = (node.tags ?? []).join(' ').toLowerCase();
-        return (
-          node.content.toLowerCase().includes(query) ||
-          String(node.type).toLowerCase().includes(query) ||
-          tagText.includes(query)
-        );
-      })
-      .slice(0, 8);
-  }, [commandQuery, graphData.nodes]);
-
-  const handleSave = useCallback(async () => {
+  const saveNode = useCallback(async () => {
     if (!activeNodeId) return;
     setIsSaving(true);
     try {
-      const tags = editTags
-        .split(',')
-        .map(item => item.trim())
-        .filter(Boolean);
+      const tags = editTags.split(',').map(value => value.trim()).filter(Boolean);
       await updateNodeData(activeNodeId, { content: editContent, tags }, selectedMachineId);
       if (activeContextId) await refreshGraph(activeContextId);
     } finally {
       setIsSaving(false);
     }
-  }, [activeContextId, activeNodeId, editContent, editTags, refreshGraph]);
+  }, [activeContextId, activeNodeId, editContent, editTags, refreshGraph, selectedMachineId]);
 
-  const handleDeleteContext = useCallback(async () => {
-    if (!activeContext) return;
-    const confirmed = window.confirm(
-      `Delete context "${activeContext.name}"? This cannot be undone.`
-    );
-    if (!confirmed) return;
-
-    await deleteContextAction(activeContext.id, selectedMachineId);
-    await refreshDashboardData();
-  }, [activeContext, refreshDashboardData, selectedMachineId]);
-
-  const handleDeleteNode = useCallback(async () => {
-    if (!activeContextId || !activeNodeId) return;
-    const confirmed = window.confirm('Delete selected node?');
-    if (!confirmed) return;
-    await deleteNodeAction(activeContextId, activeNodeId, selectedMachineId);
-    setActiveNodeId(null);
-    await refreshGraph(activeContextId);
-  }, [activeContextId, activeNodeId, refreshGraph, selectedMachineId]);
-
-  const toggleTypeVisibility = useCallback((nodeType: NodeType) => {
-    setTypeVisibility(previous => ({
-      ...previous,
-      [nodeType]: !previous[nodeType]
-    }));
-  }, []);
-
-  const handleCreateNode = useCallback(async () => {
-    if (!activeContextId || !newContent.trim()) return;
-    setIsCreating(true);
+  const openTurn = useCallback(async (turn: ChatTurnSummary) => {
+    setSelectedTurn(turn);
+    setShowRawPayload(false);
+    setPayload(null);
+    if (!turn.hasPayload) return;
+    setPayloadLoading(true);
     try {
-      const tags = newTags.split(',').map(t => t.trim()).filter(Boolean);
-      const created = await addNodeAction(activeContextId, {
-        type: newType,
-        content: newContent.trim(),
-        tags: tags.length > 0 ? tags : undefined,
-        key: newKey.trim() || undefined
-      }, selectedMachineId);
-      if (created) {
-        setActiveNodeId(created.id);
-      }
-      setCreatingNode(false);
-      setNewType('decision');
-      setNewContent('');
-      setNewTags('');
-      setNewKey('');
-      await refreshGraph(activeContextId);
+      setPayload(await getNodePayloadAction(turn.nodeId, selectedMachineId));
     } finally {
-      setIsCreating(false);
+      setPayloadLoading(false);
     }
-  }, [activeContextId, newContent, newKey, newTags, newType, refreshGraph, selectedMachineId]);
-
-  const inspectorContent = (
-    <div className="flex h-full flex-col">
-      <div className="border-b border-[var(--border-muted)] px-4 py-3">
-        <p className="text-[11px] uppercase tracking-[0.15em] text-[var(--text-muted)]">
-          {creatingNode ? 'Create' : 'Inspector'}
-        </p>
-        <h2 className="mt-1 text-sm font-semibold text-[var(--text-primary)]">
-          {creatingNode ? 'New Node' : activeNode ? 'Selected Node' : 'No Selection'}
-        </h2>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-4">
-        {creatingNode ? (
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
-                Type
-              </label>
-              <select
-                value={newType}
-                onChange={e => setNewType(e.target.value as NodeType)}
-                className="h-9 w-full rounded-lg border border-[var(--border-muted)] bg-[var(--surface-raised)] px-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)] focus:ring-2 focus:ring-[var(--focus-ring)]"
-              >
-                {NODE_TYPES.map(type => (
-                  <option key={type} value={type}>
-                    {NODE_TYPE_META[type].label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
-                Content
-              </label>
-              <textarea
-                autoFocus
-                value={newContent}
-                onChange={e => setNewContent(e.target.value)}
-                placeholder="Describe the node…"
-                className="min-h-36 w-full rounded-lg border border-[var(--border-muted)] bg-[var(--surface-raised)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)] focus:ring-2 focus:ring-[var(--focus-ring)]"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
-                Tags
-              </label>
-              <input
-                value={newTags}
-                onChange={e => setNewTags(e.target.value)}
-                placeholder="security, infra, rollout"
-                className="h-9 w-full rounded-lg border border-[var(--border-muted)] bg-[var(--surface-raised)] px-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)] focus:ring-2 focus:ring-[var(--focus-ring)]"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
-                Key <span className="normal-case tracking-normal">(optional, for direct lookup)</span>
-              </label>
-              <input
-                value={newKey}
-                onChange={e => setNewKey(e.target.value)}
-                placeholder="auth-strategy"
-                className="h-9 w-full rounded-lg border border-[var(--border-muted)] bg-[var(--surface-raised)] px-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)] focus:ring-2 focus:ring-[var(--focus-ring)]"
-              />
-            </div>
-          </div>
-        ) : activeNode ? (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <Badge
-                className="border-[var(--accent-border)]"
-                style={{
-                  backgroundColor: NODE_TYPE_META[asNodeType(activeNode.type)].surface,
-                  borderColor: NODE_TYPE_META[asNodeType(activeNode.type)].border,
-                  color: NODE_TYPE_META[asNodeType(activeNode.type)].color
-                }}
-              >
-                {NODE_TYPE_META[asNodeType(activeNode.type)].label}
-              </Badge>
-              <span className="text-xs text-[var(--text-muted)]">
-                {formatTimestamp(activeNode.createdAt)}
-              </span>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
-                Content
-              </label>
-              <textarea
-                value={editContent}
-                onChange={event => setEditContent(event.target.value)}
-                className="min-h-36 w-full rounded-lg border border-[var(--border-muted)] bg-[var(--surface-raised)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)] focus:ring-2 focus:ring-[var(--focus-ring)]"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
-                Tags
-              </label>
-              <input
-                value={editTags}
-                onChange={event => setEditTags(event.target.value)}
-                placeholder="security, infra, rollout"
-                className="h-9 w-full rounded-lg border border-[var(--border-muted)] bg-[var(--surface-raised)] px-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--border-strong)] focus:ring-2 focus:ring-[var(--focus-ring)]"
-              />
-            </div>
-          </div>
-        ) : (
-          <div className="flex h-full min-h-44 flex-col items-center justify-center gap-3 text-center">
-            <Network className="h-5 w-5 text-[var(--text-muted)]" />
-            <p className="text-sm text-[var(--text-muted)]">
-              Pick a node in the graph to inspect details.
-            </p>
-          </div>
-        )}
-      </div>
-
-      {creatingNode && (
-        <div className="flex gap-2 border-t border-[var(--border-muted)] p-4">
-          <Button
-            onClick={() => void handleCreateNode()}
-            disabled={!newContent.trim() || isCreating}
-            variant="primary"
-            className="flex-1"
-          >
-            {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-            {isCreating ? 'Creating…' : 'Create'}
-          </Button>
-          <Button variant="secondary" onClick={() => setCreatingNode(false)}>
-            <X className="h-4 w-4" />
-            Cancel
-          </Button>
-        </div>
-      )}
-
-      {!creatingNode && activeNode && (
-        <div className="flex gap-2 border-t border-[var(--border-muted)] p-4">
-          <Button onClick={() => void handleSave()} disabled={!isDirty || isSaving} variant="primary" className="flex-1">
-            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-            {isSaving ? 'Saving…' : 'Save'}
-          </Button>
-          <Button variant="danger" onClick={() => void handleDeleteNode()}>
-            <Trash2 className="h-4 w-4" />
-            Delete
-          </Button>
-        </div>
-      )}
-    </div>
-  );
+  }, [selectedMachineId]);
 
   return (
     <div className="flex h-full min-h-0">
       <main className="flex min-w-0 flex-1 flex-col gap-3 p-3 md:p-4">
         <Panel className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="secondary" size="sm" onClick={() => graphControlsRef.current?.fit()}>
-              <Search className="h-4 w-4" />
-              Fit
+            <Button variant="secondary" size="sm" onClick={() => graphControlsRef.current?.fit()}><Search className="h-4 w-4" />Fit</Button>
+            <Button variant="secondary" size="sm" onClick={() => graphControlsRef.current?.reset()}><RefreshCw className="h-4 w-4" />Reset</Button>
+            <Button variant={showSessionNodes ? 'primary' : 'secondary'} size="sm" onClick={() => setShowSessionNodes(current => !current)}>
+              {showSessionNodes ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              {showSessionNodes ? 'Hide Session Nodes' : 'Show Session Nodes'}
             </Button>
-            <Button variant="secondary" size="sm" onClick={() => graphControlsRef.current?.reset()}>
-              <RefreshCw className="h-4 w-4" />
-              Reset
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => graphControlsRef.current?.zoomIn()}>
-              <ZoomIn className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => graphControlsRef.current?.zoomOut()}>
-              <ZoomOut className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => setActiveNodeId(null)}>
-              <Minus className="h-4 w-4" />
-              Clear
-            </Button>
-            <Button variant="secondary" size="sm" onClick={() => setCommandOpen(true)}>
-              <Command className="h-4 w-4" />
-              Command
-            </Button>
-
-            <div className="flex rounded-md shadow-sm ml-2">
-              <Button
-                variant={layoutMode === 'force' ? 'primary' : 'secondary'}
-                size="sm"
-                className="rounded-e-none"
-                onClick={() => setLayoutMode('force')}
-              >
-                Force
-              </Button>
-              <Button
-                variant={layoutMode === 'hierarchical' ? 'primary' : 'secondary'}
-                size="sm"
-                className="rounded-none border-x-0"
-                onClick={() => setLayoutMode('hierarchical')}
-              >
-                Hierarchical
-              </Button>
-              <Button
-                variant={layoutMode === 'clustered' ? 'primary' : 'secondary'}
-                size="sm"
-                className="rounded-s-none"
-                onClick={() => setLayoutMode('clustered')}
-              >
-                Clustered
-              </Button>
-            </div>
-
-            <Button
-              variant="primary"
-              size="sm"
-              disabled={!activeContextId}
-              onClick={() => {
-                setActiveNodeId(null);
-                setCreatingNode(true);
-              }}
-            >
-              <Plus className="h-4 w-4" />
-              Add Node
-            </Button>
+            <Button variant="primary" size="sm" disabled={!activeContextId} onClick={async () => {
+              if (!activeContextId) return;
+              const created = await addNodeAction(activeContextId, { type: 'decision', content: 'New node' }, selectedMachineId);
+              if (created) setActiveNodeId(created.id);
+              await refreshGraph(activeContextId);
+            }}><Plus className="h-4 w-4" />Add Node</Button>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge muted>
-              <Database className="mr-1.5 h-3.5 w-3.5" />
-              {filteredGraph.nodes.length} nodes
-            </Badge>
-            <Badge muted>
-              <Network className="mr-1.5 h-3.5 w-3.5" />
-              {filteredGraph.edges.length} edges
-            </Badge>
-            {activeContext && (
-              <Button variant="danger" size="sm" onClick={() => void handleDeleteContext()}>
-                <Trash2 className="h-4 w-4" />
-                Delete context
-              </Button>
-            )}
+            <Badge muted><Database className="mr-1.5 h-3.5 w-3.5" />{filteredGraph.nodes.length} nodes</Badge>
+            <Badge muted><Network className="mr-1.5 h-3.5 w-3.5" />{filteredGraph.edges.length} edges</Badge>
+            <Badge muted><CalendarClock className="mr-1.5 h-3.5 w-3.5" />{sessions.length} sessions</Badge>
+            {activeContext ? <Button variant="danger" size="sm" onClick={async () => {
+              const confirmed = window.confirm(`Delete context \"${activeContext.name}\"? This cannot be undone.`);
+              if (!confirmed) return;
+              await deleteContextAction(activeContext.id, selectedMachineId);
+              await refreshDashboardData();
+            }}><Trash2 className="h-4 w-4" />Delete context</Button> : null}
           </div>
         </Panel>
 
         <Panel className="relative h-[min(72vh,760px)] min-h-[420px] overflow-hidden">
-          {graphLoading ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-              <Loader2 className="h-6 w-6 animate-spin text-[var(--accent-strong)]" />
-              <p className="text-sm text-[var(--text-muted)]">Loading graph workspace...</p>
-            </div>
-          ) : graphError ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
-              <p className="text-sm font-medium text-[var(--text-primary)]">Unable to load graph</p>
-              <p className="text-sm text-[var(--text-muted)]">{graphError}</p>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => {
-                  if (activeContextId) {
-                    void refreshGraph(activeContextId);
-                  }
-                }}
-              >
-                Retry
-              </Button>
-            </div>
-          ) : filteredGraph.nodes.length === 0 ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-center">
-              <Database className="h-6 w-6 text-[var(--text-muted)]" />
-              <p className="text-sm font-medium text-[var(--text-primary)]">No graph data in this view</p>
-              <p className="max-w-md text-sm text-[var(--text-muted)]">
-                Add nodes in your active context or relax filters to display relationships.
-              </p>
-            </div>
-          ) : (
+          {graphLoading ? <div className="absolute inset-0 flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin" /></div> : null}
+          {graphError ? <div className="absolute inset-0 flex items-center justify-center text-sm text-[var(--text-muted)]">{graphError}</div> : null}
+          {!graphLoading && !graphError && filteredGraph.nodes.length > 0 ? (
             <ForceGraph
               graphData={filteredGraph}
               activeNodeId={activeNodeId}
-              layoutType={layoutMode === 'hierarchical' ? 'treeTd2d' : 'forceDirected2d'}
-              clusterAttribute={layoutMode === 'clustered' ? 'type' : undefined}
               onNodeClick={setActiveNodeId}
               onBackgroundClick={() => setActiveNodeId(null)}
-              onGraphReady={controls => {
-                graphControlsRef.current = controls;
-              }}
+              onGraphReady={controls => { graphControlsRef.current = controls; }}
             />
-          )}
+          ) : null}
         </Panel>
 
         <Panel className="p-3">
           <div className="mb-2 flex flex-wrap gap-2">
-            {NODE_TYPES.map(type => {
-              const meta = NODE_TYPE_META[type];
-              const active = typeVisibility[type];
-              return (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => toggleTypeVisibility(type)}
-                  className={cn(
-                    'rounded-full border px-2.5 py-1 text-xs font-medium transition-colors',
-                    active
-                      ? 'text-[var(--text-primary)]'
-                      : 'text-[var(--text-muted)] opacity-70 hover:opacity-100'
-                  )}
-                  style={{
-                    borderColor: active ? meta.border : 'var(--border-muted)',
-                    backgroundColor: active ? meta.surface : 'var(--surface-subtle)'
-                  }}
-                >
-                  {meta.label}
-                </button>
-              );
-            })}
+            {NODE_TYPES.map(type => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setTypeVisibility(prev => ({ ...prev, [type]: !prev[type] }))}
+                className={cn('rounded-full border px-2.5 py-1 text-xs', typeVisibility[type] ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]')}
+              >
+                {NODE_TYPE_META[type].label}
+              </button>
+            ))}
           </div>
           <div className="grid gap-2 md:grid-cols-3">
-            <div className="rounded-lg border border-[var(--border-muted)] bg-[var(--surface-subtle)] px-3 py-2">
-              <p className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">Daemon</p>
-              <p className="mt-1 text-sm font-semibold">{daemonOnline ? 'Healthy' : 'Offline'}</p>
-            </div>
-            <div className="rounded-lg border border-[var(--border-muted)] bg-[var(--surface-subtle)] px-3 py-2">
-              <p className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">Methods</p>
-              <p className="mt-1 text-sm font-semibold">{methodCount || '-'}</p>
-            </div>
-            <div className="rounded-lg border border-[var(--border-muted)] bg-[var(--surface-subtle)] px-3 py-2">
-              <p className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">Requests</p>
-              <p className="mt-1 text-sm font-semibold">{requestCount ?? '-'}</p>
-            </div>
+            <MetaBox label="Daemon" value={daemonOnline ? 'Healthy' : 'Offline'} />
+            <MetaBox label="Methods" value={String(methodCount || '-')} />
+            <MetaBox label="Requests" value={String(requestCount ?? '-')} />
           </div>
         </Panel>
-
-        <Panel className="xl:hidden">{inspectorContent}</Panel>
       </main>
 
-      <aside className="hidden w-[340px] border-l border-[var(--border-muted)] xl:block">
-        <Panel className="h-full rounded-none border-0">{inspectorContent}</Panel>
+      <aside className="hidden w-[420px] border-l border-[var(--border-muted)] xl:flex xl:flex-col">
+        <Panel className="h-1/2 rounded-none border-0 border-b border-[var(--border-muted)] p-3">
+          <p className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">Inspector</p>
+          {!activeNode ? <p className="mt-3 text-sm text-[var(--text-muted)]">Select a node to inspect.</p> : (
+            <div className="mt-3 space-y-2">
+              <textarea value={editContent} onChange={event => setEditContent(event.target.value)} className="min-h-32 w-full rounded-lg border border-[var(--border-muted)] bg-[var(--surface-raised)] px-3 py-2 text-sm" />
+              <input value={editTags} onChange={event => setEditTags(event.target.value)} className="h-9 w-full rounded-lg border border-[var(--border-muted)] bg-[var(--surface-raised)] px-3 text-sm" />
+              <div className="flex gap-2">
+                <Button variant="primary" className="flex-1" onClick={() => void saveNode()} disabled={isSaving}>{isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}Save</Button>
+                <Button variant="danger" onClick={async () => {
+                  if (!activeContextId || !activeNodeId) return;
+                  const confirmed = window.confirm('Delete selected node?');
+                  if (!confirmed) return;
+                  await deleteNodeAction(activeContextId, activeNodeId, selectedMachineId);
+                  setActiveNodeId(null);
+                  await refreshGraph(activeContextId);
+                }}><Trash2 className="h-4 w-4" />Delete</Button>
+              </div>
+            </div>
+          )}
+        </Panel>
+
+        <Panel className="h-1/2 rounded-none border-0 p-3">
+          <p className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">Sessions</p>
+          {sessionsLoading ? <div className="mt-3 text-xs text-[var(--text-muted)]">Loading sessions...</div> : (
+            <div className="mt-3 grid min-h-0 grid-rows-[auto,1fr] gap-2">
+              <div className="max-h-40 space-y-1 overflow-y-auto">
+                {sessions.map(session => (
+                  <button key={session.sessionId} type="button" onClick={() => setSelectedSessionId(session.sessionId)} className={cn('w-full rounded-lg border px-2 py-1 text-left text-xs', selectedSessionId === session.sessionId ? 'border-[var(--accent-border)] bg-[var(--accent-soft)]' : 'border-[var(--border-muted)]')}>
+                    <p className="font-medium text-[var(--text-primary)]">{compact(session.summary || session.sessionId, 58)}</p>
+                    <p className="text-[10px] text-[var(--text-muted)]">{session.turnCount} turns • {formatTimestamp(session.lastTurnAt)}</p>
+                  </button>
+                ))}
+              </div>
+              <div className="space-y-1 overflow-y-auto">
+                {turnsLoading ? <p className="text-xs text-[var(--text-muted)]">Loading turns...</p> : turns.map(turn => (
+                  <button key={turn.nodeId} type="button" onClick={() => void openTurn(turn)} className="w-full rounded-lg border border-[var(--border-muted)] px-2 py-1 text-left text-xs">
+                    <p className="text-[10px] uppercase text-[var(--text-muted)]">{turn.role ?? 'turn'} • {formatTimestamp(turn.createdAt)}</p>
+                    <p className="text-[var(--text-primary)]">{compact(turn.content, 84)}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </Panel>
       </aside>
 
-      {commandOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-start justify-center bg-black/55 px-4 pt-[12vh]"
-          onClick={() => setCommandOpen(false)}
-        >
-          <div
-            className="w-full max-w-xl rounded-xl border border-[var(--border-muted)] bg-[var(--surface-raised)] p-3 shadow-[var(--shadow-float)]"
-            onClick={event => event.stopPropagation()}
-          >
-            <div className="mb-3 flex items-center gap-2 rounded-lg border border-[var(--border-muted)] bg-[var(--surface-subtle)] px-3">
-              <Search className="h-4 w-4 text-[var(--text-muted)]" />
-              <input
-                autoFocus
-                value={commandQuery}
-                onChange={event => setCommandQuery(event.target.value)}
-                placeholder="Search nodes or run an action"
-                className="h-10 w-full bg-transparent text-sm outline-none"
-              />
-              <span className="text-xs text-[var(--text-muted)]">Esc</span>
-            </div>
-
-            <div className="space-y-3">
+      {selectedTurn ? (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/45" onClick={() => setSelectedTurn(null)}>
+          <div className="h-full w-full max-w-[560px] border-l border-[var(--border-muted)] bg-[var(--surface-raised)] p-4" onClick={event => event.stopPropagation()}>
+            <div className="flex items-start justify-between">
               <div>
-                <p className="mb-2 text-xs uppercase tracking-[0.12em] text-[var(--text-muted)]">
-                  Actions
-                </p>
-                <div className="space-y-1">
-                  {commandActions
-                    .filter(action =>
-                      commandQuery.trim()
-                        ? `${action.label} ${action.hint}`.toLowerCase().includes(commandQuery.toLowerCase())
-                        : true
-                    )
-                    .map(action => (
-                      <button
-                        key={action.id}
-                        type="button"
-                        onClick={action.run}
-                        className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm hover:bg-[var(--surface-subtle)]"
-                      >
-                        <span>{action.label}</span>
-                        <span className="text-xs text-[var(--text-muted)]">{action.hint}</span>
-                      </button>
-                    ))}
-                </div>
+                <p className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">Turn Detail</p>
+                <h3 className="mt-1 text-sm font-semibold text-[var(--text-primary)]">{compact(selectedTurn.content, 100)}</h3>
               </div>
-
-              {nodeSearchHits.length > 0 && (
-                <div>
-                  <p className="mb-2 text-xs uppercase tracking-[0.12em] text-[var(--text-muted)]">
-                    Node Results
-                  </p>
-                  <div className="space-y-1">
-                    {nodeSearchHits.map((node: GraphNode) => (
-                      <button
-                        key={node.id}
-                        type="button"
-                        onClick={() => {
-                          setActiveNodeId(node.id);
-                          graphControlsRef.current?.focusNode(node.id);
-                          setCommandOpen(false);
-                        }}
-                        className="w-full rounded-lg px-3 py-2 text-left hover:bg-[var(--surface-subtle)]"
-                      >
-                        <p className="truncate text-sm text-[var(--text-primary)]">{node.content}</p>
-                        <p className="text-xs text-[var(--text-muted)]">
-                          {NODE_TYPE_META[asNodeType(node.type)].label}
-                        </p>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {commandQuery.trim() && nodeSearchHits.length === 0 && (
-                <p className="px-2 pb-1 text-sm text-[var(--text-muted)]">
-                  No matching nodes for &quot;{commandQuery}&quot;.
-                </p>
-              )}
+              <Button variant="ghost" size="sm" onClick={() => setSelectedTurn(null)}><X className="h-4 w-4" /></Button>
             </div>
+            <div className="mt-3 grid gap-2 md:grid-cols-2">
+              <MetaBox label="Session" value={selectedTurn.sessionId} mono />
+              <MetaBox label="Role" value={selectedTurn.role ?? '-'} />
+              <MetaBox label="Branch" value={selectedTurn.branch ?? '-'} />
+              <MetaBox label="Commit" value={selectedTurn.commitSha ? selectedTurn.commitSha.slice(0, 12) : '-'} mono />
+            </div>
+            <div className="mt-3 flex gap-2">
+              <Button size="sm" variant="secondary" disabled={!selectedTurn.hasPayload || payloadLoading} onClick={() => setShowRawPayload(current => !current)}>
+                {showRawPayload ? 'Hide Raw Payload' : 'Show Raw Payload'}
+              </Button>
+            </div>
+            {showRawPayload ? (
+              <div className="mt-3">
+                {payloadLoading ? <p className="text-xs text-[var(--text-muted)]">Loading raw payload...</p> : payload ? (
+                  <pre className="max-h-[60vh] overflow-auto rounded-lg bg-[var(--surface-subtle)] p-3 text-xs text-[var(--text-secondary)]">{JSON.stringify(payload.payload, null, 2)}</pre>
+                ) : <p className="text-xs text-[var(--text-muted)]">No payload found.</p>}
+              </div>
+            ) : null}
           </div>
         </div>
-      )}
+      ) : null}
+    </div>
+  );
+}
+
+function MetaBox({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="rounded-lg border border-[var(--border-muted)] bg-[var(--surface-subtle)] px-3 py-2">
+      <p className="text-[11px] uppercase tracking-[0.1em] text-[var(--text-muted)]">{label}</p>
+      <p className={cn('mt-1 text-sm font-semibold text-[var(--text-primary)]', mono ? 'font-mono' : undefined)}>{value}</p>
     </div>
   );
 }

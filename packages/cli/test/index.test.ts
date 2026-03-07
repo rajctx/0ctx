@@ -14,10 +14,13 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("case 'version'");
         expect(source).toContain("case 'mcp'");
         expect(source).toContain("case 'recall'");
+        expect(source).toContain("case 'extract'");
         expect(source).toContain("case 'repair'");
+        expect(source).toContain("case 'reset'");
         expect(source).toContain("case 'shell'");
         expect(source).toContain("case 'release'");
         expect(source).toContain("case 'connector'");
+        expect(source).toContain("case 'hook'");
         expect(source).toContain("return commandShell();");
         expect(source).toContain("return commandReleasePublish(parsed.flags);");
         expect(source).toContain("connector register");
@@ -34,6 +37,9 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("[--dashboard-query[=k=v&...]]");
         expect(source).toContain("0ctx status [--json] [--compact]");
         expect(source).toContain("0ctx repair [--clients=...] [--deep] [--json]");
+        expect(source).toContain("0ctx reset [--confirm] [--full] [--include-auth] [--json]");
+        expect(source).toContain("0ctx extract session --context-id=<id> --session-id=<id> [--preview] [--keys=key1,key2] [--max-nodes=12] [--json]");
+        expect(source).toContain("0ctx extract checkpoint --checkpoint-id=<id> [--preview] [--keys=key1,key2] [--max-nodes=12] [--json]");
         expect(source).toContain("0ctx logs [--no-open] [--snapshot] [--limit=50] [--since-hours=N] [--grep=text] [--errors-only]");
         expect(source).toContain("0ctx bootstrap [--dry-run] [--clients=...] [--entrypoint=/path/to/mcp-server.js]");
         expect(source).toContain("[--mcp-profile=all|core|recall|ops] [--json]");
@@ -45,6 +51,11 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("0ctx connector status [--json] [--cloud] [--require-bridge]");
         expect(source).toContain("0ctx connector verify [--require-cloud] [--json]");
         expect(source).toContain("0ctx connector register [--force] [--local-only] [--require-cloud] [--json]");
+        expect(source).toContain("0ctx connector hook install [--clients=all|claude,cursor,windsurf,codex,factory,antigravity] [--context-id=<id>] [--global]");
+        expect(source).toContain("0ctx connector hook status [--json]");
+        expect(source).toContain("0ctx connector hook prune [--days=30] [--json]");
+        expect(source).toContain("0ctx connector hook ingest --agent=claude|windsurf|codex|cursor|factory|antigravity [--context-id=<id>] [--repo-root=<path>]");
+        expect(source).toContain('0ctx hook install|status|prune|ingest  Alias for "0ctx connector hook ..."');
         expect(source).toContain("0ctx connector queue status [--json]");
         expect(source).toContain("0ctx sync policy get --context-id=<contextId>");
         expect(source).toContain("0ctx sync policy set <local_only|metadata_only|full_sync> --context-id=<contextId>");

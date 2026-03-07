@@ -4,7 +4,7 @@ import path from 'path';
 import os from 'os';
 
 const DB_PATH = path.join(os.homedir(), '.0ctx', '0ctx.db');
-export const CURRENT_SCHEMA_VERSION = 5;
+export const CURRENT_SCHEMA_VERSION = 8;
 
 export interface OpenDbOptions {
     dbPath?: string;
@@ -58,6 +58,21 @@ function migrate(db: Database.Database) {
         migrateToV5(db);
         setSchemaVersion(db, 5);
     }
+
+    if (version < 6) {
+        migrateToV6(db);
+        setSchemaVersion(db, 6);
+    }
+
+    if (version < 7) {
+        migrateToV7(db);
+        setSchemaVersion(db, 7);
+    }
+
+    if (version < 8) {
+        migrateToV8(db);
+        setSchemaVersion(db, 8);
+    }
 }
 
 function migrateToV1(db: Database.Database) {
@@ -78,6 +93,7 @@ function migrateToV1(db: Database.Database) {
       key         TEXT,
       tags        TEXT NOT NULL DEFAULT '[]',
       source      TEXT,
+      hidden      INTEGER NOT NULL DEFAULT 0,
       createdAt   INTEGER NOT NULL,
       checkpointId TEXT,
       FOREIGN KEY (contextId) REFERENCES contexts(id)
@@ -150,7 +166,7 @@ function migrateToV3(db: Database.Database) {
     if (!hasColumn(db, 'contexts', 'syncPolicy')) {
         db.exec(`
         ALTER TABLE contexts
-        ADD COLUMN syncPolicy TEXT NOT NULL DEFAULT 'metadata_only'
+        ADD COLUMN syncPolicy TEXT NOT NULL DEFAULT 'full_sync'
       `);
     }
 }
@@ -162,6 +178,129 @@ function migrateToV5(db: Database.Database) {
 
     CREATE INDEX IF NOT EXISTS idx_audit_logs_session_created
       ON audit_logs(sessionToken, createdAt DESC);
+  `);
+}
+
+function migrateToV6(db: Database.Database) {
+    if (!hasColumn(db, 'nodes', 'hidden')) {
+        db.exec(`ALTER TABLE nodes ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0`);
+    }
+
+    db.exec(`
+    CREATE TABLE IF NOT EXISTS node_payloads (
+      nodeId       TEXT PRIMARY KEY,
+      contextId    TEXT NOT NULL,
+      contentType  TEXT NOT NULL DEFAULT 'application/json',
+      compression  TEXT NOT NULL DEFAULT 'gzip',
+      payload      BLOB NOT NULL,
+      byteLength   INTEGER NOT NULL DEFAULT 0,
+      createdAt    INTEGER NOT NULL,
+      updatedAt    INTEGER NOT NULL,
+      FOREIGN KEY (nodeId) REFERENCES nodes(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_nodes_context_hidden_created
+      ON nodes(contextId, hidden, createdAt DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_nodes_context_key_created
+      ON nodes(contextId, key, createdAt DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_node_payloads_context_created
+      ON node_payloads(contextId, createdAt DESC);
+  `);
+}
+
+function migrateToV7(db: Database.Database) {
+    db.exec(`
+    UPDATE nodes
+    SET hidden = 1
+    WHERE hidden = 0
+      AND type = 'artifact'
+      AND (
+        key LIKE 'chat_session:%'
+        OR key LIKE 'chat_turn:%'
+        OR key LIKE 'chat_commit:%'
+      );
+  `);
+}
+
+function migrateToV8(db: Database.Database) {
+    if (!hasColumn(db, 'checkpoints', 'kind')) {
+        db.exec(`ALTER TABLE checkpoints ADD COLUMN kind TEXT NOT NULL DEFAULT 'legacy'`);
+    }
+    if (!hasColumn(db, 'checkpoints', 'sessionId')) {
+        db.exec(`ALTER TABLE checkpoints ADD COLUMN sessionId TEXT`);
+    }
+    if (!hasColumn(db, 'checkpoints', 'branch')) {
+        db.exec(`ALTER TABLE checkpoints ADD COLUMN branch TEXT`);
+    }
+    if (!hasColumn(db, 'checkpoints', 'worktreePath')) {
+        db.exec(`ALTER TABLE checkpoints ADD COLUMN worktreePath TEXT`);
+    }
+    if (!hasColumn(db, 'checkpoints', 'commitSha')) {
+        db.exec(`ALTER TABLE checkpoints ADD COLUMN commitSha TEXT`);
+    }
+    if (!hasColumn(db, 'checkpoints', 'summary')) {
+        db.exec(`ALTER TABLE checkpoints ADD COLUMN summary TEXT`);
+    }
+    if (!hasColumn(db, 'checkpoints', 'agentSet')) {
+        db.exec(`ALTER TABLE checkpoints ADD COLUMN agentSet TEXT NOT NULL DEFAULT '[]'`);
+    }
+
+    db.exec(`
+    CREATE TABLE IF NOT EXISTS checkpoint_payloads (
+      checkpointId  TEXT PRIMARY KEY,
+      contextId     TEXT NOT NULL,
+      contentType   TEXT NOT NULL DEFAULT 'application/json',
+      compression   TEXT NOT NULL DEFAULT 'gzip',
+      payload       BLOB NOT NULL,
+      byteLength    INTEGER NOT NULL DEFAULT 0,
+      createdAt     INTEGER NOT NULL,
+      updatedAt     INTEGER NOT NULL,
+      FOREIGN KEY (checkpointId) REFERENCES checkpoints(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS branch_lanes (
+      contextId       TEXT NOT NULL,
+      branch          TEXT NOT NULL,
+      worktreePath    TEXT NOT NULL DEFAULT '',
+      lastAgent       TEXT,
+      lastCommitSha   TEXT,
+      lastActivityAt  INTEGER NOT NULL,
+      sessionCount    INTEGER NOT NULL DEFAULT 0,
+      checkpointCount INTEGER NOT NULL DEFAULT 0,
+      agentSet        TEXT NOT NULL DEFAULT '[]',
+      PRIMARY KEY (contextId, branch, worktreePath),
+      FOREIGN KEY (contextId) REFERENCES contexts(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_checkpoints_context_created
+      ON checkpoints(contextId, createdAt DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_checkpoints_context_branch_created
+      ON checkpoints(contextId, branch, createdAt DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_checkpoints_context_session_created
+      ON checkpoints(contextId, sessionId, createdAt DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_checkpoint_payloads_context_created
+      ON checkpoint_payloads(contextId, createdAt DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_branch_lanes_context_last_activity
+      ON branch_lanes(contextId, lastActivityAt DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_branch_lanes_context_branch
+      ON branch_lanes(contextId, branch);
+
+    UPDATE checkpoints
+    SET kind = CASE
+      WHEN kind IS NULL OR TRIM(kind) = '' THEN 'legacy'
+      ELSE kind
+    END,
+        agentSet = CASE
+      WHEN agentSet IS NULL OR TRIM(agentSet) = '' THEN '[]'
+      ELSE agentSet
+    END;
   `);
 }
 

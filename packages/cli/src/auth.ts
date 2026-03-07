@@ -30,8 +30,9 @@ import { appendCliOpsLogEntry } from './ops-log.js';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-const DEFAULT_AUTH_SERVER = 'https://0ctx.com';
+const DEFAULT_AUTH_SERVER = 'https://www.0ctx.com';
 const DEFAULT_SCOPE = 'openid profile email offline_access';
+const MAX_REDIRECTS = 5;
 
 /**
  * Returns the token file path.
@@ -43,7 +44,7 @@ function getTokenFilePath(): string {
 }
 
 function getAuthServer(): string {
-    return getConfigValue('auth.server').replace(/\/$/, '');
+    return normalize0ctxHostedUrl(getConfigValue('auth.server')).replace(/\/$/, '');
 }
 
 function recordAuthOpsEvent(
@@ -269,7 +270,8 @@ function httpPost(
     url: string,
     body: string,
     contentType: string,
-    timeoutMs = 10_000
+    timeoutMs = 10_000,
+    redirectsRemaining = MAX_REDIRECTS
 ): Promise<string> {
     return new Promise((resolve, reject) => {
         const parsed = new URL(url);
@@ -290,7 +292,20 @@ function httpPost(
             res => {
                 let data = '';
                 res.on('data', chunk => { data += chunk; });
-                res.on('end', () => resolve(data));
+                res.on('end', () => {
+                    const status = res.statusCode ?? 0;
+                    const location = res.headers.location;
+                    if (location && [301, 302, 303, 307, 308].includes(status)) {
+                        if (redirectsRemaining <= 0) {
+                            reject(new Error(`Too many redirects while requesting ${url}`));
+                            return;
+                        }
+                        const nextUrl = new URL(location, url).toString();
+                        resolve(httpPost(nextUrl, body, contentType, timeoutMs, redirectsRemaining - 1));
+                        return;
+                    }
+                    resolve(data);
+                });
             }
         );
         req.on('error', reject);
@@ -308,6 +323,27 @@ function httpJsonPost(url: string, body: Record<string, unknown>, timeoutMs = 10
     return httpPost(url, JSON.stringify(body), 'application/json', timeoutMs);
 }
 
+function normalize0ctxHostedUrl(value: string): string {
+    try {
+        const parsed = new URL(value);
+        if (parsed.hostname === '0ctx.com') {
+            parsed.hostname = 'www.0ctx.com';
+        }
+        return parsed.toString();
+    } catch {
+        return value.replace(/^https:\/\/0ctx\.com(?=\/|$)/, 'https://www.0ctx.com');
+    }
+}
+
+function parseJsonResponse<T>(raw: string, operation: string): T {
+    try {
+        return JSON.parse(raw) as T;
+    } catch {
+        const preview = raw.replace(/\s+/g, ' ').trim().slice(0, 160) || '(empty response)';
+        throw new Error(`${operation} returned a non-JSON response. This usually means the auth server redirected or served HTML/text instead of JSON. Response preview: ${preview}`);
+    }
+}
+
 function sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -323,7 +359,7 @@ async function requestDeviceCode(authServer: string): Promise<DeviceCodeResponse
         throw new Error(`Cannot connect to auth server (${authServer}): ${msg}`);
     }
 
-    const parsed = JSON.parse(raw) as BffDeviceCodeResponse;
+    const parsed = parseJsonResponse<BffDeviceCodeResponse>(raw, 'Device code request');
     if (parsed.error || !parsed.deviceCode || !parsed.userCode) {
         throw new Error(`Device code error: ${bffErrorMessage(parsed.error)} — ${raw}`);
     }
@@ -359,7 +395,7 @@ async function pollForToken(
             throw new Error(`Token poll failed: ${msg}`);
         }
 
-        const parsed = JSON.parse(raw) as BffTokenResponse;
+        const parsed = parseJsonResponse<BffTokenResponse>(raw, 'Token poll');
 
         if (parsed.accessToken) {
             // SEC-04: Validate token_type per RFC 6749 §5.1
@@ -411,7 +447,7 @@ export async function refreshAccessToken(store: TokenStore): Promise<TokenStore>
         throw new Error(`Token refresh failed: ${msg}`);
     }
 
-    const parsed = JSON.parse(raw) as BffTokenResponse;
+    const parsed = parseJsonResponse<BffTokenResponse>(raw, 'Token refresh');
     if (!parsed.accessToken) {
         throw new Error(`Refresh error: ${bffErrorMessage(parsed.error)} — ${parsed.errorDescription ?? ''}`);
     }
@@ -435,6 +471,12 @@ export async function refreshAccessToken(store: TokenStore): Promise<TokenStore>
     writeTokenFile(updated);
     return updated;
 }
+
+export const __test = {
+    requestDeviceCode,
+    normalize0ctxHostedUrl,
+    parseJsonResponse
+};
 
 // ─── CLI commands ─────────────────────────────────────────────────────────────
 

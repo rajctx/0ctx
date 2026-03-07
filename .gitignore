@@ -56,3 +56,6 @@ tsc_errors.txt
 
 # local scratch artifacts
 .tmp/
+
+# Rust build artifacts
+target/

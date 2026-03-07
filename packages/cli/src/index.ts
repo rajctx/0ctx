@@ -57,8 +57,35 @@ import { runInteractiveShell } from './shell';
 import { runReleasePublish } from './release';
 import { startLogsServer } from './logs-server';
 import { initTelemetry, captureEvent, shutdownTelemetry } from './telemetry';
+import {
+    appendHookEventLog,
+    getHookDumpDir,
+    getHookDumpRetentionDays,
+    persistHookDump,
+    pruneHookDumps,
+    persistHookTranscriptHistory,
+    persistHookTranscriptSnapshot
+} from './hook-dumps';
+import {
+    getHookConfigPath,
+    getHookStatePath,
+    installHooks,
+    matchesHookCaptureRoot,
+    normalizeHookPayload,
+    readCodexArchiveCapture,
+    readCodexCapture,
+    readInlineHookCapture,
+    readTranscriptCapture,
+    resolveCodexSessionArchivePath,
+    resolveHookTranscriptPath,
+    resolveHookCaptureRoot,
+    readHookInstallState,
+    selectHookContextId,
+    type HookSupportedAgent
+} from './hooks';
 
 type SupportedClient = 'claude' | 'cursor' | 'windsurf' | 'codex' | 'antigravity';
+type HookInstallClient = 'claude' | 'cursor' | 'windsurf' | 'codex' | 'factory' | 'antigravity';
 type CheckStatus = 'pass' | 'warn' | 'fail';
 type BootstrapResult = { client: string; status: string; configPath: string; message?: string };
 
@@ -84,6 +111,26 @@ interface SetupStep {
     message: string;
 }
 
+interface HookHealthAgentCheck {
+    agent: HookSupportedAgent;
+    configPath: string;
+    configExists: boolean;
+    commandPresent: boolean;
+    command: string | null;
+}
+
+interface HookHealthDetails {
+    statePath: string;
+    projectRoot: string | null;
+    projectRootExists: boolean;
+    projectConfigPath: string | null;
+    projectConfigExists: boolean;
+    contextId: string | null;
+    contextIdExists: boolean | null;
+    installedAgentCount: number;
+    agents: HookHealthAgentCheck[];
+}
+
 interface ParsedArgs {
     command: string;
     subcommand?: string;
@@ -99,6 +146,7 @@ const SOCKET_PATH = os.platform() === 'win32'
     : path.join(os.homedir(), '.0ctx', '0ctx.sock');
 
 const SUPPORTED_CLIENTS: SupportedClient[] = ['claude', 'cursor', 'windsurf', 'codex', 'antigravity'];
+const SUPPORTED_HOOK_INSTALL_CLIENTS: HookInstallClient[] = ['claude', 'cursor', 'windsurf', 'codex', 'factory', 'antigravity'];
 const CLI_VERSION = (() => {
     try {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -182,6 +230,19 @@ function parseClients(raw: string | boolean | undefined): SupportedClient[] {
         .filter((item): item is SupportedClient => SUPPORTED_CLIENTS.includes(item as SupportedClient));
 
     return parsed.length > 0 ? parsed : SUPPORTED_CLIENTS;
+}
+
+function parseHookClients(raw: string | boolean | undefined): HookInstallClient[] {
+    if (!raw || typeof raw !== 'string') return SUPPORTED_HOOK_INSTALL_CLIENTS;
+    const normalized = raw.trim().toLowerCase();
+    if (normalized === 'all') return SUPPORTED_HOOK_INSTALL_CLIENTS;
+
+    const parsed = normalized
+        .split(/[,\s]+/)
+        .map(item => item.trim())
+        .filter((item): item is HookInstallClient => item === 'factory' || SUPPORTED_CLIENTS.includes(item as SupportedClient));
+
+    return parsed.length > 0 ? parsed : SUPPORTED_HOOK_INSTALL_CLIENTS;
 }
 
 async function isDaemonReachable(): Promise<{ ok: boolean; error?: string; health?: any }> {
@@ -281,6 +342,132 @@ function inferDaemonRecoverySteps(error?: string): string[] {
 
     steps.push('0ctx doctor');
     return Array.from(new Set(steps));
+}
+
+function isHookCommandPresent(agent: HookSupportedAgent, configContent: string, expectedCommand: string | null): boolean {
+    if (agent === 'codex') {
+        return configContent.includes('# BEGIN 0ctx-codex-notify')
+            && configContent.includes('# END 0ctx-codex-notify')
+            && configContent.includes('--agent=codex');
+    }
+
+    if (!expectedCommand) return false;
+    return configContent.includes('0ctx connector hook ingest')
+        && configContent.includes(`--agent=${agent}`)
+        && configContent.includes(expectedCommand.replace(/\s+/g, ' ').trim().split(' ').slice(0, 4).join(' '));
+}
+
+async function collectHookHealth(): Promise<{
+    check: DoctorCheck;
+    dumpCheck: DoctorCheck;
+    details: HookHealthDetails;
+}> {
+    const state = readHookInstallState();
+    const statePath = getHookStatePath();
+    const projectRoot = state.projectRoot ? path.resolve(state.projectRoot) : null;
+    const projectConfigPath = state.projectConfigPath ?? (projectRoot ? path.join(projectRoot, '.0ctx', 'settings.local.json') : null);
+    const installedAgents = state.agents.filter(agent => agent.installed);
+    const projectRootExists = projectRoot ? fs.existsSync(projectRoot) : false;
+    const projectConfigExists = projectConfigPath ? fs.existsSync(projectConfigPath) : false;
+    let contextIdExists: boolean | null = null;
+
+    if (state.contextId) {
+        try {
+            const contexts = await sendToDaemon('listContexts', {}) as Array<{ id?: string }> | null;
+            contextIdExists = Array.isArray(contexts)
+                ? contexts.some(context => context?.id === state.contextId)
+                : false;
+        } catch {
+            contextIdExists = null;
+        }
+    }
+
+    const agents: HookHealthAgentCheck[] = installedAgents.map(agentState => {
+        const configPath = projectRoot ? getHookConfigPath(projectRoot, agentState.agent) : getHookConfigPath('.', agentState.agent);
+        const configExists = fs.existsSync(configPath);
+        const content = configExists ? fs.readFileSync(configPath, 'utf8') : '';
+        return {
+            agent: agentState.agent,
+            configPath,
+            configExists,
+            commandPresent: configExists && isHookCommandPresent(agentState.agent, content, agentState.command),
+            command: agentState.command
+        };
+    });
+
+    const missingAgents = agents.filter(agent => !agent.configExists || !agent.commandPresent);
+    const dumpDir = getHookDumpDir();
+    let dumpDirWritable = true;
+    let dumpDirError: string | null = null;
+    try {
+        fs.mkdirSync(dumpDir, { recursive: true });
+        fs.accessSync(dumpDir, fs.constants.W_OK);
+    } catch (error) {
+        dumpDirWritable = false;
+        dumpDirError = error instanceof Error ? error.message : String(error);
+    }
+
+    let status: CheckStatus = 'pass';
+    let message = 'Managed capture integration state is healthy.';
+
+    if (!projectRoot) {
+        status = 'warn';
+        message = 'No managed capture integration project has been recorded yet.';
+    } else if (!projectRootExists) {
+        status = 'fail';
+        message = 'Managed capture integration project root no longer exists.';
+    } else if (!projectConfigExists) {
+        status = 'fail';
+        message = 'Managed capture integration project config is missing.';
+    } else if (missingAgents.length > 0) {
+        status = 'fail';
+        message = 'One or more managed capture integration configs are missing or stale.';
+    } else if (state.contextId && contextIdExists === false) {
+        status = 'warn';
+        message = 'Stored capture context id no longer exists; reinstall integrations to refresh context binding.';
+    }
+
+    return {
+        check: {
+            id: 'hook_state',
+            status,
+            message,
+            details: {
+                statePath,
+                projectRoot,
+                projectRootExists,
+                projectConfigPath,
+                projectConfigExists,
+                contextId: state.contextId,
+                contextIdExists,
+                installedAgentCount: installedAgents.length,
+                agents
+            } satisfies HookHealthDetails
+        },
+        dumpCheck: {
+            id: 'hook_dump_dir',
+            status: dumpDirWritable ? 'pass' : 'warn',
+            message: dumpDirWritable
+                ? `Hook dump directory is writable (retention ${getHookDumpRetentionDays()} days).`
+                : 'Hook dump directory is not writable.',
+            details: {
+                path: dumpDir,
+                retentionDays: getHookDumpRetentionDays(),
+                error: dumpDirError
+            }
+        },
+        details: {
+            statePath,
+            projectRoot,
+            projectRootExists,
+            projectConfigPath,
+            projectConfigExists,
+            contextId: state.contextId,
+            contextIdExists,
+            installedAgentCount: installedAgents.length,
+            agents
+        }
+    };
 }
 
 function resolveDaemonEntrypoint(): string {
@@ -867,6 +1054,10 @@ async function collectDoctorChecks(flags: Record<string, string | boolean>): Pro
         details: { results: dryRunResults }
     });
 
+    const hookHealth = await collectHookHealth();
+    checks.push(hookHealth.check);
+    checks.push(hookHealth.dumpCheck);
+
     return { checks, daemon };
 }
 
@@ -903,6 +1094,66 @@ async function commandDoctor(flags: Record<string, string | boolean>): Promise<n
 
     p.outro(hasFailures ? color.red('Doctor found issues requiring attention.') : color.green('All systems go!'));
     return hasFailures ? 1 : 0;
+}
+
+async function repairManagedHooks(flags: Record<string, string | boolean>): Promise<RepairStep> {
+    const hookState = readHookInstallState();
+    const projectRoot = hookState.projectRoot ? path.resolve(hookState.projectRoot) : null;
+    const installedAgents = hookState.agents
+        .filter(agent => agent.installed)
+        .map(agent => agent.agent);
+
+    if (!projectRoot || installedAgents.length === 0) {
+        return {
+            id: 'hooks_reinstall',
+            status: 'warn',
+            code: 0,
+            message: 'No managed capture integration installation is recorded yet.',
+            details: {
+                statePath: getHookStatePath(),
+                projectRoot: projectRoot ?? null
+            }
+        };
+    }
+
+    if (!fs.existsSync(projectRoot)) {
+        return {
+            id: 'hooks_reinstall',
+            status: 'fail',
+            code: 1,
+            message: 'Managed capture integration project root is missing.',
+            details: {
+                projectRoot
+            }
+        };
+    }
+
+    const refreshedContextId = await resolveContextIdForHookIngest(projectRoot, hookState.contextId);
+    const result = installHooks({
+        projectRoot,
+        contextId: refreshedContextId,
+        clients: installedAgents,
+        dryRun: false,
+        cliCommand: '0ctx'
+    });
+    const failedAgents = result.state.agents
+        .filter(agent => installedAgents.includes(agent.agent) && !agent.installed)
+        .map(agent => agent.agent);
+
+    return {
+        id: 'hooks_reinstall',
+        status: failedAgents.length === 0 ? 'pass' : 'fail',
+        code: failedAgents.length === 0 ? 0 : 1,
+        message: failedAgents.length === 0
+            ? 'Managed capture integrations were refreshed from the recorded project state.'
+            : `Managed capture integrations failed for: ${failedAgents.join(', ')}`,
+        details: {
+            projectRoot,
+            refreshedContextId,
+            warnings: result.warnings,
+            agents: result.state.agents
+        }
+    };
 }
 
 async function commandRepair(flags: Record<string, string | boolean>): Promise<number> {
@@ -960,6 +1211,13 @@ async function commandRepair(flags: Record<string, string | boolean>): Promise<n
         if (bootstrapCode !== 0) {
             console.log(JSON.stringify({ ok: false, steps }, null, 2));
             return bootstrapCode;
+        }
+
+        const hookRepairStep = await repairManagedHooks(flags);
+        steps.push(hookRepairStep);
+        if (hookRepairStep.status === 'fail') {
+            console.log(JSON.stringify({ ok: false, steps }, null, 2));
+            return hookRepairStep.code || 1;
         }
 
         if (deep) {
@@ -1035,6 +1293,19 @@ async function commandRepair(flags: Record<string, string | boolean>): Promise<n
         return bootstrapCode;
     }
 
+    p.log.step('Refreshing managed capture integrations');
+    const hookRepairStep = await repairManagedHooks(flags);
+    if (hookRepairStep.status === 'fail') {
+        p.log.error(hookRepairStep.message);
+        p.outro(color.yellow('Repair partial (hook refresh failed)'));
+        return hookRepairStep.code || 1;
+    }
+    if (hookRepairStep.status === 'warn') {
+        p.log.warn(hookRepairStep.message);
+    } else {
+        p.log.success(hookRepairStep.message);
+    }
+
     if (deep) {
         p.log.step('Running deep daemon capability checks');
         const check = await checkDaemonCapabilities(['recall']);
@@ -1056,6 +1327,85 @@ async function commandRepair(flags: Record<string, string | boolean>): Promise<n
 
     p.log.step('Running doctor checks');
     return commandDoctor({ ...flags, json: false });
+}
+
+async function commandReset(flags: Record<string, string | boolean>): Promise<number> {
+    const asJson = Boolean(flags.json);
+    const full = Boolean(flags.full);
+    const includeAuth = Boolean(flags['include-auth']);
+    const confirmed = Boolean(flags.confirm);
+
+    if (!confirmed && !asJson) {
+        const p = await import('@clack/prompts');
+        const accepted = await p.confirm({
+            message: full
+                ? 'Reset local 0ctx runtime data, hook state, connector state, and backups on this machine?'
+                : 'Reset local 0ctx runtime data on this machine?',
+            initialValue: false
+        });
+        if (p.isCancel(accepted) || !accepted) {
+            p.cancel('Reset cancelled.');
+            return 1;
+        }
+    } else if (!confirmed && asJson) {
+        console.error('reset_requires_confirm: pass --confirm to run non-interactively.');
+        return 1;
+    }
+
+    const daemonBefore = await isDaemonReachable();
+    if (daemonBefore.ok) {
+        console.error('reset_requires_daemon_stop: stop the daemon/service before resetting local data.');
+        console.error('Try: 0ctx connector service stop');
+        return 1;
+    }
+
+    const homeRoot = path.join(os.homedir(), '.0ctx');
+    const authFile = process.env.CTX_AUTH_FILE ?? path.join(homeRoot, 'auth.json');
+    const backupDir = process.env.CTX_BACKUP_DIR ?? path.join(homeRoot, 'backups');
+    const targets = [
+        DB_PATH,
+        `${DB_PATH}-shm`,
+        `${DB_PATH}-wal`,
+        getHookDumpDir(),
+        getConnectorQueuePath(),
+        getCliOpsLogPath(),
+        full ? getConnectorStatePath() : null,
+        full ? getHookStatePath() : null,
+        full ? backupDir : null,
+        includeAuth ? authFile : null
+    ].filter((value): value is string => typeof value === 'string' && value.length > 0);
+
+    const removed: string[] = [];
+    const skipped: string[] = [];
+    for (const target of targets) {
+        if (!fs.existsSync(target)) {
+            skipped.push(target);
+            continue;
+        }
+        fs.rmSync(target, { recursive: true, force: true });
+        removed.push(target);
+    }
+
+    if (asJson) {
+        console.log(JSON.stringify({
+            ok: true,
+            full,
+            includeAuth,
+            removed,
+            skipped
+        }, null, 2));
+        return 0;
+    }
+
+    console.log('\nLocal reset complete.\n');
+    for (const entry of removed) {
+        console.log(`  removed: ${entry}`);
+    }
+    for (const entry of skipped) {
+        console.log(`  skipped: ${entry}`);
+    }
+    console.log('');
+    return 0;
 }
 
 async function commandDashboard(flags: Record<string, string | boolean>): Promise<number> {
@@ -1939,6 +2289,744 @@ async function commandConnectorQueue(action: string | undefined, flags: Record<s
     return drained.failed > 0 ? 1 : 0;
 }
 
+function readStdinPayload(): string {
+    if (process.stdin.isTTY) return '';
+    try {
+        const chunk = fs.readFileSync(0);
+        return chunk.toString('utf8');
+    } catch {
+        return '';
+    }
+}
+
+function resolveRepoRoot(input: string | null): string {
+    if (input) return path.resolve(input);
+    try {
+        const root = execSync('git rev-parse --show-toplevel', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+        if (root.length > 0) return root;
+    } catch {
+        // Fall through to cwd
+    }
+    return process.cwd();
+}
+
+function safeGitValue(repoRoot: string, args: string[]): string | null {
+    try {
+        const value = execSync(`git ${args.join(' ')}`, {
+            cwd: repoRoot,
+            stdio: ['ignore', 'pipe', 'ignore']
+        }).toString().trim();
+        if (!value || value === 'HEAD') return null;
+        return value;
+    } catch {
+        return null;
+    }
+}
+
+function extractSupportedHookAgent(raw: string | null): HookSupportedAgent | null {
+    if (raw === 'claude' || raw === 'windsurf' || raw === 'codex' || raw === 'cursor' || raw === 'factory' || raw === 'antigravity') {
+        return raw;
+    }
+    return null;
+}
+
+async function resolveContextIdForHookIngest(repoRoot: string, explicitContextId: string | null): Promise<string | null> {
+    const contexts = await sendToDaemon('listContexts', {}) as Array<{ id: string; paths?: string[] }>;
+    const selected = selectHookContextId(contexts, repoRoot, explicitContextId);
+    if (selected) return selected;
+
+    // Fallback to active context so hook ingestion still works in existing
+    // projects that were created before path binding was added.
+    try {
+        const active = await sendToDaemon('getActiveContext', {}) as { id?: string } | null;
+        if (typeof active?.id === 'string' && active.id.trim().length > 0) {
+            return active.id;
+        }
+    } catch {
+        // Best-effort only; missing active context falls back to explicit error.
+    }
+
+    return null;
+}
+
+async function resolveHookContextPaths(contextId: string): Promise<string[] | null> {
+    const contexts = await sendToDaemon('listContexts', {}) as Array<{ id?: string; paths?: string[] }>;
+    const matched = Array.isArray(contexts)
+        ? contexts.find(context => typeof context?.id === 'string' && context.id === contextId)
+        : null;
+    if (!matched) return null;
+    return Array.isArray(matched.paths)
+        ? matched.paths.filter((rawPath): rawPath is string => typeof rawPath === 'string' && rawPath.trim().length > 0)
+        : [];
+}
+
+async function validateHookIngestWorkspace(options: {
+    agent: HookSupportedAgent;
+    contextId: string;
+    repoRoot: string;
+    payload: Record<string, unknown>;
+}): Promise<{
+    ok: boolean;
+    captureRoot: string;
+    error: string | null;
+}> {
+    const captureRoot = resolveHookCaptureRoot(options.agent, options.payload, options.repoRoot) ?? path.resolve(options.repoRoot);
+    if (options.agent !== 'factory' && options.agent !== 'antigravity') {
+        return {
+            ok: true,
+            captureRoot,
+            error: null
+        };
+    }
+
+    const contextPaths = await resolveHookContextPaths(options.contextId);
+    if (contextPaths === null) {
+        return {
+            ok: false,
+            captureRoot,
+            error: `connector_hook_ingest_context_missing: context '${options.contextId}' was not found.`
+        };
+    }
+    if (contextPaths.length === 0 || matchesHookCaptureRoot(contextPaths, captureRoot)) {
+        return {
+            ok: true,
+            captureRoot,
+            error: null
+        };
+    }
+
+    return {
+        ok: false,
+        captureRoot,
+        error: `connector_hook_ingest_workspace_mismatch: capture path '${captureRoot}' is outside the bound workspace paths for context '${options.contextId}' (${contextPaths.join(', ')}).`
+    };
+}
+
+interface HookArtifactPaths {
+    dumpPath: string | null;
+    hookEventLogPath: string | null;
+    transcriptDumpPath: string | null;
+    transcriptHistoryPath: string | null;
+    transcriptSourcePath: string | null;
+}
+
+function buildHookCaptureMeta(options: {
+    agent: HookSupportedAgent;
+    sessionId: string;
+    turnId: string;
+    role: string;
+    occurredAt: number;
+    branch: string | null;
+    commitSha: string | null;
+    repositoryRoot: string;
+    artifacts: HookArtifactPaths;
+    extra?: Record<string, unknown>;
+}): Record<string, unknown> {
+    return {
+        agent: options.agent,
+        sessionId: options.sessionId,
+        turnId: options.turnId,
+        role: options.role,
+        occurredAt: options.occurredAt,
+        branch: options.branch,
+        commitSha: options.commitSha,
+        repositoryRoot: options.repositoryRoot,
+        hookDumpPath: options.artifacts.dumpPath,
+        hookEventLogPath: options.artifacts.hookEventLogPath,
+        transcriptDumpPath: options.artifacts.transcriptDumpPath,
+        transcriptHistoryPath: options.artifacts.transcriptHistoryPath,
+        transcriptSourcePath: options.artifacts.transcriptSourcePath,
+        ...(options.extra ?? {})
+    };
+}
+
+async function ensureChatSessionNode(options: {
+    contextId: string;
+    agent: HookSupportedAgent;
+    sessionId: string;
+    summary: string;
+    startedAt: number;
+    branch: string | null;
+    commitSha: string | null;
+    repositoryRoot: string;
+    artifacts: HookArtifactPaths;
+    sessionTitle?: string | null;
+}): Promise<{ id?: string; content?: string } | null> {
+    const sessionKey = `chat_session:${options.agent}:${options.sessionId}`;
+    let sessionNode = await sendToDaemon('getByKey', {
+        contextId: options.contextId,
+        key: sessionKey,
+        includeHidden: true
+    }) as { id?: string; content?: string } | null;
+
+    if (!sessionNode?.id) {
+        sessionNode = await sendToDaemon('addNode', {
+            contextId: options.contextId,
+            type: 'artifact',
+            hidden: true,
+            thread: options.sessionId,
+            key: sessionKey,
+            tags: ['chat_session', `agent:${options.agent}`],
+            source: `hook:${options.agent}`,
+            content: options.summary,
+            createdAtOverride: options.startedAt,
+            rawPayload: {
+                agent: options.agent,
+                sessionId: options.sessionId,
+                sessionTitle: options.sessionTitle ?? null,
+                branch: options.branch,
+                commitSha: options.commitSha,
+                repositoryRoot: options.repositoryRoot,
+                meta: buildHookCaptureMeta({
+                    agent: options.agent,
+                    sessionId: options.sessionId,
+                    turnId: `session-${options.sessionId}`,
+                    role: 'session',
+                    occurredAt: options.startedAt,
+                    branch: options.branch,
+                    commitSha: options.commitSha,
+                    repositoryRoot: options.repositoryRoot,
+                    artifacts: options.artifacts,
+                    extra: {
+                        sessionTitle: options.sessionTitle ?? null
+                    }
+                })
+            }
+        }) as { id?: string; content?: string } | null;
+    } else if (sessionNode.content !== options.summary) {
+        sessionNode = await sendToDaemon('updateNode', {
+            id: sessionNode.id,
+            updates: {
+                content: options.summary,
+                hidden: true
+            }
+        }) as { id?: string; content?: string } | null;
+    }
+
+    return sessionNode;
+}
+
+async function ensureChatCommitNode(options: {
+    contextId: string;
+    agent: HookSupportedAgent;
+    branch: string | null;
+    commitSha: string | null;
+    repositoryRoot: string;
+}): Promise<{ id?: string } | null> {
+    if (!options.commitSha) return null;
+
+    const commitKey = `chat_commit:${options.branch ?? 'detached'}:${options.commitSha}`;
+    let commitNode = await sendToDaemon('getByKey', {
+        contextId: options.contextId,
+        key: commitKey,
+        includeHidden: true
+    }) as { id?: string } | null;
+    if (commitNode?.id) return commitNode;
+
+    commitNode = await sendToDaemon('addNode', {
+        contextId: options.contextId,
+        type: 'artifact',
+        hidden: true,
+        key: commitKey,
+        tags: ['chat_commit', `branch:${options.branch ?? 'detached'}`],
+        source: `hook:${options.agent}`,
+        content: `Commit ${options.commitSha.slice(0, 12)} on ${options.branch ?? 'detached'}`,
+        rawPayload: {
+            branch: options.branch,
+            commitSha: options.commitSha,
+            repositoryRoot: options.repositoryRoot
+        }
+    }) as { id?: string } | null;
+    return commitNode;
+}
+
+async function commandConnectorHook(action: string | undefined, flags: Record<string, string | boolean>): Promise<number> {
+    const safeAction = action ?? 'status';
+    const validActions = ['install', 'status', 'ingest', 'prune'];
+    if (!validActions.includes(safeAction)) {
+        console.error(`Unknown connector hook action: '${action ?? ''}'`);
+        console.error(`Valid actions: ${validActions.join(', ')}`);
+        return 1;
+    }
+
+    const asJson = Boolean(flags.json);
+    const quiet = Boolean(flags.quiet) || asJson;
+
+    if (safeAction === 'install') {
+        const dryRun = Boolean(flags['dry-run']) || Boolean(flags['hooks-dry-run']);
+        const installClaudeGlobal = Boolean(flags.global);
+        const repoRoot = resolveRepoRoot(parseOptionalStringFlag(flags['repo-root']));
+        const requestedContextId = parseOptionalStringFlag(flags['context-id'] ?? flags.contextId);
+        const contextId = await resolveContextIdForHookIngest(repoRoot, requestedContextId);
+        const clients = parseHookClients(flags.clients).map(client => client.toLowerCase());
+        const result = installHooks({
+            projectRoot: repoRoot,
+            contextId,
+            clients,
+            dryRun,
+            cliCommand: '0ctx',
+            installClaudeGlobal
+        });
+
+        if (asJson) {
+            console.log(JSON.stringify({
+                ok: true,
+                dryRun: result.dryRun,
+                changed: result.changed,
+                projectRoot: result.projectRoot,
+                contextId: result.contextId,
+                projectConfigPath: result.projectConfigPath,
+                statePath: result.statePath,
+                claudeConfigPath: result.claudeConfigPath,
+                claudeHookConfigured: result.claudeHookConfigured,
+                claudeHookReason: result.claudeHookReason,
+                claudeGlobalConfigPath: result.claudeGlobalConfigPath,
+                claudeGlobalHookConfigured: result.claudeGlobalHookConfigured,
+                claudeGlobalHookReason: result.claudeGlobalHookReason,
+                windsurfConfigPath: result.windsurfConfigPath,
+                windsurfHookConfigured: result.windsurfHookConfigured,
+                windsurfHookReason: result.windsurfHookReason,
+                cursorConfigPath: result.cursorConfigPath,
+                cursorHookConfigured: result.cursorHookConfigured,
+                cursorHookReason: result.cursorHookReason,
+                factoryConfigPath: result.factoryConfigPath,
+                factoryHookConfigured: result.factoryHookConfigured,
+                factoryHookReason: result.factoryHookReason,
+                antigravityConfigPath: result.antigravityConfigPath,
+                antigravityHookConfigured: result.antigravityHookConfigured,
+                antigravityHookReason: result.antigravityHookReason,
+                codexConfigPath: result.codexConfigPath,
+                codexNotifyConfigured: result.codexNotifyConfigured,
+                codexNotifyReason: result.codexNotifyReason,
+                warnings: result.warnings,
+                agents: result.state.agents
+            }, null, 2));
+        } else if (!quiet) {
+            console.log(`hook_install: ${dryRun ? 'dry-run' : (result.changed ? 'updated' : 'already up-to-date')}`);
+            console.log(`project_root: ${result.projectRoot}`);
+            console.log(`context_id: ${result.contextId ?? 'n/a (auto-resolve failed; capture may require --context-id)'}`);
+            console.log(`project_config: ${result.projectConfigPath}`);
+            console.log(`state_path: ${result.statePath}`);
+            console.log(`claude_config: ${result.claudeConfigPath}`);
+            console.log(`claude_hook: ${result.claudeHookConfigured ? 'configured' : `not-configured (${result.claudeHookReason ?? 'unknown'})`}`);
+            if (installClaudeGlobal || result.claudeGlobalHookConfigured) {
+                console.log(`claude_global_config: ${result.claudeGlobalConfigPath}`);
+                console.log(`claude_global_hook: ${result.claudeGlobalHookConfigured ? 'configured' : `not-configured (${result.claudeGlobalHookReason ?? 'unknown'})`}`);
+            }
+            console.log(`windsurf_config: ${result.windsurfConfigPath}`);
+            console.log(`windsurf_hook: ${result.windsurfHookConfigured ? 'configured' : `not-configured (${result.windsurfHookReason ?? 'unknown'})`}`);
+            console.log(`cursor_config: ${result.cursorConfigPath}`);
+            console.log(`cursor_hook: ${result.cursorHookConfigured ? 'configured' : `not-configured (${result.cursorHookReason ?? 'unknown'})`}`);
+            console.log(`factory_config: ${result.factoryConfigPath}`);
+            console.log(`factory_hook: ${result.factoryHookConfigured ? 'configured' : `not-configured (${result.factoryHookReason ?? 'unknown'})`}`);
+            console.log(`antigravity_config: ${result.antigravityConfigPath}`);
+            console.log(`antigravity_hook: ${result.antigravityHookConfigured ? 'configured' : `not-configured (${result.antigravityHookReason ?? 'unknown'})`}`);
+            console.log(`codex_config: ${result.codexConfigPath}`);
+            console.log(`codex_notify: ${result.codexNotifyConfigured ? 'configured' : `not-configured (${result.codexNotifyReason ?? 'unknown'})`}`);
+            for (const agent of result.state.agents) {
+                console.log(`agent_${agent.agent}: ${agent.status}${agent.installed ? ' (installed)' : ''}`);
+            }
+            for (const warning of result.warnings) {
+                console.log(`warning: ${warning}`);
+            }
+        }
+        return 0;
+    }
+
+    if (safeAction === 'status') {
+        const state = readHookInstallState();
+        if (asJson) {
+            console.log(JSON.stringify(state, null, 2));
+        } else if (!quiet) {
+            console.log('\nConnector Hook Status\n');
+            console.log(`  project_root:   ${state.projectRoot ?? 'n/a'}`);
+            console.log(`  project_config: ${state.projectConfigPath ?? 'n/a'}`);
+            console.log(`  updated_at:     ${new Date(state.updatedAt).toISOString()}`);
+            for (const agent of state.agents) {
+                console.log(`  ${agent.agent}: ${agent.status}${agent.installed ? ' (installed)' : ''}`);
+            }
+            console.log('');
+        }
+        return 0;
+    }
+
+    if (safeAction === 'prune') {
+        const maxAgeDays = parsePositiveIntegerFlag(flags.days ?? flags['retention-days'], getHookDumpRetentionDays());
+        const result = pruneHookDumps({ maxAgeDays });
+        if (asJson) {
+            console.log(JSON.stringify({ ok: true, ...result }, null, 2));
+        } else if (!quiet) {
+            console.log('\nHook Dump Prune\n');
+            console.log(`  root:           ${result.rootDir}`);
+            console.log(`  retention_days: ${result.maxAgeDays}`);
+            console.log(`  deleted_files:  ${result.deletedFiles}`);
+            console.log(`  deleted_dirs:   ${result.deletedDirs}`);
+            console.log(`  reclaimed:      ${result.reclaimedBytes} bytes`);
+            console.log('');
+        }
+        return 0;
+    }
+
+    const rawAgentFlag = parseOptionalStringFlag(flags.agent)?.trim().toLowerCase() ?? null;
+    const agent = extractSupportedHookAgent(rawAgentFlag);
+    if (!agent) {
+        console.error("connector_hook_ingest_requires_agent: pass --agent=claude|windsurf|codex|cursor|factory|antigravity");
+        return 1;
+    }
+
+    const inputFile = parseOptionalStringFlag(flags['input-file']);
+    const inlinePayload = parseOptionalStringFlag(flags.payload);
+    const payloadText = inputFile
+        ? fs.readFileSync(path.resolve(inputFile), 'utf8')
+        : inlinePayload ?? readStdinPayload();
+    if (!payloadText || payloadText.trim().length === 0) {
+        console.error('connector_hook_ingest_requires_payload: provide --input-file, --payload, or stdin');
+        return 1;
+    }
+
+    let parsedPayload: unknown;
+    try {
+        parsedPayload = JSON.parse(payloadText);
+    } catch {
+        parsedPayload = { content: payloadText };
+    }
+
+    const normalized = normalizeHookPayload(agent, parsedPayload);
+    const explicitTranscriptPath = resolveHookTranscriptPath(normalized.raw);
+    const codexArchivePath = agent === 'codex' && !explicitTranscriptPath
+        ? resolveCodexSessionArchivePath(normalized.raw, normalized.sessionId)
+        : null;
+    const codexArchiveCapture = agent === 'codex' && codexArchivePath
+        ? readCodexArchiveCapture(codexArchivePath, {
+            sessionId: normalized.sessionId,
+            occurredAt: normalized.occurredAt,
+            sessionTitle: typeof normalized.raw.sessionTitle === 'string' ? normalized.raw.sessionTitle : null,
+            cwd: typeof normalized.raw.cwd === 'string' ? normalized.raw.cwd : null
+        })
+        : null;
+    if (agent === 'codex') {
+        if (codexArchiveCapture?.cwd && typeof normalized.raw.cwd !== 'string') {
+            normalized.raw.cwd = codexArchiveCapture.cwd;
+        }
+        if (codexArchiveCapture?.sessionTitle && typeof normalized.raw.sessionTitle !== 'string') {
+            normalized.raw.sessionTitle = codexArchiveCapture.sessionTitle;
+        }
+    }
+    const requestedRepoRoot = parseOptionalStringFlag(flags['repo-root']);
+    const repoRoot = resolveHookCaptureRoot(
+        agent,
+        normalized.raw,
+        requestedRepoRoot ? resolveRepoRoot(requestedRepoRoot) : null
+    ) ?? resolveRepoRoot(requestedRepoRoot);
+    const explicitContextId = parseOptionalStringFlag(flags['context-id'] ?? flags.contextId);
+    const contextId = await resolveContextIdForHookIngest(repoRoot, explicitContextId);
+    if (!contextId) {
+        console.error('connector_hook_ingest_context_missing: no context matched this repository path. Create a workspace for this repo or pass --context-id.');
+        return 1;
+    }
+    const captureNow = Date.now();
+    const transcriptSourcePath = explicitTranscriptPath ?? codexArchivePath;
+    const transcriptDumpPath = transcriptSourcePath
+        ? persistHookTranscriptSnapshot({
+            agent,
+            sessionId: normalized.sessionId,
+            transcriptPath: transcriptSourcePath
+        })
+        : null;
+    const transcriptHistoryPath = transcriptSourcePath
+        ? persistHookTranscriptHistory({
+            agent,
+            sessionId: normalized.sessionId,
+            transcriptPath: transcriptSourcePath,
+            now: captureNow
+        })
+        : null;
+    const hookEventLogPath = appendHookEventLog({
+        agent,
+        sessionId: normalized.sessionId,
+        rawText: payloadText
+    });
+    const dumpPath = persistHookDump({
+        agent,
+        contextId,
+        rawText: payloadText,
+        parsedPayload,
+        normalized,
+        repositoryRoot: resolveHookCaptureRoot(agent, normalized.raw, repoRoot),
+        eventLogPath: hookEventLogPath,
+        transcriptSnapshotPath: transcriptDumpPath,
+        transcriptHistoryPath,
+        now: captureNow
+    });
+    const artifacts: HookArtifactPaths = {
+        dumpPath,
+        hookEventLogPath,
+        transcriptDumpPath,
+        transcriptHistoryPath,
+        transcriptSourcePath
+    };
+    const workspaceCheck = await validateHookIngestWorkspace({
+        agent,
+        contextId,
+        repoRoot,
+        payload: normalized.raw
+    });
+    if (!workspaceCheck.ok) {
+        console.error(workspaceCheck.error ?? 'connector_hook_ingest_workspace_mismatch');
+        return 1;
+    }
+
+    const captureRoot = workspaceCheck.captureRoot;
+    const branch = safeGitValue(captureRoot, ['rev-parse', '--abbrev-ref', 'HEAD']);
+    const commitSha = safeGitValue(captureRoot, ['rev-parse', 'HEAD']);
+    const transcriptCapture = transcriptSourcePath
+        ? (agent === 'codex'
+            ? (codexArchiveCapture ?? readCodexArchiveCapture(transcriptSourcePath, {
+                sessionId: normalized.sessionId,
+                occurredAt: normalized.occurredAt,
+                sessionTitle: typeof normalized.raw.sessionTitle === 'string' ? normalized.raw.sessionTitle : null,
+                cwd: typeof normalized.raw.cwd === 'string' ? normalized.raw.cwd : null
+            }))
+            : readTranscriptCapture(transcriptSourcePath))
+        : null;
+    const codexCapture = agent === 'codex' && !transcriptCapture
+        ? readCodexCapture(normalized.raw, {
+            sessionId: normalized.sessionId,
+            turnId: normalized.turnId,
+            occurredAt: normalized.occurredAt
+        })
+        : null;
+    const inlineCapture = !transcriptCapture && !codexCapture
+        ? readInlineHookCapture(agent, normalized.raw, {
+            sessionId: normalized.sessionId,
+            turnId: normalized.turnId,
+            occurredAt: normalized.occurredAt
+        })
+        : null;
+    const captureData = transcriptCapture ?? codexCapture ?? inlineCapture;
+    const sessionSummary = captureData?.summary ?? normalized.summary;
+    const sessionStartedAt = captureData?.startedAt ?? normalized.occurredAt;
+    const sessionNode = await ensureChatSessionNode({
+        contextId,
+        agent,
+        sessionId: normalized.sessionId,
+        summary: sessionSummary,
+        startedAt: sessionStartedAt,
+        branch,
+        commitSha,
+        repositoryRoot: captureRoot,
+        artifacts,
+        sessionTitle: captureData?.sessionTitle ?? (typeof normalized.raw.sessionTitle === 'string' ? normalized.raw.sessionTitle : null)
+    });
+    const commitNode = await ensureChatCommitNode({
+        contextId,
+        agent,
+        branch,
+        commitSha,
+        repositoryRoot: captureRoot
+    });
+
+    const capturedNodes: Array<{
+        id: string;
+        key: string;
+        role: string;
+        occurredAt: number;
+        deduped: boolean;
+    }> = [];
+
+    if (captureData && captureData.messages.length > 0) {
+        for (const message of captureData.messages) {
+            const key = `chat_turn:${agent}:${normalized.sessionId}:${message.messageId}`;
+            const existing = await sendToDaemon('getByKey', {
+                contextId,
+                key,
+                includeHidden: true
+            }) as { id?: string } | null;
+
+            if (existing?.id) {
+                capturedNodes.push({
+                    id: existing.id,
+                    key,
+                    role: message.role,
+                    occurredAt: message.occurredAt,
+                    deduped: true
+                });
+                continue;
+            }
+
+            const node = await sendToDaemon('addNode', {
+                contextId,
+                type: 'artifact',
+                hidden: true,
+                thread: normalized.sessionId,
+                key,
+                tags: ['chat_turn', `agent:${agent}`, `role:${message.role}`],
+                source: `hook:${agent}`,
+                content: message.text,
+                createdAtOverride: message.occurredAt,
+                rawPayload: {
+                    ...message.raw,
+                    role: message.role,
+                    text: message.text,
+                    branch,
+                    commitSha,
+                    occurredAt: message.occurredAt,
+                    meta: buildHookCaptureMeta({
+                        agent,
+                        sessionId: normalized.sessionId,
+                        turnId: message.messageId,
+                        role: message.role,
+                        occurredAt: message.occurredAt,
+                        branch,
+                        commitSha,
+                        repositoryRoot: captureRoot,
+                        artifacts,
+                        extra: {
+                            parentId: message.parentId,
+                            lineNumber: message.lineNumber,
+                            transcriptMessageId: message.messageId,
+                            captureSource: transcriptCapture
+                                ? (agent === 'codex' ? 'codex-archive' : 'transcript')
+                                : (codexCapture ? 'codex-notify' : 'inline-hook')
+                        }
+                    })
+                }
+            }) as { id: string };
+
+            capturedNodes.push({
+                id: node.id,
+                key,
+                role: message.role,
+                occurredAt: message.occurredAt,
+                deduped: false
+            });
+
+            if (sessionNode?.id) {
+                await sendToDaemon('addEdge', {
+                    fromId: node.id,
+                    toId: sessionNode.id,
+                    relation: 'depends_on'
+                });
+            }
+            if (commitNode?.id) {
+                await sendToDaemon('addEdge', {
+                    fromId: node.id,
+                    toId: commitNode.id,
+                    relation: 'depends_on'
+                });
+            }
+        }
+    } else {
+        const key = `chat_turn:${agent}:${normalized.sessionId}:${normalized.turnId}`;
+        const existing = await sendToDaemon('getByKey', {
+            contextId,
+            key,
+            includeHidden: true
+        }) as { id?: string } | null;
+
+        if (existing?.id) {
+            capturedNodes.push({
+                id: existing.id,
+                key,
+                role: normalized.role,
+                occurredAt: normalized.occurredAt,
+                deduped: true
+            });
+        } else {
+            const node = await sendToDaemon('addNode', {
+                contextId,
+                type: 'artifact',
+                hidden: true,
+                thread: normalized.sessionId,
+                key,
+                tags: ['chat_turn', `agent:${agent}`, `role:${normalized.role}`],
+                source: `hook:${agent}`,
+                content: normalized.summary,
+                createdAtOverride: normalized.occurredAt,
+                rawPayload: {
+                    ...normalized.raw,
+                    branch,
+                    commitSha,
+                    occurredAt: normalized.occurredAt,
+                    meta: buildHookCaptureMeta({
+                        agent,
+                        sessionId: normalized.sessionId,
+                        turnId: normalized.turnId,
+                        role: normalized.role,
+                        occurredAt: normalized.occurredAt,
+                        branch,
+                        commitSha,
+                        repositoryRoot: captureRoot,
+                        artifacts
+                    })
+                }
+            }) as { id: string };
+
+            capturedNodes.push({
+                id: node.id,
+                key,
+                role: normalized.role,
+                occurredAt: normalized.occurredAt,
+                deduped: false
+            });
+
+            if (sessionNode?.id) {
+                await sendToDaemon('addEdge', {
+                    fromId: node.id,
+                    toId: sessionNode.id,
+                    relation: 'depends_on'
+                });
+            }
+            if (commitNode?.id) {
+                await sendToDaemon('addEdge', {
+                    fromId: node.id,
+                    toId: commitNode.id,
+                    relation: 'depends_on'
+                });
+            }
+        }
+    }
+
+    const insertedNodes = capturedNodes.filter(node => !node.deduped);
+    const dedupedNodes = capturedNodes.filter(node => node.deduped);
+    const leadNode = insertedNodes.at(-1) ?? capturedNodes.at(-1) ?? null;
+
+    if (asJson) {
+        console.log(JSON.stringify({
+            ok: true,
+            nodeId: leadNode?.id ?? null,
+            nodeIds: capturedNodes.map(node => node.id),
+            keys: capturedNodes.map(node => node.key),
+            sessionNodeId: sessionNode?.id ?? null,
+            contextId,
+            sessionId: normalized.sessionId,
+            insertedCount: insertedNodes.length,
+            dedupedCount: dedupedNodes.length,
+            transcriptMessageCount: transcriptCapture?.messages.length ?? 0,
+            branch,
+            commitSha,
+            dumpPath,
+            hookEventLogPath,
+            transcriptDumpPath,
+            transcriptHistoryPath
+        }, null, 2));
+    } else if (!quiet) {
+        console.log(`hook_ingest: captured ${insertedNodes.length > 0 ? insertedNodes.length : dedupedNodes.length} ${agent} message${(insertedNodes.length + dedupedNodes.length) === 1 ? '' : 's'}`);
+        if (leadNode?.id) console.log(`node_id: ${leadNode.id}`);
+        console.log(`context_id: ${contextId}`);
+        console.log(`session_id: ${normalized.sessionId}`);
+        console.log(`inserted: ${insertedNodes.length}`);
+        console.log(`deduped: ${dedupedNodes.length}`);
+        if (dumpPath) console.log(`hook_dump: ${dumpPath}`);
+        if (hookEventLogPath) console.log(`hook_event_log: ${hookEventLogPath}`);
+        if (transcriptDumpPath) console.log(`transcript_dump: ${transcriptDumpPath}`);
+        if (transcriptHistoryPath) console.log(`transcript_history: ${transcriptHistoryPath}`);
+        if (branch) console.log(`branch: ${branch}`);
+        if (commitSha) console.log(`commit: ${commitSha}`);
+    }
+    return 0;
+}
+
 async function commandConnector(action: string | undefined, flags: Record<string, string | boolean>): Promise<number> {
     const validActions = ['install', 'enable', 'disable', 'uninstall', 'status', 'start', 'stop', 'restart', 'verify', 'register', 'run', 'logs'];
     if (!action || !validActions.includes(action)) {
@@ -2226,10 +3314,21 @@ async function commandConnector(action: string | undefined, flags: Record<string
                     ? 'degraded'
                     : (Boolean(registration.runtime.eventBridgeError) || Boolean(registration.runtime.commandBridgeError))
                         ? 'degraded'
-                        : (sync?.enabled && sync?.running ? 'connected' : 'degraded');
+                        : ((sync?.enabled === false || sync == null || sync?.running) ? 'connected' : 'degraded');
+        const recoveryState = !daemon.ok
+            ? 'blocked'
+            : (!token || !registration)
+                ? 'recovering'
+                : (registration.runtime.eventQueueBackoff > 0
+                    || Boolean(registration.runtime.eventBridgeError)
+                    || Boolean(registration.runtime.commandBridgeError)
+                    || Boolean(cloud.lastError))
+                    ? 'backoff'
+                    : 'healthy';
 
         const payload = {
             posture,
+            recoveryState,
             daemon: {
                 running: daemon.ok,
                 error: daemon.ok ? null : (daemon.error ?? 'unknown'),
@@ -2253,6 +3352,14 @@ async function commandConnector(action: string | undefined, flags: Record<string
                     lastCommandCursor: registration.runtime.lastCommandCursor,
                     lastCommandSyncAt: registration.runtime.lastCommandSyncAt
                         ? new Date(registration.runtime.lastCommandSyncAt).toISOString()
+                        : null,
+                    recoveryState: registration.runtime.recoveryState ?? recoveryState,
+                    consecutiveFailures: registration.runtime.consecutiveFailures ?? 0,
+                    lastHealthyAt: registration.runtime.lastHealthyAt
+                        ? new Date(registration.runtime.lastHealthyAt).toISOString()
+                        : null,
+                    lastRecoveryAt: registration.runtime.lastRecoveryAt
+                        ? new Date(registration.runtime.lastRecoveryAt).toISOString()
                         : null,
                     queue: {
                         pending: registration.runtime.eventQueuePending,
@@ -2318,6 +3425,7 @@ async function commandConnector(action: string | undefined, flags: Record<string
 
         console.log('\nConnector Status\n');
         console.log(`  posture:      ${payload.posture}`);
+        console.log(`  recovery:     ${payload.recoveryState}`);
         console.log(`  daemon:       ${payload.daemon.running ? 'running' : 'not running'}`);
         console.log(`  registration: ${payload.registration.registered ? 'registered' : 'not registered'}`);
         console.log(`  auth:         ${payload.auth.authenticated ? 'authenticated' : 'not authenticated'}`);
@@ -2339,11 +3447,21 @@ async function commandConnector(action: string | undefined, flags: Record<string
                     ` ready=${payload.registration.runtime.queue.ready}` +
                     ` backoff=${payload.registration.runtime.queue.backoff}`
                 );
+                console.log(
+                    `  recovery_state: ${payload.registration.runtime.recoveryState}` +
+                    ` failures=${payload.registration.runtime.consecutiveFailures}`
+                );
                 if (payload.registration.runtime.lastEventSyncAt) {
                     console.log(`  event_sync:   ${payload.registration.runtime.lastEventSyncAt}`);
                 }
                 if (payload.registration.runtime.eventBridgeError) {
                     console.log(`  event_error:  ${payload.registration.runtime.eventBridgeError}`);
+                }
+                if (payload.registration.runtime.lastHealthyAt) {
+                    console.log(`  last_healthy: ${payload.registration.runtime.lastHealthyAt}`);
+                }
+                if (payload.registration.runtime.lastRecoveryAt) {
+                    console.log(`  last_recovery:${payload.registration.runtime.lastRecoveryAt}`);
                 }
                 if (payload.registration.runtime.lastCommandSyncAt) {
                     console.log(`  command_sync: ${payload.registration.runtime.lastCommandSyncAt}`);
@@ -2546,6 +3664,8 @@ async function commandSetup(flags: Record<string, string | boolean>): Promise<nu
     const quiet = Boolean(flags.quiet) || asJson;
     const skipService = Boolean(flags['skip-service']);
     const skipBootstrap = Boolean(flags['skip-bootstrap']);
+    const skipHooks = Boolean(flags['skip-hooks']);
+    const hooksDryRun = Boolean(flags['hooks-dry-run']);
     const requireCloud = Boolean(flags['require-cloud']);
     const waitCloudReady = Boolean(flags['wait-cloud-ready']);
     const cloudWaitTimeoutMs = parsePositiveIntegerFlag(flags['cloud-wait-timeout-ms'], 60_000);
@@ -2626,6 +3746,37 @@ async function commandSetup(flags: Record<string, string | boolean>): Promise<nu
             console.log(JSON.stringify({ ok: false, steps, dashboardUrl: getHostedDashboardUrl() }, null, 2));
         }
         return installCode;
+    }
+
+    if (skipHooks) {
+        steps.push({
+            id: 'hooks_install',
+            status: 'warn',
+            code: 0,
+            message: 'Capture integration installation was skipped by --skip-hooks.'
+        });
+    } else {
+        const hooksCode = await commandConnectorHook('install', {
+            ...flags,
+            quiet: true,
+            json: false,
+            'repo-root': parseOptionalStringFlag(flags['repo-root']) ?? process.cwd(),
+            'dry-run': hooksDryRun
+        });
+        steps.push({
+            id: 'hooks_install',
+            status: hooksCode === 0 ? (hooksDryRun ? 'warn' : 'pass') : 'fail',
+            code: hooksCode,
+            message: hooksCode === 0
+                ? (hooksDryRun ? 'Capture integration installation dry-run completed.' : 'Capture integration installation completed.')
+                : 'Capture integration installation failed.'
+        });
+        if (hooksCode !== 0) {
+            if (asJson) {
+                console.log(JSON.stringify({ ok: false, steps, dashboardUrl: getHostedDashboardUrl() }, null, 2));
+            }
+            return hooksCode;
+        }
     }
 
     const registerCode = await commandConnector('register', { ...flags, quiet: true, json: false, 'require-cloud': requireCloud });
@@ -2709,15 +3860,19 @@ async function commandSetup(flags: Record<string, string | boolean>): Promise<nu
     }
 
     let createdContextId: string | null = null;
+    const setupRepoRoot = resolveRepoRoot(null);
     if (createContextName) {
         try {
-            const created = await sendToDaemon('createContext', { name: createContextName }) as { id?: string; contextId?: string };
+            const created = await sendToDaemon('createContext', {
+                name: createContextName,
+                paths: [setupRepoRoot]
+            }) as { id?: string; contextId?: string };
             createdContextId = created?.id ?? created?.contextId ?? null;
             steps.push({
                 id: 'create_context',
                 status: 'pass',
                 code: 0,
-                message: `Context created: ${createContextName}`
+                message: `Context created: ${createContextName} (${setupRepoRoot})`
             });
         } catch (error) {
             const errorText = error instanceof Error ? error.message : String(error);
@@ -2784,7 +3939,8 @@ Usage:
              [--require-cloud] [--wait-cloud-ready]
              [--cloud-wait-timeout-ms=60000] [--cloud-wait-interval-ms=2000]
              [--create-context=<name>] [--dashboard-query[=k=v&...]]
-             [--skip-service] [--skip-bootstrap] [--mcp-profile=all|core|recall|ops]
+             [--skip-service] [--skip-bootstrap] [--skip-hooks] [--hooks-dry-run]
+             [--mcp-profile=all|core|recall|ops]
   0ctx install [--clients=all|claude,cursor,windsurf,codex,antigravity] [--json] [--skip-bootstrap] [--mcp-profile=all|core|recall|ops]
   0ctx bootstrap [--dry-run] [--clients=...] [--entrypoint=/path/to/mcp-server.js]
                  [--mcp-profile=all|core|recall|ops] [--json]
@@ -2796,6 +3952,17 @@ Usage:
   0ctx doctor [--json] [--clients=...]
   0ctx status [--json] [--compact]
   0ctx repair [--clients=...] [--deep] [--json]
+  0ctx reset [--confirm] [--full] [--include-auth] [--json]
+  0ctx branches [--context-id=<id>] [--limit=100] [--json]
+  0ctx sessions [--context-id=<id>] [--branch=<name>] [--session-id=<id>] [--worktree-path=<path>] [--limit=100] [--json]
+  0ctx checkpoints [list] [--context-id=<id>] [--branch=<name>] [--worktree-path=<path>] [--limit=100] [--json]
+  0ctx checkpoints create --context-id=<id> --session-id=<id> [--name="..."] [--summary="..."] [--json]
+  0ctx checkpoints show --context-id=<id> --checkpoint-id=<id> [--json]
+  0ctx extract session --context-id=<id> --session-id=<id> [--preview] [--keys=key1,key2] [--max-nodes=12] [--json]
+  0ctx extract checkpoint --checkpoint-id=<id> [--preview] [--keys=key1,key2] [--max-nodes=12] [--json]
+  0ctx resume --context-id=<id> --session-id=<id> [--json]
+  0ctx rewind --context-id=<id> --checkpoint-id=<id> [--json]
+  0ctx explain --context-id=<id> --checkpoint-id=<id> [--json]
   0ctx logs [--no-open] [--snapshot] [--limit=50] [--since-hours=N] [--grep=text] [--errors-only]
   0ctx recall [--mode=auto|temporal|topic|graph] [--query="..."] [--since-hours=24] [--limit=10] [--depth=2] [--max-nodes=30] [--start] [--json]
   0ctx recall feedback --node-id=<id> (--helpful|--not-helpful) [--reason="..."] [--context-id=<id>] [--json]
@@ -2830,6 +3997,12 @@ Connector:
   0ctx connector verify [--require-cloud] [--json]
   0ctx connector register [--force] [--local-only] [--require-cloud] [--json]
   0ctx connector run [--once] [--interval-ms=5000] [--no-daemon-autostart]
+  0ctx connector hook install [--clients=all|claude,cursor,windsurf,codex,factory,antigravity] [--context-id=<id>] [--global]
+  0ctx connector hook status [--json]
+  0ctx connector hook prune [--days=30] [--json]
+  0ctx connector hook ingest --agent=claude|windsurf|codex|cursor|factory|antigravity [--context-id=<id>] [--repo-root=<path>]
+                             [--input-file=<path>|--payload='<json>'|stdin]
+  0ctx hook install|status|prune|ingest  Alias for "0ctx connector hook ..."
   0ctx connector queue status [--json]
   0ctx connector queue drain [--max-batches=10] [--batch-size=200] [--wait] [--strict|--fail-on-retry] [--timeout-ms=120000] [--poll-ms=1000] [--json]
   0ctx connector queue purge [--all|--older-than-hours=N|--min-attempts=N] [--dry-run|--confirm] [--json]
@@ -2952,6 +4125,394 @@ function getContextIdFlag(flags: Record<string, string | boolean>): string | nul
         return contextId.trim();
     }
     return null;
+}
+
+async function resolveCommandContextId(flags: Record<string, string | boolean>): Promise<string | null> {
+    const explicit = getContextIdFlag(flags);
+    if (explicit) return explicit;
+    try {
+        const active = await sendToDaemon('getActiveContext', {}) as { id?: string } | null;
+        return typeof active?.id === 'string' && active.id.trim().length > 0 ? active.id : null;
+    } catch {
+        return null;
+    }
+}
+
+async function requireCommandContextId(
+    flags: Record<string, string | boolean>,
+    commandLabel: string
+): Promise<string | null> {
+    const contextId = await resolveCommandContextId(flags);
+    if (!contextId) {
+        console.error(`Missing context for \`${commandLabel}\`. Use '--context-id=<contextId>' or switch an active workspace first.`);
+        return null;
+    }
+    return contextId;
+}
+
+function printJsonOrValue(asJson: boolean, value: unknown, human: () => void): number {
+    if (asJson) {
+        console.log(JSON.stringify(value, null, 2));
+        return 0;
+    }
+    human();
+    return 0;
+}
+
+function short(value: string, max = 120): string {
+    return value.length > max ? `${value.slice(0, max - 3)}...` : value;
+}
+
+async function commandBranches(flags: Record<string, string | boolean>): Promise<number> {
+    const contextId = await requireCommandContextId(flags, '0ctx branches');
+    if (!contextId) return 1;
+    const asJson = Boolean(flags.json);
+    const limit = parsePositiveIntegerFlag(flags.limit, 100);
+    try {
+        const result = await sendToDaemon('listBranchLanes', { contextId, limit }) as Array<{
+            branch: string;
+            worktreePath?: string | null;
+            lastAgent?: string | null;
+            lastCommitSha?: string | null;
+            lastActivityAt: number;
+            sessionCount: number;
+            checkpointCount: number;
+            agentSet?: string[];
+        }>;
+        return printJsonOrValue(asJson, result, () => {
+            console.log('\nBranches\n');
+            if (!result.length) {
+                console.log('  No branch lanes found.\n');
+                return;
+            }
+            for (const lane of result) {
+                console.log(`  ${lane.branch}${lane.worktreePath ? ` (${lane.worktreePath})` : ''}`);
+                console.log(`    Last activity: ${new Date(lane.lastActivityAt).toLocaleString()}`);
+                console.log(`    Sessions: ${lane.sessionCount} | Checkpoints: ${lane.checkpointCount}`);
+                if (lane.lastAgent) console.log(`    Last agent: ${lane.lastAgent}`);
+                if (lane.lastCommitSha) console.log(`    Last commit: ${String(lane.lastCommitSha).slice(0, 12)}`);
+                if (Array.isArray(lane.agentSet) && lane.agentSet.length > 0) {
+                    console.log(`    Agents: ${lane.agentSet.join(', ')}`);
+                }
+                console.log('');
+            }
+        });
+    } catch (error) {
+        console.error('Failed to list branches:', error instanceof Error ? error.message : String(error));
+        return 1;
+    }
+}
+
+async function commandSessions(flags: Record<string, string | boolean>): Promise<number> {
+    const contextId = await requireCommandContextId(flags, '0ctx sessions');
+    if (!contextId) return 1;
+    const asJson = Boolean(flags.json);
+    const sessionId = parseOptionalStringFlag(flags['session-id'] ?? flags.sessionId);
+    const branch = parseOptionalStringFlag(flags.branch);
+    const worktreePath = parseOptionalStringFlag(flags['worktree-path'] ?? flags.worktreePath);
+    const limit = parsePositiveIntegerFlag(flags.limit, 100);
+    try {
+        if (sessionId) {
+            const detail = await sendToDaemon('getSessionDetail', { contextId, sessionId }) as {
+                session: { summary?: string; agent?: string | null; branch?: string | null; turnCount?: number; commitSha?: string | null } | null;
+                messages: Array<{ role?: string | null; content?: string; createdAt?: number }>;
+                checkpointCount: number;
+            };
+            return printJsonOrValue(asJson, detail, () => {
+                console.log('\nSession Detail\n');
+                console.log(`  Session: ${sessionId}`);
+                console.log(`  Summary: ${detail.session?.summary ?? '-'}`);
+                console.log(`  Agent: ${detail.session?.agent ?? '-'}`);
+                console.log(`  Branch: ${detail.session?.branch ?? '-'}`);
+                console.log(`  Commit: ${detail.session?.commitSha ?? '-'}`);
+                console.log(`  Messages: ${detail.messages.length}`);
+                console.log(`  Checkpoints: ${detail.checkpointCount}`);
+                console.log('');
+                for (const message of detail.messages.slice(0, 20)) {
+                    console.log(`  [${message.role ?? 'unknown'}] ${short(String(message.content ?? ''), 180)}`);
+                }
+                console.log('');
+            });
+        }
+
+        const result = branch
+            ? await sendToDaemon('listBranchSessions', { contextId, branch, worktreePath, limit })
+            : await sendToDaemon('listChatSessions', { contextId, limit });
+
+        const sessions = Array.isArray(result) ? result : [];
+        return printJsonOrValue(asJson, sessions, () => {
+            console.log('\nSessions\n');
+            if (!sessions.length) {
+                console.log('  No sessions found.\n');
+                return;
+            }
+            for (const session of sessions as Array<Record<string, unknown>>) {
+                console.log(`  ${String(session.sessionId ?? '-')}`);
+                console.log(`    ${String(session.summary ?? '-')}`);
+                console.log(`    Branch: ${String(session.branch ?? '-')}`);
+                console.log(`    Agent: ${String(session.agent ?? '-')}`);
+                console.log(`    Turns: ${String(session.turnCount ?? 0)}`);
+                console.log(`    Last: ${session.lastTurnAt ? new Date(Number(session.lastTurnAt)).toLocaleString() : '-'}`);
+                console.log('');
+            }
+        });
+    } catch (error) {
+        console.error('Failed to inspect sessions:', error instanceof Error ? error.message : String(error));
+        return 1;
+    }
+}
+
+async function commandCheckpoints(
+    subcommand: string | undefined,
+    flags: Record<string, string | boolean>
+): Promise<number> {
+    const contextId = await requireCommandContextId(flags, '0ctx checkpoints');
+    if (!contextId) return 1;
+    const asJson = Boolean(flags.json);
+    const action = (subcommand ?? 'list').toLowerCase();
+    const checkpointId = parseOptionalStringFlag(flags['checkpoint-id'] ?? flags.checkpointId);
+    const branch = parseOptionalStringFlag(flags.branch);
+    const worktreePath = parseOptionalStringFlag(flags['worktree-path'] ?? flags.worktreePath);
+    const sessionId = parseOptionalStringFlag(flags['session-id'] ?? flags.sessionId);
+    const name = parseOptionalStringFlag(flags.name);
+    const summary = parseOptionalStringFlag(flags.summary);
+    const limit = parsePositiveIntegerFlag(flags.limit, 100);
+
+    try {
+        if (action === 'create') {
+            if (!sessionId) {
+                console.error("Missing required '--session-id' for `0ctx checkpoints create`.");
+                return 1;
+            }
+            const result = await sendToDaemon('createSessionCheckpoint', { contextId, sessionId, name, summary });
+            return printJsonOrValue(asJson, result, () => {
+                const checkpoint = result as { id?: string; branch?: string | null; commitSha?: string | null; summary?: string | null };
+                console.log('\nCheckpoint Created\n');
+                console.log(`  Id: ${checkpoint.id ?? '-'}`);
+                console.log(`  Branch: ${checkpoint.branch ?? '-'}`);
+                console.log(`  Commit: ${checkpoint.commitSha ?? '-'}`);
+                console.log(`  Summary: ${checkpoint.summary ?? '-'}`);
+                console.log('');
+            });
+        }
+
+        if (action === 'show' || action === 'detail') {
+            if (!checkpointId) {
+                console.error("Missing required '--checkpoint-id' for `0ctx checkpoints show`.");
+                return 1;
+            }
+            const result = await sendToDaemon('getCheckpointDetail', { contextId, checkpointId });
+            return printJsonOrValue(asJson, result, () => {
+                const detail = result as { checkpoint?: Record<string, unknown>; snapshotNodeCount?: number; payloadAvailable?: boolean };
+                console.log('\nCheckpoint Detail\n');
+                console.log(`  Id: ${checkpointId}`);
+                console.log(`  Name: ${String(detail.checkpoint?.name ?? '-')}`);
+                console.log(`  Kind: ${String(detail.checkpoint?.kind ?? '-')}`);
+                console.log(`  Branch: ${String(detail.checkpoint?.branch ?? '-')}`);
+                console.log(`  Session: ${String(detail.checkpoint?.sessionId ?? '-')}`);
+                console.log(`  Snapshot nodes: ${String(detail.snapshotNodeCount ?? 0)}`);
+                console.log(`  Payload: ${detail.payloadAvailable ? 'available' : 'missing'}`);
+                console.log('');
+            });
+        }
+
+        const result = branch
+            ? await sendToDaemon('listBranchCheckpoints', { contextId, branch, worktreePath, limit })
+            : await sendToDaemon('listCheckpoints', { contextId });
+        const checkpoints = Array.isArray(result) ? result : [];
+        return printJsonOrValue(asJson, checkpoints, () => {
+            console.log('\nCheckpoints\n');
+            if (!checkpoints.length) {
+                console.log('  No checkpoints found.\n');
+                return;
+            }
+            for (const checkpoint of checkpoints as Array<Record<string, unknown>>) {
+                console.log(`  ${String(checkpoint.id ?? checkpoint.checkpointId ?? '-')}`);
+                console.log(`    ${String(checkpoint.summary ?? checkpoint.name ?? '-')}`);
+                console.log(`    Branch: ${String(checkpoint.branch ?? '-')}`);
+                console.log(`    Session: ${String(checkpoint.sessionId ?? '-')}`);
+                console.log(`    Kind: ${String(checkpoint.kind ?? '-')}`);
+                console.log(`    Created: ${checkpoint.createdAt ? new Date(Number(checkpoint.createdAt)).toLocaleString() : '-'}`);
+                console.log('');
+            }
+        });
+    } catch (error) {
+        console.error('Failed to inspect checkpoints:', error instanceof Error ? error.message : String(error));
+        return 1;
+    }
+}
+
+async function commandResume(flags: Record<string, string | boolean>): Promise<number> {
+    const contextId = await requireCommandContextId(flags, '0ctx resume');
+    if (!contextId) return 1;
+    const sessionId = parseOptionalStringFlag(flags['session-id'] ?? flags.sessionId);
+    const asJson = Boolean(flags.json);
+    if (!sessionId) {
+        console.error("Missing required '--session-id' for `0ctx resume`.");
+        return 1;
+    }
+    try {
+        const result = await sendToDaemon('resumeSession', { contextId, sessionId });
+        return printJsonOrValue(asJson, result, () => {
+            const detail = result as { session?: Record<string, unknown>; checkpointCount?: number };
+            console.log('\nResume Session\n');
+            console.log(`  Session: ${sessionId}`);
+            console.log(`  Summary: ${String(detail.session?.summary ?? '-')}`);
+            console.log(`  Branch: ${String(detail.session?.branch ?? '-')}`);
+            console.log(`  Agent: ${String(detail.session?.agent ?? '-')}`);
+            console.log(`  Checkpoints: ${String(detail.checkpointCount ?? 0)}`);
+            console.log('');
+        });
+    } catch (error) {
+        console.error('Failed to resume session:', error instanceof Error ? error.message : String(error));
+        return 1;
+    }
+}
+
+async function commandRewind(flags: Record<string, string | boolean>): Promise<number> {
+    const contextId = await requireCommandContextId(flags, '0ctx rewind');
+    if (!contextId) return 1;
+    const checkpointId = parseOptionalStringFlag(flags['checkpoint-id'] ?? flags.checkpointId);
+    const asJson = Boolean(flags.json);
+    if (!checkpointId) {
+        console.error("Missing required '--checkpoint-id' for `0ctx rewind`.");
+        return 1;
+    }
+    try {
+        const result = await sendToDaemon('rewindCheckpoint', { contextId, checkpointId });
+        return printJsonOrValue(asJson, result, () => {
+            const detail = result as { checkpoint?: Record<string, unknown> };
+            console.log('\nRewind Complete\n');
+            console.log(`  Checkpoint: ${checkpointId}`);
+            console.log(`  Name: ${String(detail.checkpoint?.name ?? '-')}`);
+            console.log(`  Branch: ${String(detail.checkpoint?.branch ?? '-')}`);
+            console.log('');
+        });
+    } catch (error) {
+        console.error('Failed to rewind checkpoint:', error instanceof Error ? error.message : String(error));
+        return 1;
+    }
+}
+
+async function commandExplain(flags: Record<string, string | boolean>): Promise<number> {
+    const contextId = await requireCommandContextId(flags, '0ctx explain');
+    if (!contextId) return 1;
+    const checkpointId = parseOptionalStringFlag(flags['checkpoint-id'] ?? flags.checkpointId);
+    const asJson = Boolean(flags.json);
+    if (!checkpointId) {
+        console.error("Missing required '--checkpoint-id' for `0ctx explain`.");
+        return 1;
+    }
+    try {
+        const result = await sendToDaemon('explainCheckpoint', { contextId, checkpointId });
+        return printJsonOrValue(asJson, result, () => {
+            const detail = result as { checkpoint?: Record<string, unknown>; snapshotNodeCount?: number; snapshotEdgeCount?: number; snapshotCheckpointCount?: number };
+            console.log('\nCheckpoint Explanation\n');
+            console.log(`  Checkpoint: ${checkpointId}`);
+            console.log(`  Summary: ${String(detail.checkpoint?.summary ?? detail.checkpoint?.name ?? '-')}`);
+            console.log(`  Branch: ${String(detail.checkpoint?.branch ?? '-')}`);
+            console.log(`  Session: ${String(detail.checkpoint?.sessionId ?? '-')}`);
+            console.log(`  Snapshot nodes: ${String(detail.snapshotNodeCount ?? 0)}`);
+            console.log(`  Snapshot edges: ${String(detail.snapshotEdgeCount ?? 0)}`);
+            console.log(`  Snapshot checkpoints: ${String(detail.snapshotCheckpointCount ?? 0)}`);
+            console.log('');
+        });
+    } catch (error) {
+        console.error('Failed to explain checkpoint:', error instanceof Error ? error.message : String(error));
+        return 1;
+    }
+}
+
+async function commandExtract(positionalArgs: string[], flags: Record<string, string | boolean>): Promise<number> {
+    const asJson = Boolean(flags.json);
+    const preview = Boolean(flags.preview);
+    const action = String(positionalArgs[0] || '').trim().toLowerCase();
+    const maxNodes = parsePositiveIntegerFlag(flags['max-nodes'] ?? flags.maxNodes, 12);
+    const candidateKeys = parseOptionalStringFlag(flags.keys ?? flags['candidate-keys'])
+        ?.split(',')
+        .map((value) => value.trim())
+        .filter(Boolean);
+
+    try {
+        if (action === 'session') {
+            const contextId = await requireCommandContextId(flags, '0ctx extract session');
+            if (!contextId) return 1;
+            const sessionId = parseOptionalStringFlag(flags['session-id'] ?? flags.sessionId);
+            if (!sessionId) {
+                console.error("Missing required '--session-id' for `0ctx extract session`.");
+                return 1;
+            }
+            const method = preview ? 'previewSessionKnowledge' : 'extractSessionKnowledge';
+            const result = await sendToDaemon(method, { contextId, sessionId, maxNodes, candidateKeys });
+            return printJsonOrValue(asJson, result, () => {
+                const extraction = result as {
+                    createdCount?: number;
+                    reusedCount?: number;
+                    nodeCount?: number;
+                    createCount?: number;
+                    reuseCount?: number;
+                    candidateCount?: number;
+                    nodes?: Array<{ type?: string; content?: string }>;
+                    candidates?: Array<{ type?: string; content?: string; action?: string }>;
+                };
+                console.log(preview ? '\nSession Knowledge Preview\n' : '\nSession Knowledge Extraction\n');
+                console.log(`  Session: ${sessionId}`);
+                console.log(`  Created: ${String(extraction.createdCount ?? extraction.createCount ?? 0)}`);
+                console.log(`  Reused: ${String(extraction.reusedCount ?? extraction.reuseCount ?? 0)}`);
+                console.log(`  ${preview ? 'Candidates' : 'Nodes'}:   ${String(extraction.nodeCount ?? extraction.candidateCount ?? 0)}`);
+                const items: Array<{ type?: string; content?: string; action?: string }> = preview
+                    ? (extraction.candidates ?? [])
+                    : (extraction.nodes ?? []);
+                for (const node of items.slice(0, 8)) {
+                    const actionLabel = preview && node.action ? ` ${String(node.action).toUpperCase()}` : '';
+                    console.log(`    - [${String(node.type ?? 'node')}${actionLabel}] ${String(node.content ?? '-')}`);
+                }
+                console.log('');
+            });
+        }
+
+        if (action === 'checkpoint') {
+            const checkpointId = parseOptionalStringFlag(flags['checkpoint-id'] ?? flags.checkpointId);
+            if (!checkpointId) {
+                console.error("Missing required '--checkpoint-id' for `0ctx extract checkpoint`.");
+                return 1;
+            }
+            const method = preview ? 'previewCheckpointKnowledge' : 'extractCheckpointKnowledge';
+            const result = await sendToDaemon(method, { checkpointId, maxNodes, candidateKeys });
+            return printJsonOrValue(asJson, result, () => {
+                const extraction = result as {
+                    createdCount?: number;
+                    reusedCount?: number;
+                    nodeCount?: number;
+                    createCount?: number;
+                    reuseCount?: number;
+                    candidateCount?: number;
+                    nodes?: Array<{ type?: string; content?: string }>;
+                    candidates?: Array<{ type?: string; content?: string; action?: string }>;
+                };
+                console.log(preview ? '\nCheckpoint Knowledge Preview\n' : '\nCheckpoint Knowledge Extraction\n');
+                console.log(`  Checkpoint: ${checkpointId}`);
+                console.log(`  Created:    ${String(extraction.createdCount ?? extraction.createCount ?? 0)}`);
+                console.log(`  Reused:     ${String(extraction.reusedCount ?? extraction.reuseCount ?? 0)}`);
+                console.log(`  ${preview ? 'Candidates' : 'Nodes'}:      ${String(extraction.nodeCount ?? extraction.candidateCount ?? 0)}`);
+                const items: Array<{ type?: string; content?: string; action?: string }> = preview
+                    ? (extraction.candidates ?? [])
+                    : (extraction.nodes ?? []);
+                for (const node of items.slice(0, 8)) {
+                    const actionLabel = preview && node.action ? ` ${String(node.action).toUpperCase()}` : '';
+                    console.log(`    - [${String(node.type ?? 'node')}${actionLabel}] ${String(node.content ?? '-')}`);
+                }
+                console.log('');
+            });
+        }
+
+        console.error('Usage: 0ctx extract session --context-id=<id> --session-id=<id> [--preview] [--keys=key1,key2] [--max-nodes=12] [--json]');
+        console.error('   or: 0ctx extract checkpoint --checkpoint-id=<id> [--preview] [--keys=key1,key2] [--max-nodes=12] [--json]');
+        return 1;
+    } catch (error) {
+        console.error('Failed to extract knowledge:', error instanceof Error ? error.message : String(error));
+        return 1;
+    }
 }
 
 async function commandSyncPolicyGet(flags: Record<string, string | boolean>): Promise<number> {
@@ -3102,6 +4663,10 @@ function resolveCommandOperation(parsed: ParsedArgs): string {
         }
         return parsed.subcommand ? `cli.connector.${parsed.subcommand}` : 'cli.connector';
     }
+    if (parsed.command === 'hook') {
+        const action = parsed.positionalArgs[0] || 'status';
+        return `cli.connector.hook.${action}`;
+    }
     if (parsed.command === 'mcp') {
         return parsed.subcommand ? `cli.mcp.${parsed.subcommand}` : 'cli.mcp';
     }
@@ -3114,6 +4679,9 @@ function resolveCommandOperation(parsed: ParsedArgs): string {
     }
     if (parsed.command === 'release') {
         return parsed.subcommand ? `cli.release.${parsed.subcommand}` : 'cli.release';
+    }
+    if (parsed.command === 'checkpoints') {
+        return parsed.subcommand ? `cli.checkpoints.${parsed.subcommand}` : 'cli.checkpoints.list';
     }
     return `cli.${parsed.command}`;
 }
@@ -3259,8 +4827,24 @@ async function main(): Promise<number> {
                 return commandStatus(parsed.flags);
             case 'repair':
                 return commandRepair(parsed.flags);
+            case 'reset':
+                return commandReset(parsed.flags);
             case 'version':
                 return commandVersion(parsed.flags);
+            case 'branches':
+                return commandBranches(parsed.flags);
+            case 'sessions':
+                return commandSessions(parsed.flags);
+            case 'checkpoints':
+                return commandCheckpoints(parsed.subcommand, parsed.flags);
+            case 'extract':
+                return commandExtract(parsed.positionalArgs, parsed.flags);
+            case 'resume':
+                return commandResume(parsed.flags);
+            case 'rewind':
+                return commandRewind(parsed.flags);
+            case 'explain':
+                return commandExplain(parsed.flags);
             case 'recall':
                 return commandRecall(parsed.flags, parsed.positionalArgs);
             case 'auth': {
@@ -3321,7 +4905,12 @@ async function main(): Promise<number> {
                 if (parsed.subcommand === 'queue') {
                     return commandConnectorQueue(parsed.positionalArgs[0], parsed.flags);
                 }
+                if (parsed.subcommand === 'hook') {
+                    return commandConnectorHook(parsed.positionalArgs[0], parsed.flags);
+                }
                 return commandConnector(parsed.subcommand, parsed.flags);
+            case 'hook':
+                return commandConnectorHook(parsed.positionalArgs[0], parsed.flags);
             case 'logs':
                 return commandLogs(parsed.flags);
             case 'dashboard':

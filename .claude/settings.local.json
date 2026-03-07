@@ -13,5 +13,27 @@
       "Bash(npx tsc --noEmit --skipLibCheck)",
       "Bash(npx tsc --noEmit --pretty)"
     ]
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "0ctx connector hook ingest --quiet --agent=claude"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "0ctx connector hook ingest --quiet --agent=claude"
+          }
+        ]
+      }
+    ]
   }
 }

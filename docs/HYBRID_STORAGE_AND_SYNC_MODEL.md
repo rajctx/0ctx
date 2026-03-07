@@ -28,6 +28,7 @@ Cloud SQLite is not a primary datastore strategy.
 
 3. `full_sync`
 - cloud stores full graph state for collaboration and centralized operations.
+- cloud-bound payloads are redacted for obvious secrets and local machine paths before upload.
 
 Operational controls:
 - CLI: `0ctx sync policy get --context-id=<id>` and `0ctx sync policy set <local_only|metadata_only|full_sync> --context-id=<id>`.
@@ -113,7 +114,7 @@ Resolution policy:
 ## 8) Default Policy Baseline
 
 Default recommendations:
-- new contexts: `metadata_only`.
+- new contexts: `full_sync`.
 - production collaboration contexts: `full_sync` with policy approval.
 - sensitive contexts: `local_only`.
 

@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "generatedAt": 1772852437408,
+  "projectRoot": "C:\\Users\\Rajesh\\development\\0ctx-dev",
+  "contextId": "bbe61d70-6b71-44f7-ae4a-b295650fd662",
+  "hooks": [
+    {
+      "agent": "codex",
+      "command": "0ctx connector hook ingest --quiet --agent=codex --payload",
+      "mode": "post-chat"
+    }
+  ]
+}

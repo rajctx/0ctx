@@ -25,6 +25,10 @@ export interface ConnectorRuntimeState {
     lastCommandSyncAt: number | null;
     commandBridgeSupported: boolean;
     commandBridgeError: string | null;
+    recoveryState?: 'healthy' | 'recovering' | 'backoff' | 'blocked';
+    consecutiveFailures?: number;
+    lastHealthyAt?: number | null;
+    lastRecoveryAt?: number | null;
 }
 
 export interface ConnectorState {
@@ -88,7 +92,15 @@ export function readConnectorState(): ConnectorState | null {
                 lastCommandCursor: typeof parsed.runtime?.lastCommandCursor === 'number' ? parsed.runtime.lastCommandCursor : 0,
                 lastCommandSyncAt: parsed.runtime?.lastCommandSyncAt ?? null,
                 commandBridgeSupported: parsed.runtime?.commandBridgeSupported !== false,
-                commandBridgeError: parsed.runtime?.commandBridgeError ?? null
+                commandBridgeError: parsed.runtime?.commandBridgeError ?? null,
+                recoveryState: parsed.runtime?.recoveryState === 'blocked'
+                    || parsed.runtime?.recoveryState === 'recovering'
+                    || parsed.runtime?.recoveryState === 'backoff'
+                    ? parsed.runtime.recoveryState
+                    : 'healthy',
+                consecutiveFailures: typeof parsed.runtime?.consecutiveFailures === 'number' ? parsed.runtime.consecutiveFailures : 0,
+                lastHealthyAt: parsed.runtime?.lastHealthyAt ?? null,
+                lastRecoveryAt: parsed.runtime?.lastRecoveryAt ?? null
             }
         };
     } catch {
@@ -124,7 +136,11 @@ export function registerConnector(options: RegisterConnectorOptions): { state: C
             lastCommandCursor: existing?.runtime.lastCommandCursor ?? 0,
             lastCommandSyncAt: existing?.runtime.lastCommandSyncAt ?? null,
             commandBridgeSupported: true,
-            commandBridgeError: null
+            commandBridgeError: null,
+            recoveryState: existing?.runtime.recoveryState ?? 'healthy',
+            consecutiveFailures: existing?.runtime.consecutiveFailures ?? 0,
+            lastHealthyAt: existing?.runtime.lastHealthyAt ?? null,
+            lastRecoveryAt: existing?.runtime.lastRecoveryAt ?? null
         }
         : {
             daemonSessionToken: existing?.runtime.daemonSessionToken ?? null,
@@ -139,7 +155,11 @@ export function registerConnector(options: RegisterConnectorOptions): { state: C
             lastCommandCursor: existing?.runtime.lastCommandCursor ?? 0,
             lastCommandSyncAt: existing?.runtime.lastCommandSyncAt ?? null,
             commandBridgeSupported: existing?.runtime.commandBridgeSupported ?? true,
-            commandBridgeError: existing?.runtime.commandBridgeError ?? null
+            commandBridgeError: existing?.runtime.commandBridgeError ?? null,
+            recoveryState: existing?.runtime.recoveryState ?? 'healthy',
+            consecutiveFailures: existing?.runtime.consecutiveFailures ?? 0,
+            lastHealthyAt: existing?.runtime.lastHealthyAt ?? null,
+            lastRecoveryAt: existing?.runtime.lastRecoveryAt ?? null
         };
 
     const state: ConnectorState = {
@@ -169,7 +189,11 @@ export function registerConnector(options: RegisterConnectorOptions): { state: C
             lastCommandCursor: options.runtime?.lastCommandCursor ?? baseRuntime.lastCommandCursor,
             lastCommandSyncAt: options.runtime?.lastCommandSyncAt ?? baseRuntime.lastCommandSyncAt,
             commandBridgeSupported: options.runtime?.commandBridgeSupported ?? baseRuntime.commandBridgeSupported,
-            commandBridgeError: options.runtime?.commandBridgeError ?? baseRuntime.commandBridgeError
+            commandBridgeError: options.runtime?.commandBridgeError ?? baseRuntime.commandBridgeError,
+            recoveryState: options.runtime?.recoveryState ?? baseRuntime.recoveryState,
+            consecutiveFailures: options.runtime?.consecutiveFailures ?? baseRuntime.consecutiveFailures,
+            lastHealthyAt: options.runtime?.lastHealthyAt ?? baseRuntime.lastHealthyAt,
+            lastRecoveryAt: options.runtime?.lastRecoveryAt ?? baseRuntime.lastRecoveryAt
         }
     };
 

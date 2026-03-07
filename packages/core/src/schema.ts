@@ -20,6 +20,7 @@ export interface ContextNode {
     key?: string;            // optional named key for direct lookup
     tags?: string[];
     source?: string;         // which tool created this
+    hidden?: boolean;        // hidden nodes are excluded from default graph/search views
     createdAt: number;       // unix ms
     checkpointId?: string;   // which checkpoint this belongs to
 }
@@ -37,6 +38,13 @@ export interface Checkpoint {
     contextId: string;
     name: string;
     nodeIds: string[];        // snapshot of which nodes existed
+    kind: CheckpointKind;
+    sessionId?: string | null;
+    branch?: string | null;
+    worktreePath?: string | null;
+    commitSha?: string | null;
+    summary?: string | null;
+    agentSet: string[];
     createdAt: number;
 }
 
@@ -63,6 +71,10 @@ export type AuditAction =
     | 'create_backup'
     | 'restore_backup'
     | 'set_sync_policy'
+    | 'resume_session'
+    | 'explain_checkpoint'
+    | 'extract_knowledge'
+    | 'sync_upload'
     | 'sync_merge'
     | 'recall_feedback';
 
@@ -96,6 +108,8 @@ export interface ContextDump {
     nodes: ContextNode[];
     edges: ContextEdge[];
     checkpoints: Checkpoint[];
+    nodePayloads?: NodePayloadRecord[];
+    checkpointPayloads?: CheckpointPayloadRecord[];
 }
 
 export type SearchMatchReason =
@@ -108,6 +122,7 @@ export interface SearchAdvancedOptions {
     limit?: number;
     sinceMs?: number;
     includeSuperseded?: boolean;
+    includeHidden?: boolean;
 }
 
 export interface SearchResult {
@@ -115,6 +130,179 @@ export interface SearchResult {
     score: number;
     matchReason: SearchMatchReason;
     matchedTerms: string[];
+}
+
+export type NodePayloadCompression = 'gzip' | 'none';
+
+export interface NodePayloadRecord {
+    nodeId: string;
+    contextId: string;
+    contentType: string;
+    compression: NodePayloadCompression;
+    byteLength: number;
+    payload: unknown;
+    createdAt: number;
+    updatedAt: number;
+}
+
+export type CheckpointKind = 'manual' | 'session' | 'legacy';
+
+export interface CheckpointPayloadRecord {
+    checkpointId: string;
+    contextId: string;
+    contentType: string;
+    compression: NodePayloadCompression;
+    byteLength: number;
+    payload: unknown;
+    createdAt: number;
+    updatedAt: number;
+}
+
+export interface BranchLaneSummary {
+    contextId: string;
+    branch: string;
+    worktreePath: string | null;
+    lastAgent: string | null;
+    lastCommitSha: string | null;
+    lastActivityAt: number;
+    sessionCount: number;
+    checkpointCount: number;
+    agentSet: string[];
+}
+
+export interface AgentSessionSummary extends ChatSessionSummary {
+    agent: string | null;
+    worktreePath: string | null;
+    repositoryRoot: string | null;
+    captureSource: string | null;
+}
+
+export interface SessionMessage extends ChatTurnSummary {
+    messageId: string;
+    parentId: string | null;
+    agent: string | null;
+    worktreePath: string | null;
+    repositoryRoot: string | null;
+    captureSource: string | null;
+    sessionTitle: string | null;
+}
+
+export interface CheckpointSummary {
+    checkpointId: string;
+    contextId: string;
+    branch: string | null;
+    worktreePath: string | null;
+    sessionId: string | null;
+    commitSha: string | null;
+    createdAt: number;
+    summary: string;
+    kind: CheckpointKind;
+    name: string;
+    agentSet: string[];
+}
+
+export interface SessionDetail {
+    session: AgentSessionSummary | null;
+    messages: SessionMessage[];
+    checkpointCount: number;
+    latestCheckpoint: CheckpointSummary | null;
+}
+
+export interface CheckpointDetail {
+    checkpoint: Checkpoint;
+    snapshotNodeCount: number;
+    snapshotEdgeCount: number;
+    snapshotCheckpointCount: number;
+    payloadAvailable: boolean;
+}
+
+export interface HandoffTimelineEntry {
+    branch: string;
+    worktreePath: string | null;
+    sessionId: string;
+    agent: string | null;
+    summary: string;
+    startedAt: number;
+    lastTurnAt: number;
+    commitSha: string | null;
+}
+
+export interface KnowledgeCandidate {
+    contextId: string;
+    source: 'session' | 'checkpoint';
+    sessionId: string | null;
+    checkpointId: string | null;
+    type: Exclude<NodeType, 'artifact'>;
+    content: string;
+    key: string;
+    action: 'create' | 'reuse';
+    existingNodeId: string | null;
+    sourceNodeId: string | null;
+    messageId: string | null;
+    role: string | null;
+    createdAt: number;
+}
+
+export interface KnowledgePreviewResult {
+    contextId: string;
+    source: 'session' | 'checkpoint';
+    sessionId: string | null;
+    checkpointId: string | null;
+    candidateCount: number;
+    createCount: number;
+    reuseCount: number;
+    candidates: KnowledgeCandidate[];
+}
+
+export interface KnowledgeExtractionResult {
+    contextId: string;
+    source: 'session' | 'checkpoint';
+    sessionId: string | null;
+    checkpointId: string | null;
+    createdCount: number;
+    reusedCount: number;
+    nodeCount: number;
+    nodes: ContextNode[];
+}
+
+export interface ChatSessionSummary {
+    sessionId: string;
+    sessionNodeId: string | null;
+    summary: string;
+    startedAt: number;
+    lastTurnAt: number;
+    turnCount: number;
+    branch: string | null;
+    commitSha: string | null;
+    agent?: string | null;
+    worktreePath?: string | null;
+    repositoryRoot?: string | null;
+    captureSource?: string | null;
+}
+
+export interface ChatTurnSummary {
+    nodeId: string;
+    contextId: string;
+    sessionId: string;
+    key: string | null;
+    type: NodeType;
+    content: string;
+    tags: string[];
+    source: string | null;
+    hidden: boolean;
+    createdAt: number;
+    role: string | null;
+    branch: string | null;
+    commitSha: string | null;
+    messageId?: string | null;
+    parentId?: string | null;
+    agent?: string | null;
+    worktreePath?: string | null;
+    repositoryRoot?: string | null;
+    captureSource?: string | null;
+    sessionTitle?: string | null;
+    hasPayload: boolean;
+    payloadBytes: number | null;
 }
 
 // ── SYNC-01: Sync types ────────────────────────────────────────

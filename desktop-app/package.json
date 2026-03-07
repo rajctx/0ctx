@@ -5,9 +5,10 @@
   "description": "0ctx Desktop — Tauri system tray companion",
   "scripts": {
     "tauri": "tauri",
-    "dev": "tauri dev",
-    "build": "tauri build",
-    "build:debug": "tauri build --debug"
+    "dev": "node scripts/tauri-run.mjs dev --no-dev-server-wait",
+    "build": "node scripts/tauri-run.mjs build",
+    "build:debug": "node scripts/tauri-run.mjs build --debug",
+    "smoke": "node scripts/smoke-build.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2"

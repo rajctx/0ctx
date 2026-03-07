@@ -1,0 +1,9 @@
+{
+  "hooks": {
+    "post_cascade_response": [
+      {
+        "command": "0ctx connector hook ingest --quiet --agent=windsurf --context-id=54e17d31-8f60-45c1-b412-61fcdda3d628"
+      }
+    ]
+  }
+}

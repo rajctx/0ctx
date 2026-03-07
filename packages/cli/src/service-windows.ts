@@ -79,10 +79,6 @@ function loadServiceXmlTemplate(): string {
 
 function resolveCliEntry(): string {
     const candidates = [
-        // published install path: cli package owns connector runtime entry
-        (() => {
-            try { return require.resolve('@0ctx/cli/dist/index.js'); } catch { return ''; }
-        })(),
         // local dist sibling in this package
         path.resolve(__dirname, 'index.js'),
         // monorepo fallback

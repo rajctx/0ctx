@@ -12,6 +12,10 @@ const RUNTIME_COMMAND_TIMEOUT_MS = 20_000;
 const ALLOWED_COMMAND_METHODS = new Set([
   'listContexts',
   'getGraphData',
+  'listChatSessions',
+  'listChatTurns',
+  'getNodePayload',
+  'getHookHealth',
   'createContext',
   'deleteContext',
   'addNode',

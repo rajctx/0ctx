@@ -92,10 +92,17 @@ function getCompletionCandidates(): string[] {
         'connector status',
         'connector verify',
         'connector register',
+        'connector hook status',
+        'connector hook install',
+        'connector hook ingest --agent=codex --payload=',
         'connector queue status',
         'connector queue drain',
         'connector queue purge',
         'connector queue logs',
+        'hook',
+        'hook status',
+        'hook install',
+        'hook ingest --agent=codex --payload=',
         'daemon start',
         'daemon service status',
     ];
@@ -146,6 +153,7 @@ async function printShellHelp(): Promise<void> {
     console.log(`  ${color.green('>')} ${color.cyan('mcp'.padEnd(35))} ${color.dim('(interactive MCP setup flow)')}`);
     console.log(`  ${color.green('>')} ${color.cyan('setup --clients=all'.padEnd(35))} ${color.dim('(configure MCP clients)')}`);
     console.log(`  ${color.green('>')} ${color.cyan('connector status --cloud'.padEnd(35))} ${color.dim('(check cloud connection)')}`);
+    console.log(`  ${color.green('>')} ${color.cyan('hook status'.padEnd(35))} ${color.dim('(check hook installation state)')}`);
     console.log(`  ${color.green('>')} ${color.cyan('auth login'.padEnd(35))} ${color.dim('(authenticate with 0ctx)')}`);
 
     console.log(`\n${color.dim('All existing 0ctx commands are supported without the "0ctx" prefix.')}\n`);

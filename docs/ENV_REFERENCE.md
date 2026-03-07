@@ -39,7 +39,7 @@ These are set in the user's shell environment or via `0ctx config set`.
 | `CTX_AUTH_TOKEN_FILE` | — | Path to a file containing a bearer token. Alternative to `CTX_AUTH_TOKEN`. |
 | `CTX_AUTH_FILE` | `~/.0ctx/auth.json` | Override path to the auth token JSON file |
 | `CTX_TENANT_ID` | — | Inject tenant ID directly. Used in CI when token doesn't embed tenant. |
-| `CTX_AUTH_SERVER` | `https://0ctx.com` | Override the auth server URL (for self-hosted deployments) |
+| `CTX_AUTH_SERVER` | `https://www.0ctx.com` | Override the auth server URL (for self-hosted deployments) |
 | `CTX_AUTH_TOKEN_ROTATION_WARN_DAYS` | `7` | Warn N days before access token expires |
 
 ### API & Connectivity
@@ -60,6 +60,8 @@ These are set in the user's shell environment or via `0ctx config set`.
 | `CTX_CONNECTOR_QUEUE_PATH` | `~/.0ctx/connector-event-queue.json` | Override path to the connector event queue file |
 | `CTX_BACKUP_DIR` | `~/.0ctx/backups` | Override directory for local graph backups |
 | `CTX_CLI_OPS_LOG_PATH` | `~/.0ctx/ops.log` | Override path to the CLI operations log |
+| `CTX_HOOK_DUMP_DIR` | `~/.0ctx/hook-dumps` | Override directory for local raw hook payload dumps for all supported hook-integrated agents |
+| `CTX_HOOK_DUMP_RETENTION_DAYS` | `30` | Default retention window used by `0ctx connector hook prune` when `--days` is not passed |
 
 ### Connector Queue Tuning
 
@@ -94,7 +96,7 @@ These can be set via `0ctx config set <key> <value>` or env var override:
 
 | Key | Env Override | Default | Description |
 |-----|-------------|---------|-------------|
-| `auth.server` | `CTX_AUTH_SERVER` | `https://0ctx.com` | Auth server base URL |
+| `auth.server` | `CTX_AUTH_SERVER` | `https://www.0ctx.com` | Auth server base URL |
 | `sync.enabled` | `CTX_SYNC_ENABLED` | `true` | Enable/disable cloud sync |
 | `sync.endpoint` | `CTX_SYNC_ENDPOINT` | `https://0ctx.com/api/v1/sync` | Sync endpoint URL |
 | `ui.url` | — | `https://0ctx.com` | Dashboard URL opened by `0ctx dashboard` |

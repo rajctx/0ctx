@@ -1,15 +1,33 @@
-import { randomUUID, randomBytes } from 'crypto';
+import { createHash, randomUUID, randomBytes } from 'crypto';
+import { gzipSync, gunzipSync } from 'zlib';
 import type Database from 'better-sqlite3';
 import type {
     ContextNode,
+    NodeType,
     ContextEdge,
     EdgeType,
     Checkpoint,
+    CheckpointKind,
     Context,
     AuditEntry,
     AuditAction,
     AuditMetadata,
     ContextDump,
+    CheckpointPayloadRecord,
+    NodePayloadRecord,
+    NodePayloadCompression,
+    BranchLaneSummary,
+    AgentSessionSummary,
+    SessionMessage,
+    CheckpointSummary,
+    SessionDetail,
+    CheckpointDetail,
+    HandoffTimelineEntry,
+    KnowledgeCandidate,
+    KnowledgePreviewResult,
+    KnowledgeExtractionResult,
+    ChatSessionSummary,
+    ChatTurnSummary,
     SyncPolicy,
     SearchAdvancedOptions,
     SearchMatchReason,
@@ -19,6 +37,282 @@ import { getConfigValue, setConfigValue } from './config';
 
 export class Graph {
     constructor(private db: Database.Database) { }
+
+    private parseNodeRow(row: any): ContextNode {
+        return {
+            ...row,
+            tags: row.tags ? JSON.parse(row.tags) : [],
+            hidden: row.hidden === 1 || row.hidden === true
+        };
+    }
+
+    private parseCheckpointRow(row: any): Checkpoint {
+        return {
+            ...row,
+            kind: (row.kind === 'manual' || row.kind === 'session' || row.kind === 'legacy') ? row.kind : 'legacy',
+            nodeIds: row.nodeIds ? JSON.parse(row.nodeIds) : [],
+            agentSet: row.agentSet ? JSON.parse(row.agentSet) : []
+        };
+    }
+
+    private toCheckpointSummary(checkpoint: Checkpoint): CheckpointSummary {
+        return {
+            checkpointId: checkpoint.id,
+            contextId: checkpoint.contextId,
+            branch: checkpoint.branch ?? null,
+            worktreePath: checkpoint.worktreePath ?? null,
+            sessionId: checkpoint.sessionId ?? null,
+            commitSha: checkpoint.commitSha ?? null,
+            createdAt: checkpoint.createdAt,
+            summary: checkpoint.summary ?? checkpoint.name,
+            kind: checkpoint.kind,
+            name: checkpoint.name,
+            agentSet: checkpoint.agentSet ?? []
+        };
+    }
+
+    private parsePayloadValue(raw: string, contentType: string): unknown {
+        if (contentType.toLowerCase().includes('json')) {
+            try {
+                return JSON.parse(raw);
+            } catch {
+                return raw;
+            }
+        }
+        return raw;
+    }
+
+    private extractString(record: unknown, path: string[]): string | null {
+        let current: unknown = record;
+        for (const key of path) {
+            if (!current || typeof current !== 'object' || Array.isArray(current)) return null;
+            current = (current as Record<string, unknown>)[key];
+        }
+        return typeof current === 'string' && current.trim().length > 0 ? current.trim() : null;
+    }
+
+    private extractTimestampValue(record: unknown, path: string[]): number | null {
+        let current: unknown = record;
+        for (const key of path) {
+            if (!current || typeof current !== 'object' || Array.isArray(current)) return null;
+            current = (current as Record<string, unknown>)[key];
+        }
+        if (typeof current === 'number' && Number.isFinite(current)) {
+            return current;
+        }
+        if (typeof current === 'string' && current.trim().length > 0) {
+            const parsed = Date.parse(current.trim());
+            if (Number.isFinite(parsed)) return parsed;
+            const asNumber = Number(current.trim());
+            if (Number.isFinite(asNumber)) return asNumber;
+        }
+        return null;
+    }
+
+    private extractAgentFromKey(key: string | null | undefined): string | null {
+        if (!key) return null;
+        const parts = key.split(':');
+        return parts.length >= 2 ? (parts[1] || null) : null;
+    }
+
+    private extractAgentFromTags(tags: string[] | null | undefined): string | null {
+        const tag = (tags ?? []).find(value => typeof value === 'string' && value.startsWith('agent:'));
+        return tag ? tag.slice('agent:'.length) : null;
+    }
+
+    private extractMessageIdFromKey(key: string | null | undefined): string | null {
+        if (!key) return null;
+        const parts = key.split(':');
+        return parts.length >= 4 ? parts.slice(3).join(':') : null;
+    }
+
+    private normalizeBranch(branch: string | null | undefined): string {
+        const normalized = typeof branch === 'string' ? branch.trim() : '';
+        return normalized.length > 0 ? normalized : 'detached';
+    }
+
+    private normalizeWorktreePath(worktreePath: string | null | undefined): string {
+        return typeof worktreePath === 'string' ? worktreePath.trim() : '';
+    }
+
+    private branchLaneKey(branch: string | null | undefined, worktreePath: string | null | undefined): string {
+        return `${this.normalizeBranch(branch)}::${this.normalizeWorktreePath(worktreePath)}`;
+    }
+
+    private extractTurnMetadata(payload: unknown): {
+        branch: string | null;
+        commitSha: string | null;
+        role: string | null;
+        occurredAt: number | null;
+        agent: string | null;
+        worktreePath: string | null;
+        repositoryRoot: string | null;
+        captureSource: string | null;
+        sessionTitle: string | null;
+        messageId: string | null;
+        parentId: string | null;
+    } {
+        const commitSha =
+            this.extractString(payload, ['commitSha'])
+            ?? this.extractString(payload, ['commit'])
+            ?? this.extractString(payload, ['gitCommit'])
+            ?? this.extractString(payload, ['git', 'commitSha'])
+            ?? this.extractString(payload, ['git', 'commit'])
+            ?? this.extractString(payload, ['meta', 'git', 'commitSha'])
+            ?? this.extractString(payload, ['meta', 'git', 'commit']);
+        const branch =
+            this.extractString(payload, ['branch'])
+            ?? this.extractString(payload, ['gitBranch'])
+            ?? this.extractString(payload, ['git', 'branch'])
+            ?? this.extractString(payload, ['meta', 'git', 'branch']);
+        const role =
+            this.extractString(payload, ['role'])
+            ?? this.extractString(payload, ['meta', 'role'])
+            ?? this.extractString(payload, ['message', 'role']);
+        const occurredAt =
+            this.extractTimestampValue(payload, ['occurredAt'])
+            ?? this.extractTimestampValue(payload, ['timestamp'])
+            ?? this.extractTimestampValue(payload, ['meta', 'occurredAt'])
+            ?? this.extractTimestampValue(payload, ['meta', 'timestamp']);
+        const agent =
+            this.extractString(payload, ['agent'])
+            ?? this.extractString(payload, ['meta', 'agent']);
+        const worktreePath =
+            this.extractString(payload, ['worktreePath'])
+            ?? this.extractString(payload, ['git', 'worktreePath'])
+            ?? this.extractString(payload, ['meta', 'git', 'worktreePath'])
+            ?? this.extractString(payload, ['cwd']);
+        const repositoryRoot =
+            this.extractString(payload, ['repositoryRoot'])
+            ?? this.extractString(payload, ['repoRoot'])
+            ?? this.extractString(payload, ['repo_root'])
+            ?? this.extractString(payload, ['meta', 'repositoryRoot'])
+            ?? this.extractString(payload, ['meta', 'repoRoot'])
+            ?? this.extractString(payload, ['meta', 'repository', 'root'])
+            ?? worktreePath;
+        const captureSource =
+            this.extractString(payload, ['captureSource'])
+            ?? this.extractString(payload, ['meta', 'captureSource']);
+        const sessionTitle =
+            this.extractString(payload, ['sessionTitle'])
+            ?? this.extractString(payload, ['title'])
+            ?? this.extractString(payload, ['summary'])
+            ?? this.extractString(payload, ['meta', 'sessionTitle']);
+        const messageId =
+            this.extractString(payload, ['messageId'])
+            ?? this.extractString(payload, ['message', 'id'])
+            ?? this.extractString(payload, ['id']);
+        const parentId =
+            this.extractString(payload, ['parentId'])
+            ?? this.extractString(payload, ['parent_id'])
+            ?? this.extractString(payload, ['parent', 'id']);
+        return { branch, commitSha, role, occurredAt, agent, worktreePath, repositoryRoot, captureSource, sessionTitle, messageId, parentId };
+    }
+
+    private cleanupExtractionText(text: string): string {
+        return text
+            .replace(/```[\s\S]*?```/g, ' ')
+            .replace(/`[^`]*`/g, ' ')
+            .replace(/\[(.*?)\]\((.*?)\)/g, '$1')
+            .replace(/https?:\/\/\S+/g, ' ')
+            .replace(/[_*~>#]+/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    private splitExtractionCandidates(text: string): string[] {
+        const withoutCode = String(text ?? '').replace(/```[\s\S]*?```/g, ' ');
+        const rough = withoutCode
+            .split(/\r?\n+/)
+            .flatMap(part => part.split(/(?<=[.?!])\s+/))
+            .map(part => this.cleanupExtractionText(part))
+            .map(part => part.replace(/^[\-\u2022•\d.)\s]+/, '').trim())
+            .filter(part => part.length >= 24 && part.length <= 280);
+
+        return Array.from(new Set(rough));
+    }
+
+    private isExtractionNoise(text: string): boolean {
+        const normalized = text.toLowerCase();
+        if (/^(hi|hello|thanks|thank you|ok|okay|sure|done|great|awesome|please|you'?re welcome)\b/.test(normalized)) {
+            return true;
+        }
+        if (/^[a-z]:\\/.test(text) || text.includes('\\\\') || normalized.includes('.jsonl') || normalized.includes('.json')) {
+            return true;
+        }
+        if (normalized.startsWith('select ') || normalized.startsWith('choose ') || normalized.startsWith('click ')) {
+            return true;
+        }
+        return false;
+    }
+
+    private classifyKnowledgeType(text: string, role: string | null | undefined): Exclude<NodeType, 'artifact'> | null {
+        const normalized = text.toLowerCase().trim();
+        if (!normalized || this.isExtractionNoise(text)) return null;
+
+        if (normalized.endsWith('?') || /^(why|what|how|when|where|which|who)\b/.test(normalized)) {
+            return 'open_question';
+        }
+
+        if (/\b(we need to|need to build|need to create|need to support|want to|goal is to|aim is to|objective is to|build a|build an|create a|create an|implement a|implement an|add support for)\b/.test(normalized)) {
+            return 'goal';
+        }
+
+        if (/\b(must|cannot|can't|should not|should stay|should remain|do not|don't|required|requirement|without|only|never|enabled by default|disabled by default|local-first)\b/.test(normalized)) {
+            return 'constraint';
+        }
+
+        if (/\b(decided|decision|going with|adopt|adopted|chosen|choose to|switched to|switch to|use the|keep the|remove the|make .* default|ship|standardize|migrate to|now uses)\b/.test(normalized)) {
+            return 'decision';
+        }
+
+        if (/\b(assume|assuming|likely|probably|seems|appears|maybe|hypothesis)\b/.test(normalized)) {
+            return 'assumption';
+        }
+
+        if (
+            (role ?? '').toLowerCase() === 'user'
+            && (
+                /\b(i|we)\s+(need|want)\s+to\b/.test(normalized)
+                || /\b(problem|issue)\s+is\b/.test(normalized)
+                || /\b(goal|objective)\s+is\s+to\b/.test(normalized)
+            )
+        ) {
+            return 'goal';
+        }
+
+        return null;
+    }
+
+    private ensureEdge(fromId: string, toId: string, relation: EdgeType): void {
+        const row = this.db.prepare(`
+      SELECT id
+      FROM edges
+      WHERE fromId = ? AND toId = ? AND relation = ?
+      LIMIT 1
+    `).get(fromId, toId, relation) as { id: string } | undefined;
+        if (!row) {
+            this.addEdge(fromId, toId, relation);
+        }
+    }
+
+    private buildKnowledgeKey(
+        contextId: string,
+        type: Exclude<NodeType, 'artifact'>,
+        content: string,
+        options: { branch?: string | null; worktreePath?: string | null } = {}
+    ): string {
+        const normalizedWorktree = this.normalizeWorktreePath(options.worktreePath);
+        const normalizedBranch = this.normalizeBranch(options.branch);
+        const scope = normalizedWorktree
+            ? `worktree:${normalizedWorktree.toLowerCase()}`
+            : normalizedBranch !== 'detached'
+                ? `branch:${normalizedBranch.toLowerCase()}`
+                : `workspace:${contextId}`;
+        const scopeDigest = createHash('sha1').update(scope).digest('hex').slice(0, 12);
+        const digest = createHash('sha1').update(`${type}\n${content.toLowerCase()}`).digest('hex').slice(0, 16);
+        return `knowledge:${type}:${scopeDigest}:${digest}`;
+    }
 
     private tokenizeQuery(query: string): string[] {
         const matches = query.toLowerCase().match(/[a-z0-9_]+/g) ?? [];
@@ -74,12 +368,12 @@ export class Graph {
 
     getContext(id: string): Context | null {
         const row = this.db.prepare('SELECT * FROM contexts WHERE id = ?').get(id) as any;
-        return row ? { ...row, paths: JSON.parse(row.paths), syncPolicy: row.syncPolicy ?? 'metadata_only' } : null;
+        return row ? { ...row, paths: JSON.parse(row.paths), syncPolicy: row.syncPolicy ?? 'full_sync' } : null;
     }
 
     listContexts(): Context[] {
         const rows = this.db.prepare('SELECT * FROM contexts ORDER BY createdAt DESC').all() as any[];
-        return rows.map(row => ({ ...row, paths: JSON.parse(row.paths), syncPolicy: row.syncPolicy ?? 'metadata_only' }));
+        return rows.map(row => ({ ...row, paths: JSON.parse(row.paths), syncPolicy: row.syncPolicy ?? 'full_sync' }));
     }
 
     getContextSyncPolicy(contextId: string): SyncPolicy | null {
@@ -88,7 +382,7 @@ export class Graph {
         if (row.syncPolicy === 'local_only' || row.syncPolicy === 'full_sync' || row.syncPolicy === 'metadata_only') {
             return row.syncPolicy;
         }
-        return 'metadata_only';
+        return 'full_sync';
     }
 
     setContextSyncPolicy(contextId: string, policy: SyncPolicy): Context | null {
@@ -104,65 +398,87 @@ export class Graph {
 
         for (const nodeId of nodeIds) {
             this.db.prepare('DELETE FROM nodes_fts WHERE id = ?').run(nodeId);
+            this.db.prepare('DELETE FROM node_payloads WHERE nodeId = ?').run(nodeId);
             this.db.prepare('DELETE FROM edges WHERE fromId = ? OR toId = ?').run(nodeId, nodeId);
         }
 
+        this.db.prepare('DELETE FROM branch_lanes WHERE contextId = ?').run(id);
+        this.db.prepare('DELETE FROM checkpoint_payloads WHERE contextId = ?').run(id);
         this.db.prepare('DELETE FROM nodes WHERE contextId = ?').run(id);
         this.db.prepare('DELETE FROM checkpoints WHERE contextId = ?').run(id);
         this.db.prepare('DELETE FROM contexts WHERE id = ?').run(id);
     }
 
     // ── Nodes ──────────────────────────────────────────────────────
-    addNode(params: Omit<ContextNode, 'id' | 'createdAt'>): ContextNode {
-        const node: ContextNode = { ...params, id: randomUUID(), createdAt: Date.now() };
+    addNode(params: Omit<ContextNode, 'id' | 'createdAt'> & { rawPayload?: unknown; payloadContentType?: string; createdAtOverride?: number }): ContextNode {
+        const { rawPayload, payloadContentType, createdAtOverride, ...nodeParams } = params;
+        const createdAt = typeof createdAtOverride === 'number' && Number.isFinite(createdAtOverride)
+            ? createdAtOverride
+            : Date.now();
+        const node: ContextNode = { ...nodeParams, id: randomUUID(), createdAt };
         this.db.prepare(`
-      INSERT INTO nodes (id, contextId, thread, type, content, key, tags, source, createdAt)
-      VALUES (@id, @contextId, @thread, @type, @content, @key, @tags, @source, @createdAt)
+      INSERT INTO nodes (id, contextId, thread, type, content, key, tags, source, hidden, createdAt, checkpointId)
+      VALUES (@id, @contextId, @thread, @type, @content, @key, @tags, @source, @hidden, @createdAt, @checkpointId)
     `).run({
             id: node.id,
-            contextId: node.contextId,
-            thread: node.thread || null,
-            type: node.type,
-            content: node.content,
-            key: node.key || null,
-            tags: JSON.stringify(node.tags ?? []),
-            source: node.source || null,
-            createdAt: node.createdAt
+            contextId: nodeParams.contextId,
+            thread: nodeParams.thread || null,
+            type: nodeParams.type,
+            content: nodeParams.content,
+            key: nodeParams.key || null,
+            tags: JSON.stringify(nodeParams.tags ?? []),
+            source: nodeParams.source || null,
+            hidden: nodeParams.hidden ? 1 : 0,
+            createdAt: node.createdAt,
+            checkpointId: nodeParams.checkpointId ?? null
         });
 
         this.db.prepare(`
       INSERT INTO nodes_fts (id, content, tags) VALUES (?, ?, ?)
-    `).run(node.id, node.content, (node.tags ?? []).join(' '));
+    `).run(node.id, nodeParams.content, (nodeParams.tags ?? []).join(' '));
 
-        return node;
+        if (rawPayload !== undefined) {
+            this.setNodePayload(node.id, nodeParams.contextId, rawPayload, {
+                contentType: payloadContentType
+            });
+        }
+
+        return this.getNode(node.id)!;
     }
 
     getNode(id: string): ContextNode | null {
         const row = this.db.prepare('SELECT * FROM nodes WHERE id = ?').get(id) as any;
-        return row ? { ...row, tags: JSON.parse(row.tags) } : null;
+        return row ? this.parseNodeRow(row) : null;
     }
 
-    getByKey(contextId: string, key: string): ContextNode | null {
-        const row = this.db.prepare(
-            'SELECT * FROM nodes WHERE contextId = ? AND key = ? ORDER BY createdAt DESC LIMIT 1'
-        ).get(contextId, key) as any;
-        return row ? { ...row, tags: JSON.parse(row.tags) } : null;
+    getByKey(contextId: string, key: string, options: { includeHidden?: boolean } = {}): ContextNode | null {
+        const includeHidden = options.includeHidden ?? false;
+        const row = includeHidden
+            ? this.db.prepare(
+                'SELECT * FROM nodes WHERE contextId = ? AND key = ? ORDER BY createdAt DESC LIMIT 1'
+            ).get(contextId, key) as any
+            : this.db.prepare(
+                'SELECT * FROM nodes WHERE contextId = ? AND key = ? AND hidden = 0 ORDER BY createdAt DESC LIMIT 1'
+            ).get(contextId, key) as any;
+        return row ? this.parseNodeRow(row) : null;
     }
 
     deleteNode(id: string): void {
         this.db.prepare('DELETE FROM nodes WHERE id = ?').run(id);
         this.db.prepare('DELETE FROM nodes_fts WHERE id = ?').run(id);
+        this.db.prepare('DELETE FROM node_payloads WHERE nodeId = ?').run(id);
         this.db.prepare('DELETE FROM edges WHERE fromId = ? OR toId = ?').run(id, id);
     }
 
-    updateNode(id: string, updates: Partial<Pick<ContextNode, 'content' | 'tags'>>): ContextNode | null {
+    updateNode(id: string, updates: Partial<Pick<ContextNode, 'content' | 'tags' | 'hidden'>>): ContextNode | null {
         const node = this.getNode(id);
         if (!node) return null;
 
         const newContent = updates.content !== undefined ? updates.content : node.content;
         const newTags = updates.tags !== undefined ? updates.tags : node.tags;
+        const newHidden = updates.hidden !== undefined ? updates.hidden : (node.hidden ?? false);
 
-        this.db.prepare('UPDATE nodes SET content = ?, tags = ? WHERE id = ?').run(newContent, JSON.stringify(newTags), id);
+        this.db.prepare('UPDATE nodes SET content = ?, tags = ?, hidden = ? WHERE id = ?').run(newContent, JSON.stringify(newTags), newHidden ? 1 : 0, id);
         this.db.prepare('UPDATE nodes_fts SET content = ?, tags = ? WHERE id = ?').run(newContent, (newTags ?? []).join(' '), id);
 
         return this.getNode(id);
@@ -254,9 +570,11 @@ export class Graph {
         const limit = Math.max(1, Math.min(options.limit ?? 20, 200));
         const sinceMs = Math.max(1, Math.floor(options.sinceMs ?? 24 * 60 * 60 * 1000));
         const includeSuperseded = options.includeSuperseded ?? false;
+        const includeHidden = options.includeHidden ?? false;
         const now = Date.now();
         const queryTerms = this.tokenizeQuery(normalizedQuery);
         const ftsQuery = this.buildFtsQuery(normalizedQuery);
+        const hiddenFilterSql = includeHidden ? '' : ' AND n.hidden = 0';
 
         let rows: any[] = [];
         try {
@@ -264,14 +582,23 @@ export class Graph {
           SELECT n.*, bm25(nodes_fts, 5.0, 1.5) AS bm25Rank
           FROM nodes n
           JOIN nodes_fts ON n.id = nodes_fts.id
-          WHERE n.contextId = ? AND nodes_fts MATCH ?
+          WHERE n.contextId = ? ${hiddenFilterSql} AND nodes_fts MATCH ?
           ORDER BY bm25Rank ASC
           LIMIT ?
         `).all(contextId, ftsQuery, Math.max(limit * 5, limit)) as any[];
         } catch {
-            rows = this.db.prepare(`
+            rows = includeHidden
+                ? this.db.prepare(`
           SELECT * FROM nodes
           WHERE contextId = ?
+            AND (content LIKE ? OR tags LIKE ?)
+          ORDER BY createdAt DESC
+          LIMIT ?
+        `).all(contextId, `%${normalizedQuery}%`, `%${normalizedQuery}%`, Math.max(limit * 5, limit)) as any[]
+                : this.db.prepare(`
+          SELECT * FROM nodes
+          WHERE contextId = ?
+            AND hidden = 0
             AND (content LIKE ? OR tags LIKE ?)
           ORDER BY createdAt DESC
           LIMIT ?
@@ -314,7 +641,7 @@ export class Graph {
         const results: SearchResult[] = [];
         for (let i = 0; i < rows.length; i += 1) {
             const row = rows[i];
-            const node: ContextNode = { ...row, tags: JSON.parse(row.tags) };
+            const node: ContextNode = this.parseNodeRow(row);
             const isSuperseded = supersededNodeIds.has(node.id);
             if (!includeSuperseded && isSuperseded) {
                 continue;
@@ -381,19 +708,826 @@ export class Graph {
         return results.slice(0, limit);
     }
 
-    search(contextId: string, query: string, limit = 20): ContextNode[] {
+    search(contextId: string, query: string, limit = 20, options: { includeHidden?: boolean } = {}): ContextNode[] {
         return this.searchAdvanced(contextId, query, {
             limit,
-            includeSuperseded: true
+            includeSuperseded: true,
+            includeHidden: options.includeHidden ?? false
         }).map(result => result.node);
     }
 
-    getGraphData(contextId: string) {
-        const nodesRows = this.db.prepare('SELECT * FROM nodes WHERE contextId = ? ORDER BY createdAt DESC').all(contextId) as any[];
-        const edgesRows = this.db.prepare(`SELECT e.* FROM edges e JOIN nodes n ON e.fromId = n.id WHERE n.contextId = ?`).all(contextId) as any[];
+    getGraphData(contextId: string, options: { includeHidden?: boolean } = {}) {
+        const includeHidden = options.includeHidden ?? false;
+        const nodesRows = includeHidden
+            ? this.db.prepare('SELECT * FROM nodes WHERE contextId = ? ORDER BY createdAt DESC').all(contextId) as any[]
+            : this.db.prepare('SELECT * FROM nodes WHERE contextId = ? AND hidden = 0 ORDER BY createdAt DESC').all(contextId) as any[];
+        const edgesRows = includeHidden
+            ? this.db.prepare(`
+          SELECT e.*
+          FROM edges e
+          JOIN nodes nf ON e.fromId = nf.id
+          JOIN nodes nt ON e.toId = nt.id
+          WHERE nf.contextId = ? AND nt.contextId = ?
+        `).all(contextId, contextId) as any[]
+            : this.db.prepare(`
+          SELECT e.*
+          FROM edges e
+          JOIN nodes nf ON e.fromId = nf.id
+          JOIN nodes nt ON e.toId = nt.id
+          WHERE nf.contextId = ? AND nt.contextId = ? AND nf.hidden = 0 AND nt.hidden = 0
+        `).all(contextId, contextId) as any[];
         return {
-            nodes: nodesRows.map(r => ({ ...r, tags: JSON.parse(r.tags) })),
+            nodes: nodesRows.map(r => this.parseNodeRow(r)),
             edges: edgesRows
+        };
+    }
+
+    setNodePayload(
+        nodeId: string,
+        contextId: string,
+        payload: unknown,
+        options: {
+            contentType?: string;
+            compression?: NodePayloadCompression;
+            createdAt?: number;
+            updatedAt?: number;
+        } = {}
+    ): NodePayloadRecord {
+        const contentType = options.contentType ?? 'application/json';
+        const compression = options.compression ?? 'gzip';
+        const serialized = typeof payload === 'string' ? payload : JSON.stringify(payload);
+        const serializedBuffer = Buffer.from(serialized, 'utf8');
+        const encoded = compression === 'gzip' ? gzipSync(serializedBuffer) : serializedBuffer;
+        const createdAt = options.createdAt ?? Date.now();
+        const updatedAt = options.updatedAt ?? Date.now();
+
+        this.db.prepare(`
+      INSERT INTO node_payloads (nodeId, contextId, contentType, compression, payload, byteLength, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(nodeId) DO UPDATE SET
+        contextId = excluded.contextId,
+        contentType = excluded.contentType,
+        compression = excluded.compression,
+        payload = excluded.payload,
+        byteLength = excluded.byteLength,
+        updatedAt = excluded.updatedAt
+    `).run(nodeId, contextId, contentType, compression, encoded, serializedBuffer.length, createdAt, updatedAt);
+
+        return this.getNodePayload(nodeId)!;
+    }
+
+    getNodePayload(nodeId: string): NodePayloadRecord | null {
+        const row = this.db.prepare(`
+      SELECT nodeId, contextId, contentType, compression, payload, byteLength, createdAt, updatedAt
+      FROM node_payloads
+      WHERE nodeId = ?
+    `).get(nodeId) as {
+        nodeId: string;
+        contextId: string;
+        contentType: string;
+        compression: NodePayloadCompression;
+        payload: Buffer;
+        byteLength: number;
+        createdAt: number;
+        updatedAt: number;
+    } | undefined;
+        if (!row) return null;
+
+        const decodedBuffer = row.compression === 'gzip'
+            ? gunzipSync(row.payload)
+            : Buffer.from(row.payload);
+        const decoded = decodedBuffer.toString('utf8');
+        const parsed = this.parsePayloadValue(decoded, row.contentType);
+
+        return {
+            nodeId: row.nodeId,
+            contextId: row.contextId,
+            contentType: row.contentType,
+            compression: row.compression,
+            byteLength: row.byteLength,
+            payload: parsed,
+            createdAt: row.createdAt,
+            updatedAt: row.updatedAt
+        };
+    }
+
+    setCheckpointPayload(
+        checkpointId: string,
+        contextId: string,
+        payload: unknown,
+        options: {
+            contentType?: string;
+            compression?: NodePayloadCompression;
+            createdAt?: number;
+            updatedAt?: number;
+        } = {}
+    ): CheckpointPayloadRecord {
+        const contentType = options.contentType ?? 'application/json';
+        const compression = options.compression ?? 'gzip';
+        const serialized = typeof payload === 'string' ? payload : JSON.stringify(payload);
+        const serializedBuffer = Buffer.from(serialized, 'utf8');
+        const encoded = compression === 'gzip' ? gzipSync(serializedBuffer) : serializedBuffer;
+        const createdAt = options.createdAt ?? Date.now();
+        const updatedAt = options.updatedAt ?? Date.now();
+
+        this.db.prepare(`
+      INSERT INTO checkpoint_payloads (checkpointId, contextId, contentType, compression, payload, byteLength, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(checkpointId) DO UPDATE SET
+        contextId = excluded.contextId,
+        contentType = excluded.contentType,
+        compression = excluded.compression,
+        payload = excluded.payload,
+        byteLength = excluded.byteLength,
+        updatedAt = excluded.updatedAt
+    `).run(checkpointId, contextId, contentType, compression, encoded, serializedBuffer.length, createdAt, updatedAt);
+
+        return this.getCheckpointPayload(checkpointId)!;
+    }
+
+    getCheckpointPayload(checkpointId: string): CheckpointPayloadRecord | null {
+        const row = this.db.prepare(`
+      SELECT checkpointId, contextId, contentType, compression, payload, byteLength, createdAt, updatedAt
+      FROM checkpoint_payloads
+      WHERE checkpointId = ?
+    `).get(checkpointId) as {
+            checkpointId: string;
+            contextId: string;
+            contentType: string;
+            compression: NodePayloadCompression;
+            payload: Buffer;
+            byteLength: number;
+            createdAt: number;
+            updatedAt: number;
+        } | undefined;
+        if (!row) return null;
+
+        const decodedBuffer = row.compression === 'gzip'
+            ? gunzipSync(row.payload)
+            : Buffer.from(row.payload);
+        const decoded = decodedBuffer.toString('utf8');
+        const parsed = this.parsePayloadValue(decoded, row.contentType);
+
+        return {
+            checkpointId: row.checkpointId,
+            contextId: row.contextId,
+            contentType: row.contentType,
+            compression: row.compression,
+            byteLength: row.byteLength,
+            payload: parsed,
+            createdAt: row.createdAt,
+            updatedAt: row.updatedAt
+        };
+    }
+
+    private refreshBranchLaneProjection(contextId: string): void {
+        const sessions = this.listChatSessions(contextId, 5000) as AgentSessionSummary[];
+        const checkpoints = this.listCheckpoints(contextId);
+        const lanes = new Map<string, {
+            branch: string;
+            worktreePath: string;
+            lastAgent: string | null;
+            lastCommitSha: string | null;
+            lastActivityAt: number;
+            sessionCount: number;
+            checkpointCount: number;
+            agentSet: Set<string>;
+        }>();
+
+        const ensureLane = (branch: string | null | undefined, worktreePath: string | null | undefined) => {
+            const normalizedBranch = this.normalizeBranch(branch);
+            const normalizedWorktree = this.normalizeWorktreePath(worktreePath);
+            const key = this.branchLaneKey(normalizedBranch, normalizedWorktree);
+            let lane = lanes.get(key);
+            if (!lane) {
+                lane = {
+                    branch: normalizedBranch,
+                    worktreePath: normalizedWorktree,
+                    lastAgent: null,
+                    lastCommitSha: null,
+                    lastActivityAt: 0,
+                    sessionCount: 0,
+                    checkpointCount: 0,
+                    agentSet: new Set<string>()
+                };
+                lanes.set(key, lane);
+            }
+            return lane;
+        };
+
+        for (const session of sessions) {
+            const lane = ensureLane(session.branch, session.worktreePath);
+            lane.sessionCount += 1;
+            if (session.agent) lane.agentSet.add(session.agent);
+            if (session.lastTurnAt >= lane.lastActivityAt) {
+                lane.lastActivityAt = session.lastTurnAt;
+                lane.lastAgent = session.agent ?? lane.lastAgent;
+                lane.lastCommitSha = session.commitSha ?? lane.lastCommitSha;
+            }
+        }
+
+        for (const checkpoint of checkpoints) {
+            const lane = ensureLane(checkpoint.branch, checkpoint.worktreePath);
+            lane.checkpointCount += 1;
+            for (const agent of checkpoint.agentSet ?? []) {
+                if (agent) lane.agentSet.add(agent);
+            }
+            if (checkpoint.createdAt >= lane.lastActivityAt) {
+                lane.lastActivityAt = checkpoint.createdAt;
+                lane.lastCommitSha = checkpoint.commitSha ?? lane.lastCommitSha;
+                lane.lastAgent = (checkpoint.agentSet ?? [])[0] ?? lane.lastAgent;
+            }
+        }
+
+        const upsert = this.db.prepare(`
+      INSERT INTO branch_lanes (
+        contextId, branch, worktreePath, lastAgent, lastCommitSha, lastActivityAt, sessionCount, checkpointCount, agentSet
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+        const tx = this.db.transaction(() => {
+            this.db.prepare('DELETE FROM branch_lanes WHERE contextId = ?').run(contextId);
+            for (const lane of lanes.values()) {
+                upsert.run(
+                    contextId,
+                    lane.branch,
+                    lane.worktreePath,
+                    lane.lastAgent,
+                    lane.lastCommitSha,
+                    lane.lastActivityAt,
+                    lane.sessionCount,
+                    lane.checkpointCount,
+                    JSON.stringify(Array.from(lane.agentSet))
+                );
+            }
+        });
+        tx();
+    }
+
+    listChatSessions(contextId: string, limit = 50): ChatSessionSummary[] {
+        const safeLimit = Math.max(1, Math.min(limit, 5000));
+        const rows = this.db.prepare(`
+      SELECT
+        thread AS sessionId,
+        MIN(createdAt) AS startedAt,
+        MAX(createdAt) AS lastTurnAt,
+        COUNT(*) AS turnCount
+      FROM nodes
+      WHERE contextId = ? AND type = 'artifact' AND thread IS NOT NULL AND key LIKE 'chat_turn:%'
+      GROUP BY thread
+      ORDER BY lastTurnAt DESC
+      LIMIT ?
+    `).all(contextId, safeLimit) as Array<{
+            sessionId: string;
+            startedAt: number;
+            lastTurnAt: number;
+            turnCount: number;
+        }>;
+
+        return rows.map((row): AgentSessionSummary => {
+            const latestRow = this.db.prepare(`
+        SELECT *
+        FROM nodes
+        WHERE contextId = ? AND thread = ? AND key LIKE 'chat_turn:%'
+        ORDER BY createdAt DESC
+        LIMIT 1
+      `).get(contextId, row.sessionId) as any;
+
+            const sessionRow = this.db.prepare(`
+        SELECT *
+        FROM nodes
+        WHERE contextId = ? AND thread = ? AND key LIKE 'chat_session:%'
+        ORDER BY createdAt DESC
+        LIMIT 1
+      `).get(contextId, row.sessionId) as any;
+
+            const firstRow = this.db.prepare(`
+        SELECT *
+        FROM nodes
+        WHERE contextId = ? AND thread = ? AND key LIKE 'chat_turn:%'
+        ORDER BY createdAt ASC
+        LIMIT 1
+      `).get(contextId, row.sessionId) as any;
+
+            const latestNode = latestRow ? this.parseNodeRow(latestRow) : null;
+            const sessionNode = sessionRow ? this.parseNodeRow(sessionRow) : null;
+            const firstNode = firstRow ? this.parseNodeRow(firstRow) : null;
+
+            const latestPayload = latestNode ? this.getNodePayload(latestNode.id) : null;
+            const firstPayload = firstNode ? this.getNodePayload(firstNode.id) : null;
+            const sessionPayload = sessionNode ? this.getNodePayload(sessionNode.id) : null;
+            const latestMetadata = this.extractTurnMetadata(latestPayload?.payload);
+            const firstMetadata = this.extractTurnMetadata(firstPayload?.payload);
+            const sessionMetadata = this.extractTurnMetadata(sessionPayload?.payload);
+
+            const agent =
+                latestMetadata.agent
+                ?? firstMetadata.agent
+                ?? sessionMetadata.agent
+                ?? this.extractAgentFromKey(sessionNode?.key ?? latestNode?.key)
+                ?? this.extractAgentFromTags(sessionNode?.tags ?? latestNode?.tags);
+
+            return {
+                sessionId: row.sessionId,
+                sessionNodeId: sessionNode?.id ?? latestNode?.id ?? null,
+                summary: (sessionNode?.content ?? latestNode?.content ?? '').trim(),
+                startedAt: firstMetadata.occurredAt ?? row.startedAt,
+                lastTurnAt: latestMetadata.occurredAt ?? row.lastTurnAt,
+                turnCount: row.turnCount,
+                branch: latestMetadata.branch ?? sessionMetadata.branch ?? firstMetadata.branch,
+                commitSha: latestMetadata.commitSha ?? sessionMetadata.commitSha ?? firstMetadata.commitSha,
+                agent,
+                worktreePath: latestMetadata.worktreePath ?? sessionMetadata.worktreePath ?? firstMetadata.worktreePath,
+                repositoryRoot: latestMetadata.repositoryRoot ?? sessionMetadata.repositoryRoot ?? firstMetadata.repositoryRoot,
+                captureSource: latestMetadata.captureSource ?? sessionMetadata.captureSource ?? latestNode?.source ?? sessionNode?.source ?? null
+            };
+        });
+    }
+
+    listBranchLanes(contextId: string, limit = 200): BranchLaneSummary[] {
+        this.refreshBranchLaneProjection(contextId);
+        const safeLimit = Math.max(1, Math.min(limit, 1000));
+        const rows = this.db.prepare(`
+      SELECT *
+      FROM branch_lanes
+      WHERE contextId = ?
+      ORDER BY lastActivityAt DESC, branch ASC, worktreePath ASC
+      LIMIT ?
+    `).all(contextId, safeLimit) as Array<any>;
+
+        return rows.map((row): BranchLaneSummary => ({
+            contextId: row.contextId,
+            branch: row.branch,
+            worktreePath: row.worktreePath || null,
+            lastAgent: row.lastAgent ?? null,
+            lastCommitSha: row.lastCommitSha ?? null,
+            lastActivityAt: row.lastActivityAt,
+            sessionCount: row.sessionCount,
+            checkpointCount: row.checkpointCount,
+            agentSet: row.agentSet ? JSON.parse(row.agentSet) : []
+        }));
+    }
+
+    listBranchSessions(
+        contextId: string,
+        branch: string,
+        options: { worktreePath?: string | null; limit?: number } = {}
+    ): AgentSessionSummary[] {
+        const targetBranch = this.normalizeBranch(branch);
+        const targetWorktree = this.normalizeWorktreePath(options.worktreePath);
+        return (this.listChatSessions(contextId, options.limit ?? 5000) as AgentSessionSummary[]).filter((session) => {
+            if (this.normalizeBranch(session.branch) !== targetBranch) return false;
+            if (!targetWorktree) return true;
+            return this.normalizeWorktreePath(session.worktreePath) === targetWorktree;
+        });
+    }
+
+    listChatTurns(contextId: string, sessionId: string, limit = 200): ChatTurnSummary[] {
+        const safeLimit = Math.max(1, Math.min(limit, 5000));
+        const rows = this.db.prepare(`
+      SELECT n.*, np.nodeId AS payloadNodeId, np.byteLength AS payloadByteLength
+      FROM nodes n
+      LEFT JOIN node_payloads np ON np.nodeId = n.id
+      WHERE n.contextId = ? AND n.thread = ? AND n.key LIKE 'chat_turn:%'
+      ORDER BY n.createdAt ASC
+      LIMIT ?
+    `).all(contextId, sessionId, safeLimit) as Array<any>;
+
+        return rows.map((row): ChatTurnSummary => {
+            const node = this.parseNodeRow(row);
+            const payload = row.payloadNodeId ? this.getNodePayload(node.id) : null;
+            const metadata = this.extractTurnMetadata(payload?.payload);
+            const roleTag = (node.tags ?? []).find(tag => tag.startsWith('role:'));
+            const role = roleTag ? roleTag.slice('role:'.length) : metadata.role;
+            return {
+                nodeId: node.id,
+                contextId: node.contextId,
+                sessionId: node.thread ?? sessionId,
+                key: node.key ?? null,
+                type: node.type,
+                content: node.content,
+                tags: node.tags ?? [],
+                source: node.source ?? null,
+                hidden: Boolean(node.hidden),
+                createdAt: metadata.occurredAt ?? node.createdAt,
+                role: role ?? null,
+                branch: metadata.branch,
+                commitSha: metadata.commitSha,
+                messageId: metadata.messageId ?? this.extractMessageIdFromKey(node.key) ?? node.id,
+                parentId: metadata.parentId ?? null,
+                agent: metadata.agent ?? this.extractAgentFromKey(node.key) ?? this.extractAgentFromTags(node.tags),
+                worktreePath: metadata.worktreePath ?? null,
+                repositoryRoot: metadata.repositoryRoot ?? null,
+                captureSource: metadata.captureSource ?? node.source ?? null,
+                sessionTitle: metadata.sessionTitle ?? null,
+                hasPayload: Boolean(row.payloadNodeId),
+                payloadBytes: typeof row.payloadByteLength === 'number' ? row.payloadByteLength : null
+            };
+        });
+    }
+
+    listSessionMessages(contextId: string, sessionId: string, limit = 500): SessionMessage[] {
+        const session = (this.listChatSessions(contextId, 5000) as AgentSessionSummary[]).find((entry) => entry.sessionId === sessionId) ?? null;
+        return this.listChatTurns(contextId, sessionId, limit).map((turn): SessionMessage => ({
+            ...turn,
+            messageId: turn.messageId ?? turn.nodeId,
+            parentId: turn.parentId ?? null,
+            agent: turn.agent ?? session?.agent ?? null,
+            worktreePath: turn.worktreePath ?? session?.worktreePath ?? null,
+            repositoryRoot: turn.repositoryRoot ?? session?.repositoryRoot ?? null,
+            captureSource: turn.captureSource ?? session?.captureSource ?? null,
+            sessionTitle: turn.sessionTitle ?? session?.summary ?? null
+        }));
+    }
+
+    getSessionDetail(contextId: string, sessionId: string): SessionDetail {
+        const session = (this.listChatSessions(contextId, 5000) as AgentSessionSummary[]).find((entry) => entry.sessionId === sessionId) ?? null;
+        const messages = this.listSessionMessages(contextId, sessionId, 5000);
+        const checkpoints = (this.db.prepare(`
+      SELECT *
+      FROM checkpoints
+      WHERE contextId = ? AND sessionId = ?
+      ORDER BY createdAt DESC
+    `).all(contextId, sessionId) as any[]).map(row => this.parseCheckpointRow(row));
+        return {
+            session,
+            messages,
+            checkpointCount: checkpoints.length,
+            latestCheckpoint: checkpoints[0] ? this.toCheckpointSummary(checkpoints[0]) : null
+        };
+    }
+
+    listBranchCheckpoints(
+        contextId: string,
+        branch: string,
+        options: { worktreePath?: string | null; limit?: number } = {}
+    ): CheckpointSummary[] {
+        const safeLimit = Math.max(1, Math.min(options.limit ?? 500, 5000));
+        const targetBranch = this.normalizeBranch(branch);
+        const targetWorktree = this.normalizeWorktreePath(options.worktreePath);
+        const rows = this.db.prepare(`
+      SELECT *
+      FROM checkpoints
+      WHERE contextId = ?
+      ORDER BY createdAt DESC
+      LIMIT ?
+    `).all(contextId, safeLimit) as any[];
+
+        return rows
+            .map(row => this.parseCheckpointRow(row))
+            .filter((checkpoint) => this.normalizeBranch(checkpoint.branch) === targetBranch)
+            .filter((checkpoint) => !targetWorktree || this.normalizeWorktreePath(checkpoint.worktreePath) === targetWorktree)
+            .map(checkpoint => this.toCheckpointSummary(checkpoint));
+    }
+
+    getCheckpointDetail(checkpointId: string): CheckpointDetail | null {
+        const row = this.db.prepare('SELECT * FROM checkpoints WHERE id = ?').get(checkpointId) as any;
+        if (!row) return null;
+        const checkpoint = this.parseCheckpointRow(row);
+        const payload = this.getCheckpointPayload(checkpointId);
+        const dump = payload?.payload && typeof payload.payload === 'object' ? payload.payload as Partial<ContextDump> : null;
+        return {
+            checkpoint,
+            snapshotNodeCount: Array.isArray(dump?.nodes) ? dump.nodes.length : checkpoint.nodeIds.length,
+            snapshotEdgeCount: Array.isArray(dump?.edges) ? dump.edges.length : 0,
+            snapshotCheckpointCount: Array.isArray(dump?.checkpoints) ? dump.checkpoints.length : 0,
+            payloadAvailable: Boolean(payload)
+        };
+    }
+
+    getHandoffTimeline(contextId: string, branch?: string, worktreePath?: string | null, limit = 100): HandoffTimelineEntry[] {
+        const safeLimit = Math.max(1, Math.min(limit, 1000));
+        const sessions = (this.listChatSessions(contextId, 5000) as AgentSessionSummary[])
+            .filter((session) => !branch || this.normalizeBranch(session.branch) === this.normalizeBranch(branch))
+            .filter((session) => !worktreePath || this.normalizeWorktreePath(session.worktreePath) === this.normalizeWorktreePath(worktreePath))
+            .sort((a, b) => b.lastTurnAt - a.lastTurnAt)
+            .slice(0, safeLimit);
+
+        return sessions.map((session) => ({
+            branch: this.normalizeBranch(session.branch),
+            worktreePath: session.worktreePath ?? null,
+            sessionId: session.sessionId,
+            agent: session.agent ?? null,
+            summary: session.summary,
+            startedAt: session.startedAt,
+            lastTurnAt: session.lastTurnAt,
+            commitSha: session.commitSha ?? null
+        }));
+    }
+
+    private collectSessionKnowledgeCandidates(
+        contextId: string,
+        sessionId: string,
+        options: {
+            checkpointId?: string | null;
+            maxNodes?: number;
+            source?: 'session' | 'checkpoint';
+            allowedKeys?: string[] | null;
+        } = {}
+    ): {
+        session: AgentSessionSummary | null;
+        source: 'session' | 'checkpoint';
+        checkpointId: string | null;
+        candidates: Array<KnowledgeCandidate & { existingNode: ContextNode | null }>;
+    } {
+        const detail = this.getSessionDetail(contextId, sessionId);
+        const session = detail.session;
+        const safeLimit = Math.max(1, Math.min(options.maxNodes ?? 12, 50));
+        const source = options.source ?? 'session';
+        const checkpointId = options.checkpointId ?? null;
+        const allowedKeys = Array.isArray(options.allowedKeys)
+            ? new Set(options.allowedKeys.map((value) => String(value || '').trim()).filter(Boolean))
+            : null;
+        const seenCandidates = new Set<string>();
+        const candidates: Array<KnowledgeCandidate & { existingNode: ContextNode | null }> = [];
+
+        if (!session) {
+            return { session: null, source, checkpointId, candidates };
+        }
+
+        for (const message of detail.messages) {
+            const extracted = this.splitExtractionCandidates(message.content);
+            for (const candidateText of extracted) {
+                if (candidates.length >= safeLimit) break;
+                const type = this.classifyKnowledgeType(candidateText, message.role);
+                if (!type) continue;
+                const dedupeKey = `${type}:${candidateText.toLowerCase()}`;
+                if (seenCandidates.has(dedupeKey)) continue;
+                seenCandidates.add(dedupeKey);
+
+                const key = this.buildKnowledgeKey(contextId, type, candidateText, {
+                    branch: session.branch,
+                    worktreePath: session.worktreePath
+                });
+                if (allowedKeys && !allowedKeys.has(key)) continue;
+                const existingNode = this.getByKey(contextId, key, { includeHidden: true });
+                candidates.push({
+                    contextId,
+                    source,
+                    sessionId,
+                    checkpointId,
+                    type,
+                    content: candidateText,
+                    key,
+                    action: existingNode ? 'reuse' : 'create',
+                    existingNodeId: existingNode?.id ?? null,
+                    sourceNodeId: message.nodeId ?? null,
+                    messageId: message.messageId ?? null,
+                    role: message.role ?? null,
+                    createdAt: message.createdAt,
+                    existingNode
+                });
+            }
+            if (candidates.length >= safeLimit) break;
+        }
+
+        return { session, source, checkpointId, candidates };
+    }
+
+    previewKnowledgeFromSession(
+        contextId: string,
+        sessionId: string,
+        options: { checkpointId?: string | null; maxNodes?: number; source?: 'session' | 'checkpoint' } = {}
+    ): KnowledgePreviewResult {
+        const { source, checkpointId, candidates } = this.collectSessionKnowledgeCandidates(contextId, sessionId, options);
+        const createCount = candidates.filter((candidate) => candidate.action === 'create').length;
+        const reuseCount = candidates.length - createCount;
+        return {
+            contextId,
+            source,
+            sessionId,
+            checkpointId,
+            candidateCount: candidates.length,
+            createCount,
+            reuseCount,
+            candidates: candidates.map(({ existingNode, ...candidate }) => candidate)
+        };
+    }
+
+    extractKnowledgeFromSession(
+        contextId: string,
+        sessionId: string,
+        options: {
+            checkpointId?: string | null;
+            maxNodes?: number;
+            source?: 'session' | 'checkpoint';
+            allowedKeys?: string[] | null;
+        } = {}
+    ): KnowledgeExtractionResult {
+        const { session, source, checkpointId, candidates } = this.collectSessionKnowledgeCandidates(contextId, sessionId, options);
+        const resultNodes: ContextNode[] = [];
+        const resultIds = new Set<string>();
+        let createdCount = 0;
+        let reusedCount = 0;
+
+        if (!session) {
+            return {
+                contextId,
+                source,
+                sessionId,
+                checkpointId,
+                createdCount: 0,
+                reusedCount: 0,
+                nodeCount: 0,
+                nodes: []
+            };
+        }
+
+        const baseTags = [
+            'knowledge',
+            'derived',
+            `session:${sessionId}`,
+            session.agent ? `agent:${session.agent}` : null,
+            session.branch ? `branch:${session.branch}` : null,
+            session.worktreePath ? `worktree:${session.worktreePath}` : null,
+            checkpointId ? `checkpoint:${checkpointId}` : null
+        ].filter((value): value is string => Boolean(value));
+
+        for (const candidate of candidates) {
+            let node = candidate.existingNode;
+            if (!node) {
+                node = this.addNode({
+                    contextId,
+                    thread: sessionId,
+                    type: candidate.type,
+                    content: candidate.content,
+                    key: candidate.key,
+                    tags: [...baseTags, `source:${source}`],
+                    source: `extractor:${source}`,
+                    hidden: false,
+                    checkpointId: checkpointId ?? undefined,
+                    createdAtOverride: candidate.createdAt
+                });
+                createdCount += 1;
+            } else {
+                reusedCount += 1;
+            }
+
+            if (candidate.sourceNodeId) {
+                this.ensureEdge(node.id, candidate.sourceNodeId, 'caused_by');
+            }
+            if (!resultIds.has(node.id)) {
+                resultIds.add(node.id);
+                resultNodes.push(node);
+            }
+        }
+
+        return {
+            contextId,
+            source,
+            sessionId,
+            checkpointId,
+            createdCount,
+            reusedCount,
+            nodeCount: resultNodes.length,
+            nodes: resultNodes
+        };
+    }
+
+    previewKnowledgeFromCheckpoint(
+        checkpointId: string,
+        options: { maxNodes?: number } = {}
+    ): KnowledgePreviewResult {
+        const row = this.db.prepare('SELECT * FROM checkpoints WHERE id = ?').get(checkpointId) as any;
+        if (!row) {
+            throw new Error(`Checkpoint ${checkpointId} not found`);
+        }
+        const checkpoint = this.parseCheckpointRow(row);
+        if (checkpoint.sessionId) {
+            return this.previewKnowledgeFromSession(checkpoint.contextId, checkpoint.sessionId, {
+                checkpointId,
+                maxNodes: options.maxNodes,
+                source: 'checkpoint'
+            });
+        }
+
+        const summary = this.cleanupExtractionText(checkpoint.summary ?? checkpoint.name ?? '');
+        const type = this.classifyKnowledgeType(summary, 'assistant');
+        if (!summary || !type) {
+            return {
+                contextId: checkpoint.contextId,
+                source: 'checkpoint',
+                sessionId: null,
+                checkpointId,
+                candidateCount: 0,
+                createCount: 0,
+                reuseCount: 0,
+                candidates: []
+            };
+        }
+
+        const key = this.buildKnowledgeKey(checkpoint.contextId, type, summary, {
+            branch: checkpoint.branch,
+            worktreePath: checkpoint.worktreePath
+        });
+        const existingNode = this.getByKey(checkpoint.contextId, key, { includeHidden: true });
+        return {
+            contextId: checkpoint.contextId,
+            source: 'checkpoint',
+            sessionId: null,
+            checkpointId,
+            candidateCount: 1,
+            createCount: existingNode ? 0 : 1,
+            reuseCount: existingNode ? 1 : 0,
+            candidates: [{
+                contextId: checkpoint.contextId,
+                source: 'checkpoint',
+                sessionId: null,
+                checkpointId,
+                type,
+                content: summary,
+                key,
+                action: existingNode ? 'reuse' : 'create',
+                existingNodeId: existingNode?.id ?? null,
+                sourceNodeId: null,
+                messageId: null,
+                role: 'assistant',
+                createdAt: checkpoint.createdAt
+            }]
+        };
+    }
+
+    extractKnowledgeFromCheckpoint(
+        checkpointId: string,
+        options: { maxNodes?: number; allowedKeys?: string[] | null } = {}
+    ): KnowledgeExtractionResult {
+        const row = this.db.prepare('SELECT * FROM checkpoints WHERE id = ?').get(checkpointId) as any;
+        if (!row) {
+            throw new Error(`Checkpoint ${checkpointId} not found`);
+        }
+        const checkpoint = this.parseCheckpointRow(row);
+        if (checkpoint.sessionId) {
+            return this.extractKnowledgeFromSession(checkpoint.contextId, checkpoint.sessionId, {
+                checkpointId,
+                maxNodes: options.maxNodes,
+                source: 'checkpoint',
+                allowedKeys: options.allowedKeys
+            });
+        }
+
+        const preview = this.previewKnowledgeFromCheckpoint(checkpointId, options);
+        if (preview.candidates.length === 0) {
+            return {
+                contextId: checkpoint.contextId,
+                source: 'checkpoint',
+                sessionId: null,
+                checkpointId,
+                createdCount: 0,
+                reusedCount: 0,
+                nodeCount: 0,
+                nodes: []
+            };
+        }
+
+        const candidate = preview.candidates[0];
+        if (Array.isArray(options.allowedKeys) && options.allowedKeys.length > 0 && !options.allowedKeys.includes(candidate.key)) {
+            return {
+                contextId: checkpoint.contextId,
+                source: 'checkpoint',
+                sessionId: null,
+                checkpointId,
+                createdCount: 0,
+                reusedCount: 0,
+                nodeCount: 0,
+                nodes: []
+            };
+        }
+        let node = candidate.existingNodeId ? this.getNode(candidate.existingNodeId) : null;
+        let createdCount = 0;
+        let reusedCount = 0;
+        if (!node) {
+            node = this.addNode({
+                contextId: checkpoint.contextId,
+                type: candidate.type,
+                content: candidate.content,
+                key: candidate.key,
+                tags: [
+                    'knowledge',
+                    'derived',
+                    'source:checkpoint',
+                    `checkpoint:${checkpointId}`,
+                    checkpoint.branch ? `branch:${checkpoint.branch}` : null,
+                    checkpoint.worktreePath ? `worktree:${checkpoint.worktreePath}` : null
+                ].filter((value): value is string => Boolean(value)),
+                source: 'extractor:checkpoint',
+                hidden: false,
+                checkpointId,
+                createdAtOverride: candidate.createdAt
+            });
+            createdCount = 1;
+        } else {
+            reusedCount = 1;
+        }
+
+        return {
+            contextId: checkpoint.contextId,
+            source: 'checkpoint',
+            sessionId: null,
+            checkpointId,
+            createdCount,
+            reusedCount,
+            nodeCount: 1,
+            nodes: [node]
         };
     }
 
@@ -529,10 +1663,14 @@ export class Graph {
         }
 
         const nodes = (this.db.prepare('SELECT * FROM nodes WHERE contextId = ? ORDER BY createdAt ASC').all(contextId) as any[])
-            .map(row => ({ ...row, tags: JSON.parse(row.tags) }));
+            .map(row => this.parseNodeRow(row));
 
         const nodeIds = nodes.map(node => node.id);
         const idPlaceholders = nodeIds.map(() => '?').join(', ');
+
+        const nodePayloads = nodeIds
+            .map(nodeId => this.getNodePayload(nodeId))
+            .filter((payload): payload is NodePayloadRecord => Boolean(payload));
 
         const edges = nodeIds.length === 0
             ? []
@@ -543,6 +1681,9 @@ export class Graph {
         `).all(...nodeIds, ...nodeIds) as ContextEdge[];
 
         const checkpoints = this.listCheckpoints(contextId);
+        const checkpointPayloads = checkpoints
+            .map(checkpoint => this.getCheckpointPayload(checkpoint.id))
+            .filter((payload): payload is CheckpointPayloadRecord => Boolean(payload));
 
         return {
             version: 1,
@@ -550,7 +1691,9 @@ export class Graph {
             context,
             nodes,
             edges,
-            checkpoints
+            checkpoints,
+            nodePayloads,
+            checkpointPayloads
         };
     }
 
@@ -562,13 +1705,14 @@ export class Graph {
         const context = this.createContext(
             options?.name || dump.context.name,
             dump.context.paths,
-            (dump.context as Partial<Context>).syncPolicy ?? 'metadata_only'
+            (dump.context as Partial<Context>).syncPolicy ?? 'full_sync'
         );
         const nodeIdMap = new Map<string, string>();
+        const checkpointIdMap = new Map<string, string>();
 
         const insertNode = this.db.prepare(`
-      INSERT INTO nodes (id, contextId, thread, type, content, key, tags, source, createdAt)
-      VALUES (@id, @contextId, @thread, @type, @content, @key, @tags, @source, @createdAt)
+      INSERT INTO nodes (id, contextId, thread, type, content, key, tags, source, hidden, createdAt, checkpointId)
+      VALUES (@id, @contextId, @thread, @type, @content, @key, @tags, @source, @hidden, @createdAt, @checkpointId)
     `);
 
         const insertNodeFts = this.db.prepare(`
@@ -581,8 +1725,8 @@ export class Graph {
     `);
 
         const insertCheckpoint = this.db.prepare(`
-      INSERT INTO checkpoints (id, contextId, name, nodeIds, createdAt)
-      VALUES (@id, @contextId, @name, @nodeIds, @createdAt)
+      INSERT INTO checkpoints (id, contextId, name, nodeIds, kind, sessionId, branch, worktreePath, commitSha, summary, agentSet, createdAt)
+      VALUES (@id, @contextId, @name, @nodeIds, @kind, @sessionId, @branch, @worktreePath, @commitSha, @summary, @agentSet, @createdAt)
     `);
 
         const tx = this.db.transaction(() => {
@@ -599,7 +1743,9 @@ export class Graph {
                     key: node.key || null,
                     tags: JSON.stringify(node.tags ?? []),
                     source: node.source || null,
-                    createdAt: node.createdAt
+                    hidden: node.hidden ? 1 : 0,
+                    createdAt: node.createdAt,
+                    checkpointId: node.checkpointId ?? null
                 });
 
                 insertNodeFts.run(newId, node.content, (node.tags ?? []).join(' '));
@@ -623,51 +1769,285 @@ export class Graph {
                 const mappedNodeIds = checkpoint.nodeIds
                     .map(nodeId => nodeIdMap.get(nodeId))
                     .filter((nodeId): nodeId is string => Boolean(nodeId));
+                const newCheckpointId = randomUUID();
+                checkpointIdMap.set(checkpoint.id, newCheckpointId);
 
                 insertCheckpoint.run({
-                    id: randomUUID(),
+                    id: newCheckpointId,
                     contextId: context.id,
                     name: checkpoint.name,
                     nodeIds: JSON.stringify(mappedNodeIds),
+                    kind: checkpoint.kind ?? 'legacy',
+                    sessionId: checkpoint.sessionId ?? null,
+                    branch: checkpoint.branch ?? null,
+                    worktreePath: checkpoint.worktreePath ?? null,
+                    commitSha: checkpoint.commitSha ?? null,
+                    summary: checkpoint.summary ?? null,
+                    agentSet: JSON.stringify(checkpoint.agentSet ?? []),
                     createdAt: checkpoint.createdAt
+                });
+            }
+
+            if (Array.isArray(dump.nodePayloads)) {
+                for (const payload of dump.nodePayloads) {
+                    const mappedNodeId = nodeIdMap.get(payload.nodeId);
+                    if (!mappedNodeId) continue;
+                    this.setNodePayload(
+                        mappedNodeId,
+                        context.id,
+                        payload.payload,
+                        {
+                            contentType: payload.contentType,
+                            compression: payload.compression,
+                            createdAt: payload.createdAt,
+                            updatedAt: payload.updatedAt
+                        }
+                    );
+                }
+            }
+
+            if (Array.isArray(dump.checkpointPayloads)) {
+                for (const payload of dump.checkpointPayloads) {
+                    const mappedCheckpointId = checkpointIdMap.get(payload.checkpointId);
+                    if (!mappedCheckpointId) continue;
+                    this.setCheckpointPayload(
+                        mappedCheckpointId,
+                        context.id,
+                        payload.payload,
+                        {
+                            contentType: payload.contentType,
+                            compression: payload.compression,
+                            createdAt: payload.createdAt,
+                            updatedAt: payload.updatedAt
+                        }
+                    );
+                }
+            }
+        });
+
+        tx();
+        this.refreshBranchLaneProjection(context.id);
+        return context;
+    }
+
+    // ── Checkpoints ────────────────────────────────────────────────
+    private insertCheckpoint(checkpoint: Checkpoint): void {
+        this.db.prepare(`
+      INSERT INTO checkpoints (
+        id, contextId, name, nodeIds, kind, sessionId, branch, worktreePath, commitSha, summary, agentSet, createdAt
+      )
+      VALUES (
+        @id, @contextId, @name, @nodeIds, @kind, @sessionId, @branch, @worktreePath, @commitSha, @summary, @agentSet, @createdAt
+      )
+    `).run({
+            ...checkpoint,
+            nodeIds: JSON.stringify(checkpoint.nodeIds),
+            agentSet: JSON.stringify(checkpoint.agentSet ?? [])
+        });
+    }
+
+    private replaceContextFromDump(contextId: string, dump: ContextDump): void {
+        const tx = this.db.transaction(() => {
+            if (this.getContext(contextId)) {
+                this.deleteContext(contextId);
+            }
+
+            const syncPolicy: SyncPolicy =
+                dump.context.syncPolicy === 'local_only'
+                    || dump.context.syncPolicy === 'metadata_only'
+                    || dump.context.syncPolicy === 'full_sync'
+                    ? dump.context.syncPolicy
+                    : 'full_sync';
+
+            this.db.prepare(`
+        INSERT INTO contexts (id, name, paths, syncPolicy, createdAt)
+        VALUES (@id, @name, @paths, @syncPolicy, @createdAt)
+      `).run({
+                id: contextId,
+                name: dump.context.name,
+                paths: JSON.stringify(dump.context.paths ?? []),
+                syncPolicy,
+                createdAt: dump.context.createdAt
+            });
+
+            const insertNode = this.db.prepare(`
+        INSERT INTO nodes (id, contextId, thread, type, content, key, tags, source, hidden, createdAt, checkpointId)
+        VALUES (@id, @contextId, @thread, @type, @content, @key, @tags, @source, @hidden, @createdAt, @checkpointId)
+      `);
+            const insertNodeFts = this.db.prepare(`
+        INSERT INTO nodes_fts (id, content, tags) VALUES (?, ?, ?)
+      `);
+            const nodeIds = new Set<string>();
+            for (const node of dump.nodes) {
+                const tags = Array.isArray(node.tags) ? node.tags.filter((tag): tag is string => typeof tag === 'string') : [];
+                insertNode.run({
+                    id: node.id,
+                    contextId,
+                    thread: node.thread ?? null,
+                    type: node.type,
+                    content: node.content,
+                    key: node.key ?? null,
+                    tags: JSON.stringify(tags),
+                    source: node.source ?? null,
+                    hidden: node.hidden ? 1 : 0,
+                    createdAt: node.createdAt,
+                    checkpointId: node.checkpointId ?? null
+                });
+                insertNodeFts.run(node.id, node.content, tags.join(' '));
+                nodeIds.add(node.id);
+            }
+
+            const insertEdge = this.db.prepare(`
+        INSERT INTO edges (id, fromId, toId, relation, createdAt)
+        VALUES (@id, @fromId, @toId, @relation, @createdAt)
+      `);
+            for (const edge of dump.edges) {
+                if (!nodeIds.has(edge.fromId) || !nodeIds.has(edge.toId)) continue;
+                insertEdge.run(edge);
+            }
+
+            for (const checkpoint of dump.checkpoints) {
+                const checkpointNodeIds = Array.isArray(checkpoint.nodeIds)
+                    ? checkpoint.nodeIds.filter((nodeId): nodeId is string => typeof nodeId === 'string' && nodeIds.has(nodeId))
+                    : [];
+                this.insertCheckpoint({
+                    ...checkpoint,
+                    contextId,
+                    nodeIds: checkpointNodeIds,
+                    kind: checkpoint.kind ?? 'legacy',
+                    agentSet: checkpoint.agentSet ?? []
+                });
+            }
+
+            for (const payload of dump.nodePayloads ?? []) {
+                if (!nodeIds.has(payload.nodeId)) continue;
+                this.setNodePayload(payload.nodeId, contextId, payload.payload, {
+                    contentType: payload.contentType,
+                    compression: payload.compression,
+                    createdAt: payload.createdAt,
+                    updatedAt: payload.updatedAt
+                });
+            }
+
+            const checkpointIds = new Set(dump.checkpoints.map(checkpoint => checkpoint.id));
+            for (const payload of dump.checkpointPayloads ?? []) {
+                if (!checkpointIds.has(payload.checkpointId)) continue;
+                this.setCheckpointPayload(payload.checkpointId, contextId, payload.payload, {
+                    contentType: payload.contentType,
+                    compression: payload.compression,
+                    createdAt: payload.createdAt,
+                    updatedAt: payload.updatedAt
                 });
             }
         });
 
         tx();
-        return context;
+        this.refreshBranchLaneProjection(contextId);
     }
 
-    // ── Checkpoints ────────────────────────────────────────────────
     saveCheckpoint(contextId: string, name: string): Checkpoint {
         const nodeIds = (this.db.prepare(
             'SELECT id FROM nodes WHERE contextId = ?'
         ).all(contextId) as any[]).map(r => r.id);
 
-        const cp: Checkpoint = { id: randomUUID(), contextId, name, nodeIds, createdAt: Date.now() };
-        this.db.prepare(`
-      INSERT INTO checkpoints (id, contextId, name, nodeIds, createdAt)
-      VALUES (@id, @contextId, @name, @nodeIds, @createdAt)
-    `).run({ ...cp, nodeIds: JSON.stringify(cp.nodeIds) });
-        return cp;
+        const cp: Checkpoint = {
+            id: randomUUID(),
+            contextId,
+            name,
+            nodeIds,
+            kind: 'manual',
+            sessionId: null,
+            branch: null,
+            worktreePath: null,
+            commitSha: null,
+            summary: name,
+            agentSet: [],
+            createdAt: Date.now()
+        };
+        this.insertCheckpoint(cp);
+        const snapshot = this.exportContextDump(contextId);
+        this.setCheckpointPayload(cp.id, contextId, snapshot, {
+            createdAt: cp.createdAt,
+            updatedAt: cp.createdAt
+        });
+        this.refreshBranchLaneProjection(contextId);
+        return this.getCheckpointDetail(cp.id)?.checkpoint ?? cp;
+    }
+
+    createSessionCheckpoint(
+        contextId: string,
+        sessionId: string,
+        options: {
+            name?: string;
+            summary?: string;
+            kind?: CheckpointKind;
+        } = {}
+    ): Checkpoint {
+        const session = (this.listChatSessions(contextId, 5000) as AgentSessionSummary[]).find((entry) => entry.sessionId === sessionId);
+        if (!session) {
+            throw new Error(`Session ${sessionId} not found`);
+        }
+
+        const nodeIds = (this.db.prepare('SELECT id FROM nodes WHERE contextId = ?').all(contextId) as any[]).map(r => r.id);
+        const checkpoint: Checkpoint = {
+            id: randomUUID(),
+            contextId,
+            name: options.name ?? `${session.agent ?? 'agent'} ${this.normalizeBranch(session.branch)} checkpoint`,
+            nodeIds,
+            kind: options.kind ?? 'session',
+            sessionId,
+            branch: session.branch ?? null,
+            worktreePath: session.worktreePath ?? null,
+            commitSha: session.commitSha ?? null,
+            summary: options.summary ?? session.summary,
+            agentSet: session.agent ? [session.agent] : [],
+            createdAt: Date.now()
+        };
+        this.insertCheckpoint(checkpoint);
+        const snapshot = this.exportContextDump(contextId);
+        this.setCheckpointPayload(checkpoint.id, contextId, snapshot, {
+            createdAt: checkpoint.createdAt,
+            updatedAt: checkpoint.createdAt
+        });
+        this.refreshBranchLaneProjection(contextId);
+        return this.getCheckpointDetail(checkpoint.id)?.checkpoint ?? checkpoint;
     }
 
     rewind(checkpointId: string): void {
-        const cp = this.db.prepare('SELECT * FROM checkpoints WHERE id = ?').get(checkpointId) as any;
-        if (!cp) throw new Error(`Checkpoint ${checkpointId} not found`);
-        const allowed = new Set<string>(JSON.parse(cp.nodeIds));
-        const current = (this.db.prepare(
-            'SELECT id FROM nodes WHERE contextId = ?'
-        ).all(cp.contextId) as any[]).map(r => r.id);
+        this.rewindCheckpoint(checkpointId);
+    }
 
-        for (const id of current) {
-            if (!allowed.has(id)) this.deleteNode(id);
+    rewindCheckpoint(checkpointId: string): CheckpointDetail {
+        const payload = this.getCheckpointPayload(checkpointId);
+        if (!payload) {
+            throw new Error(`Checkpoint ${checkpointId} has no snapshot payload`);
         }
+        const detail = this.getCheckpointDetail(checkpointId);
+        if (!detail) {
+            throw new Error(`Checkpoint ${checkpointId} not found`);
+        }
+        const dump = payload.payload as ContextDump;
+        this.replaceContextFromDump(detail.checkpoint.contextId, dump);
+        this.setCheckpointPayload(checkpointId, detail.checkpoint.contextId, dump, {
+            contentType: payload.contentType,
+            compression: payload.compression,
+            createdAt: payload.createdAt,
+            updatedAt: Date.now()
+        });
+        return this.getCheckpointDetail(checkpointId)!;
+    }
+
+    resumeSession(contextId: string, sessionId: string): SessionDetail {
+        return this.getSessionDetail(contextId, sessionId);
+    }
+
+    explainCheckpoint(checkpointId: string): CheckpointDetail | null {
+        return this.getCheckpointDetail(checkpointId);
     }
 
     listCheckpoints(contextId: string): Checkpoint[] {
         return (this.db.prepare(
             'SELECT * FROM checkpoints WHERE contextId = ? ORDER BY createdAt DESC'
-        ).all(contextId) as any[]).map(r => ({ ...r, nodeIds: JSON.parse(r.nodeIds) }));
+        ).all(contextId) as any[]).map(r => this.parseCheckpointRow(r));
     }
 }
