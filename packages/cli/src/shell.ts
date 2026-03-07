@@ -151,7 +151,7 @@ async function printShellHelp(): Promise<void> {
     console.log(`\n${color.bold('Get started')}`);
     console.log(`  ${color.green('>')} ${color.cyan('status'.padEnd(35))} ${color.dim('(check daemon and system health)')}`);
     console.log(`  ${color.green('>')} ${color.cyan('mcp'.padEnd(35))} ${color.dim('(interactive MCP setup flow)')}`);
-    console.log(`  ${color.green('>')} ${color.cyan('setup --clients=all'.padEnd(35))} ${color.dim('(configure MCP clients)')}`);
+    console.log(`  ${color.green('>')} ${color.cyan('enable'.padEnd(35))} ${color.dim('(bind this repo and install GA integrations)')}`);
     console.log(`  ${color.green('>')} ${color.cyan('connector status --cloud'.padEnd(35))} ${color.dim('(check cloud connection)')}`);
     console.log(`  ${color.green('>')} ${color.cyan('hook status'.padEnd(35))} ${color.dim('(check hook installation state)')}`);
     console.log(`  ${color.green('>')} ${color.cyan('auth login'.padEnd(35))} ${color.dim('(authenticate with 0ctx)')}`);

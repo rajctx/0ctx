@@ -59,6 +59,7 @@ import { startLogsServer } from './logs-server';
 import { initTelemetry, captureEvent, shutdownTelemetry } from './telemetry';
 import {
     appendHookEventLog,
+    getHookDebugRetentionDays,
     getHookDumpDir,
     getHookDumpRetentionDays,
     persistHookDump,
@@ -147,8 +148,9 @@ const SOCKET_PATH = os.platform() === 'win32'
 
 const SUPPORTED_CLIENTS: SupportedClient[] = ['claude', 'cursor', 'windsurf', 'codex', 'antigravity'];
 const SUPPORTED_HOOK_INSTALL_CLIENTS: HookInstallClient[] = ['claude', 'cursor', 'windsurf', 'codex', 'factory', 'antigravity'];
+const DEFAULT_MCP_CLIENTS: SupportedClient[] = ['claude', 'antigravity'];
 const DEFAULT_HOOK_INSTALL_CLIENTS: HookInstallClient[] = ['claude', 'factory', 'antigravity'];
-const DEFAULT_ENABLE_MCP_CLIENTS: SupportedClient[] = ['claude', 'cursor', 'windsurf', 'antigravity'];
+const DEFAULT_ENABLE_MCP_CLIENTS: SupportedClient[] = DEFAULT_MCP_CLIENTS;
 const CLI_VERSION = (() => {
     try {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -222,8 +224,9 @@ function parseArgs(argv: string[]): ParsedArgs {
 }
 
 function parseClients(raw: string | boolean | undefined): SupportedClient[] {
-    if (!raw || typeof raw !== 'string') return SUPPORTED_CLIENTS;
+    if (!raw || typeof raw !== 'string') return DEFAULT_MCP_CLIENTS;
     const normalized = raw.trim().toLowerCase();
+    if (!normalized || normalized === 'ga') return DEFAULT_MCP_CLIENTS;
     if (normalized === 'all') return SUPPORTED_CLIENTS;
 
     const parsed = normalized
@@ -231,12 +234,13 @@ function parseClients(raw: string | boolean | undefined): SupportedClient[] {
         .map(item => item.trim())
         .filter((item): item is SupportedClient => SUPPORTED_CLIENTS.includes(item as SupportedClient));
 
-    return parsed.length > 0 ? parsed : SUPPORTED_CLIENTS;
+    return parsed.length > 0 ? parsed : DEFAULT_MCP_CLIENTS;
 }
 
 function parseHookClients(raw: string | boolean | undefined): HookInstallClient[] {
     if (!raw || typeof raw !== 'string') return DEFAULT_HOOK_INSTALL_CLIENTS;
     const normalized = raw.trim().toLowerCase();
+    if (!normalized || normalized === 'ga') return DEFAULT_HOOK_INSTALL_CLIENTS;
     if (normalized === 'all') return SUPPORTED_HOOK_INSTALL_CLIENTS;
 
     const parsed = normalized
@@ -252,6 +256,7 @@ function parseEnableMcpClients(raw: string | boolean | undefined): SupportedClie
     const normalized = raw.trim().toLowerCase();
     if (!normalized) return DEFAULT_ENABLE_MCP_CLIENTS;
     if (normalized === 'none') return [];
+    if (normalized === 'ga') return DEFAULT_ENABLE_MCP_CLIENTS;
     return parseClients(raw);
 }
 
@@ -458,11 +463,12 @@ async function collectHookHealth(): Promise<{
             id: 'hook_dump_dir',
             status: dumpDirWritable ? 'pass' : 'warn',
             message: dumpDirWritable
-                ? `Hook dump directory is writable (retention ${getHookDumpRetentionDays()} days).`
+                ? `Hook dump directory is writable (dump retention ${getHookDumpRetentionDays()} days, debug retention ${getHookDebugRetentionDays()} days).`
                 : 'Hook dump directory is not writable.',
             details: {
                 path: dumpDir,
                 retentionDays: getHookDumpRetentionDays(),
+                debugRetentionDays: getHookDebugRetentionDays(),
                 error: dumpDirError
             }
         },
@@ -527,7 +533,7 @@ function resolveMcpEntrypointForBootstrap(explicitEntrypoint?: string): string {
         if (fs.existsSync(candidate)) return candidate;
     }
 
-    throw new Error('Could not resolve MCP server entrypoint. Run `npm run build` (repo) or `0ctx repair --clients=all` (installed CLI).');
+    throw new Error('Could not resolve MCP server entrypoint. Run `npm run build` (repo) or `0ctx repair` (installed CLI).');
 }
 
 function resolveCliEntrypoint(): string {
@@ -849,7 +855,7 @@ async function commandMcp(subcommand: string | undefined, flags: Record<string, 
     // Non-interactive fallback: do a safe MCP bootstrap with sensible defaults.
     if (quiet || !process.stdin.isTTY || !process.stdout.isTTY) {
         const nextFlags: Record<string, string | boolean> = { ...flags };
-        if (!nextFlags.clients) nextFlags.clients = 'all';
+        if (!nextFlags.clients) nextFlags.clients = 'ga';
         if (!nextFlags['mcp-profile'] && !nextFlags.profile) nextFlags['mcp-profile'] = 'core';
         return commandBootstrap(nextFlags);
     }
@@ -878,8 +884,8 @@ async function commandMcp(subcommand: string | undefined, flags: Record<string, 
         required: true,
         options: [
             { value: 'claude', label: 'Claude Desktop' },
-            { value: 'cursor', label: 'Cursor' },
-            { value: 'windsurf', label: 'Windsurf' },
+            { value: 'cursor', label: 'Cursor (Preview)' },
+            { value: 'windsurf', label: 'Windsurf (Preview)' },
             { value: 'codex', label: 'Codex CLI (Preview)' },
             { value: 'antigravity', label: 'Antigravity' }
         ]
@@ -890,7 +896,10 @@ async function commandMcp(subcommand: string | undefined, flags: Record<string, 
     }
     const clients = (selectedClients as string[])
         .filter((client): client is SupportedClient => SUPPORTED_CLIENTS.includes(client as SupportedClient));
-    nextFlags.clients = clients.length === SUPPORTED_CLIENTS.length ? 'all' : clients.join(',');
+    const isAllClients = clients.length === SUPPORTED_CLIENTS.length;
+    const isGaClients = clients.length === DEFAULT_MCP_CLIENTS.length
+        && DEFAULT_MCP_CLIENTS.every(client => clients.includes(client));
+    nextFlags.clients = isAllClients ? 'all' : isGaClients ? 'ga' : clients.join(',');
 
     const selectedProfile = await p.select({
         message: 'Select MCP tool profile',
@@ -4219,23 +4228,23 @@ Usage:
   0ctx --version | -v
 
 Recommended daily flow:
-  0ctx enable [--repo-root=<path>] [--name=<workspace>] [--clients=all|claude,cursor,windsurf,codex,factory,antigravity]
-              [--mcp-clients=none|all|claude,cursor,windsurf,codex,antigravity]
+  0ctx enable [--repo-root=<path>] [--name=<workspace>] [--clients=ga|all|claude,cursor,windsurf,codex,factory,antigravity]
+              [--mcp-clients=none|ga|all|claude,cursor,windsurf,codex,antigravity]
               [--skip-bootstrap] [--skip-hooks] [--mcp-profile=all|core|recall|ops] [--json]
 
 Support / legacy:
-  0ctx setup [--clients=all|claude,cursor,windsurf,codex,antigravity] [--no-open] [--json] [--validate]
+  0ctx setup [--clients=ga|all|claude,cursor,windsurf,codex,antigravity] [--no-open] [--json] [--validate]
              [--require-cloud] [--wait-cloud-ready]
              [--cloud-wait-timeout-ms=60000] [--cloud-wait-interval-ms=2000]
              [--create-context=<name>] [--dashboard-query[=k=v&...]]
              [--skip-service] [--skip-bootstrap] [--skip-hooks] [--hooks-dry-run]
              [--mcp-profile=all|core|recall|ops]
-  0ctx install [--clients=all|claude,cursor,windsurf,codex,antigravity] [--json] [--skip-bootstrap] [--mcp-profile=all|core|recall|ops]
+  0ctx install [--clients=ga|all|claude,cursor,windsurf,codex,antigravity] [--json] [--skip-bootstrap] [--mcp-profile=all|core|recall|ops]
   0ctx bootstrap [--dry-run] [--clients=...] [--entrypoint=/path/to/mcp-server.js]
                  [--mcp-profile=all|core|recall|ops] [--json]
   0ctx mcp [setup|bootstrap|validate]
   0ctx mcp                     Interactive MCP setup/selection flow
-  0ctx mcp setup [--clients=all|claude,cursor,windsurf,codex,antigravity] [--mcp-profile=all|core|recall|ops] [--no-open]
+  0ctx mcp setup [--clients=ga|all|claude,cursor,windsurf,codex,antigravity] [--mcp-profile=all|core|recall|ops] [--no-open]
   0ctx mcp bootstrap [--dry-run] [--clients=...] [--mcp-profile=all|core|recall|ops]
   0ctx mcp validate [--clients=...] [--mcp-profile=...]
   0ctx doctor [--json] [--clients=...]
@@ -4265,6 +4274,10 @@ Capture support:
   GA:      claude, factory, antigravity
   Preview: codex (notify + archive), cursor, windsurf
 
+Client scope defaults:
+  ga      Supported-by-default product path
+  all     Include preview integrations too
+
 Authentication:
   0ctx auth login    Start device-code login flow
   0ctx auth logout   Clear stored credentials
@@ -4291,7 +4304,7 @@ Connector:
   0ctx connector verify [--require-cloud] [--json]
   0ctx connector register [--force] [--local-only] [--require-cloud] [--json]
   0ctx connector run [--once] [--interval-ms=5000] [--no-daemon-autostart]
-  0ctx connector hook install [--clients=all|claude,cursor,windsurf,codex,factory,antigravity] [--repo-root=<path>] [--global]
+  0ctx connector hook install [--clients=ga|all|claude,cursor,windsurf,codex,factory,antigravity] [--repo-root=<path>] [--global]
   0ctx connector hook status [--json]
   0ctx connector hook prune [--days=30] [--json]
 0ctx connector hook session-start --agent=claude|factory|antigravity [--repo-root=<path>]

@@ -4,6 +4,7 @@ import path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
     appendHookEventLog,
+    getHookDebugRetentionDays,
     getHookDumpDir,
     getHookDumpRetentionDays,
     persistHookDump,
@@ -15,6 +16,7 @@ import {
 const tempDirs: string[] = [];
 const originalHookDumpDir = process.env.CTX_HOOK_DUMP_DIR;
 const originalHookDumpRetentionDays = process.env.CTX_HOOK_DUMP_RETENTION_DAYS;
+const originalHookDebugRetentionDays = process.env.CTX_HOOK_DEBUG_RETENTION_DAYS;
 
 function createTempDir(): string {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), '0ctx-hook-dumps-'));
@@ -32,6 +34,11 @@ afterEach(() => {
         delete process.env.CTX_HOOK_DUMP_RETENTION_DAYS;
     } else {
         process.env.CTX_HOOK_DUMP_RETENTION_DAYS = originalHookDumpRetentionDays;
+    }
+    if (originalHookDebugRetentionDays === undefined) {
+        delete process.env.CTX_HOOK_DEBUG_RETENTION_DAYS;
+    } else {
+        process.env.CTX_HOOK_DEBUG_RETENTION_DAYS = originalHookDebugRetentionDays;
     }
     for (const dir of tempDirs.splice(0, tempDirs.length)) {
         fs.rmSync(dir, { recursive: true, force: true });
@@ -111,23 +118,37 @@ describe('hook dump persistence', () => {
         const dumpRoot = createTempDir();
         process.env.CTX_HOOK_DUMP_DIR = dumpRoot;
         process.env.CTX_HOOK_DUMP_RETENTION_DAYS = '5';
+        process.env.CTX_HOOK_DEBUG_RETENTION_DAYS = '2';
 
         const oldFile = path.join(dumpRoot, 'factory', 'events', 'old.ndjson');
         const freshFile = path.join(dumpRoot, 'factory', 'events', 'fresh.ndjson');
+        const oldTranscriptHistory = path.join(dumpRoot, 'factory', 'transcript-history', 'demo-session', 'old.jsonl');
+        const stableDump = path.join(dumpRoot, 'factory', '2024-01-07T00-00-00-000Z-demo-turn.json');
         fs.mkdirSync(path.dirname(oldFile), { recursive: true });
+        fs.mkdirSync(path.dirname(oldTranscriptHistory), { recursive: true });
+        fs.mkdirSync(path.dirname(stableDump), { recursive: true });
         fs.writeFileSync(oldFile, 'old\n', 'utf8');
         fs.writeFileSync(freshFile, 'fresh\n', 'utf8');
+        fs.writeFileSync(oldTranscriptHistory, '{"old":true}\n', 'utf8');
+        fs.writeFileSync(stableDump, '{"session":"stable"}\n', 'utf8');
         fs.utimesSync(oldFile, new Date('2024-01-01T00:00:00Z'), new Date('2024-01-01T00:00:00Z'));
         fs.utimesSync(freshFile, new Date('2024-01-09T00:00:00Z'), new Date('2024-01-09T00:00:00Z'));
+        fs.utimesSync(oldTranscriptHistory, new Date('2024-01-01T00:00:00Z'), new Date('2024-01-01T00:00:00Z'));
+        fs.utimesSync(stableDump, new Date('2024-01-07T00:00:00Z'), new Date('2024-01-07T00:00:00Z'));
 
         const result = pruneHookDumps({
             now: Date.parse('2024-01-10T00:00:00Z')
         });
 
         expect(getHookDumpRetentionDays()).toBe(5);
-        expect(result.deletedFiles).toBe(1);
+        expect(getHookDebugRetentionDays()).toBe(2);
+        expect(result.deletedFiles).toBe(2);
+        expect(result.debugMaxAgeDays).toBe(2);
         expect(result.prunedPaths).toContain(oldFile);
+        expect(result.prunedPaths).toContain(oldTranscriptHistory);
         expect(fs.existsSync(oldFile)).toBe(false);
+        expect(fs.existsSync(oldTranscriptHistory)).toBe(false);
         expect(fs.existsSync(freshFile)).toBe(true);
+        expect(fs.existsSync(stableDump)).toBe(true);
     });
 });

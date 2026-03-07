@@ -20,15 +20,25 @@ export function getHookDumpDir(): string {
 export function getHookDumpRetentionDays(): number {
     const raw = process.env.CTX_HOOK_DUMP_RETENTION_DAYS;
     if (typeof raw !== 'string' || raw.trim().length === 0) {
-        return 30;
+        return 14;
     }
     const parsed = Number.parseInt(raw.trim(), 10);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : 30;
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 14;
+}
+
+export function getHookDebugRetentionDays(): number {
+    const raw = process.env.CTX_HOOK_DEBUG_RETENTION_DAYS;
+    if (typeof raw !== 'string' || raw.trim().length === 0) {
+        return 7;
+    }
+    const parsed = Number.parseInt(raw.trim(), 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 7;
 }
 
 export interface HookDumpPruneResult {
     rootDir: string;
     maxAgeDays: number;
+    debugMaxAgeDays: number;
     deletedFiles: number;
     deletedDirs: number;
     reclaimedBytes: number;
@@ -88,14 +98,19 @@ function pruneEmptyDirectories(rootDir: string): number {
 export function pruneHookDumps(options: {
     rootDir?: string;
     maxAgeDays?: number;
+    debugMaxAgeDays?: number;
     now?: number;
 } = {}): HookDumpPruneResult {
     const rootDir = path.resolve(options.rootDir ?? getHookDumpDir());
     const maxAgeDays = options.maxAgeDays ?? getHookDumpRetentionDays();
-    const cutoffMs = (options.now ?? Date.now()) - (maxAgeDays * 24 * 60 * 60 * 1000);
+    const debugMaxAgeDays = options.debugMaxAgeDays ?? getHookDebugRetentionDays();
+    const now = options.now ?? Date.now();
+    const cutoffMs = now - (maxAgeDays * 24 * 60 * 60 * 1000);
+    const debugCutoffMs = now - (debugMaxAgeDays * 24 * 60 * 60 * 1000);
     const result: HookDumpPruneResult = {
         rootDir,
         maxAgeDays,
+        debugMaxAgeDays,
         deletedFiles: 0,
         deletedDirs: 0,
         reclaimedBytes: 0,
@@ -104,7 +119,12 @@ export function pruneHookDumps(options: {
 
     for (const filePath of collectPathsForPrune(rootDir)) {
         const stat = fs.statSync(filePath);
-        if (stat.mtimeMs > cutoffMs) continue;
+        const relativePath = path.relative(rootDir, filePath).replace(/\\/g, '/');
+        const isDebugArtifact = relativePath.includes('/events/')
+            || relativePath.includes('/transcript-history/')
+            || relativePath.endsWith('.ndjson');
+        const fileCutoffMs = isDebugArtifact ? debugCutoffMs : cutoffMs;
+        if (stat.mtimeMs > fileCutoffMs) continue;
         fs.rmSync(filePath, { force: true });
         result.deletedFiles += 1;
         result.reclaimedBytes += stat.size;
