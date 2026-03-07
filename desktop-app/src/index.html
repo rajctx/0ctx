@@ -8,641 +8,549 @@
 </head>
 <body>
 <div class="app-shell">
-  <aside class="sidebar-shell">
-    <section class="sidebar-panel surface">
-      <div class="window-chrome" aria-hidden="true">
-        <span class="dot red"></span>
-        <span class="dot amber"></span>
-        <span class="dot green"></span>
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-icon" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+        </svg>
+      </div>
+      <div>
+        <h1>0ctx Desktop</h1>
+        <p>Project memory</p>
+      </div>
+    </div>
+
+    <section class="sidebar-card workspace-sidebar-card">
+      <div class="workspace-card-head">
+        <div>
+          <p class="section-label">Current workspace</p>
+          <h2 id="sideWorkspaceName">No workspace selected</h2>
+        </div>
+        <span id="sidebarPosture" class="badge offline">Offline</span>
       </div>
 
-      <section class="brand-block">
-        <p class="eyebrow">0ctx desktop</p>
-        <h1>0ctx</h1>
-        <p class="supporting">
-          Project memory for branches, sessions, and checkpoints.
-        </p>
-      </section>
+      <p id="sideWorkspacePath" class="sidebar-path">Create a workspace and bind a repository folder so agent integrations can capture automatically.</p>
 
-      <section class="workspace-card">
-        <div class="section-head compact">
-          <div>
-            <p class="section-label">Current Workspace</p>
-            <h2 id="sideWorkspaceName">No workspace selected</h2>
-          </div>
-          <span id="sidebarPosture" class="badge offline">Offline</span>
-        </div>
-        <p id="sideWorkspacePath" class="muted">
-          Create a workspace and bind a repository folder so agent integrations can capture automatically.
-        </p>
-        <div class="mini-grid workspace-mini-grid">
-          <div>
-            <span>Captured</span>
-            <strong id="sideWorkspaceCapture">0</strong>
-            <p class="hint">Sessions</p>
-          </div>
-          <div>
-            <span>Integrations</span>
-            <strong id="sideWorkspaceHooks">0</strong>
-            <p class="hint">Installed</p>
-          </div>
-        </div>
-        <p id="sideBinding" class="hint workspace-hint">
-          Once a folder and context are bound, future sessions can capture without asking again.
-        </p>
-      </section>
+      <div class="workspace-summary-strip">
+        <div class="workspace-fact"><strong id="sideWorkspaceBranches">0</strong><span>branches</span></div>
+        <div class="workspace-fact"><strong id="sideWorkspaceSessions">0</strong><span>sessions</span></div>
+      </div>
 
-      <section class="nav-group">
-        <p class="section-label">Library</p>
-        <nav class="nav-panel" aria-label="Primary">
-          <button class="nav-btn" data-view="workspaces">
-            <span class="nav-dot workspaces"></span>
-            <span class="nav-copy">
-              <strong>Workspaces</strong>
-              <small>Projects, folders, and context bindings</small>
-            </span>
-          </button>
-          <button class="nav-btn active" data-view="branches">
-            <span class="nav-dot branches"></span>
-            <span class="nav-copy">
-              <strong>Branches</strong>
-              <small>Workstreams, agents, and handoffs</small>
-            </span>
-          </button>
-          <button class="nav-btn" data-view="sessions">
-            <span class="nav-dot sessions"></span>
-            <span class="nav-copy">
-              <strong>Sessions</strong>
-              <small>Captured conversations and message detail</small>
-            </span>
-          </button>
-          <button class="nav-btn" data-view="checkpoints">
-            <span class="nav-dot checkpoints"></span>
-            <span class="nav-copy">
-              <strong>Checkpoints</strong>
-              <small>Restore points and explanations</small>
-            </span>
-          </button>
-          <button class="nav-btn" data-view="knowledge">
-            <span class="nav-dot knowledge"></span>
-            <span class="nav-copy">
-              <strong>Graph</strong>
-              <small>Visible nodes, edges, and optional hidden capture records</small>
-            </span>
-          </button>
-          <button class="nav-btn" data-view="setup">
-            <span class="nav-dot setup"></span>
-            <span class="nav-copy">
-              <strong>Setup</strong>
-              <small>Agent integrations, runtime tools, and machine diagnostics</small>
-            </span>
-          </button>
-        </nav>
-      </section>
+      <p id="sideBinding" class="sidebar-copy">Once a folder and context are bound, future sessions can capture without asking again.</p>
+
+      <div class="workspace-controls">
+        <select id="ctxSel" aria-label="Select workspace"></select>
+        <div class="workspace-actions">
+          <span id="postureBadge" class="badge offline">Offline</span>
+          <button id="refresh" class="btn tertiary" type="button">Refresh</button>
+          <button id="restart" class="btn tertiary" type="button">Restart</button>
+        </div>
+      </div>
     </section>
+
+    <nav class="sidebar-nav" aria-label="Primary">
+      <button class="nav-btn active" data-view="workspaces" type="button">
+        <span class="nav-dot workspaces"></span>
+        <span>Workspaces</span>
+      </button>
+      <button class="nav-btn" data-view="branches" type="button">
+        <span class="nav-dot branches"></span>
+        <span>Branches</span>
+      </button>
+      <button class="nav-btn" data-view="sessions" type="button">
+        <span class="nav-dot sessions"></span>
+        <span>Sessions</span>
+      </button>
+      <button class="nav-btn" data-view="checkpoints" type="button">
+        <span class="nav-dot checkpoints"></span>
+        <span>Checkpoints</span>
+      </button>
+    </nav>
+
+    <div class="sidebar-utilities">
+      <button class="nav-btn utility-btn" data-view="knowledge" type="button">
+        <span class="nav-dot knowledge"></span>
+        <span>Graph</span>
+      </button>
+      <button class="nav-btn utility-btn" data-view="setup" type="button">
+        <span class="nav-dot setup"></span>
+        <span>Setup</span>
+      </button>
+    </div>
   </aside>
 
-  <main class="main-stage">
-    <header class="surface topbar">
-      <div class="topbar-main">
-        <p class="breadcrumbs"><span>Workspace</span><span>/</span><span id="viewCrumb">Branches</span></p>
+  <main class="stage main-stage">
+    <header class="topbar">
+      <div class="topbar-crumbs">
+        <span id="stageCrumbBase">Workspace Library</span>
+        <span>/</span>
+        <span id="stageCrumbCurrent">Overview</span>
+      </div>
+      <div class="topbar-tools">
         <div class="search-wrap">
           <label class="sr-only" for="search">Filter current view</label>
-          <input id="search" type="search" placeholder="Filter this screen" />
+          <input id="search" type="search" placeholder="Filter current view" />
         </div>
-      </div>
-      <div class="header-controls">
-        <select id="ctxSel" aria-label="Select workspace"></select>
-        <span id="postureBadge" class="badge offline">Offline</span>
-        <button id="refresh" class="btn secondary">Refresh</button>
-        <button id="restart" class="btn secondary">Restart connector</button>
+        <button id="heroPrimary" class="btn primary" type="button">Create workspace</button>
       </div>
     </header>
 
-    <section id="authBanner" class="surface auth-banner hidden">
-      <div class="auth-copy">
-        <p class="section-label">Login Required</p>
+    <section id="authBanner" class="banner hidden">
+      <div class="banner-copy">
+        <p class="section-label">Login required</p>
         <p>Run <code>0ctx shell</code> once to unlock login-backed machine features.</p>
       </div>
-      <button id="copyLogin" class="btn tertiary">Copy 0ctx shell</button>
+      <button id="copyLogin" class="btn tertiary" type="button">Copy 0ctx shell</button>
     </section>
 
-    <section id="runtimeBanner" class="surface runtime-banner hidden">
-      <div class="runtime-copy">
+    <section id="runtimeBanner" class="banner hidden">
+      <div class="banner-copy">
         <p id="runtimeBannerTitle" class="section-label">Runtime issue</p>
         <p id="runtimeBannerText">The desktop app needs a newer local runtime.</p>
       </div>
-      <div class="runtime-actions">
-        <button id="runtimeBannerRefresh" class="btn secondary" type="button">Refresh</button>
+      <div class="banner-actions">
+        <button id="runtimeBannerRefresh" class="btn tertiary" type="button">Refresh</button>
         <button id="runtimeBannerSetup" class="btn tertiary" type="button">Open setup</button>
       </div>
     </section>
 
-    <section class="surface view-toolbar">
-      <div class="view-toolbar-main">
-        <div class="view-toolbar-copy">
-          <p id="heroEyebrow" class="eyebrow">Captured sessions</p>
-          <h2 id="heroTitle">Sessions and turns</h2>
-        </div>
-        <p id="heroMeta" class="hero-meta">Choose a workspace to begin.</p>
-      </div>
-      <div class="hero-actions">
-        <button id="heroPrimary" class="btn primary">Refresh capture</button>
-        <button id="heroSecondary" class="btn secondary">Open setup</button>
-      </div>
-    </section>
+    <div class="stage-scroll">
+      <div class="stage-inner">
+        <section class="view active" data-view="workspaces">
+          <div class="page-shell page-workspaces">
+            <header class="page-head">
+              <p class="page-kicker">Workspace library</p>
+              <h1>Projects and repository bindings</h1>
+              <p id="workspacesPageMeta" class="page-copy">Create a workspace once, bind its repository folder, and route future capture automatically.</p>
+            </header>
 
-    <div class="view-stack">
-      <section class="view" data-view="home">
-        <div class="view-grid home-grid">
-          <section class="surface panel panel-large">
-            <div class="section-head">
-              <div>
-                <p class="section-label">Capture readiness</p>
-                <h3>Start from the current workspace</h3>
-              </div>
-              <span id="captureStateBadge" class="badge offline">Not ready</span>
-            </div>
-            <ol id="setupChecklist" class="checklist"></ol>
-          </section>
-
-          <section class="surface panel panel-large">
-            <div class="section-head">
-              <div>
-                <p class="section-label">Storage model</p>
-                <h3>What 0ctx stores locally</h3>
-              </div>
-            </div>
-            <div id="storageExplainer" class="info-list"></div>
-          </section>
-
-          <section class="surface panel">
-            <div class="section-head">
-              <div>
-                <p class="section-label">Snapshot</p>
-                <h3>Current workspace health</h3>
-              </div>
-            </div>
-            <div class="stats-grid">
-              <article class="stat-card">
-                <span>Sessions</span>
-                <strong id="homeSessionCount">0</strong>
-                <p>Captured conversations in this workspace.</p>
-              </article>
-              <article class="stat-card">
-                <span>Turns</span>
-                <strong id="homeTurnCount">0</strong>
-                <p>Turns in the selected or most recent session.</p>
-              </article>
-              <article class="stat-card">
-                <span>Visible nodes</span>
-                <strong id="homeNodeCount">0</strong>
-                <p>Knowledge nodes shown in the current view.</p>
-              </article>
-              <article class="stat-card">
-                <span>Local storage</span>
-                <strong id="homeStorageState">Ready</strong>
-                <p id="homeStorageCopy">SQLite, payload sidecars, and integration state stay on this machine.</p>
-              </article>
-            </div>
-          </section>
-
-          <section class="surface panel">
-            <div class="section-head">
-              <div>
-                <p class="section-label">Recent sessions</p>
-                <h3>Latest captured conversations</h3>
-              </div>
-              <button class="btn tertiary" data-nav="sessions">Open sessions</button>
-            </div>
-            <div id="recentSessions" class="list"></div>
-          </section>
-
-          <section class="surface panel">
-            <div class="section-head">
-              <div>
-                <p class="section-label">Recent turns</p>
-                <h3>Turn summaries</h3>
-              </div>
-            </div>
-            <div id="recentTurns" class="list"></div>
-          </section>
-
-          <section class="surface panel">
-            <div class="section-head">
-              <div>
-                <p class="section-label">Local storage paths</p>
-                <h3>Where data lives</h3>
-              </div>
-            </div>
-            <div id="homeStoragePaths" class="path-list"></div>
-          </section>
-        </div>
-      </section>
-
-      <section class="view" data-view="sessions">
-        <div class="view-grid single-view-grid">
-          <section class="surface panel session-flow-panel">
-            <div class="section-head">
-              <div>
-                <p class="section-label">Current focus</p>
-                <h3 id="sessionFocusTitle">Choose a session</h3>
-              </div>
-              <div class="row-actions">
-                <span id="sessionHeadline" class="chip">0 sessions</span>
-                <button id="previewSessionKnowledgeBtn" class="btn tertiary" type="button">Preview knowledge</button>
-                <button id="extractSessionKnowledgeBtn" class="btn tertiary" type="button">Extract knowledge</button>
-                <button id="createCheckpointBtn" class="btn tertiary" type="button">Create checkpoint</button>
-              </div>
-            </div>
-            <p id="sessionFocusMeta" class="muted">Pick a branch lane, then choose a session to read the message stream and capture a checkpoint.</p>
-          </section>
-
-          <div class="sessions-layout">
-            <section class="surface panel">
-              <div class="section-head">
-                <div>
-                  <p class="section-label">Sessions</p>
-                  <h3>Sessions on this lane</h3>
+            <div class="workspace-layout">
+              <aside class="panel form-panel">
+                <div class="panel-head compact">
+                  <div>
+                    <p class="section-label">Create workspace</p>
+                    <h3>Bind a project once</h3>
+                  </div>
                 </div>
-              </div>
-              <div id="sessionList" class="list dense"></div>
-            </section>
 
-            <section class="surface panel">
-              <div class="section-head">
-                <div>
-                  <p class="section-label">Messages</p>
-                  <h3>Conversation stream</h3>
-                </div>
-                <span id="turnCount" class="chip">0</span>
-              </div>
-              <div id="turnList" class="list dense"></div>
-            </section>
-
-            <section class="surface panel detail-panel">
-              <div class="section-head">
-                <div>
-                  <p class="section-label">Selected message</p>
-                  <h3 id="turnDetailTitle">Choose a message</h3>
-                </div>
-                <button id="togglePayload" class="btn tertiary">Show raw payload</button>
-              </div>
-
-              <div id="turnDetailEmpty" class="empty-state">
-                Select a message to inspect its text, companion context, and raw payload when needed.
-              </div>
-
-              <div id="turnDetailBody" class="detail-body hidden">
-                <div class="detail-stack">
-                  <section class="detail-summary">
-                    <p id="turnPrimaryLabel" class="detail-label">Message</p>
-                    <p id="turnPrompt" class="detail-copy detail-primary"></p>
-                  </section>
-                  <section class="detail-summary">
-                    <p id="turnSecondaryLabel" class="detail-label">Related context</p>
-                    <p id="turnReply" class="detail-copy"></p>
-                  </section>
-                </div>
-                <div id="turnMeta" class="meta-grid"></div>
-                <details class="technical-details">
-                  <summary>Technical details</summary>
-                  <div id="turnTechnical" class="meta-grid tech-grid"></div>
-                </details>
-                <section id="sessionKnowledgePreviewPanel" class="knowledge-preview-panel hidden">
-                  <div class="section-head compact">
-                    <div>
-                      <p class="section-label">Knowledge preview</p>
-                      <h4>Review extracted candidates</h4>
+                <form id="ctxForm" class="workspace-form">
+                  <label>
+                    <span>Name</span>
+                    <input id="ctxName" type="text" placeholder="Release hardening" />
+                  </label>
+                  <label>
+                    <span>Repository folder</span>
+                    <div class="path-picker-row">
+                      <input id="ctxPath" type="text" placeholder="Choose a project folder" />
+                      <button id="pickFolder" class="btn tertiary" type="button">Choose folder</button>
                     </div>
-                    <div class="row-actions">
-                      <span id="sessionKnowledgePreviewBadge" class="chip">0 selected</span>
-                      <button class="btn tertiary" type="button" data-preview-action="all" data-preview-scope="session">All</button>
-                      <button class="btn tertiary" type="button" data-preview-action="new" data-preview-scope="session">New</button>
-                      <button class="btn tertiary" type="button" data-preview-action="none" data-preview-scope="session">None</button>
+                  </label>
+                  <button class="btn primary wide" type="submit">Create workspace</button>
+                </form>
+
+                <div class="inline-note">
+                  <p>Workspaces are lightweight bindings to local folders. They do not modify your files; they add a memory layer for branches, sessions, and checkpoints.</p>
+                </div>
+              </aside>
+
+              <section class="workspace-main">
+                <div class="section-row">
+                  <h2>Project contexts</h2>
+                  <span id="workspaceCount" class="chip">0 workspaces</span>
+                </div>
+
+                <section class="panel hero-panel workspace-focus-panel">
+                  <div class="panel-head">
+                    <div>
+                      <p class="section-label">Selected workspace</p>
+                      <h3>Binding and storage</h3>
                     </div>
                   </div>
-                  <div id="sessionKnowledgePreviewList" class="list preview-list"></div>
+                  <div id="workspaceFocus" class="workspace-focus-grid info-list"></div>
                 </section>
-                <section id="payloadPanel" class="payload-panel hidden">
-                  <div class="section-head compact">
-                    <div>
-                      <p class="section-label">Raw payload</p>
-                      <h4 id="payloadTitle">Captured sidecar payload</h4>
-                    </div>
-                    <span id="payloadBadge" class="chip">none</span>
-                  </div>
-                  <pre id="payloadText">Select a turn in Sessions to inspect payload.</pre>
-                </section>
-              </div>
-            </section>
+
+                <div id="workspaceList" class="workspace-grid list"></div>
+              </section>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <section class="view active" data-view="branches">
-        <div class="view-grid single-view-grid">
-          <div class="sessions-layout branches-layout" id="branchesLayout">
-            <section class="surface panel">
-              <div class="section-head">
-                <div>
-                  <p class="section-label">Branches</p>
-                  <h3>Branch lanes</h3>
-                </div>
-                <span id="branchHeadline" class="chip">0 lanes</span>
-              </div>
-              <div id="branchList" class="list dense"></div>
-            </section>
+        <section class="view" data-view="branches">
+          <div class="page-shell page-branches">
+            <header class="page-head">
+              <p class="page-kicker">Branch lanes</p>
+              <h1>Workstreams and handoffs</h1>
+              <p id="branchesPageMeta" class="page-copy">Inspect branch-level work, see which agent touched a lane, and follow the handoff path.</p>
+            </header>
 
-            <section class="surface panel detail-panel" id="branchDetailPanel">
-              <div class="section-head">
-                <div>
-                  <p class="section-label">Selected lane</p>
-                  <h3 id="branchDetailTitle">Choose a branch lane</h3>
-                </div>
-                <button class="btn tertiary" data-nav="sessions">Open message stream</button>
-              </div>
-              <div id="branchDetailEmpty" class="empty-state">
-                Select a branch lane to inspect cross-agent activity and checkpoint coverage.
-              </div>
-              <div id="branchDetailBody" class="detail-body hidden">
-                <div id="branchMeta" class="meta-grid"></div>
-                <div class="branch-detail-grid">
-                  <section class="detail-summary">
-                    <div class="section-head compact">
+              <div class="branches-page-grid">
+                <aside id="branchDetailPanel" class="panel editorial-rail branch-summary-rail">
+                  <div id="branchDetailEmpty" class="empty-state">Select a branch lane to inspect cross-agent activity and checkpoint coverage.</div>
+
+                  <div id="branchDetailBody" class="branch-summary-body hidden">
+                    <div>
+                      <p class="section-label">Selected lane</p>
+                      <h3 id="branchDetailTitle">Choose a branch lane</h3>
+                    </div>
+                    <p id="branchLeadCopy" class="lead-copy"></p>
+                    <div id="branchMeta" class="fact-grid editorial-facts"></div>
+                    <div class="row-actions">
+                      <button class="btn tertiary" data-nav="sessions" type="button">Open message stream</button>
+                    </div>
+                  </div>
+                </aside>
+
+                <section class="branch-main-grid">
+                  <section class="panel page-block">
+                    <div class="section-row">
                       <div>
-                        <p class="detail-label">Recent sessions</p>
-                        <h4>Work on this lane</h4>
+                        <p class="section-label">Branches</p>
+                        <h2>Branch lanes</h2>
                       </div>
-                      <span id="branchSessionCount" class="chip">0</span>
+                      <span id="branchHeadline" class="chip">0 lanes</span>
                     </div>
-                    <div id="branchSessionList" class="list dense branch-sublist"></div>
+                    <div id="branchList" class="list stack-list"></div>
                   </section>
-                  <section class="detail-summary">
-                    <p class="detail-label">Handoff timeline</p>
-                    <div id="handoffList" class="list dense branch-sublist"></div>
-                  </section>
-                </div>
-              </div>
-            </section>
-          </div>
-        </div>
-      </section>
 
-      <section class="view" data-view="workspaces">
-        <div class="view-grid workspace-grid">
-          <section class="surface panel workspace-create-panel">
-            <div class="section-head">
-              <div>
-                <p class="section-label">Create workspace</p>
-                <h3>Bind a project once</h3>
-              </div>
-            </div>
-            <form id="ctxForm" class="workspace-form">
-              <label>
-                <span>Name</span>
-                <input id="ctxName" type="text" placeholder="Release hardening" />
-              </label>
-              <label>
-                <span>Repository folder</span>
-                <div class="path-picker-row">
-                  <input id="ctxPath" type="text" placeholder="Choose a project folder" />
-                  <button id="pickFolder" class="btn tertiary" type="button">Choose folder</button>
-                </div>
-              </label>
-              <button class="btn primary" type="submit">Create workspace</button>
-            </form>
-          </section>
+                  <div class="branch-activity-grid">
+                    <section class="panel page-block">
+                      <div class="section-row small">
+                        <div>
+                          <p class="section-label">Recent sessions</p>
+                          <h4>Activity on this lane</h4>
+                        </div>
+                        <span id="branchSessionCount" class="chip">0 sessions</span>
+                      </div>
+                      <div id="branchSessionList" class="list stack-list"></div>
+                    </section>
 
-          <section class="surface panel workspace-focus-panel">
-            <div class="section-head">
-              <div>
-                <p class="section-label">Selected workspace</p>
-                <h3>Binding and storage</h3>
-              </div>
-            </div>
-            <div id="workspaceFocus" class="info-list"></div>
-          </section>
-
-          <section class="surface panel workspace-list-panel">
-            <div class="section-head">
-              <div>
-                <p class="section-label">All workspaces</p>
-                <h3>Project library</h3>
-              </div>
-              <span id="workspaceCount" class="chip">0</span>
-            </div>
-            <div id="workspaceList" class="list"></div>
-          </section>
-
-          <section class="surface panel workspace-guide-panel">
-            <div class="section-head">
-              <div>
-                <p class="section-label">Why repo folders matter</p>
-                <h3>Automatic capture routing</h3>
-              </div>
-            </div>
-            <div id="workspaceBindingGuide" class="info-list"></div>
-          </section>
-        </div>
-      </section>
-
-      <section class="view" data-view="checkpoints">
-        <div class="view-grid single-view-grid">
-          <div class="sessions-layout">
-            <section class="surface panel">
-              <div class="section-head">
-                <div>
-                  <p class="section-label">Checkpoints</p>
-                  <h3>Restore points</h3>
-                </div>
-                <span id="checkpointHeadline" class="chip">0 checkpoints</span>
-              </div>
-              <div id="checkpointList" class="list dense"></div>
-            </section>
-
-            <section class="surface panel">
-              <div class="section-head">
-                <div>
-                  <p class="section-label">Linked session</p>
-                  <h3>Checkpoint source</h3>
-                </div>
-                <button class="btn tertiary" id="rewindCheckpointBtn" type="button">Rewind checkpoint</button>
-              </div>
-              <div id="checkpointSessionCard" class="list dense"></div>
-            </section>
-
-            <section class="surface panel detail-panel">
-              <div class="section-head">
-                <div>
-                  <p class="section-label">Selected checkpoint</p>
-                  <h3 id="checkpointDetailTitle">Choose a checkpoint</h3>
-                </div>
-                <div class="row-actions">
-                  <button class="btn tertiary" id="previewCheckpointKnowledgeBtn" type="button">Preview knowledge</button>
-                  <button class="btn tertiary" id="extractCheckpointKnowledgeBtn" type="button">Extract knowledge</button>
-                  <button class="btn tertiary" id="explainCheckpointBtn" type="button">Explain checkpoint</button>
-                </div>
-              </div>
-              <div id="checkpointDetailEmpty" class="empty-state">
-                Choose a checkpoint to inspect its summary, linked branch/session, and stored snapshot shape.
-              </div>
-              <div id="checkpointDetailBody" class="detail-body hidden">
-                <div id="checkpointMeta" class="meta-grid"></div>
-                <section id="checkpointKnowledgePreviewPanel" class="knowledge-preview-panel hidden">
-                  <div class="section-head compact">
-                    <div>
-                      <p class="section-label">Knowledge preview</p>
-                      <h4>Review extracted candidates</h4>
-                    </div>
-                    <div class="row-actions">
-                      <span id="checkpointKnowledgePreviewBadge" class="chip">0 selected</span>
-                      <button class="btn tertiary" type="button" data-preview-action="all" data-preview-scope="checkpoint">All</button>
-                      <button class="btn tertiary" type="button" data-preview-action="new" data-preview-scope="checkpoint">New</button>
-                      <button class="btn tertiary" type="button" data-preview-action="none" data-preview-scope="checkpoint">None</button>
-                    </div>
+                    <section class="panel page-block">
+                      <div class="section-row small">
+                        <div>
+                          <p class="section-label">Handoff timeline</p>
+                          <h4>Agent continuity</h4>
+                        </div>
+                      </div>
+                      <div id="handoffList" class="list stack-list"></div>
+                    </section>
                   </div>
-                  <div id="checkpointKnowledgePreviewList" class="list preview-list"></div>
                 </section>
               </div>
-            </section>
+            </div>
+          </section>
+
+        <section class="view" data-view="sessions">
+            <div class="page-shell page-sessions">
+            <header class="page-head">
+              <p class="page-kicker">Captured sessions</p>
+              <h1>Read the message stream</h1>
+              <p id="sessionsPageMeta" class="page-copy">Choose a session, read its messages, and only open raw payload when you need the underlying capture.</p>
+            </header>
+
+              <div class="sessions-page-grid">
+                <aside class="panel editorial-rail session-list-rail">
+                  <div class="section-row">
+                    <div>
+                      <p class="section-label">Conversation</p>
+                      <h2>Sessions</h2>
+                    </div>
+                    <span id="sessionHeadline" class="chip">0 sessions</span>
+                  </div>
+                  <div id="sessionList" class="list stack-list"></div>
+                </aside>
+
+                <section class="session-main-grid">
+                  <section class="panel session-summary-panel">
+                    <div class="section-row">
+                      <div>
+                        <p class="section-label">Current session</p>
+                        <h3 id="sessionFocusTitle">Choose a session</h3>
+                        <p id="sessionFocusMeta" class="page-copy compact-copy">Pick a branch lane, then choose a session to read the message stream and capture a checkpoint.</p>
+                      </div>
+                      <div class="reader-actions">
+                        <button id="createCheckpointBtn" class="btn primary" type="button">Create checkpoint</button>
+                        <button id="togglePayload" class="btn tertiary" type="button">Show raw payload</button>
+                      </div>
+                    </div>
+
+                    <div class="utility-inline">
+                      <button id="previewSessionKnowledgeBtn" class="btn quiet" type="button">Preview knowledge</button>
+                      <button id="extractSessionKnowledgeBtn" class="btn quiet" type="button">Extract selected</button>
+                    </div>
+                  </section>
+
+                  <div class="session-reading-grid">
+                    <section class="panel page-block messages-panel">
+                      <div class="section-row">
+                        <div>
+                          <p class="section-label">Messages</p>
+                          <h2>Message stream</h2>
+                        </div>
+                        <span id="turnCount" class="chip">0 messages</span>
+                      </div>
+                      <div id="turnList" class="list stack-list"></div>
+                    </section>
+
+                    <section class="panel reader-panel">
+                      <div id="turnDetailEmpty" class="empty-state">Select a message to inspect its text, companion context, and raw payload when needed.</div>
+
+                      <div id="turnDetailBody" class="reader-body hidden">
+                        <div class="reader-header-block">
+                          <p class="section-label">Selected message</p>
+                          <h4 id="turnDetailTitle">Choose a message</h4>
+                          <div id="turnLeadMeta" class="meta-line"></div>
+                        </div>
+
+                        <div class="reader-document">
+                          <section class="reader-block">
+                            <p id="turnPrimaryLabel" class="detail-label">Message</p>
+                            <p id="turnPrompt" class="detail-copy detail-primary"></p>
+                          </section>
+
+                          <section class="reader-block secondary">
+                            <p id="turnSecondaryLabel" class="detail-label">Related context</p>
+                            <p id="turnReply" class="detail-copy"></p>
+                          </section>
+                        </div>
+
+                        <div id="turnMeta" class="fact-grid reader-facts"></div>
+
+                        <section id="sessionKnowledgePreviewPanel" class="panel subpanel hidden">
+                          <div class="section-row small">
+                            <div>
+                              <p class="section-label">Knowledge preview</p>
+                              <h4>Review extracted candidates</h4>
+                            </div>
+                            <div class="row-actions">
+                              <span id="sessionKnowledgePreviewBadge" class="chip">0 selected</span>
+                              <button class="btn tertiary" type="button" data-preview-action="all" data-preview-scope="session">All</button>
+                              <button class="btn tertiary" type="button" data-preview-action="new" data-preview-scope="session">New</button>
+                              <button class="btn tertiary" type="button" data-preview-action="none" data-preview-scope="session">None</button>
+                            </div>
+                          </div>
+                          <div id="sessionKnowledgePreviewList" class="list preview-list"></div>
+                        </section>
+
+                        <details class="technical-details">
+                          <summary>Technical details</summary>
+                          <div id="turnTechnical" class="meta-grid tech-grid"></div>
+                        </details>
+
+                        <section id="payloadPanel" class="panel subpanel hidden">
+                          <div class="section-row small">
+                            <div>
+                              <p class="section-label">Raw payload</p>
+                              <h4 id="payloadTitle">Captured sidecar payload</h4>
+                            </div>
+                            <span id="payloadBadge" class="chip">none</span>
+                          </div>
+                          <pre id="payloadText">Select a message in Sessions to inspect payload.</pre>
+                        </section>
+                      </div>
+                    </section>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </section>
+
+        <section class="view" data-view="checkpoints">
+          <div class="page-shell page-checkpoints">
+            <header class="page-head">
+              <p class="page-kicker">Checkpoints</p>
+              <h1>Restore points and explanations</h1>
+              <p id="checkpointsPageMeta" class="page-copy">Use checkpoints to explain a branch state or rewind a workspace to a known snapshot.</p>
+            </header>
+
+            <div class="checkpoints-layout">
+              <aside class="panel rail-panel">
+                <div class="section-row">
+                  <div>
+                    <p class="section-label">Checkpoints</p>
+                    <h2>Restore points</h2>
+                  </div>
+                  <span id="checkpointHeadline" class="chip">0 checkpoints</span>
+                </div>
+                <div id="checkpointList" class="list stack-list"></div>
+              </aside>
+
+              <section class="panel detail-panel">
+                <header class="detail-head">
+                  <div>
+                    <p class="section-label">Selected checkpoint</p>
+                    <h3 id="checkpointDetailTitle">Choose a checkpoint</h3>
+                  </div>
+                  <div class="reader-actions">
+                    <button id="explainCheckpointBtn" class="btn primary" type="button">Explain checkpoint</button>
+                    <button id="rewindCheckpointBtn" class="btn tertiary" type="button">Rewind</button>
+                  </div>
+                </header>
+
+                <div class="utility-inline">
+                  <button id="previewCheckpointKnowledgeBtn" class="btn quiet" type="button">Preview knowledge</button>
+                  <button id="extractCheckpointKnowledgeBtn" class="btn quiet" type="button">Extract selected</button>
+                </div>
+
+                <div id="checkpointDetailEmpty" class="empty-state">Choose a checkpoint to inspect its summary, linked branch or session, and stored snapshot shape.</div>
+
+                <div id="checkpointDetailBody" class="reader-body hidden">
+                  <section class="panel subpanel lead-panel">
+                    <p id="checkpointLeadCopy" class="lead-copy"></p>
+                    <div id="checkpointFactStrip" class="fact-grid editorial-facts"></div>
+                  </section>
+
+                  <section class="panel subpanel">
+                    <div class="section-row small">
+                      <div>
+                        <p class="section-label">Linked session</p>
+                        <h4>Source conversation</h4>
+                      </div>
+                    </div>
+                    <div id="checkpointSessionCard" class="list compact-list"></div>
+                  </section>
+
+                  <div id="checkpointMeta" class="meta-grid"></div>
+
+                  <section id="checkpointKnowledgePreviewPanel" class="panel subpanel hidden">
+                    <div class="section-row small">
+                      <div>
+                        <p class="section-label">Knowledge preview</p>
+                        <h4>Review extracted candidates</h4>
+                      </div>
+                      <div class="row-actions">
+                        <span id="checkpointKnowledgePreviewBadge" class="chip">0 selected</span>
+                        <button class="btn tertiary" type="button" data-preview-action="all" data-preview-scope="checkpoint">All</button>
+                        <button class="btn tertiary" type="button" data-preview-action="new" data-preview-scope="checkpoint">New</button>
+                        <button class="btn tertiary" type="button" data-preview-action="none" data-preview-scope="checkpoint">None</button>
+                      </div>
+                    </div>
+                    <div id="checkpointKnowledgePreviewList" class="list preview-list"></div>
+                  </section>
+                </div>
+              </section>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <section class="view" data-view="knowledge">
-        <div class="view-grid knowledge-grid">
-          <section class="surface panel intro-panel">
-            <div class="section-head">
-              <div>
-                <p class="section-label">Project graph</p>
-                <h3>Visible graph nodes, not automatic memory extraction</h3>
-              </div>
-              <label class="toggle">
-                <input id="inclHidden" type="checkbox" />
-                <span>Include hidden capture nodes</span>
-              </label>
+        <section class="view" data-view="knowledge">
+          <div class="page-shell utility-page">
+            <header class="page-head compact-head">
+              <p class="page-kicker">Graph utility</p>
+              <h1>Structured graph</h1>
+              <p id="knowledgePageMeta" class="page-copy">Inspect the visible graph stored in SQLite when you need the current structured memory, not the conversation.</p>
+            </header>
+            <div class="utility-layout">
+              <aside class="panel rail-panel utility-rail">
+                <div class="section-row">
+                  <div>
+                    <p class="section-label">Project graph</p>
+                    <h2>Visible structure</h2>
+                  </div>
+                  <label class="toggle">
+                    <input id="inclHidden" type="checkbox" />
+                    <span>Include hidden nodes</span>
+                  </label>
+                </div>
+                <div class="stats-inline">
+                  <span class="chip">Nodes <strong id="knowledgeNodeCount">0</strong></span>
+                  <span class="chip">Edges <strong id="knowledgeEdgeCount">0</strong></span>
+                  <span id="knowledgeContext" class="chip">Workspace: none</span>
+                </div>
+                <div id="knowledgeExplainer" class="info-list compact-info-list"></div>
+              </aside>
+              <section class="panel utility-table-panel">
+                <div class="section-row">
+                  <div>
+                    <p class="section-label">Current graph snapshot</p>
+                    <h2>Visible nodes</h2>
+                  </div>
+                </div>
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Type</th>
+                        <th>Summary</th>
+                        <th>Key</th>
+                        <th>Created</th>
+                      </tr>
+                    </thead>
+                    <tbody id="knowledgeTable"></tbody>
+                  </table>
+                </div>
+              </section>
             </div>
-            <div class="stats-inline">
-              <span class="chip">Nodes: <strong id="knowledgeNodeCount">0</strong></span>
-              <span class="chip">Edges: <strong id="knowledgeEdgeCount">0</strong></span>
-              <span id="knowledgeContext" class="chip">Workspace: none</span>
-            </div>
-          </section>
+          </div>
+        </section>
 
-          <section class="surface panel">
-            <div class="section-head">
-              <div>
-                <p class="section-label">What this screen shows</p>
-                <h3>Graph data stored in the workspace</h3>
-              </div>
-            </div>
-            <div id="knowledgeExplainer" class="info-list"></div>
-          </section>
+        <section class="view" data-view="setup">
+          <div class="page-shell utility-page">
+            <header class="page-head compact-head">
+              <p class="page-kicker">Setup utility</p>
+              <h1>Setup and repair</h1>
+              <p id="setupPageMeta" class="page-copy">Install integrations, run a smoke test, or recover the local runtime when something is off.</p>
+            </header>
+            <div class="utility-layout setup-layout">
+              <aside class="panel rail-panel utility-rail">
+                <div class="section-row">
+                  <div>
+                    <p class="section-label">Setup commands</p>
+                    <h2>Machine and workspace actions</h2>
+                  </div>
+                </div>
+                <div class="command-grid">
+                  <article class="command-card">
+                    <span>Machine setup</span>
+                    <code id="setupCommand">0ctx setup</code>
+                  </article>
+                  <article class="command-card">
+                    <span>Install integrations for this workspace</span>
+                    <code id="hookInstallCommand">0ctx connector hook install --clients=factory,antigravity,claude</code>
+                  </article>
+                  <article class="command-card">
+                    <span>Smoke-test one captured turn</span>
+                    <code id="hookIngestCommand">0ctx connector hook ingest --agent=factory --payload '{"session":{"id":"demo"},"turn":{"id":"t1"},"content":"hello"}'</code>
+                  </article>
+                </div>
+                <div class="row-actions wrap-row">
+                  <button id="copyHookInstall" class="btn tertiary" type="button">Copy install command</button>
+                  <button id="copyIngest" class="btn tertiary" type="button">Copy smoke test</button>
+                  <button id="copyShell" class="btn tertiary" type="button">Copy 0ctx shell</button>
+                </div>
+              </aside>
+              <section class="panel utility-stack">
+                <section class="panel subpanel">
+                  <div class="section-row small">
+                    <div>
+                      <p class="section-label">Integration health</p>
+                      <h4>Agent setup status</h4>
+                    </div>
+                    <span id="hookSummary" class="chip">0 installed</span>
+                  </div>
+                  <div id="hookList" class="list stack-list"></div>
+                </section>
 
-          <section class="surface panel knowledge-table-panel">
-            <div class="section-head">
-              <div>
-                <p class="section-label">Visible nodes</p>
-                <h3>Current graph snapshot</h3>
-              </div>
+                <section class="panel subpanel compact-support-block">
+                  <div class="section-row small">
+                    <div>
+                      <p class="section-label">Support actions</p>
+                      <h4>Recover the local runtime</h4>
+                    </div>
+                    <div class="row-actions wrap-row">
+                      <button id="checkUpdates" class="btn quiet" type="button">Check updates</button>
+                      <button id="copyRepair" class="btn quiet" type="button">Copy 0ctx repair</button>
+                      <button id="copyDoctor" class="btn quiet" type="button">Copy 0ctx doctor</button>
+                    </div>
+                  </div>
+                  <div id="setupSupportList" class="info-list compact-info-list"></div>
+                  <p id="setupSupportCopy" class="page-copy compact-copy">Use setup only when you need to install integrations, smoke-test capture, or repair the runtime.</p>
+                </section>
+              </section>
             </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Type</th>
-                    <th>Summary</th>
-                    <th>Key</th>
-                    <th>Created</th>
-                  </tr>
-                </thead>
-                <tbody id="knowledgeTable"></tbody>
-              </table>
-            </div>
-          </section>
-        </div>
-      </section>
-
-      <section class="view" data-view="setup">
-        <div class="view-grid setup-grid">
-          <section class="surface panel panel-large">
-            <div class="section-head">
-              <div>
-                <p class="section-label">Setup commands</p>
-                <h3>Machine and workspace actions</h3>
-              </div>
-              <div class="row-actions">
-                <button id="copyHookInstall" class="btn tertiary">Copy install command</button>
-                <button id="copyIngest" class="btn tertiary">Copy smoke test</button>
-                <button id="copyShell" class="btn tertiary">Copy 0ctx shell</button>
-              </div>
-            </div>
-            <div class="command-grid">
-              <article class="command-card">
-                <span>Machine setup</span>
-                <code id="setupCommand">0ctx setup</code>
-              </article>
-              <article class="command-card">
-                <span>Install integrations for this workspace</span>
-                <code id="hookInstallCommand">0ctx connector hook install --clients=factory,antigravity,claude</code>
-              </article>
-              <article class="command-card">
-                <span>Smoke-test one captured turn</span>
-                <code id="hookIngestCommand">0ctx connector hook ingest --agent=factory --payload '{"session":{"id":"demo"},"turn":{"id":"t1"},"content":"hello"}'</code>
-              </article>
-            </div>
-          </section>
-
-          <section class="surface panel">
-            <div class="section-head">
-              <div>
-                <p class="section-label">Integration health</p>
-                <h3>Agent setup status</h3>
-              </div>
-              <span id="hookSummary" class="chip">0 installed</span>
-            </div>
-            <div id="hookList" class="list"></div>
-          </section>
-
-          <section class="surface panel">
-            <div class="section-head">
-              <div>
-                <p class="section-label">Support actions</p>
-                <h3>Recover the local runtime</h3>
-              </div>
-              <div class="row-actions">
-                <button id="checkUpdates" class="btn tertiary">Check updates</button>
-                <button id="copyRepair" class="btn tertiary">Copy 0ctx repair</button>
-                <button id="copyDoctor" class="btn tertiary">Copy 0ctx doctor</button>
-              </div>
-            </div>
-            <div class="stats-grid compact-stats">
-              <article class="stat-card">
-                <span>Auth</span>
-                <strong id="setupAuth">Unknown</strong>
-                <p id="setupAuthMeta">provider:-</p>
-              </article>
-              <article class="stat-card">
-                <span>Queue</span>
-                <strong id="setupQueue">0/0</strong>
-                <p>pending/done</p>
-              </article>
-              <article class="stat-card">
-                <span>Methods</span>
-                <strong id="setupMethods">0</strong>
-                <p>daemon methods</p>
-              </article>
-              <article class="stat-card">
-                <span>Posture</span>
-                <strong id="setupPosture">Offline</strong>
-                <p>connector + daemon</p>
-              </article>
-            </div>
-            <p id="setupSupportCopy" class="muted">Use setup for commands and machine recovery. Runtime JSON, event feeds, and storage internals are intentionally out of the daily workflow.</p>
-          </section>
-        </div>
-      </section>
+          </div>
+        </section>
+      </div>
     </div>
 
     <footer class="statusbar">

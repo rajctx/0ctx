@@ -1,71 +1,49 @@
 const VIEW_META = {
-  home: {
-    eyebrow: 'Workspace overview',
-    title: 'Workspace overview',
-    summary: 'Readiness, storage, and recent activity for the selected workspace.',
-    primaryLabel: 'Open branches',
-    primaryAction: 'go-branches',
-    secondaryLabel: 'Open setup',
-    secondaryAction: 'go-setup'
-  },
   branches: {
     eyebrow: 'Branch lanes',
     title: 'Branch lanes',
     summary: 'Track workstreams by branch or worktree, then inspect which agent touched each lane and when.',
     primaryLabel: 'Open sessions',
-    primaryAction: 'go-sessions',
-    secondaryLabel: 'Refresh',
-    secondaryAction: 'refresh'
+    primaryAction: 'go-sessions'
   },
   sessions: {
     eyebrow: 'Captured sessions',
     title: 'Sessions and messages',
     summary: 'Choose a session, read the message stream, and inspect raw payload only when you need more detail.',
     primaryLabel: 'Create checkpoint',
-    primaryAction: 'create-checkpoint',
-    secondaryLabel: 'Refresh capture',
-    secondaryAction: 'refresh'
+    primaryAction: 'create-checkpoint'
   },
   checkpoints: {
     eyebrow: 'Checkpoints',
     title: 'Checkpoints',
     summary: 'Use restore points to explain a branch state or rewind a workspace to a known snapshot.',
     primaryLabel: 'Explain checkpoint',
-    primaryAction: 'explain-checkpoint',
-    secondaryLabel: 'Refresh',
-    secondaryAction: 'refresh'
+    primaryAction: 'explain-checkpoint'
   },
   workspaces: {
     eyebrow: 'Workspace library',
     title: 'Projects and repository bindings',
     summary: 'Create a project once, bind its repo, and route future capture automatically.',
     primaryLabel: 'Create workspace',
-    primaryAction: 'focus-create',
-    secondaryLabel: 'Open setup',
-    secondaryAction: 'go-setup'
+    primaryAction: 'focus-create'
   },
   knowledge: {
-    eyebrow: 'Project graph',
-    title: 'Project graph',
-    summary: 'Inspect the visible graph stored in SQLite. Captured chats stay hidden unless you explicitly include them.',
+    eyebrow: 'Graph utility',
+    title: 'Structured graph',
+    summary: 'Inspect the visible graph stored in SQLite when you need the current structured memory, not the conversation.',
     primaryLabel: 'Toggle hidden nodes',
-    primaryAction: 'toggle-hidden',
-    secondaryLabel: 'Open sessions',
-    secondaryAction: 'go-sessions'
+    primaryAction: 'toggle-hidden'
   },
   setup: {
-    eyebrow: 'Machine setup',
-    title: 'Setup and support',
-    summary: 'Use this screen for machine setup, agent integration status, and recovery actions.',
+    eyebrow: 'Setup utility',
+    title: 'Setup and repair',
+    summary: 'Install integrations, run a smoke test, or recover the local runtime when something is off.',
     primaryLabel: 'Copy install command',
-    primaryAction: 'copy-install',
-    secondaryLabel: 'Refresh',
-    secondaryAction: 'refresh'
+    primaryAction: 'copy-install'
   }
 };
 
 const SEARCH_HINTS = {
-  home: 'Filter current workspace activity',
   branches: 'Filter branches, agents, or commits',
   sessions: 'Filter sessions and messages',
   checkpoints: 'Filter checkpoints, sessions, or commits',
@@ -90,11 +68,11 @@ const REQUIRED_RUNTIME_METHODS = [
 
 function initialView() {
   if (typeof window === 'undefined') {
-    return 'branches';
+    return 'workspaces';
   }
   const params = new URLSearchParams(window.location.search || '');
   const candidate = String(params.get('view') || window.location.hash.replace(/^#/, '') || '').trim().toLowerCase();
-  return Object.prototype.hasOwnProperty.call(VIEW_META, candidate) ? candidate : 'branches';
+  return Object.prototype.hasOwnProperty.call(VIEW_META, candidate) ? candidate : 'workspaces';
 }
 
 const state = {
@@ -330,6 +308,16 @@ function renderChip(label, tone = 'beige', options = {}) {
   return `<span class="${classes.join(' ')}">${esc(label)}</span>`;
 }
 
+function renderMetaLine(parts, options = {}) {
+  const values = Array.isArray(parts)
+    ? parts.map((value) => String(value || '').trim()).filter(Boolean)
+    : [];
+  if (values.length === 0) return '';
+  const classes = ['item-meta-line'];
+  if (options.mono) classes.push('text-mono');
+  return `<p class="${classes.join(' ')}">${esc(values.join(' · '))}</p>`;
+}
+
 function renderAgentChain(agentSet, lastAgent) {
   const ordered = Array.isArray(agentSet) && agentSet.length > 0
     ? [...new Set(agentSet.filter(Boolean).map((value) => String(value).trim()).filter(Boolean))]
@@ -455,11 +443,24 @@ function jsonText(value) {
   }
 }
 
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function selectedPayloadMeta() {
   const payload = state.payload;
   if (!payload || typeof payload !== 'object') return {};
   const meta = payload.meta;
   return meta && typeof meta === 'object' ? meta : {};
+}
+
+function bindById(id, eventName, handler) {
+  const element = document.getElementById(id);
+  if (!element) {
+    return null;
+  }
+  element.addEventListener(eventName, handler);
+  return element;
 }
 
 function matches(value) {
@@ -535,10 +536,6 @@ function missingRequiredMethods() {
 
 function integrationListText(agents) {
   return agents.map((agent) => integrationLabel(agent.agent)).join(', ');
-}
-
-function totalTurnCount() {
-  return state.allSessions.reduce((sum, session) => sum + Number(session.turnCount || 0), 0);
 }
 
 function hasLocalRuntimeData() {
@@ -663,15 +660,6 @@ function resetBranchScopedState() {
   state.handoff = [];
 }
 
-function storageEntries() {
-  return [
-    { label: 'Data directory', value: state.storage?.dataDir || 'Unavailable' },
-    { label: 'SQLite database', value: state.storage?.dbPath || 'Unavailable' },
-    { label: 'Daemon socket', value: state.storage?.socketPath || 'Unavailable' },
-    { label: 'Integration state', value: state.storage?.hookStatePath || 'Unavailable' }
-  ];
-}
-
 function setStatus(message) {
   document.getElementById('statusTxt').textContent = message;
   document.getElementById('statusTime').textContent = `Updated ${new Date().toLocaleTimeString()}`;
@@ -695,6 +683,21 @@ async function daemon(method, params = {}) {
   return invoke('daemon_call', { method, params });
 }
 
+async function requestDaemonStatus(retries = 2) {
+  let lastError = null;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      return await invoke('daemon_status', {});
+    } catch (error) {
+      lastError = error;
+      if (attempt < retries) {
+        await delay(350 * (attempt + 1));
+      }
+    }
+  }
+  throw lastError;
+}
+
 function setView(view) {
   state.view = view;
   renderAll();
@@ -702,7 +705,8 @@ function setView(view) {
 function renderChrome() {
   const posture = String(state.health?.status || 'offline').toLowerCase();
   const postureText = formatPosture(posture);
-  const viewMeta = VIEW_META[state.view] || VIEW_META.branches;
+  document.body.dataset.view = state.view;
+  document.querySelector('.main-stage')?.setAttribute('data-view', state.view);
   const postureBadge = document.getElementById('postureBadge');
   const sidebarPosture = document.getElementById('sidebarPosture');
   postureBadge.className = postureClass(posture);
@@ -710,7 +714,6 @@ function renderChrome() {
   sidebarPosture.className = postureClass(posture);
   sidebarPosture.textContent = postureText;
   document.getElementById('search').placeholder = SEARCH_HINTS[state.view] || 'Filter this screen';
-  document.getElementById('viewCrumb').textContent = viewMeta.title;
 
   const select = document.getElementById('ctxSel');
   if (state.contexts.length === 0) {
@@ -739,11 +742,11 @@ function renderChrome() {
     : 'No repository folder bound.';
   pathEl.textContent = short(workspacePath, 56);
   pathEl.title = workspacePath;
-  document.getElementById('sideWorkspaceCapture').textContent = String(state.allSessions.length);
-  document.getElementById('sideWorkspaceHooks').textContent = String(installedAgents().length);
+  document.getElementById('sideWorkspaceBranches').textContent = String(state.branches.length);
+  document.getElementById('sideWorkspaceSessions').textContent = String(state.allSessions.length);
   document.getElementById('sideBinding').textContent = Array.isArray(context?.paths) && context.paths.length > 0
-    ? 'Bound to a repo path. Installed integrations resolve workspaces from the running repo.'
-    : 'Choose a repo folder to arm capture.';
+    ? 'Bound to a repo path. Daily work now flows through branches, sessions, and checkpoints.'
+    : 'Choose a repo folder to route future capture here automatically.';
 
   const auth = state.health?.auth;
   if (auth && typeof auth.authenticated === 'boolean') {
@@ -757,43 +760,18 @@ function renderChrome() {
 function renderHero() {
   const meta = VIEW_META[state.view] || VIEW_META.branches;
   const context = activeContext();
-  document.getElementById('heroEyebrow').textContent = meta.eyebrow;
-  document.getElementById('heroTitle').textContent = meta.title;
-  let detail = 'Choose a workspace to begin.';
-  if (context) {
-    if (state.view === 'branches') {
-      detail = state.runtimeIssue
-        ? `${context.name} | Update the local runtime to enable branch-first views.`
-        : `${context.name} | ${state.branches.length} branch lane${state.branches.length === 1 ? '' : 's'} tracked.`;
-    } else if (state.view === 'sessions') {
-      const lane = activeBranch();
-      const session = activeSession();
-      detail = session
-        ? `${context.name} | ${session.agent || 'agent'} on ${normalizeBranch(session.branch)}.`
-        : lane
-          ? `${context.name} | Reading sessions for ${describeBranchLane(lane).title}.`
-          : `${context.name} | Choose a branch lane, then open a session.`;
-    } else if (state.view === 'checkpoints') {
-      detail = `${context.name} | ${state.checkpoints.length} checkpoint${state.checkpoints.length === 1 ? '' : 's'} in the current view.`;
-    } else if (state.view === 'knowledge') {
-      detail = `${context.name} | ${state.graphNodes.length} visible node${state.graphNodes.length === 1 ? '' : 's'} in the graph.`;
-    } else if (state.view === 'setup') {
-      detail = `${context.name} | ${installedAgents().length} integration${installedAgents().length === 1 ? '' : 's'} installed.`;
-    } else if (state.view === 'workspaces') {
-      detail = `${state.contexts.length} workspace${state.contexts.length === 1 ? '' : 's'} on this machine.`;
-    } else {
-      const capture = captureState();
-      detail = `${context.name} | ${capture.detail}`;
-    }
-  }
-  document.getElementById('heroMeta').textContent = detail;
-
+  document.getElementById('stageCrumbBase').textContent = state.view === 'workspaces'
+    ? 'Workspace Library'
+    : (context?.name || 'Workspace Library');
+  document.getElementById('stageCrumbCurrent').textContent = state.view === 'workspaces'
+    ? 'Overview'
+    : meta.title;
   const primary = document.getElementById('heroPrimary');
-  const secondary = document.getElementById('heroSecondary');
   primary.textContent = meta.primaryLabel;
   primary.dataset.action = meta.primaryAction;
-  secondary.textContent = meta.secondaryLabel;
-  secondary.dataset.action = meta.secondaryAction;
+  primary.disabled =
+    (meta.primaryAction === 'create-checkpoint' && !state.activeSessionId)
+    || (meta.primaryAction === 'explain-checkpoint' && !state.activeCheckpointId);
 }
 
 function renderRuntimeBanner() {
@@ -807,123 +785,19 @@ function renderRuntimeBanner() {
   banner.classList.remove('hidden');
 }
 
-function renderHome() {
-  const capture = captureState();
-  const setupBadge = document.getElementById('captureStateBadge');
-  setupBadge.className = capture.className;
-  setupBadge.textContent = capture.label;
-
-  const context = activeContext();
-  const installed = installedAgents();
-  const checklist = [
-    {
-      state: Array.isArray(context?.paths) && context.paths.length > 0 ? 'done' : 'todo',
-      title: 'Workspace bound to a repository path',
-      detail: Array.isArray(context?.paths) && context.paths.length > 0
-        ? `Current path: ${context.paths.join(', ')}`
-        : 'Create or update a workspace with the repo path so integrations can resolve it automatically.'
-    },
-    {
-      state: installed.length > 0 ? 'done' : 'warn',
-      title: 'Integrations installed for one or more agents',
-      detail: installed.length > 0
-        ? `Installed agents: ${integrationListText(installed)}`
-        : 'Use the Setup screen to install the integrations for the agents you actually use.'
-    },
-    {
-      state: state.allSessions.length > 0 ? 'done' : 'warn',
-      title: 'At least one session captured',
-      detail: state.allSessions.length > 0
-        ? `${state.allSessions.length} session${state.allSessions.length === 1 ? '' : 's'} already captured for this workspace.`
-        : 'After integrations are installed, complete one agent turn in this repo and refresh the desktop app.'
-    },
-    {
-      state: String(state.health?.status || '').toLowerCase() === 'connected' ? 'done' : 'warn',
-      title: 'Connector and daemon reachable',
-      detail: String(state.health?.status || '').toLowerCase() === 'connected'
-        ? 'The local runtime is responding to desktop queries.'
-        : 'The UI can load only when the local runtime is reachable. Use Restart connector if posture stays offline.'
-    }
-  ];
-  document.getElementById('setupChecklist').innerHTML = checklist.map((item) => {
-    const symbol = item.state === 'done' ? 'OK' : item.state === 'warn' ? '!' : '...';
-    return `<li><span class="checkmark ${item.state}">${symbol}</span><div><strong>${esc(item.title)}</strong><p>${esc(item.detail)}</p></div></li>`;
-  }).join('');
-
-  document.getElementById('homeSessionCount').textContent = String(state.allSessions.length);
-  document.getElementById('homeTurnCount').textContent = String(totalTurnCount());
-  document.getElementById('homeNodeCount').textContent = String(state.graphNodes.length);
-  document.getElementById('homeStorageState').textContent = state.storage?.dbPath ? 'Local only' : 'Unknown';
-  document.getElementById('homeStorageCopy').textContent = state.storage?.dbPath
-    ? `Primary database: ${short(state.storage.dbPath, 70)}`
-    : 'Storage path becomes visible when the daemon reports machine status.';
-
-  const storageExplainer = [
-    {
-      title: 'Graph summaries stay small',
-      detail: 'Session summaries, messages, checkpoints, and derived knowledge live in query-friendly rows so recall stays fast.'
-    },
-    {
-      title: 'Raw dumps stay off the hot path',
-      detail: 'Full transcript payloads are stored in sidecar rows and only fetched when you open a message detail.'
-    },
-    {
-      title: 'Branch lanes stay explicit',
-      detail: 'A workspace contains multiple branch or worktree lanes, each with its own agent activity and checkpoints.'
-    }
-  ];
-  document.getElementById('storageExplainer').innerHTML = storageExplainer.map((item) => {
-    return `<article><strong>${esc(item.title)}</strong><p>${esc(item.detail)}</p></article>`;
-  }).join('');
-
-  const recentSessions = state.allSessions.filter((session) => matches(`${session.sessionId} ${session.summary || ''}`));
-  document.getElementById('recentSessions').innerHTML = recentSessions.length > 0
-    ? recentSessions.slice(0, 8).map((session) => {
-      const summary = describeSession(session);
-      return `
-        <article class="list-item conversation-card" data-session-id="${esc(session.sessionId)}" data-open-view="sessions">
-          <p class="item-kicker">${esc(formatRelativeTime(session.lastTurnAt || session.startedAt))}</p>
-          <h4 class="item-title">${esc(summary.title)}</h4>
-          <p class="item-preview">${esc(summary.preview)}</p>
-          <div class="list-row">
-            ${renderChip(`${session.turnCount || 0} messages`, 'beige')}
-            ${session.branch ? renderChip(session.branch, 'green') : ''}
-            ${session.agent ? renderChip(session.agent, chipToneForAgent(session.agent)) : ''}
-          </div>
-        </article>
-      `;
-    }).join('')
-    : '<div class="empty-state">No captured sessions yet for this workspace.</div>';
-
-  const recentTurns = state.turns.filter((turn) => matches(`${turn.content || ''} ${turn.role || ''}`));
-  document.getElementById('recentTurns').innerHTML = recentTurns.length > 0
-    ? recentTurns.slice(0, 10).map((turn) => {
-      const summary = describeTurn(turn);
-      return `
-        <article class="list-item conversation-card ${turn.nodeId === state.activeTurnId ? 'active' : ''}" data-turn-id="${esc(turn.nodeId)}" data-open-view="sessions">
-          <p class="item-kicker">${esc(formatRelativeTime(turn.createdAt))}</p>
-          <h4 class="item-title">${esc(summary.title)}</h4>
-          <p class="item-preview">${esc(summary.preview)}</p>
-          <div class="list-row">
-            ${renderChip(turn.role || 'message', chipToneForRole(turn.role))}
-            ${renderChip(turn.hasPayload ? 'raw available' : 'summary only', turn.hasPayload ? 'blue' : 'beige')}
-            ${turn.commitSha ? renderChip(`#${commitShort(turn.commitSha)}`, 'beige', { mono: true }) : ''}
-          </div>
-        </article>
-      `;
-    }).join('')
-    : '<div class="empty-state">Select or capture a session to see its messages here.</div>';
-
-  document.getElementById('homeStoragePaths').innerHTML = storageEntries().map((entry) => {
-    return `<article><span>${esc(entry.label)}</span><code>${esc(entry.value)}</code></article>`;
-  }).join('');
-}
-
-function renderBranches() {
-  const branches = state.branches.filter((lane) => matches(`${lane.branch} ${lane.worktreePath || ''} ${lane.lastAgent || ''} ${lane.lastCommitSha || ''}`));
-  const branchDetailPanel = document.getElementById('branchDetailPanel');
-  document.getElementById('branchHeadline').textContent = `${branches.length} lane${branches.length === 1 ? '' : 's'}`;
-  document.getElementById('branchSessionCount').textContent = `${state.sessions.length} session${state.sessions.length === 1 ? '' : 's'}`;
+  function renderBranches() {
+    const branches = state.branches.filter((lane) => matches(`${lane.branch} ${lane.worktreePath || ''} ${lane.lastAgent || ''} ${lane.lastCommitSha || ''}`));
+    const context = activeContext();
+    document.getElementById('branchHeadline').textContent = `${branches.length} lane${branches.length === 1 ? '' : 's'}`;
+    document.getElementById('branchSessionCount').textContent = `${state.sessions.length} session${state.sessions.length === 1 ? '' : 's'}`;
+  const branchesPageMeta = document.getElementById('branchesPageMeta');
+  if (branchesPageMeta) {
+    branchesPageMeta.textContent = state.runtimeIssue
+      ? 'Update the local runtime to enable branch lanes, branch sessions, and handoff timelines.'
+      : context
+        ? `${context.name} has ${branches.length} tracked branch lane${branches.length === 1 ? '' : 's'} in the current view.`
+        : 'Choose a workspace to inspect branch-level work.';
+  }
 
   document.getElementById('branchList').innerHTML = branches.length > 0
     ? branches.map((lane) => {
@@ -934,22 +808,18 @@ function renderBranches() {
           <p class="item-kicker">${esc(formatRelativeTime(lane.lastActivityAt))}</p>
           <h4 class="item-title">${esc(summary.title)}</h4>
           <p class="item-preview">${esc(summary.preview)}</p>
-          <div class="list-row">
-            ${renderChip(normalizeBranch(lane.branch), lane.lastAgent ? 'green' : 'beige')}
-            ${renderChip(`${lane.sessionCount} sessions`, 'beige')}
-            ${renderChip(`${lane.checkpointCount} checkpoints`, 'orange')}
-            ${lane.lastCommitSha ? renderChip(`#${commitShort(lane.lastCommitSha)}`, 'beige', { mono: true }) : ''}
-          </div>
-          <div class="item-footer">
-            ${renderAgentChain(lane.agentSet, lane.lastAgent)}
-            <span class="item-meta">${esc(summary.timeRange)}</span>
-          </div>
+          ${renderMetaLine([
+            `${lane.sessionCount} sessions`,
+            `${lane.checkpointCount} checkpoints`,
+            lane.lastAgent || '',
+            lane.lastCommitSha ? `#${commitShort(lane.lastCommitSha)}` : ''
+          ])}
         </article>
       `;
-    }).join('')
-    : state.runtimeIssue
-      ? '<div class="empty-state">This desktop build needs a newer local runtime before branch lanes can load.</div>'
-      : '<div class="empty-state">No branch lanes yet. Capture one agent session in this repo, then refresh.</div>';
+      }).join('')
+      : state.runtimeIssue
+        ? '<div class="empty-state">This desktop build needs a newer local runtime before branch lanes can load.</div>'
+        : '<div class="empty-state">No branch lanes yet. Capture one agent session in this repo, then refresh.</div>';
 
   document.getElementById('branchSessionList').innerHTML = state.sessions.length > 0
     ? state.sessions.map((session) => {
@@ -959,65 +829,67 @@ function renderBranches() {
           <p class="item-kicker">${esc(formatRelativeTime(session.lastTurnAt || session.startedAt))}</p>
           <h4 class="item-title">${esc(summary.title)}</h4>
           <p class="item-preview">${esc(summary.preview)}</p>
-          <div class="list-row">
-            ${renderChip(`${session.turnCount || 0} messages`, 'beige')}
-            ${session.agent ? renderChip(session.agent, chipToneForAgent(session.agent)) : ''}
-            ${session.commitSha ? renderChip(`#${commitShort(session.commitSha)}`, 'beige', { mono: true }) : ''}
-          </div>
+          ${renderMetaLine([
+            `${session.turnCount || 0} messages`,
+            session.agent || '',
+            session.commitSha ? `#${commitShort(session.commitSha)}` : ''
+          ])}
         </article>
       `;
-    }).join('')
-    : '<div class="empty-state">Select a branch lane to inspect the sessions captured on it.</div>';
+      }).join('')
+      : '<div class="empty-state">Select a branch lane to inspect the sessions captured on it.</div>';
 
-  if (state.runtimeIssue && branches.length === 0) {
-    branchDetailPanel.classList.add('wide-panel');
-    document.getElementById('branchDetailTitle').textContent = 'Update the local runtime';
-    document.getElementById('branchMeta').innerHTML = '';
-    document.getElementById('branchSessionList').innerHTML = '';
-    document.getElementById('handoffList').innerHTML = '';
-    document.getElementById('branchDetailEmpty').innerHTML = `
-      <div class="empty-flow">
-        <strong>Branch views need a newer runtime.</strong>
-        <p>${esc(state.runtimeIssue.detail)}</p>
+    if (state.runtimeIssue && branches.length === 0) {
+      document.getElementById('branchDetailTitle').textContent = 'Update the local runtime';
+      document.getElementById('branchLeadCopy').textContent = '';
+      document.getElementById('branchMeta').innerHTML = '';
+      document.getElementById('branchSessionList').innerHTML = '<div class="empty-state">Branch sessions will appear here after the local runtime is updated.</div>';
+      document.getElementById('handoffList').innerHTML = '<div class="empty-state">Agent handoff history will appear here after the local runtime is updated.</div>';
+      document.getElementById('branchDetailEmpty').innerHTML = `
+        <div class="empty-flow">
+          <strong>Branch views need a newer runtime.</strong>
+          <p>${esc(state.runtimeIssue.detail)}</p>
         <div class="row-actions">
           <button class="btn primary" data-banner-action="refresh">Refresh</button>
           <button class="btn tertiary" data-banner-action="setup">Open setup</button>
         </div>
       </div>
     `;
-    document.getElementById('branchDetailEmpty').classList.remove('hidden');
-    document.getElementById('branchDetailBody').classList.add('hidden');
-    return;
-  }
+      document.getElementById('branchDetailEmpty').classList.remove('hidden');
+      document.getElementById('branchDetailBody').classList.add('hidden');
+      return;
+    }
 
-  branchDetailPanel.classList.remove('wide-panel');
+    const lane = activeBranch();
+    const detailBody = document.getElementById('branchDetailBody');
+    const empty = document.getElementById('branchDetailEmpty');
+    if (!lane) {
+      document.getElementById('branchDetailTitle').textContent = 'Choose a branch lane';
+      document.getElementById('branchLeadCopy').textContent = '';
+      document.getElementById('branchMeta').innerHTML = '';
+      document.getElementById('branchSessionList').innerHTML = '<div class="empty-state">Choose a lane to see the captured sessions on it.</div>';
+      document.getElementById('handoffList').innerHTML = '<div class="empty-state">No handoff history yet.</div>';
+      empty.innerHTML = 'Select a branch lane to inspect cross-agent activity and checkpoint coverage.';
+      empty.classList.remove('hidden');
+      detailBody.classList.add('hidden');
+      return;
+    }
 
-  const lane = activeBranch();
-  const detailBody = document.getElementById('branchDetailBody');
-  const empty = document.getElementById('branchDetailEmpty');
-  if (!lane) {
-    document.getElementById('branchDetailTitle').textContent = 'Choose a branch lane';
-    document.getElementById('branchMeta').innerHTML = '';
-    document.getElementById('handoffList').innerHTML = '<div class="empty-state">No handoff history yet.</div>';
-    empty.innerHTML = 'Select a branch lane to inspect cross-agent activity and checkpoint coverage.';
-    empty.classList.remove('hidden');
-    detailBody.classList.add('hidden');
-    return;
-  }
-
-  document.getElementById('branchDetailTitle').textContent = describeBranchLane(lane).title;
-  empty.classList.add('hidden');
-  detailBody.classList.remove('hidden');
-  const meta = [
-    { label: 'Branch', value: normalizeBranch(lane.branch) },
-    { label: 'Worktree', value: lane.worktreePath || 'Primary repo path' },
-    { label: 'Last agent', value: lane.lastAgent || 'unknown' },
-    { label: 'Last commit', value: lane.lastCommitSha || 'none' },
-    { label: 'Last activity', value: formatTime(lane.lastActivityAt) },
-    { label: 'Sessions', value: String(lane.sessionCount) },
-    { label: 'Checkpoints', value: String(lane.checkpointCount) },
-    { label: 'Agents', value: lane.agentSet?.length ? lane.agentSet.join(', ') : 'none' }
-  ];
+    document.getElementById('branchDetailTitle').textContent = describeBranchLane(lane).title;
+    document.getElementById('branchLeadCopy').textContent = [
+      `${describeBranchLane(lane).title} carries ${lane.sessionCount} captured session${lane.sessionCount === 1 ? '' : 's'} and ${lane.checkpointCount} checkpoint${lane.checkpointCount === 1 ? '' : 's'}.`,
+      lane.lastAgent ? `The most recent handoff came from ${lane.lastAgent}` : 'No agent has touched this lane yet.',
+      lane.lastActivityAt ? `${formatRelativeTime(lane.lastActivityAt)}.` : ''
+    ].join(' ').trim();
+    empty.classList.add('hidden');
+    detailBody.classList.remove('hidden');
+    const meta = [
+      { label: 'Lane', value: normalizeBranch(lane.branch) },
+      { label: 'Last agent', value: lane.lastAgent || 'unknown' },
+      { label: 'Latest commit', value: lane.lastCommitSha || 'none' },
+      { label: 'Agents on lane', value: lane.agentSet?.length ? lane.agentSet.join(', ') : 'none' },
+      { label: 'Worktree', value: lane.worktreePath || 'Primary workspace root' }
+    ];
   document.getElementById('branchMeta').innerHTML = meta.map((item) => `<article><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong></article>`).join('');
 
   document.getElementById('handoffList').innerHTML = state.handoff.length > 0
@@ -1026,11 +898,11 @@ function renderBranches() {
           <p class="item-kicker">${esc(formatRelativeTime(entry.lastTurnAt))}</p>
           <h4 class="item-title">${esc(entry.agent || 'unknown agent')}</h4>
           <p class="item-preview">${esc(short(entry.summary || 'No summary stored for this session.', 150))}</p>
-          <div class="list-row">
-            ${entry.commitSha ? renderChip(`#${commitShort(entry.commitSha)}`, 'beige', { mono: true }) : ''}
-            ${renderChip(normalizeBranch(entry.branch), 'green')}
-            ${renderChip(entry.agent || 'agent', chipToneForAgent(entry.agent))}
-          </div>
+          ${renderMetaLine([
+            normalizeBranch(entry.branch),
+            entry.agent || '',
+            entry.commitSha ? `#${commitShort(entry.commitSha)}` : ''
+          ])}
         </article>
       `).join('')
     : '<div class="empty-state">No handoff history recorded for this branch lane yet.</div>';
@@ -1041,11 +913,22 @@ function renderSessions() {
   const lane = activeBranch();
   const session = activeSession();
   const sessionSummary = session ? describeSession(session) : null;
+  const context = activeContext();
   document.getElementById('sessionHeadline').textContent = `${sessions.length} session${sessions.length === 1 ? '' : 's'}`;
   document.getElementById('turnCount').textContent = `${turns.length} message${turns.length === 1 ? '' : 's'}`;
+  const sessionsPageMeta = document.getElementById('sessionsPageMeta');
+  if (sessionsPageMeta) {
+    sessionsPageMeta.textContent = session
+      ? `${session.agent || 'Agent'} on ${normalizeBranch(session.branch)}. Read the message stream and capture a checkpoint when the session reaches a useful state.`
+      : lane
+        ? `Reading sessions for ${describeBranchLane(lane).title}. Choose a session to inspect its messages.`
+        : context
+          ? `Choose a branch lane inside ${context.name}, then open a session to read the message stream.`
+          : 'Choose a workspace and branch lane before reading captured sessions.';
+  }
   document.getElementById('sessionFocusTitle').textContent = sessionSummary?.title || (lane ? describeBranchLane(lane).title : 'Choose a session');
   document.getElementById('sessionFocusMeta').textContent = session
-    ? `${sessionSummary?.preview || 'Read the stream below.'} ${session.branch ? `Branch: ${session.branch}.` : ''} ${session.agent ? `Agent: ${session.agent}.` : ''}`.trim()
+    ? `${sessionSummary?.preview || 'Read the stream below.'} ${session.agent ? `Agent: ${session.agent}.` : ''}`.trim()
     : lane
       ? `Selected lane: ${describeBranchLane(lane).title}. Choose a session to read its message stream and create a checkpoint.`
       : 'Pick a branch lane, then choose a session to read the message stream and capture a checkpoint.';
@@ -1058,12 +941,11 @@ function renderSessions() {
           <p class="item-kicker">${esc(formatRelativeTime(session.lastTurnAt || session.startedAt))}</p>
           <h4 class="item-title">${esc(summary.title)}</h4>
           <p class="item-preview">${esc(summary.preview)}</p>
-          <div class="list-row">
-            ${renderChip(`${session.turnCount || 0} messages`, 'beige')}
-            ${session.agent ? renderChip(session.agent, chipToneForAgent(session.agent)) : ''}
-            ${session.branch ? renderChip(session.branch, 'green') : ''}
-            ${session.commitSha ? renderChip(`#${commitShort(session.commitSha)}`, 'beige', { mono: true }) : ''}
-          </div>
+          ${renderMetaLine([
+            session.agent || '',
+            `${session.turnCount || 0} messages`,
+            session.commitSha ? `#${commitShort(session.commitSha)}` : ''
+          ])}
         </article>
       `;
     }).join('')
@@ -1077,12 +959,10 @@ function renderSessions() {
           <p class="item-kicker">${esc(formatRelativeTime(turn.createdAt))}</p>
           <h4 class="item-title">${esc(summary.title)}</h4>
           <p class="item-preview">${esc(summary.preview)}</p>
-          <div class="list-row">
-            ${renderChip(turn.role || 'message', chipToneForRole(turn.role))}
-            ${renderChip(turn.hasPayload ? 'raw available' : 'summary only', turn.hasPayload ? 'blue' : 'beige')}
-            ${turn.agent ? renderChip(turn.agent, chipToneForAgent(turn.agent)) : ''}
-            ${turn.commitSha ? renderChip(`#${commitShort(turn.commitSha)}`, 'beige', { mono: true }) : ''}
-          </div>
+          ${renderMetaLine([
+            humanizeLabel(turn.role || 'message'),
+            turn.commitSha ? `#${commitShort(turn.commitSha)}` : ''
+          ])}
         </article>
       `;
     }).join('')
@@ -1118,6 +998,7 @@ function renderSessions() {
     document.getElementById('turnSecondaryLabel').textContent = 'Related context';
     document.getElementById('turnPrompt').textContent = '';
     document.getElementById('turnReply').textContent = '';
+    document.getElementById('turnLeadMeta').innerHTML = '';
     document.getElementById('turnTechnical').innerHTML = '';
     document.getElementById('turnMeta').innerHTML = state.sessionDetail?.session
       ? `<article><span>Session</span><strong>${esc(short(state.sessionDetail.session.summary || state.sessionDetail.session.sessionId, 72))}</strong></article><article><span>Checkpoint count</span><strong>${esc(String(state.sessionDetail.checkpointCount || 0))}</strong></article>`
@@ -1136,14 +1017,19 @@ function renderSessions() {
   document.getElementById('turnSecondaryLabel').textContent = detail.secondaryLabel;
   document.getElementById('turnPrompt').textContent = detail.primaryText || 'No visible message text was extracted for this capture.';
   document.getElementById('turnReply').textContent = detail.secondaryText || 'No adjacent message context is available.';
+  document.getElementById('turnLeadMeta').innerHTML = [
+    renderChip(turn.role || 'message', chipToneForRole(turn.role)),
+    renderChip(turn.agent || activeSession()?.agent || 'unknown', chipToneForAgent(turn.agent || activeSession()?.agent)),
+    renderChip(formatRelativeTime(turn.createdAt), 'beige'),
+    turn.branch ? renderChip(normalizeBranch(turn.branch), 'green') : '',
+    turn.commitSha ? renderChip(`#${commitShort(turn.commitSha)}`, 'beige', { mono: true }) : ''
+  ].filter(Boolean).join('');
 
   const meta = [
-    { label: 'Speaker', value: turn.role || 'unknown' },
     { label: 'Captured', value: formatTime(turn.createdAt) },
-    { label: 'Agent', value: turn.agent || activeSession()?.agent || 'unknown' },
-    { label: 'Git', value: turn.commitSha ? `${turn.branch || 'detached'} @ ${String(turn.commitSha).slice(0, 8)}` : (turn.branch || 'No git link') },
     { label: 'Session checkpoints', value: String(state.sessionDetail?.checkpointCount || 0) },
-    { label: 'Raw data', value: turn.hasPayload ? 'Available on demand' : 'No sidecar payload' }
+    { label: 'Raw data', value: turn.hasPayload ? 'Available on demand' : 'No sidecar payload' },
+    { label: 'Session summary', value: short(state.sessionDetail?.session?.summary || turn.sessionId || 'No session summary stored', 88) }
   ];
   document.getElementById('turnMeta').innerHTML = meta.map((item) => {
     return `<article><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong></article>`;
@@ -1193,8 +1079,11 @@ function renderWorkspaces() {
   const contexts = state.contexts.filter((context) => matches(`${context.name || ''} ${(context.paths || []).join(' ')}`));
   const context = activeContext();
   const capture = captureState();
-  const hooks = installedAgents();
   document.getElementById('workspaceCount').textContent = `${contexts.length} workspace${contexts.length === 1 ? '' : 's'}`;
+  const workspacesPageMeta = document.getElementById('workspacesPageMeta');
+  if (workspacesPageMeta) {
+    workspacesPageMeta.textContent = `${contexts.length} workspace${contexts.length === 1 ? '' : 's'} on this machine.${context ? ` Current selection: ${context.name}.` : ''}`;
+  }
 
   document.getElementById('workspaceList').innerHTML = contexts.length > 0
     ? contexts.map((item) => {
@@ -1217,11 +1106,11 @@ function renderWorkspaces() {
               : 'Bind a repository folder to route future capture automatically.'
           )}</p>
           <div class="workspace-path text-mono">${esc(repoPath || 'No repository folder bound yet')}</div>
-          <div class="list-row">
-            ${renderChip(repoPath ? 'Repo bound' : 'Needs repo', repoPath ? 'green' : 'orange')}
-            ${item.syncPolicy ? renderChip(humanizeLabel(item.syncPolicy), 'blue') : ''}
-            ${pathList.length > 1 ? renderChip(`${pathList.length} paths`, 'beige') : ''}
-          </div>
+          ${renderMetaLine([
+            repoPath ? 'Repo bound' : 'Needs repo',
+            item.syncPolicy ? humanizeLabel(item.syncPolicy) : '',
+            pathList.length > 1 ? `${pathList.length} paths` : ''
+          ])}
         </article>
       `;
     }).join('')
@@ -1252,24 +1141,9 @@ function renderWorkspaces() {
           hint: 'All captured runs currently linked to this project.'
         },
         {
-          title: 'Installed integrations',
-          detail: `${hooks.length} agent integration${hooks.length === 1 ? '' : 's'} ready`,
-          hint: hooks.length > 0 ? integrationListText(hooks) : 'No agent integrations detected yet.'
-        },
-        {
           title: 'Default sync policy',
           detail: humanizeLabel(context.syncPolicy || 'full_sync'),
           hint: 'Local-first storage remains the source of truth.'
-        },
-        {
-          title: 'Workspace id',
-          detail: context.id,
-          hint: 'Stable identifier for tooling and support operations.'
-        },
-        {
-          title: 'Local storage',
-          detail: state.storage?.dbPath || 'SQLite path unavailable',
-          hint: 'Primary database backing this desktop workspace.'
         }
       ]
     : [
@@ -1288,29 +1162,17 @@ function renderWorkspaces() {
       </article>
     `;
   }).join('');
-
-  const bindingGuide = [
-    {
-      title: '1. Create one workspace per project',
-      detail: 'A workspace represents the repo. Branches and worktrees stay inside that workspace instead of becoming separate projects.'
-    },
-    {
-      title: '2. Install integrations once per repo',
-      detail: 'Hook-based agents route by repo path, and Codex uses notify plus repo-path routing. None of them depend on a baked context id that can go stale after resets.'
-    },
-    {
-      title: '3. Future sessions capture without prompting',
-      detail: 'As long as the agent runs inside the bound repo and its integration is installed, new sessions land in the correct workspace automatically.'
-    }
-  ];
-  document.getElementById('workspaceBindingGuide').innerHTML = bindingGuide.map((item) => {
-    return `<article><strong>${esc(item.title)}</strong><p>${esc(item.detail)}</p></article>`;
-  }).join('');
 }
 
-function renderCheckpoints() {
-  const checkpoints = state.checkpoints.filter((checkpoint) => matches(`${checkpoint.summary || ''} ${checkpoint.name || ''} ${checkpoint.sessionId || ''} ${checkpoint.commitSha || ''}`));
-  document.getElementById('checkpointHeadline').textContent = `${checkpoints.length} checkpoint${checkpoints.length === 1 ? '' : 's'}`;
+  function renderCheckpoints() {
+    const checkpoints = state.checkpoints.filter((checkpoint) => matches(`${checkpoint.summary || ''} ${checkpoint.name || ''} ${checkpoint.sessionId || ''} ${checkpoint.commitSha || ''}`));
+    document.getElementById('checkpointHeadline').textContent = `${checkpoints.length} checkpoint${checkpoints.length === 1 ? '' : 's'}`;
+    const checkpointsPageMeta = document.getElementById('checkpointsPageMeta');
+  if (checkpointsPageMeta) {
+    checkpointsPageMeta.textContent = state.activeCheckpointId
+      ? 'Explain the selected checkpoint or rewind the workspace to its stored snapshot.'
+      : `There are ${checkpoints.length} checkpoint${checkpoints.length === 1 ? '' : 's'} in the current view.`;
+  }
 
   document.getElementById('checkpointList').innerHTML = checkpoints.length > 0
     ? checkpoints.map((checkpoint) => {
@@ -1320,11 +1182,11 @@ function renderCheckpoints() {
           <p class="item-kicker">${esc(formatRelativeTime(checkpoint.createdAt))}</p>
           <h4 class="item-title">${esc(summary.title)}</h4>
           <p class="item-preview">${esc(summary.preview)}</p>
-          <div class="list-row">
-            ${renderChip(checkpoint.kind, 'orange')}
-            ${checkpoint.branch ? renderChip(checkpoint.branch, 'green') : ''}
-            ${checkpoint.commitSha ? renderChip(`#${commitShort(checkpoint.commitSha)}`, 'beige', { mono: true }) : ''}
-          </div>
+          ${renderMetaLine([
+            checkpoint.kind,
+            checkpoint.sessionId ? 'linked session' : '',
+            checkpoint.commitSha ? `#${commitShort(checkpoint.commitSha)}` : ''
+          ])}
         </article>
       `;
     }).join('')
@@ -1339,11 +1201,11 @@ function renderCheckpoints() {
         <p class="item-kicker">${esc(formatRelativeTime(linkedSession.lastTurnAt || linkedSession.startedAt))}</p>
         <h4 class="item-title">${esc(summary.title)}</h4>
         <p class="item-preview">${esc(summary.preview)}</p>
-        <div class="list-row">
-          ${renderChip(`${linkedSession.turnCount || 0} messages`, 'beige')}
-          ${linkedSession.agent ? renderChip(linkedSession.agent, chipToneForAgent(linkedSession.agent)) : ''}
-          ${linkedSession.commitSha ? renderChip(`#${commitShort(linkedSession.commitSha)}`, 'beige', { mono: true }) : ''}
-        </div>
+        ${renderMetaLine([
+          `${linkedSession.turnCount || 0} messages`,
+          linkedSession.agent || '',
+          linkedSession.commitSha ? `#${commitShort(linkedSession.commitSha)}` : ''
+        ])}
       </article>
     `;
   } else {
@@ -1357,38 +1219,61 @@ function renderCheckpoints() {
   const previewBtn = document.getElementById('previewCheckpointKnowledgeBtn');
   const extractBtn = document.getElementById('extractCheckpointKnowledgeBtn');
   const rewindBtn = document.getElementById('rewindCheckpointBtn');
-  explainBtn.disabled = !state.activeCheckpointId;
-  previewBtn.disabled = !state.activeCheckpointId;
-  extractBtn.disabled = !state.activeCheckpointId;
-  rewindBtn.disabled = !state.activeCheckpointId;
+  if (explainBtn) {
+    explainBtn.disabled = !state.activeCheckpointId;
+  }
+  if (previewBtn) {
+    previewBtn.disabled = !state.activeCheckpointId;
+  }
+  if (extractBtn) {
+    extractBtn.disabled = !state.activeCheckpointId;
+  }
+  if (rewindBtn) {
+    rewindBtn.disabled = !state.activeCheckpointId;
+  }
 
-  if (!detail?.checkpoint) {
-    document.getElementById('checkpointDetailTitle').textContent = 'Choose a checkpoint';
-    document.getElementById('checkpointMeta').innerHTML = '';
-    document.getElementById('checkpointKnowledgePreviewPanel').classList.add('hidden');
-    document.getElementById('checkpointKnowledgePreviewBadge').textContent = '0 candidates';
-    document.getElementById('checkpointKnowledgePreviewList').innerHTML = '';
-    empty.classList.remove('hidden');
+    if (!detail?.checkpoint) {
+      document.getElementById('checkpointDetailTitle').textContent = 'Choose a checkpoint';
+      document.getElementById('checkpointLeadCopy').textContent = '';
+      document.getElementById('checkpointFactStrip').innerHTML = '';
+      document.getElementById('checkpointMeta').innerHTML = '';
+      document.getElementById('checkpointKnowledgePreviewPanel').classList.add('hidden');
+      document.getElementById('checkpointKnowledgePreviewBadge').textContent = '0 candidates';
+      document.getElementById('checkpointKnowledgePreviewList').innerHTML = '';
+      empty.classList.remove('hidden');
     body.classList.add('hidden');
     return;
   }
 
-  const checkpoint = detail.checkpoint;
-  document.getElementById('checkpointDetailTitle').textContent = short(checkpoint.summary || checkpoint.name || checkpoint.id, 72);
-  empty.classList.add('hidden');
-  body.classList.remove('hidden');
-  const meta = [
-    { label: 'Kind', value: checkpoint.kind },
-    { label: 'Name', value: checkpoint.name },
-    { label: 'Branch', value: checkpoint.branch || 'none' },
-    { label: 'Worktree', value: checkpoint.worktreePath || 'Primary repo path' },
-    { label: 'Session', value: checkpoint.sessionId || 'none' },
-    { label: 'Commit', value: checkpoint.commitSha || 'none' },
-    { label: 'Created', value: formatTime(checkpoint.createdAt) },
+    const checkpoint = detail.checkpoint;
+    const checkpointSummary = describeCheckpoint(checkpoint);
+    document.getElementById('checkpointDetailTitle').textContent = short(checkpoint.summary || checkpoint.name || checkpoint.id, 72);
+    document.getElementById('checkpointLeadCopy').textContent = [
+      checkpointSummary.title,
+      checkpoint.branch
+        ? `tracks the ${normalizeBranch(checkpoint.branch)} lane`
+        : 'captures a workspace snapshot',
+      `from ${formatRelativeTime(checkpoint.createdAt)}.`,
+      checkpoint.sessionId
+        ? `It stays linked to the originating conversation so you can explain or rewind it without losing the surrounding context.`
+        : `It can still be explained or rewound even without a linked captured conversation.`
+    ].join(' ');
+    empty.classList.add('hidden');
+    body.classList.remove('hidden');
+    document.getElementById('checkpointFactStrip').innerHTML = [
+      { label: 'Snapshot', value: `${String(detail.snapshotNodeCount || 0)} nodes / ${String(detail.snapshotEdgeCount || 0)} edges` },
+      { label: 'Linked session', value: checkpoint.sessionId ? short(checkpoint.sessionId, 28) : 'None' },
+      { label: 'Commit', value: checkpoint.commitSha ? `#${commitShort(checkpoint.commitSha)}` : 'Unpinned' },
+      { label: 'Agents', value: checkpoint.agentSet?.length ? checkpoint.agentSet.join(', ') : 'Unknown' }
+    ].map((item) => `<article><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong></article>`).join('');
+    const meta = [
+      { label: 'Kind', value: checkpoint.kind },
+      { label: 'Branch', value: checkpoint.branch || 'none' },
+      { label: 'Commit', value: checkpoint.commitSha || 'none' },
+      { label: 'Created', value: formatTime(checkpoint.createdAt) },
     { label: 'Agents', value: checkpoint.agentSet?.length ? checkpoint.agentSet.join(', ') : 'none' },
-    { label: 'Snapshot nodes', value: String(detail.snapshotNodeCount || 0) },
-    { label: 'Snapshot edges', value: String(detail.snapshotEdgeCount || 0) },
-    { label: 'Snapshot checkpoints', value: String(detail.snapshotCheckpointCount || 0) },
+    { label: 'Snapshot', value: `${String(detail.snapshotNodeCount || 0)} nodes, ${String(detail.snapshotEdgeCount || 0)} edges` },
+    { label: 'Session', value: checkpoint.sessionId || 'none' },
     { label: 'Payload', value: detail.payloadAvailable ? 'Stored locally' : 'Missing' }
   ];
   document.getElementById('checkpointMeta').innerHTML = meta.map((item) => `<article><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong></article>`).join('');
@@ -1407,36 +1292,42 @@ function renderCheckpoints() {
   }
 }
 
-function renderKnowledge() {
-  document.getElementById('inclHidden').checked = state.includeHidden;
-  document.getElementById('knowledgeNodeCount').textContent = String(state.graphNodes.length);
-  document.getElementById('knowledgeEdgeCount').textContent = String(state.graphEdges.length);
-  document.getElementById('knowledgeContext').textContent = `Workspace: ${activeContext()?.name || 'none'}`;
-
-  const explainer = [
-    {
-      title: 'This is the stored graph',
-      detail: 'This screen shows nodes and edges already written into the workspace graph. It is not a full automatic extraction of every chat.'
-    },
-    {
-      title: 'Captured sessions are separate by default',
-      detail: 'Session and message records live in the same workspace, but stay hidden here unless you explicitly include hidden capture nodes.'
-    },
-    {
-      title: 'Use Sessions for conversations',
-      detail: 'If you want to read what happened in a conversation, use Sessions. Use Graph when you want the current structured project memory.'
+  function renderKnowledge() {
+    document.getElementById('inclHidden').checked = state.includeHidden;
+    document.getElementById('knowledgeNodeCount').textContent = String(state.graphNodes.length);
+    document.getElementById('knowledgeEdgeCount').textContent = String(state.graphEdges.length);
+    document.getElementById('knowledgeContext').textContent = `Workspace: ${activeContext()?.name || 'none'}`;
+    const nodes = state.graphNodes.filter((node) => matches(`${node.type || ''} ${node.content || ''} ${node.key || ''}`));
+    const knowledgePageMeta = document.getElementById('knowledgePageMeta');
+    if (knowledgePageMeta) {
+      const context = activeContext();
+      knowledgePageMeta.textContent = context
+        ? `${context.name} currently exposes ${nodes.length} visible node${nodes.length === 1 ? '' : 's'} in the structured graph${state.includeHidden ? ', including hidden capture records.' : '.'}`
+        : 'Inspect the visible graph stored in SQLite when you need the current structured memory, not the conversation.';
     }
-  ];
-  document.getElementById('knowledgeExplainer').innerHTML = explainer.map((item) => {
-    return `<article><strong>${esc(item.title)}</strong><p>${esc(item.detail)}</p></article>`;
-  }).join('');
 
-  const nodes = state.graphNodes.filter((node) => matches(`${node.type || ''} ${node.content || ''} ${node.key || ''}`));
-  document.getElementById('knowledgeTable').innerHTML = nodes.length > 0
-    ? nodes.slice(0, 400).map((node) => `
-        <tr>
-          <td>${renderChip(node.type || 'artifact', 'beige')}</td>
-          <td>${esc(short(node.content || '', 140))}</td>
+    const explainer = [
+      {
+        title: 'Use this for project memory',
+        detail: 'Graph is the durable structured layer: decisions, constraints, goals, assumptions, questions, and artifacts already written into the workspace.'
+      },
+      {
+        title: 'Conversations stay separate by default',
+        detail: 'Captured sessions and messages live in the same workspace, but stay hidden here unless you explicitly include hidden capture records.'
+      },
+      {
+        title: 'Sessions and checkpoints feed this layer',
+        detail: 'Use Sessions to read the conversation and Checkpoints to explain or rewind workspace state. Use Graph to inspect the memory that survives beyond a single run.'
+      }
+    ];
+    document.getElementById('knowledgeExplainer').innerHTML = explainer.map((item) => {
+      return `<article><strong>${esc(item.title)}</strong><p>${esc(item.detail)}</p></article>`;
+    }).join('');
+    document.getElementById('knowledgeTable').innerHTML = nodes.length > 0
+      ? nodes.slice(0, 400).map((node) => `
+          <tr>
+            <td>${renderChip(node.type || 'artifact', 'beige')}</td>
+            <td>${esc(short(node.content || '', 140))}</td>
           <td>${esc(node.key || '-')}</td>
           <td>${esc(formatTime(node.createdAt))}</td>
         </tr>
@@ -1444,44 +1335,74 @@ function renderKnowledge() {
     : '<tr><td colspan="4"><div class="empty-state">No knowledge nodes match the current filter.</div></td></tr>';
 }
 
-function renderSetup() {
-  document.getElementById('setupCommand').textContent = '0ctx setup';
-  document.getElementById('hookInstallCommand').textContent = hookInstallCommand();
-  document.getElementById('hookIngestCommand').textContent = hookIngestCommand();
+  function renderSetup() {
+    document.getElementById('setupCommand').textContent = '0ctx setup';
+    document.getElementById('hookInstallCommand').textContent = hookInstallCommand();
+    document.getElementById('hookIngestCommand').textContent = hookIngestCommand();
 
-  const hooks = Array.isArray(state.hook?.agents) ? state.hook.agents : [];
-  const installed = hooks.filter((hook) => hook.installed);
-  document.getElementById('hookSummary').textContent = `${installed.length} installed / ${hooks.length}`;
-  document.getElementById('hookList').innerHTML = hooks.length > 0
-    ? hooks.filter((hook) => matches(`${hook.agent} ${hook.status} ${hook.notes || ''} ${hook.command || ''}`)).map((hook) => `
-        <article class="list-item">
-          <h4>${esc(integrationLabel(hook.agent))}</h4>
-          <p>${esc(`${hook.status} | ${hook.installed ? `${integrationType(hook.agent)} installed` : `${integrationType(hook.agent)} not installed`}`)}</p>
-          <div class="list-row">
-            ${hook.notes ? renderChip(formatIntegrationNote(hook.notes), 'beige') : ''}
-            ${hook.command ? renderChip(`${integrationType(hook.agent)} command ready`, hook.installed ? 'green' : 'orange') : ''}
-          </div>
-          ${hook.command ? `<p>${esc(short(hook.command, 180))}</p>` : ''}
-        </article>
-      `).join('')
-    : '<div class="empty-state">Integration health is unavailable until the daemon can read local setup state.</div>';
+    const hooks = Array.isArray(state.hook?.agents) ? state.hook.agents : [];
+    const installed = hooks.filter((hook) => hook.installed);
+    const filteredHooks = hooks.filter((hook) => matches(`${hook.agent} ${hook.status} ${hook.notes || ''} ${hook.command || ''}`));
+    const setupPageMeta = document.getElementById('setupPageMeta');
+    if (setupPageMeta) {
+      setupPageMeta.textContent = state.runtimeIssue
+        ? state.runtimeIssue.detail
+        : installed.length > 0
+          ? `${installed.length} integration${installed.length === 1 ? '' : 's'} are installed on this machine. Use this screen only when you need to add another agent, run a smoke test, or repair the runtime.`
+          : 'Install the integrations you actually use, then leave this screen. Daily work should happen in branches, sessions, and checkpoints.';
+    }
+    document.getElementById('hookSummary').textContent = `${installed.length} installed / ${hooks.length}`;
+    document.getElementById('hookList').innerHTML = filteredHooks.length > 0
+      ? filteredHooks.map((hook) => `
+          <article class="list-item">
+            <h4>${esc(integrationLabel(hook.agent))}</h4>
+            <p>${esc(`${hook.status} | ${hook.installed ? `${integrationType(hook.agent)} installed` : `${integrationType(hook.agent)} not installed`}`)}</p>
+            ${renderMetaLine([
+              hook.notes ? formatIntegrationNote(hook.notes) : '',
+              hook.command ? `${integrationType(hook.agent)} command ready` : ''
+            ])}
+            ${hook.command ? `<p>${esc(short(hook.command, 180))}</p>` : ''}
+          </article>
+        `).join('')
+      : hooks.length > 0
+        ? '<div class="empty-state">No integrations match the current filter.</div>'
+      : '<div class="empty-state">Integration health is unavailable until the daemon can read local setup state.</div>';
 
-  const queue = state.health?.sync?.queue || {};
-  document.getElementById('setupAuth').textContent = state.auth.authenticated ? 'YES' : 'NO';
-  document.getElementById('setupAuthMeta').textContent = `provider:${state.auth.provider}`;
-  document.getElementById('setupQueue').textContent = `${queue.pending || 0}/${queue.done || 0}`;
-  document.getElementById('setupMethods').textContent = String(state.caps.length);
-  document.getElementById('setupPosture').textContent = formatPosture(state.health?.status || 'offline');
-  document.getElementById('setupSupportCopy').textContent = state.runtimeIssue
-    ? state.runtimeIssue.detail
-    : 'Use setup for commands and machine recovery. Runtime JSON, event feeds, and storage internals are intentionally out of the daily workflow.';
-}
+    const supportItems = [
+      {
+        title: 'Runtime posture',
+      detail: formatPosture(state.health?.status || 'offline'),
+      hint: state.runtimeIssue
+        ? state.runtimeIssue.detail
+        : 'Desktop and local runtime are aligned.'
+    },
+    {
+      title: 'Machine session',
+      detail: state.auth.authenticated ? 'Signed in' : 'Login required',
+      hint: `provider: ${state.auth.provider || 'unknown'}`
+    },
+    {
+      title: 'Installed integrations',
+      detail: installed.length > 0 ? integrationListText(installed) : 'None installed',
+      hint: 'Install only the agents you actually use on this machine.'
+      }
+    ];
+    document.getElementById('setupSupportList').innerHTML = supportItems.map((item) => `
+      <article>
+        <strong>${esc(item.title)}</strong>
+      <p>${esc(item.detail)}</p>
+      <p>${esc(item.hint)}</p>
+      </article>
+    `).join('');
+    document.getElementById('setupSupportCopy').textContent = state.runtimeIssue
+      ? state.runtimeIssue.detail
+      : 'Use setup only when you need to install integrations, smoke-test capture, check updates, or repair the local runtime.';
+  }
 
 function renderAll() {
   renderChrome();
   renderHero();
   renderRuntimeBanner();
-  renderHome();
   renderBranches();
   renderSessions();
   renderWorkspaces();
@@ -1695,7 +1616,7 @@ async function refreshAll() {
   state.loading = true;
   try {
     state.runtimeIssue = null;
-    const status = await invoke('daemon_status', {});
+    const status = await requestDaemonStatus();
     state.health = status?.health || {};
     state.contexts = Array.isArray(status?.contexts) ? status.contexts : [];
     state.caps = Array.isArray(status?.capabilities?.methods) ? status.capabilities.methods : [];
@@ -1728,22 +1649,70 @@ async function refreshAll() {
       setStatus(`Runtime contract mismatch: ${missingMethods.join(', ')}`);
       return;
     }
-    await loadBranches();
-    await loadSessions();
-    await loadSessionDetail();
-    await loadTurns();
-    await loadPayload(state.turns[0]?.nodeId || null);
-    await loadCheckpoints();
-    await loadCheckpointDetail();
-    await loadHandoff();
-    await loadGraph();
+    const issues = [];
+
+    const safeLoad = async (label, loader, onError) => {
+      try {
+        await loader();
+      } catch (error) {
+        if (typeof onError === 'function') onError();
+        issues.push(`${label}: ${String(error)}`);
+      }
+    };
+
+    await safeLoad('integrations', loadHook, () => {
+      state.hook = null;
+    });
+    await safeLoad('branches', loadBranches, () => {
+      state.branches = [];
+      state.activeBranchKey = null;
+    });
+    await safeLoad('sessions', loadSessions, () => {
+      state.allSessions = [];
+      state.sessions = [];
+      state.activeSessionId = null;
+      state.sessionDetail = null;
+    });
+    await safeLoad('session detail', loadSessionDetail, () => {
+      state.sessionDetail = null;
+    });
+    await safeLoad('messages', loadTurns, () => {
+      state.turns = [];
+      state.activeTurnId = null;
+    });
+    await safeLoad('payload', async () => loadPayload(state.turns[0]?.nodeId || null), () => {
+      state.payload = null;
+      state.payloadNodeId = null;
+      state.payloadExpanded = false;
+    });
+    await safeLoad('checkpoints', loadCheckpoints, () => {
+      state.checkpoints = [];
+      state.activeCheckpointId = null;
+      state.checkpointDetail = null;
+      state.checkpointSessionDetail = null;
+    });
+    await safeLoad('checkpoint detail', loadCheckpointDetail, () => {
+      state.checkpointDetail = null;
+      state.checkpointSessionDetail = null;
+    });
+    await safeLoad('handoff', loadHandoff, () => {
+      state.handoff = [];
+    });
+    await safeLoad('graph', loadGraph, () => {
+      state.graphNodes = [];
+      state.graphEdges = [];
+    });
     renderAll();
-    setStatus('Refreshed local desktop data.');
+    if (issues.length > 0) {
+      setStatus(`Loaded with partial data: ${issues[0]}`);
+    } else {
+      setStatus('Refreshed local desktop data.');
+    }
   } catch (error) {
     if (!state.runtimeIssue) {
       setRuntimeIssue(
         'Runtime unavailable',
-        'The desktop app could not load the local runtime. Restart connector, then reopen the app if the issue remains.'
+        'The desktop app could not reach the local daemon. Start or repair 0ctx, then reopen the app if the issue remains.'
       );
     }
     renderAll();
@@ -2005,12 +1974,12 @@ function wire() {
     button.addEventListener('click', () => setView(button.dataset.view || 'branches'));
   });
 
-  document.getElementById('search').addEventListener('input', (event) => {
+  bindById('search', 'input', (event) => {
     state.q = String(event.target.value || '').trim();
     renderAll();
   });
 
-  document.getElementById('ctxSel').addEventListener('change', async (event) => {
+  bindById('ctxSel', 'change', async (event) => {
     const nextId = String(event.target.value || '');
     if (!nextId) return;
     await selectContext(nextId);
@@ -2028,8 +1997,8 @@ function wire() {
     renderAll();
   });
 
-  document.getElementById('refresh').addEventListener('click', () => void refreshAll());
-  document.getElementById('restart').addEventListener('click', async () => {
+  bindById('refresh', 'click', () => void refreshAll());
+  bindById('restart', 'click', async () => {
     try {
       const result = await invoke('restart_connector', {});
       setStatus(String(result || 'Connector restarted.'));
@@ -2039,13 +2008,12 @@ function wire() {
     }
   });
 
-  document.getElementById('copyLogin').addEventListener('click', () => void copyText('0ctx shell'));
-  document.getElementById('runtimeBannerRefresh').addEventListener('click', () => void refreshAll());
-  document.getElementById('runtimeBannerSetup').addEventListener('click', () => setView('setup'));
-  document.getElementById('heroPrimary').addEventListener('click', (event) => void performHeroAction(event.currentTarget.dataset.action));
-  document.getElementById('heroSecondary').addEventListener('click', (event) => void performHeroAction(event.currentTarget.dataset.action));
-  document.getElementById('ctxForm').addEventListener('submit', createContext);
-  document.getElementById('pickFolder').addEventListener('click', async () => {
+  bindById('copyLogin', 'click', () => void copyText('0ctx shell'));
+  bindById('runtimeBannerRefresh', 'click', () => void refreshAll());
+  bindById('runtimeBannerSetup', 'click', () => setView('setup'));
+  bindById('heroPrimary', 'click', (event) => void performHeroAction(event.currentTarget.dataset.action));
+  bindById('ctxForm', 'submit', createContext);
+  bindById('pickFolder', 'click', async () => {
     try {
       const selected = await invoke('pick_workspace_folder', {});
       if (!selected) {
@@ -2063,12 +2031,12 @@ function wire() {
       setStatus(`Folder picker failed: ${String(error)}`);
     }
   });
-  document.getElementById('inclHidden').addEventListener('change', async (event) => {
+  bindById('inclHidden', 'change', async (event) => {
     state.includeHidden = Boolean(event.target.checked);
     await loadGraph();
     renderAll();
   });
-  document.getElementById('togglePayload').addEventListener('click', () => {
+  bindById('togglePayload', 'click', () => {
     const turn = selectedTurn();
     if (!turn || !turn.hasPayload) return;
     state.payloadExpanded = !state.payloadExpanded;
@@ -2095,15 +2063,15 @@ function wire() {
   if (extractCheckpointKnowledgeBtn) {
     extractCheckpointKnowledgeBtn.addEventListener('click', () => void extractKnowledgeFromActiveCheckpoint());
   }
-  document.getElementById('rewindCheckpointBtn').addEventListener('click', () => void rewindActiveCheckpoint());
-  document.getElementById('explainCheckpointBtn').addEventListener('click', () => void explainActiveCheckpoint());
+  bindById('rewindCheckpointBtn', 'click', () => void rewindActiveCheckpoint());
+  bindById('explainCheckpointBtn', 'click', () => void explainActiveCheckpoint());
 
-  document.getElementById('copyHookInstall').addEventListener('click', () => void copyText(hookInstallCommand()));
-  document.getElementById('copyIngest').addEventListener('click', () => void copyText(hookIngestCommand()));
-  document.getElementById('copyShell').addEventListener('click', () => void copyText('0ctx shell'));
-  document.getElementById('copyRepair').addEventListener('click', () => void copyText('0ctx repair'));
-  document.getElementById('copyDoctor').addEventListener('click', () => void copyText('0ctx doctor'));
-  document.getElementById('checkUpdates').addEventListener('click', async () => {
+  bindById('copyHookInstall', 'click', () => void copyText(hookInstallCommand()));
+  bindById('copyIngest', 'click', () => void copyText(hookIngestCommand()));
+  bindById('copyShell', 'click', () => void copyText('0ctx shell'));
+  bindById('copyRepair', 'click', () => void copyText('0ctx repair'));
+  bindById('copyDoctor', 'click', () => void copyText('0ctx doctor'));
+  bindById('checkUpdates', 'click', async () => {
     try {
       const result = await invoke('check_for_updates', {});
       setStatus(String(result || 'Update check completed.'));
