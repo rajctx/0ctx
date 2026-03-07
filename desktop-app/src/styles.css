@@ -1112,6 +1112,16 @@ select:focus {
   gap: 8px;
 }
 
+.preview-footnote {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .detail-label {
   margin: 0 0 8px;
   color: var(--text-soft);

@@ -74,6 +74,20 @@ const SEARCH_HINTS = {
   setup: 'Filter agent integrations and setup state'
 };
 
+const REQUIRED_RUNTIME_METHODS = [
+  'listBranchLanes',
+  'listBranchSessions',
+  'listSessionMessages',
+  'listBranchCheckpoints',
+  'getSessionDetail',
+  'getCheckpointDetail',
+  'getHandoffTimeline',
+  'previewSessionKnowledge',
+  'extractSessionKnowledge',
+  'previewCheckpointKnowledge',
+  'extractCheckpointKnowledge'
+];
+
 function initialView() {
   if (typeof window === 'undefined') {
     return 'branches';
@@ -378,6 +392,26 @@ function selectKnowledgeCandidates(scope, mode) {
   setSelectedKnowledgeKeys(scope, keys);
 }
 
+function formatConfidence(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  return `${Math.round(numeric * 100)}% confidence`;
+}
+
+function confidenceTone(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 'beige';
+  if (numeric >= 0.85) return 'green';
+  if (numeric >= 0.72) return 'blue';
+  return 'orange';
+}
+
+function formatReason(value) {
+  const text = String(value || '').trim();
+  if (!text) return null;
+  return text.replace(/[_-]+/g, ' ');
+}
+
 function renderKnowledgeCandidates(candidates, scope) {
   if (!Array.isArray(candidates) || candidates.length === 0) {
     return '<div class="empty-state">No extractable knowledge candidates were found in this source.</div>';
@@ -394,15 +428,19 @@ function renderKnowledgeCandidates(candidates, scope) {
           data-candidate-key="${esc(candidate.key)}"
           ${selected.has(candidate.key) ? 'checked' : ''}
         />
-        <div>
-          <div class="preview-meta">
-            ${renderChip(candidate.type || 'node', candidate.action === 'create' ? 'green' : 'beige')}
-            ${renderChip(candidate.action === 'create' ? 'new node' : 'already in graph', candidate.action === 'create' ? 'green' : 'orange')}
-            ${candidate.role ? renderChip(candidate.role, chipToneForRole(candidate.role)) : ''}
-            ${candidate.messageId ? renderChip(short(candidate.messageId, 24), 'beige', { mono: true }) : ''}
-          </div>
+          <div>
+            <div class="preview-meta">
+              ${renderChip(candidate.type || 'node', candidate.action === 'create' ? 'green' : 'beige')}
+              ${renderChip(candidate.action === 'create' ? 'new node' : 'already in graph', candidate.action === 'create' ? 'green' : 'orange')}
+              ${candidate.confidence != null ? renderChip(formatConfidence(candidate.confidence), confidenceTone(candidate.confidence)) : ''}
+              ${candidate.role ? renderChip(candidate.role, chipToneForRole(candidate.role)) : ''}
+              ${candidate.messageId ? renderChip(short(candidate.messageId, 24), 'beige', { mono: true }) : ''}
+            </div>
           <p class="preview-content">${esc(candidate.content || '')}</p>
-          <p class="item-preview">${esc(formatTime(candidate.createdAt))}</p>
+          <div class="preview-footnote">
+            <span>${esc(formatTime(candidate.createdAt))}</span>
+            ${formatReason(candidate.reason) ? `<span>Why: ${esc(formatReason(candidate.reason))}</span>` : ''}
+          </div>
         </div>
       </div>
     </article>
@@ -475,6 +513,14 @@ function integrationLabel(agent) {
   return agent === 'codex' ? `${base} notify` : `${base} hook`;
 }
 
+function methodSupported(method) {
+  return Array.isArray(state.caps) && state.caps.includes(method);
+}
+
+function missingRequiredMethods() {
+  return REQUIRED_RUNTIME_METHODS.filter((method) => !methodSupported(method));
+}
+
 function integrationListText(agents) {
   return agents.map((agent) => integrationLabel(agent.agent)).join(', ');
 }
@@ -537,7 +583,7 @@ function preferredClients() {
   if (agents.length > 0) {
     return [...new Set(agents)].join(',');
   }
-  return 'factory,antigravity,codex';
+  return 'factory,antigravity,claude,codex';
 }
 
 function preferredAgent() {
@@ -617,11 +663,6 @@ function storageEntries() {
 function setStatus(message) {
   document.getElementById('statusTxt').textContent = message;
   document.getElementById('statusTime').textContent = `Updated ${new Date().toLocaleTimeString()}`;
-}
-
-function isUnknownMethodError(error, method) {
-  const text = String(error || '');
-  return text.includes(`Unknown method: ${method}`);
 }
 
 function setRuntimeIssue(title, detail) {
@@ -704,12 +745,36 @@ function renderChrome() {
 function renderHero() {
   const meta = VIEW_META[state.view] || VIEW_META.branches;
   const context = activeContext();
-  const capture = captureState();
   document.getElementById('heroEyebrow').textContent = meta.eyebrow;
   document.getElementById('heroTitle').textContent = meta.title;
-  document.getElementById('heroMeta').textContent = context
-    ? `${context.name} | ${capture.detail}`
-    : 'Choose a workspace to begin.';
+  let detail = 'Choose a workspace to begin.';
+  if (context) {
+    if (state.view === 'branches') {
+      detail = state.runtimeIssue
+        ? `${context.name} | Update the local runtime to enable branch-first views.`
+        : `${context.name} | ${state.branches.length} branch lane${state.branches.length === 1 ? '' : 's'} tracked.`;
+    } else if (state.view === 'sessions') {
+      const lane = activeBranch();
+      const session = activeSession();
+      detail = session
+        ? `${context.name} | ${session.agent || 'agent'} on ${normalizeBranch(session.branch)}.`
+        : lane
+          ? `${context.name} | Reading sessions for ${describeBranchLane(lane).title}.`
+          : `${context.name} | Choose a branch lane, then open a session.`;
+    } else if (state.view === 'checkpoints') {
+      detail = `${context.name} | ${state.checkpoints.length} checkpoint${state.checkpoints.length === 1 ? '' : 's'} in the current view.`;
+    } else if (state.view === 'knowledge') {
+      detail = `${context.name} | ${state.graphNodes.length} visible node${state.graphNodes.length === 1 ? '' : 's'} in the graph.`;
+    } else if (state.view === 'setup') {
+      detail = `${context.name} | ${installedAgents().length} integration${installedAgents().length === 1 ? '' : 's'} installed.`;
+    } else if (state.view === 'workspaces') {
+      detail = `${state.contexts.length} workspace${state.contexts.length === 1 ? '' : 's'} on this machine.`;
+    } else {
+      const capture = captureState();
+      detail = `${context.name} | ${capture.detail}`;
+    }
+  }
+  document.getElementById('heroMeta').textContent = detail;
 
   const primary = document.getElementById('heroPrimary');
   const secondary = document.getElementById('heroSecondary');
@@ -871,7 +936,7 @@ function renderBranches() {
       `;
     }).join('')
     : state.runtimeIssue
-      ? '<div class="empty-state">Branch lanes are unavailable in this runtime. Sessions can still load, but the branch view needs a newer local runtime.</div>'
+      ? '<div class="empty-state">This desktop build needs a newer local runtime before branch lanes can load.</div>'
       : '<div class="empty-state">No branch lanes yet. Capture one agent session in this repo, then refresh.</div>';
 
   document.getElementById('branchSessionList').innerHTML = state.sessions.length > 0
@@ -894,7 +959,7 @@ function renderBranches() {
 
   if (state.runtimeIssue && branches.length === 0) {
     branchDetailPanel.classList.add('wide-panel');
-    document.getElementById('branchDetailTitle').textContent = 'Branch lanes are unavailable in this runtime';
+    document.getElementById('branchDetailTitle').textContent = 'Update the local runtime';
     document.getElementById('branchMeta').innerHTML = '';
     document.getElementById('branchSessionList').innerHTML = '';
     document.getElementById('handoffList').innerHTML = '';
@@ -1427,21 +1492,8 @@ async function loadBranches() {
     state.activeBranchKey = null;
     return;
   }
-  try {
-    const branches = await daemon('listBranchLanes', { contextId: state.activeContextId, limit: 300 });
-    state.branches = Array.isArray(branches) ? branches : [];
-  } catch (error) {
-    if (isUnknownMethodError(error, 'listBranchLanes')) {
-      state.branches = [];
-      state.activeBranchKey = null;
-      setRuntimeIssue(
-        'Branch lanes unavailable',
-        'This local runtime does not expose the newer branch APIs yet. Sessions and checkpoints can still load. Restart or update 0ctx if you want branch-first views.'
-      );
-      return;
-    }
-    throw error;
-  }
+  const branches = await daemon('listBranchLanes', { contextId: state.activeContextId, limit: 300 });
+  state.branches = Array.isArray(branches) ? branches : [];
   if (!state.activeBranchKey || !state.branches.some((lane) => branchKey(lane.branch, lane.worktreePath) === state.activeBranchKey)) {
     const first = state.branches[0] || null;
     state.activeBranchKey = first ? branchKey(first.branch, first.worktreePath) : null;
@@ -1491,25 +1543,10 @@ async function getSessionDetailWithFallback(sessionId) {
   if (!state.activeContextId || !sessionId || !state.auth.authenticated) {
     return null;
   }
-  try {
-    return await daemon('getSessionDetail', {
-      contextId: state.activeContextId,
-      sessionId
-    });
-  } catch (error) {
-    if (isUnknownMethodError(error, 'getSessionDetail')) {
-      const session = state.allSessions.find((item) => item.sessionId === sessionId)
-        || state.sessions.find((item) => item.sessionId === sessionId)
-        || null;
-      return session
-        ? {
-            session,
-            checkpointCount: state.checkpoints.filter((item) => item.sessionId === sessionId).length
-          }
-        : null;
-    }
-    throw error;
-  }
+  return daemon('getSessionDetail', {
+    contextId: state.activeContextId,
+    sessionId
+  });
 }
 
 async function loadTurns() {
@@ -1518,30 +1555,12 @@ async function loadTurns() {
     state.activeTurnId = null;
     return;
   }
-  try {
-    const turns = await daemon('listSessionMessages', {
-      contextId: state.activeContextId,
-      sessionId: state.activeSessionId,
-      limit: 500
-    });
-    state.turns = Array.isArray(turns) ? turns : [];
-  } catch (error) {
-    if (isUnknownMethodError(error, 'listSessionMessages')) {
-      const turns = await daemon('listChatTurns', {
-        contextId: state.activeContextId,
-        sessionId: state.activeSessionId,
-        limit: 500
-      });
-      state.turns = Array.isArray(turns)
-        ? turns.map((turn) => ({
-            ...turn,
-            messageId: turn.messageId || turn.nodeId || null
-          }))
-        : [];
-    } else {
-      throw error;
-    }
-  }
+  const turns = await daemon('listSessionMessages', {
+    contextId: state.activeContextId,
+    sessionId: state.activeSessionId,
+    limit: 500
+  });
+  state.turns = Array.isArray(turns) ? turns : [];
   if (!state.activeTurnId || !state.turns.some((turn) => turn.nodeId === state.activeTurnId)) {
     state.activeTurnId = state.turns[0]?.nodeId || null;
   }
@@ -1679,6 +1698,24 @@ async function refreshAll() {
       await selectContext(state.activeContextId, true);
     }
     await loadHook();
+    const missingMethods = missingRequiredMethods();
+    if (missingMethods.length > 0) {
+      resetBranchScopedState();
+      state.branches = [];
+      state.allSessions = [];
+      state.sessions = [];
+      state.turns = [];
+      state.checkpoints = [];
+      state.graphNodes = [];
+      state.graphEdges = [];
+      setRuntimeIssue(
+        'Runtime update required',
+        `This desktop build requires a newer local runtime. Reinstall or restart 0ctx, then reopen the app. Missing methods: ${missingMethods.join(', ')}.`
+      );
+      renderAll();
+      setStatus(`Runtime contract mismatch: ${missingMethods.join(', ')}`);
+      return;
+    }
     await loadBranches();
     await loadSessions();
     await loadSessionDetail();
@@ -1756,7 +1793,13 @@ async function createCheckpointFromActiveSession() {
     await loadCheckpointDetail();
     renderAll();
     setView('checkpoints');
-    setStatus(`Created checkpoint ${result?.name || result?.id || ''}`.trim());
+    const knowledge = result?.knowledge;
+    const promoted = Number(knowledge?.createdCount || 0);
+    const reused = Number(knowledge?.reusedCount || 0);
+    const knowledgeSuffix = promoted > 0 || reused > 0
+      ? ` | knowledge ${promoted} new, ${reused} reused`
+      : '';
+    setStatus(`Created checkpoint ${result?.name || result?.id || ''}${knowledgeSuffix}`.trim());
   } catch (error) {
     setStatus(`Create checkpoint failed: ${String(error)}`);
   }
@@ -1773,9 +1816,17 @@ async function previewKnowledgeFromActiveSession() {
       sessionId: state.activeSessionId
     });
     state.sessionKnowledgePreview = result;
-    setSelectedKnowledgeKeys('session', Array.isArray(result?.candidates) ? result.candidates.map((candidate) => candidate.key) : []);
+    const candidates = Array.isArray(result?.candidates) ? result.candidates : [];
+    const preferred = candidates
+      .filter((candidate) => candidate.action === 'create' && Number(candidate.confidence || 0) >= 0.72)
+      .map((candidate) => candidate.key);
+    const fallback = candidates
+      .filter((candidate) => candidate.action === 'create')
+      .map((candidate) => candidate.key);
+    const selected = preferred.length > 0 ? preferred : fallback;
+    setSelectedKnowledgeKeys('session', selected);
     renderAll();
-    setStatus(`Knowledge preview ready: ${String(result?.candidateCount || 0)} candidates, ${String(result?.createCount || 0)} new.`);
+    setStatus(`Knowledge preview ready: ${String(result?.candidateCount || 0)} candidates, ${String(result?.createCount || 0)} new, ${selected.length} preselected.`);
   } catch (error) {
     setStatus(`Preview knowledge failed: ${String(error)}`);
   }
@@ -1822,9 +1873,17 @@ async function previewKnowledgeFromActiveCheckpoint() {
       checkpointId: state.activeCheckpointId
     });
     state.checkpointKnowledgePreview = result;
-    setSelectedKnowledgeKeys('checkpoint', Array.isArray(result?.candidates) ? result.candidates.map((candidate) => candidate.key) : []);
+    const candidates = Array.isArray(result?.candidates) ? result.candidates : [];
+    const preferred = candidates
+      .filter((candidate) => candidate.action === 'create' && Number(candidate.confidence || 0) >= 0.72)
+      .map((candidate) => candidate.key);
+    const fallback = candidates
+      .filter((candidate) => candidate.action === 'create')
+      .map((candidate) => candidate.key);
+    const selected = preferred.length > 0 ? preferred : fallback;
+    setSelectedKnowledgeKeys('checkpoint', selected);
     renderAll();
-    setStatus(`Checkpoint preview ready: ${String(result?.candidateCount || 0)} candidates, ${String(result?.createCount || 0)} new.`);
+    setStatus(`Checkpoint preview ready: ${String(result?.candidateCount || 0)} candidates, ${String(result?.createCount || 0)} new, ${selected.length} preselected.`);
   } catch (error) {
     setStatus(`Preview checkpoint knowledge failed: ${String(error)}`);
   }

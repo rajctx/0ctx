@@ -243,42 +243,91 @@ export class Graph {
         if (normalized.startsWith('select ') || normalized.startsWith('choose ') || normalized.startsWith('click ')) {
             return true;
         }
+        if (/^(run|open|refresh|restart|copy|paste|install|reinstall)\b/.test(normalized)) {
+            return true;
+        }
+        if (/\b(bridge error|runtime issue|runtime unavailable|preview knowledge failed|extract knowledge failed|create checkpoint failed)\b/.test(normalized)) {
+            return true;
+        }
+        if (
+            /\b(implemented|updated|patched|validated|verified|compiled|built|installed|restarted|refreshed|copied|selected)\b/.test(normalized)
+            && !/\b(decided|decision|must|need to|goal|constraint|assume|open question)\b/.test(normalized)
+        ) {
+            return true;
+        }
         return false;
     }
 
-    private classifyKnowledgeType(text: string, role: string | null | undefined): Exclude<NodeType, 'artifact'> | null {
+    private scoreKnowledgeCandidate(
+        text: string,
+        role: string | null | undefined
+    ): {
+        type: Exclude<NodeType, 'artifact'>;
+        confidence: number;
+        reason: string;
+    } | null {
         const normalized = text.toLowerCase().trim();
         if (!normalized || this.isExtractionNoise(text)) return null;
 
+        const wordCount = normalized.split(/\s+/).filter(Boolean).length;
+        if (wordCount < 5) return null;
+        if (/^(this|that|it|there)\s+(is|was|are|were)\b/.test(normalized)) return null;
+        if (/(^|\s)(click|choose|select|open|refresh|restart|copy|paste)\b/.test(normalized)) return null;
+        const lowerRole = (role ?? '').toLowerCase();
+
         if (normalized.endsWith('?') || /^(why|what|how|when|where|which|who)\b/.test(normalized)) {
-            return 'open_question';
+            return {
+                type: 'open_question',
+                confidence: 0.92,
+                reason: 'explicit-question'
+            };
         }
 
         if (/\b(we need to|need to build|need to create|need to support|want to|goal is to|aim is to|objective is to|build a|build an|create a|create an|implement a|implement an|add support for)\b/.test(normalized)) {
-            return 'goal';
+            return {
+                type: 'goal',
+                confidence: lowerRole === 'user' ? 0.88 : 0.8,
+                reason: 'goal-language'
+            };
         }
 
-        if (/\b(must|cannot|can't|should not|should stay|should remain|do not|don't|required|requirement|without|only|never|enabled by default|disabled by default|local-first)\b/.test(normalized)) {
-            return 'constraint';
+        if (/\b(must|cannot|can't|should not|should stay|should remain|do not|don't|required|requirement|never|enabled by default|disabled by default|local-first)\b/.test(normalized)) {
+            return {
+                type: 'constraint',
+                confidence: 0.84,
+                reason: 'constraint-language'
+            };
         }
 
-        if (/\b(decided|decision|going with|adopt|adopted|chosen|choose to|switched to|switch to|use the|keep the|remove the|make .* default|ship|standardize|migrate to|now uses)\b/.test(normalized)) {
-            return 'decision';
+        if (/\b(decided|decision|going with|adopt|adopted|chosen|choose to|switched to|default to|standardize|migrate to|now uses|first-class|promote)\b/.test(normalized)) {
+            return {
+                type: 'decision',
+                confidence: lowerRole === 'assistant' ? 0.86 : 0.74,
+                reason: 'decision-language'
+            };
         }
 
         if (/\b(assume|assuming|likely|probably|seems|appears|maybe|hypothesis)\b/.test(normalized)) {
-            return 'assumption';
+            return {
+                type: 'assumption',
+                confidence: 0.66,
+                reason: 'assumption-language'
+            };
         }
 
         if (
-            (role ?? '').toLowerCase() === 'user'
+            lowerRole === 'user'
             && (
                 /\b(i|we)\s+(need|want)\s+to\b/.test(normalized)
                 || /\b(problem|issue)\s+is\b/.test(normalized)
                 || /\b(goal|objective)\s+is\s+to\b/.test(normalized)
             )
         ) {
-            return 'goal';
+            return {
+                type: 'goal',
+                confidence: 0.78,
+                reason: 'user-stated-goal'
+            };
         }
 
         return null;
@@ -1223,6 +1272,7 @@ export class Graph {
             maxNodes?: number;
             source?: 'session' | 'checkpoint';
             allowedKeys?: string[] | null;
+            minConfidence?: number;
         } = {}
     ): {
         session: AgentSessionSummary | null;
@@ -1235,6 +1285,7 @@ export class Graph {
         const safeLimit = Math.max(1, Math.min(options.maxNodes ?? 12, 50));
         const source = options.source ?? 'session';
         const checkpointId = options.checkpointId ?? null;
+        const minConfidence = Math.max(0, Math.min(options.minConfidence ?? 0.55, 1));
         const allowedKeys = Array.isArray(options.allowedKeys)
             ? new Set(options.allowedKeys.map((value) => String(value || '').trim()).filter(Boolean))
             : null;
@@ -1249,8 +1300,9 @@ export class Graph {
             const extracted = this.splitExtractionCandidates(message.content);
             for (const candidateText of extracted) {
                 if (candidates.length >= safeLimit) break;
-                const type = this.classifyKnowledgeType(candidateText, message.role);
-                if (!type) continue;
+                const classified = this.scoreKnowledgeCandidate(candidateText, message.role);
+                if (!classified || classified.confidence < minConfidence) continue;
+                const type = classified.type;
                 const dedupeKey = `${type}:${candidateText.toLowerCase()}`;
                 if (seenCandidates.has(dedupeKey)) continue;
                 seenCandidates.add(dedupeKey);
@@ -1275,6 +1327,8 @@ export class Graph {
                     messageId: message.messageId ?? null,
                     role: message.role ?? null,
                     createdAt: message.createdAt,
+                    confidence: classified.confidence,
+                    reason: classified.reason,
                     existingNode
                 });
             }
@@ -1287,7 +1341,7 @@ export class Graph {
     previewKnowledgeFromSession(
         contextId: string,
         sessionId: string,
-        options: { checkpointId?: string | null; maxNodes?: number; source?: 'session' | 'checkpoint' } = {}
+        options: { checkpointId?: string | null; maxNodes?: number; source?: 'session' | 'checkpoint'; minConfidence?: number } = {}
     ): KnowledgePreviewResult {
         const { source, checkpointId, candidates } = this.collectSessionKnowledgeCandidates(contextId, sessionId, options);
         const createCount = candidates.filter((candidate) => candidate.action === 'create').length;
@@ -1312,6 +1366,7 @@ export class Graph {
             maxNodes?: number;
             source?: 'session' | 'checkpoint';
             allowedKeys?: string[] | null;
+            minConfidence?: number;
         } = {}
     ): KnowledgeExtractionResult {
         const { session, source, checkpointId, candidates } = this.collectSessionKnowledgeCandidates(contextId, sessionId, options);
@@ -1386,7 +1441,7 @@ export class Graph {
 
     previewKnowledgeFromCheckpoint(
         checkpointId: string,
-        options: { maxNodes?: number } = {}
+        options: { maxNodes?: number; minConfidence?: number } = {}
     ): KnowledgePreviewResult {
         const row = this.db.prepare('SELECT * FROM checkpoints WHERE id = ?').get(checkpointId) as any;
         if (!row) {
@@ -1397,13 +1452,14 @@ export class Graph {
             return this.previewKnowledgeFromSession(checkpoint.contextId, checkpoint.sessionId, {
                 checkpointId,
                 maxNodes: options.maxNodes,
+                minConfidence: options.minConfidence,
                 source: 'checkpoint'
             });
         }
 
         const summary = this.cleanupExtractionText(checkpoint.summary ?? checkpoint.name ?? '');
-        const type = this.classifyKnowledgeType(summary, 'assistant');
-        if (!summary || !type) {
+        const classified = this.scoreKnowledgeCandidate(summary, 'assistant');
+        if (!summary || !classified || classified.confidence < (options.minConfidence ?? 0.55)) {
             return {
                 contextId: checkpoint.contextId,
                 source: 'checkpoint',
@@ -1416,6 +1472,7 @@ export class Graph {
             };
         }
 
+        const type = classified.type;
         const key = this.buildKnowledgeKey(checkpoint.contextId, type, summary, {
             branch: checkpoint.branch,
             worktreePath: checkpoint.worktreePath
@@ -1442,14 +1499,16 @@ export class Graph {
                 sourceNodeId: null,
                 messageId: null,
                 role: 'assistant',
-                createdAt: checkpoint.createdAt
+                createdAt: checkpoint.createdAt,
+                confidence: classified.confidence,
+                reason: classified.reason
             }]
         };
     }
 
     extractKnowledgeFromCheckpoint(
         checkpointId: string,
-        options: { maxNodes?: number; allowedKeys?: string[] | null } = {}
+        options: { maxNodes?: number; allowedKeys?: string[] | null; minConfidence?: number } = {}
     ): KnowledgeExtractionResult {
         const row = this.db.prepare('SELECT * FROM checkpoints WHERE id = ?').get(checkpointId) as any;
         if (!row) {
@@ -1461,7 +1520,8 @@ export class Graph {
                 checkpointId,
                 maxNodes: options.maxNodes,
                 source: 'checkpoint',
-                allowedKeys: options.allowedKeys
+                allowedKeys: options.allowedKeys,
+                minConfidence: options.minConfidence
             });
         }
 

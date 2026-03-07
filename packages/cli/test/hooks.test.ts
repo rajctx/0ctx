@@ -770,8 +770,13 @@ describe('hook install workflow', () => {
         process.env.USERPROFILE = fakeHome;
 
         const sessionId = 'codex-session-archive-1';
-        const archivePath = path.join(fakeHome, '.codex', 'sessions', '2026', '03', '07', `rollout-2026-03-07T10-00-00-${sessionId}.jsonl`);
+        const archivePath = path.join(fakeHome, '.codex', 'sessions', '2026', '03', '07', 'rollout-2026-03-07T10-00-00-other-name.jsonl');
         fs.mkdirSync(path.dirname(archivePath), { recursive: true });
+        fs.writeFileSync(path.join(fakeHome, '.codex', 'session_index.jsonl'), JSON.stringify({
+            id: sessionId,
+            thread_name: 'Codex archive test',
+            updated_at: '2026-03-07T10:00:09.000Z'
+        }) + '\n', 'utf8');
         fs.writeFileSync(archivePath, [
             JSON.stringify({
                 type: 'session_meta',

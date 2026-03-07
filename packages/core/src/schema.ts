@@ -241,6 +241,8 @@ export interface KnowledgeCandidate {
     messageId: string | null;
     role: string | null;
     createdAt: number;
+    confidence?: number;
+    reason?: string | null;
 }
 
 export interface KnowledgePreviewResult {

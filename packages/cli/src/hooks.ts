@@ -1361,6 +1361,74 @@ export function readCodexCapture(
     };
 }
 
+function readCodexIndexTimestamps(sessionId: string): number[] {
+    const indexPath = path.join(os.homedir(), '.codex', 'session_index.jsonl');
+    if (!fs.existsSync(indexPath)) {
+        return [];
+    }
+    try {
+        const lines = fs.readFileSync(indexPath, 'utf8').split(/\r?\n/);
+        const matches: number[] = [];
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+            let parsed: unknown;
+            try {
+                parsed = JSON.parse(trimmed);
+            } catch {
+                continue;
+            }
+            if (!isRecord(parsed) || pickString(parsed, ['id']) !== sessionId) {
+                continue;
+            }
+            const updatedAt = pickTimestamp(parsed, ['updated_at', 'updatedAt', 'timestamp'], NaN);
+            if (Number.isFinite(updatedAt)) {
+                matches.push(updatedAt);
+            }
+        }
+        return matches;
+    } catch {
+        return [];
+    }
+}
+
+function codexSessionIdFromArchive(filePath: string): string | null {
+    try {
+        const content = fs.readFileSync(filePath, 'utf8');
+        for (const line of content.split(/\r?\n/)) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+            let parsed: unknown;
+            try {
+                parsed = JSON.parse(trimmed);
+            } catch {
+                continue;
+            }
+            if (!isRecord(parsed) || parsed.type !== 'session_meta') {
+                continue;
+            }
+            const payload = isRecord(parsed.payload) ? parsed.payload : parsed;
+            return pickString(payload, ['id', 'session_id', 'sessionId']);
+        }
+    } catch {
+        return null;
+    }
+    return null;
+}
+
+function collectCodexSearchRoots(sessionsRoot: string, sessionId: string): string[] {
+    const roots = new Set<string>([sessionsRoot]);
+    for (const timestamp of readCodexIndexTimestamps(sessionId)) {
+        const date = new Date(timestamp);
+        if (Number.isNaN(date.getTime())) continue;
+        const year = String(date.getUTCFullYear()).padStart(4, '0');
+        const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(date.getUTCDate()).padStart(2, '0');
+        roots.add(path.join(sessionsRoot, year, month, day));
+    }
+    return Array.from(roots).filter((value) => fs.existsSync(value));
+}
+
 export function resolveCodexSessionArchivePath(payload: Record<string, unknown>, sessionId: string): string | null {
     const explicitPath = pickString(payload, [
         'session_path',
@@ -1382,8 +1450,10 @@ export function resolveCodexSessionArchivePath(payload: Record<string, unknown>,
         return null;
     }
 
+    const searchRoots = collectCodexSearchRoots(sessionsRoot, sessionId);
     let bestMatch: { path: string; mtimeMs: number } | null = null;
-    const pending = [sessionsRoot];
+    const inspectedFiles: string[] = [];
+    const pending = [...searchRoots];
     while (pending.length > 0) {
         const current = pending.pop();
         if (!current) continue;
@@ -1402,6 +1472,7 @@ export function resolveCodexSessionArchivePath(payload: Record<string, unknown>,
             if (!entry.isFile() || !entry.name.toLowerCase().endsWith('.jsonl')) {
                 continue;
             }
+            inspectedFiles.push(fullPath);
             if (!entry.name.includes(sessionId)) {
                 continue;
             }
@@ -1415,6 +1486,26 @@ export function resolveCodexSessionArchivePath(payload: Record<string, unknown>,
             if (!bestMatch || mtimeMs >= bestMatch.mtimeMs) {
                 bestMatch = { path: fullPath, mtimeMs };
             }
+        }
+    }
+
+    if (bestMatch) {
+        return bestMatch.path;
+    }
+
+    for (const filePath of inspectedFiles) {
+        if (codexSessionIdFromArchive(filePath) !== sessionId) {
+            continue;
+        }
+        let stats: fs.Stats | null = null;
+        try {
+            stats = fs.statSync(filePath);
+        } catch {
+            stats = null;
+        }
+        const mtimeMs = stats?.mtimeMs ?? 0;
+        if (!bestMatch || mtimeMs >= bestMatch.mtimeMs) {
+            bestMatch = { path: filePath, mtimeMs };
         }
     }
 
