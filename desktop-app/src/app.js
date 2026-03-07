@@ -318,6 +318,26 @@ function renderMetaLine(parts, options = {}) {
   return `<p class="${classes.join(' ')}">${esc(values.join(' · '))}</p>`;
 }
 
+function describeWorkstreamSync(lane) {
+  if (!lane) return '';
+  if (typeof lane.aheadCount === 'number' && typeof lane.behindCount === 'number' && lane.upstream) {
+    if (lane.aheadCount === 0 && lane.behindCount === 0) {
+      return `In sync with ${lane.upstream}`;
+    }
+    if (lane.aheadCount > 0 && lane.behindCount === 0) {
+      return `${lane.aheadCount} ahead of ${lane.upstream}`;
+    }
+    if (lane.aheadCount === 0 && lane.behindCount > 0) {
+      return `${lane.behindCount} behind ${lane.upstream}`;
+    }
+    return `${lane.aheadCount} ahead / ${lane.behindCount} behind ${lane.upstream}`;
+  }
+  if (lane.isCurrent === true) {
+    return 'Current local workstream';
+  }
+  return '';
+}
+
 function renderAgentChain(agentSet, lastAgent) {
   const ordered = Array.isArray(agentSet) && agentSet.length > 0
     ? [...new Set(agentSet.filter(Boolean).map((value) => String(value).trim()).filter(Boolean))]
@@ -614,9 +634,10 @@ function describeBranchLane(lane) {
   const title = lane?.worktreePath
     ? `${normalizeBranch(lane.branch)} | ${basenameFromPath(lane.worktreePath)}`
     : normalizeBranch(lane?.branch);
+  const syncState = describeWorkstreamSync(lane);
   const preview = lane?.lastAgent
-    ? `${lane.lastAgent} touched this workstream most recently.`
-    : 'No agent activity recorded yet for this workstream.';
+    ? `${lane.lastAgent} touched this workstream most recently.${syncState ? ` ${syncState}.` : ''}`
+    : syncState || 'No agent activity recorded yet for this workstream.';
   return {
     title,
     preview,
@@ -813,7 +834,8 @@ function renderRuntimeBanner() {
             `${lane.sessionCount} sessions`,
             `${lane.checkpointCount} checkpoints`,
             lane.lastAgent || '',
-            lane.lastCommitSha ? `#${commitShort(lane.lastCommitSha)}` : ''
+            lane.lastCommitSha ? `#${commitShort(lane.lastCommitSha)}` : '',
+            describeWorkstreamSync(lane)
           ])}
         </article>
       `;
@@ -880,6 +902,7 @@ function renderRuntimeBanner() {
     document.getElementById('branchLeadCopy').textContent = [
       `${describeBranchLane(lane).title} carries ${lane.sessionCount} captured session${lane.sessionCount === 1 ? '' : 's'} and ${lane.checkpointCount} checkpoint${lane.checkpointCount === 1 ? '' : 's'}.`,
       lane.lastAgent ? `The most recent handoff came from ${lane.lastAgent}` : 'No agent has touched this workstream yet.',
+      describeWorkstreamSync(lane) ? `${describeWorkstreamSync(lane)}.` : '',
       lane.lastActivityAt ? `${formatRelativeTime(lane.lastActivityAt)}.` : ''
     ].join(' ').trim();
     empty.classList.add('hidden');
@@ -888,6 +911,8 @@ function renderRuntimeBanner() {
       { label: 'Workstream', value: normalizeBranch(lane.branch) },
       { label: 'Last agent', value: lane.lastAgent || 'unknown' },
       { label: 'Latest commit', value: lane.lastCommitSha || 'none' },
+      { label: 'Git state', value: describeWorkstreamSync(lane) || 'unknown' },
+      { label: 'Upstream', value: lane.upstream || 'not configured' },
       { label: 'Agents on workstream', value: lane.agentSet?.length ? lane.agentSet.join(', ') : 'none' },
       { label: 'Worktree', value: lane.worktreePath || 'Primary workspace root' }
     ];

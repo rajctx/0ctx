@@ -2888,7 +2888,7 @@ async function commandConnectorHook(action: string | undefined, flags: Record<st
     }
 
     if (safeAction === 'session-start') {
-        if (agent !== 'claude' && agent !== 'factory') {
+        if (agent !== 'claude' && agent !== 'factory' && agent !== 'antigravity') {
             if (asJson) {
                 console.log(JSON.stringify({
                     ok: true,
@@ -2993,7 +2993,7 @@ async function commandConnectorHook(action: string | undefined, flags: Record<st
     const explicitContextId = parseOptionalStringFlag(flags['context-id'] ?? flags.contextId);
     const contextId = await resolveContextIdForHookIngest(repoRoot, explicitContextId);
     if (!contextId) {
-        console.error('connector_hook_ingest_context_missing: no context matched this repository path. Create a workspace for this repo or pass --context-id.');
+        console.error('connector_hook_ingest_context_missing: no workspace matched this repository path. Run `0ctx enable` in this repo first, or use --context-id only for support workflows.');
         return 1;
     }
     const captureNow = Date.now();
@@ -4228,17 +4228,17 @@ Usage:
   0ctx status [--json] [--compact]
   0ctx repair [--clients=...] [--deep] [--json]
   0ctx reset [--confirm] [--full] [--include-auth] [--json]
-  0ctx workstreams [--repo-root=<path>] [--context-id=<id>] [--limit=100] [--json]
-  0ctx branches [--repo-root=<path>] [--context-id=<id>] [--limit=100] [--json]
-  0ctx sessions [--repo-root=<path>] [--context-id=<id>] [--branch=<name>] [--session-id=<id>] [--worktree-path=<path>] [--limit=100] [--json]
-  0ctx checkpoints [list] [--repo-root=<path>] [--context-id=<id>] [--branch=<name>] [--worktree-path=<path>] [--limit=100] [--json]
-  0ctx checkpoints create [--repo-root=<path>] [--context-id=<id>] --session-id=<id> [--name="..."] [--summary="..."] [--json]
-  0ctx checkpoints show [--repo-root=<path>] [--context-id=<id>] --checkpoint-id=<id> [--json]
-  0ctx extract session [--repo-root=<path>] [--context-id=<id>] --session-id=<id> [--preview] [--keys=key1,key2] [--max-nodes=12] [--json]
+  0ctx workstreams [--repo-root=<path>] [--limit=100] [--json]
+  0ctx branches [--repo-root=<path>] [--limit=100] [--json]
+  0ctx sessions [--repo-root=<path>] [--branch=<name>] [--session-id=<id>] [--worktree-path=<path>] [--limit=100] [--json]
+  0ctx checkpoints [list] [--repo-root=<path>] [--branch=<name>] [--worktree-path=<path>] [--limit=100] [--json]
+  0ctx checkpoints create [--repo-root=<path>] --session-id=<id> [--name="..."] [--summary="..."] [--json]
+  0ctx checkpoints show [--repo-root=<path>] --checkpoint-id=<id> [--json]
+  0ctx extract session [--repo-root=<path>] --session-id=<id> [--preview] [--keys=key1,key2] [--max-nodes=12] [--json]
   0ctx extract checkpoint --checkpoint-id=<id> [--preview] [--keys=key1,key2] [--max-nodes=12] [--json]
-  0ctx resume [--repo-root=<path>] [--context-id=<id>] --session-id=<id> [--json]
-  0ctx rewind [--repo-root=<path>] [--context-id=<id>] --checkpoint-id=<id> [--json]
-  0ctx explain [--repo-root=<path>] [--context-id=<id>] --checkpoint-id=<id> [--json]
+  0ctx resume [--repo-root=<path>] --session-id=<id> [--json]
+  0ctx rewind [--repo-root=<path>] --checkpoint-id=<id> [--json]
+  0ctx explain [--repo-root=<path>] --checkpoint-id=<id> [--json]
   0ctx logs [--no-open] [--snapshot] [--limit=50] [--since-hours=N] [--grep=text] [--errors-only]
   0ctx recall [--mode=auto|temporal|topic|graph] [--query="..."] [--since-hours=24] [--limit=10] [--depth=2] [--max-nodes=30] [--start] [--json]
   0ctx recall feedback --node-id=<id> (--helpful|--not-helpful) [--reason="..."] [--context-id=<id>] [--json]
@@ -4263,8 +4263,8 @@ Configuration:
 
 Sync:
   0ctx sync status   Show sync engine health and queue
-  0ctx sync policy get --context-id=<contextId>
-  0ctx sync policy set <local_only|metadata_only|full_sync> --context-id=<contextId>
+  0ctx sync policy get [--repo-root=<path>] [--json]
+  0ctx sync policy set <local_only|metadata_only|full_sync> [--repo-root=<path>] [--json]
 
 Connector:
   0ctx connector service install|enable|disable|uninstall|status|start|stop|restart
@@ -4273,19 +4273,22 @@ Connector:
   0ctx connector verify [--require-cloud] [--json]
   0ctx connector register [--force] [--local-only] [--require-cloud] [--json]
   0ctx connector run [--once] [--interval-ms=5000] [--no-daemon-autostart]
-  0ctx connector hook install [--clients=all|claude,cursor,windsurf,codex,factory,antigravity] [--context-id=<id>] [--global]
+  0ctx connector hook install [--clients=all|claude,cursor,windsurf,codex,factory,antigravity] [--repo-root=<path>] [--global]
   0ctx connector hook status [--json]
   0ctx connector hook prune [--days=30] [--json]
-  0ctx connector hook session-start --agent=claude|factory [--context-id=<id>] [--repo-root=<path>]
-                                   [--input-file=<path>|--payload='<json>'|stdin] [--json]
-  0ctx connector hook ingest --agent=claude|windsurf|codex|cursor|factory|antigravity [--context-id=<id>] [--repo-root=<path>]
-                             [--input-file=<path>|--payload='<json>'|stdin]
+0ctx connector hook session-start --agent=claude|factory|antigravity [--repo-root=<path>]
+                                    [--input-file=<path>|--payload='<json>'|stdin] [--json]
+  0ctx connector hook ingest --agent=claude|windsurf|codex|cursor|factory|antigravity [--repo-root=<path>]
+                              [--input-file=<path>|--payload='<json>'|stdin]
   0ctx hook install|status|prune|session-start|ingest  Alias for "0ctx connector hook ..."
   0ctx connector queue status [--json]
   0ctx connector queue drain [--max-batches=10] [--batch-size=200] [--wait] [--strict|--fail-on-retry] [--timeout-ms=120000] [--poll-ms=1000] [--json]
   0ctx connector queue purge [--all|--older-than-hours=N|--min-attempts=N] [--dry-run|--confirm] [--json]
   0ctx connector queue logs [--limit=50] [--json] [--clear --confirm|--dry-run]
   0ctx connector logs [--service|--system] [--no-open] [--snapshot] [--limit=50] [--since-hours=N] [--grep=text] [--errors-only]
+
+Support overrides:
+  Use --context-id only for support, debugging, or automation outside a bound repo.
 
 Service management compatibility (requires Admin on Windows):
   Both command paths manage the same underlying OS service.
@@ -4421,7 +4424,7 @@ async function resolveCommandContextId(
             if (byRepo) return byRepo;
         }
 
-        if (options.allowActiveFallback !== false) {
+        if (options.allowActiveFallback === true) {
             const active = await sendToDaemon('getActiveContext', {}) as { id?: string } | null;
             return typeof active?.id === 'string' && active.id.trim().length > 0 ? active.id : null;
         }
@@ -4465,12 +4468,17 @@ async function commandBranches(flags: Record<string, string | boolean>): Promise
         const result = await sendToDaemon('listBranchLanes', { contextId, limit }) as Array<{
             branch: string;
             worktreePath?: string | null;
+            repositoryRoot?: string | null;
             lastAgent?: string | null;
             lastCommitSha?: string | null;
             lastActivityAt: number;
             sessionCount: number;
             checkpointCount: number;
             agentSet?: string[];
+            upstream?: string | null;
+            aheadCount?: number | null;
+            behindCount?: number | null;
+            isCurrent?: boolean | null;
         }>;
         return printJsonOrValue(asJson, result, () => {
             console.log('\nWorkstreams\n');
@@ -4484,6 +4492,13 @@ async function commandBranches(flags: Record<string, string | boolean>): Promise
                 console.log(`    Sessions: ${lane.sessionCount} | Checkpoints: ${lane.checkpointCount}`);
                 if (lane.lastAgent) console.log(`    Last agent: ${lane.lastAgent}`);
                 if (lane.lastCommitSha) console.log(`    Last commit: ${String(lane.lastCommitSha).slice(0, 12)}`);
+                if (lane.upstream) {
+                    const ahead = typeof lane.aheadCount === 'number' ? lane.aheadCount : '?';
+                    const behind = typeof lane.behindCount === 'number' ? lane.behindCount : '?';
+                    console.log(`    Git: ${lane.upstream} | ahead ${ahead} | behind ${behind}`);
+                } else if (lane.isCurrent === true) {
+                    console.log('    Git: current local workstream');
+                }
                 if (Array.isArray(lane.agentSet) && lane.agentSet.length > 0) {
                     console.log(`    Agents: ${lane.agentSet.join(', ')}`);
                 }
@@ -4748,7 +4763,7 @@ async function commandExtract(positionalArgs: string[], flags: Record<string, st
                     nodes?: Array<{ type?: string; content?: string }>;
                     candidates?: Array<{ type?: string; content?: string; action?: string }>;
                 };
-                console.log(preview ? '\nSession Knowledge Preview\n' : '\nSession Knowledge Extraction\n');
+            console.log(preview ? '\nSession Insights Preview\n' : '\nSession Insights Save\n');
                 console.log(`  Session: ${sessionId}`);
                 console.log(`  Created: ${String(extraction.createdCount ?? extraction.createCount ?? 0)}`);
                 console.log(`  Reused: ${String(extraction.reusedCount ?? extraction.reuseCount ?? 0)}`);
@@ -4783,7 +4798,7 @@ async function commandExtract(positionalArgs: string[], flags: Record<string, st
                     nodes?: Array<{ type?: string; content?: string }>;
                     candidates?: Array<{ type?: string; content?: string; action?: string }>;
                 };
-                console.log(preview ? '\nCheckpoint Knowledge Preview\n' : '\nCheckpoint Knowledge Extraction\n');
+            console.log(preview ? '\nCheckpoint Insights Preview\n' : '\nCheckpoint Insights Save\n');
                 console.log(`  Checkpoint: ${checkpointId}`);
                 console.log(`  Created:    ${String(extraction.createdCount ?? extraction.createCount ?? 0)}`);
                 console.log(`  Reused:     ${String(extraction.reusedCount ?? extraction.reuseCount ?? 0)}`);
@@ -4799,19 +4814,18 @@ async function commandExtract(positionalArgs: string[], flags: Record<string, st
             });
         }
 
-        console.error('Usage: 0ctx extract session --context-id=<id> --session-id=<id> [--preview] [--keys=key1,key2] [--max-nodes=12] [--json]');
+        console.error('Usage: 0ctx extract session [--repo-root=<path>] --session-id=<id> [--preview] [--keys=key1,key2] [--max-nodes=12] [--json]');
         console.error('   or: 0ctx extract checkpoint --checkpoint-id=<id> [--preview] [--keys=key1,key2] [--max-nodes=12] [--json]');
         return 1;
     } catch (error) {
-        console.error('Failed to extract knowledge:', error instanceof Error ? error.message : String(error));
+        console.error('Failed to save insights:', error instanceof Error ? error.message : String(error));
         return 1;
     }
 }
 
 async function commandSyncPolicyGet(flags: Record<string, string | boolean>): Promise<number> {
-    const contextId = getContextIdFlag(flags);
+    const contextId = await requireCommandContextId(flags, '0ctx sync policy get');
     if (!contextId) {
-        console.error("Missing required '--context-id' for `0ctx sync policy get`.");
         return 1;
     }
 
@@ -4833,9 +4847,8 @@ async function commandSyncPolicySet(
     policy: string | undefined,
     flags: Record<string, string | boolean>
 ): Promise<number> {
-    const contextId = getContextIdFlag(flags);
+    const contextId = await requireCommandContextId(flags, '0ctx sync policy set');
     if (!contextId) {
-        console.error("Missing required '--context-id' for `0ctx sync policy set`.");
         return 1;
     }
 
@@ -5190,8 +5203,8 @@ async function main(): Promise<number> {
                     const action = parsed.positionalArgs[0];
                     if (action === 'get') return commandSyncPolicyGet(parsed.flags);
                     if (action === 'set') return commandSyncPolicySet(parsed.positionalArgs[1], parsed.flags);
-                    console.error('Usage: 0ctx sync policy get --context-id=<contextId>');
-                    console.error('   or: 0ctx sync policy set <local_only|metadata_only|full_sync> --context-id=<contextId>');
+                    console.error('Usage: 0ctx sync policy get [--repo-root=<path>] [--json]');
+                    console.error('   or: 0ctx sync policy set <local_only|metadata_only|full_sync> [--repo-root=<path>] [--json]');
                     return 1;
                 }
                 printHelp();

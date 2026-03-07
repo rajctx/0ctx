@@ -1108,12 +1108,18 @@ export class Graph {
             contextId: row.contextId,
             branch: row.branch,
             worktreePath: row.worktreePath || null,
+            repositoryRoot: null,
             lastAgent: row.lastAgent ?? null,
             lastCommitSha: row.lastCommitSha ?? null,
             lastActivityAt: row.lastActivityAt,
             sessionCount: row.sessionCount,
             checkpointCount: row.checkpointCount,
-            agentSet: row.agentSet ? JSON.parse(row.agentSet) : []
+            agentSet: row.agentSet ? JSON.parse(row.agentSet) : [],
+            upstream: null,
+            aheadCount: null,
+            behindCount: null,
+            mergeBaseSha: null,
+            isCurrent: null
         }));
     }
 

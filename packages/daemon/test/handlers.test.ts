@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from 'fs';
 import os from 'os';
 import path from 'path';
+import { spawnSync } from 'child_process';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Graph, openDb } from '@0ctx/core';
 import { handleRequest } from '../src/handlers';
@@ -27,6 +28,10 @@ function runtime(): HandlerRuntimeContext {
             methods: {}
         })
     };
+}
+
+function gitAvailable(): boolean {
+    return spawnSync('git', ['--version'], { encoding: 'utf8', windowsHide: true }).status === 0;
 }
 
 beforeEach(() => {
@@ -406,6 +411,101 @@ describe('daemon request handling', () => {
             expect(audit.some(event => event.action === 'rewind')).toBe(true);
             expect(audit.some(event => event.action === 'resume_session')).toBe(true);
             expect(audit.some(event => event.action === 'explain_checkpoint')).toBe(true);
+        } finally {
+            db.close();
+        }
+    });
+
+    it('enriches workstreams with git-aware state when the repository exists locally', () => {
+        if (!gitAvailable()) return;
+        const { db, graph } = createGraph();
+        try {
+            const repoRoot = path.join(os.tmpdir(), `0ctx-workstream-repo-${Date.now()}`);
+            tempDirs.push(repoRoot);
+            spawnSync('git', ['init', '--initial-branch', 'feature/runtime-shape', repoRoot], { encoding: 'utf8', windowsHide: true });
+
+            const session = handleRequest(graph, 'conn-git', { method: 'createSession' }, runtime()) as { sessionToken: string };
+            const context = handleRequest(graph, 'conn-git', {
+                method: 'createContext',
+                sessionToken: session.sessionToken,
+                params: { name: 'git-aware-context', paths: [repoRoot] }
+            }, runtime()) as { id: string };
+
+            handleRequest(graph, 'conn-git', {
+                method: 'addNode',
+                sessionToken: session.sessionToken,
+                params: {
+                    contextId: context.id,
+                    type: 'artifact',
+                    hidden: true,
+                    thread: 'session-git-1',
+                    key: 'chat_session:claude:session-git-1',
+                    content: 'git aware session summary',
+                    tags: ['chat_session', 'agent:claude'],
+                    rawPayload: {
+                        sessionId: 'session-git-1',
+                        branch: 'feature/runtime-shape',
+                        agent: 'claude',
+                        worktreePath: repoRoot,
+                        repositoryRoot: repoRoot
+                    }
+                }
+            }, runtime());
+
+            handleRequest(graph, 'conn-git', {
+                method: 'addNode',
+                sessionToken: session.sessionToken,
+                params: {
+                    contextId: context.id,
+                    type: 'artifact',
+                    hidden: true,
+                    thread: 'session-git-1',
+                    key: 'chat_turn:claude:session-git-1:msg-1',
+                    content: 'git aware captured turn',
+                    tags: ['chat_turn', 'role:assistant'],
+                    rawPayload: {
+                        sessionId: 'session-git-1',
+                        messageId: 'msg-1',
+                        role: 'assistant',
+                        branch: 'feature/runtime-shape',
+                        agent: 'claude',
+                        worktreePath: repoRoot,
+                        repositoryRoot: repoRoot,
+                        occurredAt: Date.now()
+                    }
+                }
+            }, runtime());
+
+            const lanes = handleRequest(graph, 'conn-git', {
+                method: 'listBranchLanes',
+                sessionToken: session.sessionToken,
+                params: { contextId: context.id }
+            }, runtime()) as Array<{
+                branch: string;
+                repositoryRoot: string | null;
+                isCurrent: boolean | null;
+                upstream: string | null;
+            }>;
+
+            expect(lanes).toHaveLength(1);
+            expect(lanes[0].branch).toBe('feature/runtime-shape');
+            expect(lanes[0].repositoryRoot).toBe(repoRoot);
+            expect(lanes[0].isCurrent).toBe(true);
+            expect(lanes[0].upstream).toBeNull();
+
+            const brief = handleRequest(graph, 'conn-git', {
+                method: 'getWorkstreamBrief',
+                sessionToken: session.sessionToken,
+                params: {
+                    contextId: context.id,
+                    branch: 'feature/runtime-shape',
+                    worktreePath: repoRoot
+                }
+            }, runtime()) as { repositoryRoot: string | null; isCurrent: boolean | null; contextText: string };
+
+            expect(brief.repositoryRoot).toBe(repoRoot);
+            expect(brief.isCurrent).toBe(true);
+            expect(brief.contextText).toContain('Git state: current local workstream.');
         } finally {
             db.close();
         }

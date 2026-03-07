@@ -100,12 +100,12 @@ export const tools = [
     },
     {
         name: 'ctx_get_workstream_brief',
-        description: 'Get a compact workstream brief suitable for injecting into an agent session or summarizing the current lane.',
+        description: 'Get a compact workstream brief suitable for injecting into an agent session or summarizing the current workstream.',
         inputSchema: {
             type: 'object',
             properties: {
                 branch: { type: 'string', description: 'Optional branch name for the workstream.' },
-                worktreePath: { type: 'string', description: 'Optional worktree path for a specific lane.' },
+                worktreePath: { type: 'string', description: 'Optional worktree path for a specific workstream.' },
                 sessionLimit: { type: 'number', description: 'Maximum number of recent sessions to include (default 3).' },
                 checkpointLimit: { type: 'number', description: 'Maximum number of checkpoints to include (default 2).' },
                 contextId: { type: 'string', description: 'Optional explicit context ID override for this operation.' },
@@ -120,7 +120,7 @@ export const tools = [
             type: 'object',
             properties: {
                 branch: { type: 'string', description: 'Branch name for the workstream.' },
-                worktreePath: { type: 'string', description: 'Optional worktree path for a specific lane.' },
+                worktreePath: { type: 'string', description: 'Optional worktree path for a specific workstream.' },
                 limit: { type: 'number', description: 'Maximum number of sessions to return (default 100).' },
                 contextId: { type: 'string', description: 'Optional explicit context ID override for this operation.' },
             },
@@ -159,7 +159,7 @@ export const tools = [
             type: 'object',
             properties: {
                 branch: { type: 'string', description: 'Branch name for the workstream.' },
-                worktreePath: { type: 'string', description: 'Optional worktree path for a specific lane.' },
+                worktreePath: { type: 'string', description: 'Optional worktree path for a specific workstream.' },
                 limit: { type: 'number', description: 'Maximum number of checkpoints to return (default 100).' },
                 contextId: { type: 'string', description: 'Optional explicit context ID override for this operation.' },
             },

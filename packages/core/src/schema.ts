@@ -162,12 +162,18 @@ export interface BranchLaneSummary {
     contextId: string;
     branch: string;
     worktreePath: string | null;
+    repositoryRoot: string | null;
     lastAgent: string | null;
     lastCommitSha: string | null;
     lastActivityAt: number;
     sessionCount: number;
     checkpointCount: number;
     agentSet: string[];
+    upstream: string | null;
+    aheadCount: number | null;
+    behindCount: number | null;
+    mergeBaseSha: string | null;
+    isCurrent: boolean | null;
 }
 
 export interface AgentSessionSummary extends ChatSessionSummary {
@@ -206,12 +212,18 @@ export interface WorkstreamBrief {
     workspaceName: string;
     branch: string | null;
     worktreePath: string | null;
+    repositoryRoot: string | null;
     tracked: boolean;
     sessionCount: number;
     checkpointCount: number;
     lastAgent: string | null;
     lastCommitSha: string | null;
     lastActivityAt: number | null;
+    upstream: string | null;
+    aheadCount: number | null;
+    behindCount: number | null;
+    mergeBaseSha: string | null;
+    isCurrent: boolean | null;
     recentSessions: AgentSessionSummary[];
     latestCheckpoints: CheckpointSummary[];
     contextText: string;

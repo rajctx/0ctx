@@ -9,6 +9,7 @@ import type {
     CheckpointSummary,
     WorkstreamBrief
 } from '@0ctx/core';
+import { spawnSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -212,6 +213,89 @@ function formatRelativeAge(timestamp: number, now = Date.now()): string {
     return `${Math.max(1, Math.floor(delta / day))}d ago`;
 }
 
+function safeGit(repoRoot: string, args: string[]): string | null {
+    const result = spawnSync('git', ['-C', repoRoot, ...args], {
+        encoding: 'utf8',
+        windowsHide: true
+    });
+    if (result.status !== 0) {
+        return null;
+    }
+    const value = String(result.stdout ?? '').trim();
+    return value.length > 0 ? value : null;
+}
+
+function safeGitCurrentBranch(repoRoot: string): string | null {
+    return safeGit(repoRoot, ['symbolic-ref', '--short', 'HEAD'])
+        ?? safeGit(repoRoot, ['rev-parse', '--abbrev-ref', 'HEAD']);
+}
+
+function resolveWorkstreamRepositoryRoot(
+    graph: Graph,
+    contextId: string,
+    lane: BranchLaneSummary,
+    contextPaths: string[]
+): string | null {
+    const branchSessions = graph.listBranchSessions(contextId, lane.branch, {
+        worktreePath: lane.worktreePath,
+        limit: 10
+    });
+    const sessionRoot = branchSessions.find((session) => typeof session.repositoryRoot === 'string' && session.repositoryRoot.trim().length > 0)?.repositoryRoot ?? null;
+    const preferred = sessionRoot
+        ?? lane.worktreePath
+        ?? contextPaths.find((candidate) => typeof candidate === 'string' && candidate.trim().length > 0)
+        ?? null;
+    if (!preferred) return null;
+    try {
+        return path.resolve(preferred);
+    } catch {
+        return null;
+    }
+}
+
+function enrichWorkstreamLane(
+    graph: Graph,
+    contextId: string,
+    contextPaths: string[],
+    lane: BranchLaneSummary
+): BranchLaneSummary {
+    const repositoryRoot = resolveWorkstreamRepositoryRoot(graph, contextId, lane, contextPaths);
+    if (!repositoryRoot) {
+        return {
+            ...lane,
+            repositoryRoot: null,
+            upstream: null,
+            aheadCount: null,
+            behindCount: null,
+            mergeBaseSha: null,
+            isCurrent: null
+        };
+    }
+
+    const currentBranch = safeGitCurrentBranch(repositoryRoot);
+    const currentRoot = safeGit(repositoryRoot, ['rev-parse', '--show-toplevel']);
+    const upstream = safeGit(repositoryRoot, ['rev-parse', '--abbrev-ref', `${lane.branch}@{upstream}`]);
+    const countText = upstream
+        ? safeGit(repositoryRoot, ['rev-list', '--left-right', '--count', `${lane.branch}...${upstream}`])
+        : null;
+    const counts = countText ? countText.split(/\s+/).map((entry) => Number(entry)).filter((entry) => Number.isFinite(entry)) : [];
+    const mergeBaseSha = upstream ? safeGit(repositoryRoot, ['merge-base', lane.branch, upstream]) : null;
+    const normalizedWorktree = lane.worktreePath ? path.resolve(lane.worktreePath) : null;
+    const normalizedCurrentRoot = currentRoot ? path.resolve(currentRoot) : null;
+
+    return {
+        ...lane,
+        repositoryRoot,
+        upstream,
+        aheadCount: counts.length >= 2 ? counts[0] : null,
+        behindCount: counts.length >= 2 ? counts[1] : null,
+        mergeBaseSha,
+        isCurrent: currentBranch
+            ? currentBranch === lane.branch && (!normalizedWorktree || normalizedCurrentRoot === normalizedWorktree)
+            : null
+    };
+}
+
 function buildWorkstreamBrief(
     graph: Graph,
     contextId: string,
@@ -226,6 +310,9 @@ function buildWorkstreamBrief(
     if (!context) {
         throw new Error(`Context ${contextId} not found`);
     }
+    const contextPaths = Array.isArray(context.paths)
+        ? context.paths.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+        : [];
 
     const branch = typeof options.branch === 'string' && options.branch.trim().length > 0
         ? options.branch.trim()
@@ -241,7 +328,7 @@ function buildWorkstreamBrief(
     let latestCheckpoints: CheckpointSummary[] = [];
 
     if (branch) {
-        const lanes = graph.listBranchLanes(contextId, 200);
+        const lanes = graph.listBranchLanes(contextId, 200).map((entry) => enrichWorkstreamLane(graph, contextId, contextPaths, entry));
         lane = lanes.find((entry) => entry.branch === branch && (!worktreePath || entry.worktreePath === worktreePath))
             ?? lanes.find((entry) => entry.branch === branch)
             ?? null;
@@ -282,6 +369,18 @@ function buildWorkstreamBrief(
         if (laneFacts.length > 0) {
             lines.push(`Tracked activity: ${laneFacts.join(', ')}.`);
         }
+        if (lane.upstream && typeof lane.aheadCount === 'number' && typeof lane.behindCount === 'number') {
+            const gitState = lane.aheadCount === 0 && lane.behindCount === 0
+                ? `in sync with ${lane.upstream}`
+                : lane.aheadCount > 0 && lane.behindCount === 0
+                    ? `${lane.aheadCount} commit${lane.aheadCount === 1 ? '' : 's'} ahead of ${lane.upstream}`
+                    : lane.aheadCount === 0 && lane.behindCount > 0
+                        ? `${lane.behindCount} commit${lane.behindCount === 1 ? '' : 's'} behind ${lane.upstream}`
+                        : `${lane.aheadCount} ahead / ${lane.behindCount} behind ${lane.upstream}`;
+            lines.push(`Git state: ${gitState}.`);
+        } else if (lane.isCurrent === true) {
+            lines.push('Git state: current local workstream.');
+        }
     }
 
     if (recentSessions.length > 0) {
@@ -308,12 +407,18 @@ function buildWorkstreamBrief(
         workspaceName: context.name,
         branch,
         worktreePath,
+        repositoryRoot: lane?.repositoryRoot ?? contextPaths[0] ?? null,
         tracked: Boolean(lane),
         sessionCount: lane?.sessionCount ?? recentSessions.length,
         checkpointCount: lane?.checkpointCount ?? latestCheckpoints.length,
         lastAgent: lane?.lastAgent ?? null,
         lastCommitSha: lane?.lastCommitSha ?? null,
         lastActivityAt: lane?.lastActivityAt ?? null,
+        upstream: lane?.upstream ?? null,
+        aheadCount: lane?.aheadCount ?? null,
+        behindCount: lane?.behindCount ?? null,
+        mergeBaseSha: lane?.mergeBaseSha ?? null,
+        isCurrent: lane?.isCurrent ?? null,
         recentSessions,
         latestCheckpoints,
         contextText: lines.join('\n')
@@ -1370,7 +1475,14 @@ export function handleRequest(
             return graph.listChatTurns(contextId!, sessionId, params.limit as number | undefined);
         }
         case 'listBranchLanes':
-            return graph.listBranchLanes(contextId!, params.limit as number | undefined);
+            return (() => {
+                const context = graph.getContext(contextId!);
+                const contextPaths = Array.isArray(context?.paths)
+                    ? context.paths.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+                    : [];
+                return graph.listBranchLanes(contextId!, params.limit as number | undefined)
+                    .map((lane) => enrichWorkstreamLane(graph, contextId!, contextPaths, lane));
+            })();
         case 'getWorkstreamBrief':
             return buildWorkstreamBrief(graph, contextId!, {
                 branch: typeof params.branch === 'string' ? params.branch : null,

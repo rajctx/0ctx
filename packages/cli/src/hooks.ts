@@ -162,7 +162,7 @@ function buildHookCommand(
 }
 
 function buildSessionStartCommand(
-    agent: Extract<HookSupportedAgent, 'claude' | 'factory'>,
+    agent: Extract<HookSupportedAgent, 'claude' | 'factory' | 'antigravity'>,
     cliCommand: string
 ): string {
     return `${cliCommand} connector hook session-start --agent=${agent}`;
@@ -632,7 +632,8 @@ function ensureAntigravityHookConfig(options: {
     dryRun: boolean;
 }): HookConfigResult {
     const configPath = path.join(options.projectRoot, '.gemini', 'settings.json');
-    const command = buildHookCommand('antigravity', options.projectRoot, options.cliCommand, options.contextId);
+    const captureCommand = buildHookCommand('antigravity', options.projectRoot, options.cliCommand, options.contextId);
+    const sessionStartCommand = buildSessionStartCommand('antigravity', options.cliCommand);
     const read = readJsonConfig(configPath);
     const config: Record<string, unknown> = read.value ?? {};
     if (read.reason) {
@@ -655,7 +656,12 @@ function ensureAntigravityHookConfig(options: {
     }
 
     const hooksRoot = (hooksValue ?? {}) as Record<string, unknown>;
-    for (const eventName of ['Stop', 'SubagentStop'] as const) {
+    const eventCommands: Array<readonly [string, string]> = [
+        ['SessionStart', sessionStartCommand],
+        ['Stop', captureCommand],
+        ['SubagentStop', captureCommand]
+    ];
+    for (const [eventName, command] of eventCommands) {
         const eventGroups = ensureHookEventArray(hooksRoot, eventName);
         if (eventGroups.reason) {
             return {
@@ -724,7 +730,7 @@ function ensureAntigravityHookConfig(options: {
         const cleanup = removeManagedHookCommandsFromConfig({
             configPath: cleanupPath,
             agent: 'antigravity',
-            events: ['Stop', 'SubagentStop'],
+            events: ['SessionStart', 'Stop', 'SubagentStop'],
             dryRun: options.dryRun
         });
         cleanupChanged = cleanupChanged || cleanup.changed;

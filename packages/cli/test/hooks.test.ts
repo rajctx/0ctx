@@ -323,6 +323,10 @@ describe('hook install workflow', () => {
 
         const parsed = JSON.parse(fs.readFileSync(result.antigravityConfigPath, 'utf8')) as {
             hooks?: {
+                SessionStart?: Array<{
+                    matcher?: string;
+                    hooks?: Array<{ type?: string; command?: string }>;
+                }>;
                 Stop?: Array<{
                     matcher?: string;
                     hooks?: Array<{ type?: string; command?: string }>;
@@ -333,11 +337,19 @@ describe('hook install workflow', () => {
                 }>;
             };
         };
+        const sessionStartHooks = parsed.hooks?.SessionStart ?? [];
         const stopHooks = parsed.hooks?.Stop ?? [];
         const subagentStopHooks = parsed.hooks?.SubagentStop ?? [];
 
+        expect(sessionStartHooks.length).toBeGreaterThan(0);
         expect(stopHooks.length).toBeGreaterThan(0);
         expect(subagentStopHooks.length).toBeGreaterThan(0);
+        expect(
+            sessionStartHooks.some(group =>
+                group.matcher === '*'
+                && (group.hooks ?? []).some(entry => String(entry.command ?? '').includes('connector hook session-start --agent=antigravity'))
+            )
+        ).toBe(true);
         expect(
             stopHooks.some(group =>
                 group.matcher === '*'
@@ -350,6 +362,11 @@ describe('hook install workflow', () => {
                 && (group.hooks ?? []).some(entry => String(entry.command ?? '').includes('--agent=antigravity'))
             )
         ).toBe(true);
+        expect(
+            sessionStartHooks.some(group =>
+                (group.hooks ?? []).some(entry => String(entry.command ?? '').includes('--context-id='))
+            )
+        ).toBe(false);
         expect(
             stopHooks.some(group =>
                 (group.hooks ?? []).some(entry => String(entry.command ?? '').includes('--repo-root'))
@@ -548,6 +565,17 @@ describe('hook install workflow', () => {
         fs.mkdirSync(path.dirname(homeConfigPath), { recursive: true });
         fs.writeFileSync(homeConfigPath, JSON.stringify({
             hooks: {
+                SessionStart: [
+                    {
+                        matcher: '*',
+                        hooks: [
+                            {
+                                type: 'command',
+                                command: '0ctx connector hook session-start --agent=antigravity'
+                            }
+                        ]
+                    }
+                ],
                 Stop: [
                     {
                         matcher: '*',
@@ -585,15 +613,19 @@ describe('hook install workflow', () => {
 
         const homeConfig = JSON.parse(fs.readFileSync(homeConfigPath, 'utf8')) as {
             hooks?: {
+                SessionStart?: Array<{ hooks?: Array<{ command?: string }> }>;
                 Stop?: Array<{ hooks?: Array<{ command?: string }> }>;
                 SubagentStop?: Array<{ hooks?: Array<{ command?: string }> }>;
             };
         };
+        const sessionStartCommands = (homeConfig.hooks?.SessionStart ?? [])
+            .flatMap(group => (group.hooks ?? []).map(entry => String(entry.command ?? '')));
         const stopCommands = (homeConfig.hooks?.Stop ?? [])
             .flatMap(group => (group.hooks ?? []).map(entry => String(entry.command ?? '')));
         const subagentCommands = (homeConfig.hooks?.SubagentStop ?? [])
             .flatMap(group => (group.hooks ?? []).map(entry => String(entry.command ?? '')));
 
+        expect(sessionStartCommands.some(command => command.includes('connector hook session-start'))).toBe(false);
         expect(stopCommands.some(command => command.includes('keep-stop'))).toBe(true);
         expect(stopCommands.some(command => command.includes('connector hook ingest'))).toBe(false);
         expect(subagentCommands.some(command => command.includes('connector hook ingest'))).toBe(false);
