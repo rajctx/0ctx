@@ -33,6 +33,11 @@ describe('MCP tool profile filtering', () => {
         const names = new Set(tools.map(tool => tool.name));
         expect(names.has('ctx_set')).toBe(true);
         expect(names.has('ctx_runtime_status')).toBe(true);
+        expect(names.has('ctx_list_workstreams')).toBe(true);
+        expect(names.has('ctx_get_workstream_brief')).toBe(true);
+        expect(names.has('ctx_get_session')).toBe(true);
+        expect(names.has('ctx_create_session_checkpoint')).toBe(true);
+        expect(names.has('ctx_preview_insights')).toBe(true);
         expect(names.has('ctx_recall')).toBe(false);
         expect(names.has('ctx_sync_now')).toBe(false);
     });

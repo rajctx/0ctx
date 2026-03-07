@@ -8,6 +8,8 @@ describe('@0ctx/cli build artifact source', () => {
         const source = readFileSync(sourcePath, 'utf8');
 
         expect(source).toContain("case 'install'");
+        expect(source).toContain("case 'enable'");
+        expect(source).toContain("case 'workstreams'");
         expect(source).toContain("case 'bootstrap'");
         expect(source).toContain("case 'doctor'");
         expect(source).toContain("case 'status'");
@@ -29,6 +31,8 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("0ctx shell");
         expect(source).toContain("0ctx version [--verbose] [--json]");
         expect(source).toContain("0ctx --version | -v");
+        expect(source).toContain("0ctx enable [--repo-root=<path>] [--name=<workspace>] [--clients=all|claude,cursor,windsurf,codex,factory,antigravity]");
+        expect(source).toContain("[--mcp-clients=none|all|claude,cursor,windsurf,codex,antigravity]");
         expect(source).toContain("0ctx recall [--mode=auto|temporal|topic|graph]");
         expect(source).toContain("[--start] [--json]");
         expect(source).toContain("0ctx release publish --version vX.Y.Z [--tag latest|next] [--otp 123456] [--dry-run] [--json]");
@@ -38,8 +42,15 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("0ctx status [--json] [--compact]");
         expect(source).toContain("0ctx repair [--clients=...] [--deep] [--json]");
         expect(source).toContain("0ctx reset [--confirm] [--full] [--include-auth] [--json]");
-        expect(source).toContain("0ctx extract session --context-id=<id> --session-id=<id> [--preview] [--keys=key1,key2] [--max-nodes=12] [--json]");
+        expect(source).toContain("0ctx workstreams [--repo-root=<path>] [--context-id=<id>] [--limit=100] [--json]");
+        expect(source).toContain("0ctx branches [--repo-root=<path>] [--context-id=<id>] [--limit=100] [--json]");
+        expect(source).toContain("0ctx sessions [--repo-root=<path>] [--context-id=<id>] [--branch=<name>] [--session-id=<id>] [--worktree-path=<path>] [--limit=100] [--json]");
+        expect(source).toContain("0ctx checkpoints [list] [--repo-root=<path>] [--context-id=<id>] [--branch=<name>] [--worktree-path=<path>] [--limit=100] [--json]");
+        expect(source).toContain("0ctx extract session [--repo-root=<path>] [--context-id=<id>] --session-id=<id> [--preview] [--keys=key1,key2] [--max-nodes=12] [--json]");
         expect(source).toContain("0ctx extract checkpoint --checkpoint-id=<id> [--preview] [--keys=key1,key2] [--max-nodes=12] [--json]");
+        expect(source).toContain("0ctx resume [--repo-root=<path>] [--context-id=<id>] --session-id=<id> [--json]");
+        expect(source).toContain("0ctx rewind [--repo-root=<path>] [--context-id=<id>] --checkpoint-id=<id> [--json]");
+        expect(source).toContain("0ctx explain [--repo-root=<path>] [--context-id=<id>] --checkpoint-id=<id> [--json]");
         expect(source).toContain("0ctx logs [--no-open] [--snapshot] [--limit=50] [--since-hours=N] [--grep=text] [--errors-only]");
         expect(source).toContain("0ctx bootstrap [--dry-run] [--clients=...] [--entrypoint=/path/to/mcp-server.js]");
         expect(source).toContain("[--mcp-profile=all|core|recall|ops] [--json]");
@@ -47,15 +58,18 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("0ctx mcp                     Interactive MCP setup/selection flow");
         expect(source).toContain("0ctx mcp setup [--clients=all|claude,cursor,windsurf,codex,antigravity] [--mcp-profile=all|core|recall|ops] [--no-open]");
         expect(source).toContain("0ctx install [--clients=all|claude,cursor,windsurf,codex,antigravity] [--json] [--skip-bootstrap] [--mcp-profile=all|core|recall|ops]");
+        expect(source).toContain("const DEFAULT_ENABLE_MCP_CLIENTS: SupportedClient[] = ['claude', 'cursor', 'windsurf', 'antigravity'];");
         expect(source).toContain("0ctx connector service install|enable|disable|uninstall|status|start|stop|restart");
         expect(source).toContain("0ctx connector status [--json] [--cloud] [--require-bridge]");
         expect(source).toContain("0ctx connector verify [--require-cloud] [--json]");
         expect(source).toContain("0ctx connector register [--force] [--local-only] [--require-cloud] [--json]");
         expect(source).toContain("0ctx connector hook install [--clients=all|claude,cursor,windsurf,codex,factory,antigravity] [--context-id=<id>] [--global]");
+        expect(source).toContain("const DEFAULT_HOOK_INSTALL_CLIENTS: HookInstallClient[] = ['claude', 'factory', 'antigravity'];");
         expect(source).toContain("0ctx connector hook status [--json]");
         expect(source).toContain("0ctx connector hook prune [--days=30] [--json]");
+        expect(source).toContain("0ctx connector hook session-start --agent=claude|factory [--context-id=<id>] [--repo-root=<path>]");
         expect(source).toContain("0ctx connector hook ingest --agent=claude|windsurf|codex|cursor|factory|antigravity [--context-id=<id>] [--repo-root=<path>]");
-        expect(source).toContain('0ctx hook install|status|prune|ingest  Alias for "0ctx connector hook ..."');
+        expect(source).toContain('0ctx hook install|status|prune|session-start|ingest  Alias for "0ctx connector hook ..."');
         expect(source).toContain("0ctx connector queue status [--json]");
         expect(source).toContain("0ctx sync policy get --context-id=<contextId>");
         expect(source).toContain("0ctx sync policy set <local_only|metadata_only|full_sync> --context-id=<contextId>");

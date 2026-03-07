@@ -1,12 +1,17 @@
 {
   "version": 1,
-  "generatedAt": 1772852437408,
+  "generatedAt": 1772889353372,
   "projectRoot": "C:\\Users\\Rajesh\\development\\0ctx-dev",
-  "contextId": "bbe61d70-6b71-44f7-ae4a-b295650fd662",
+  "contextId": "48138c30-e553-40a5-b872-fca9c88a7085",
   "hooks": [
     {
-      "agent": "codex",
-      "command": "0ctx connector hook ingest --quiet --agent=codex --payload",
+      "agent": "claude",
+      "command": "0ctx connector hook ingest --quiet --agent=claude",
+      "mode": "post-chat"
+    },
+    {
+      "agent": "factory",
+      "command": "0ctx connector hook ingest --quiet --agent=factory",
       "mode": "post-chat"
     }
   ]

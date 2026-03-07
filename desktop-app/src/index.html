@@ -33,7 +33,7 @@
       <p id="sideWorkspacePath" class="sidebar-path">Create a workspace and bind a repository folder so agent integrations can capture automatically.</p>
 
       <div class="workspace-summary-strip">
-        <div class="workspace-fact"><strong id="sideWorkspaceBranches">0</strong><span>branches</span></div>
+              <div class="workspace-fact"><strong id="sideWorkspaceBranches">0</strong><span>workstreams</span></div>
         <div class="workspace-fact"><strong id="sideWorkspaceSessions">0</strong><span>sessions</span></div>
       </div>
 
@@ -56,7 +56,7 @@
       </button>
       <button class="nav-btn" data-view="branches" type="button">
         <span class="nav-dot branches"></span>
-        <span>Branches</span>
+            <span>Workstreams</span>
       </button>
       <button class="nav-btn" data-view="sessions" type="button">
         <span class="nav-dot sessions"></span>
@@ -71,7 +71,7 @@
     <div class="sidebar-utilities">
       <button class="nav-btn utility-btn" data-view="knowledge" type="button">
         <span class="nav-dot knowledge"></span>
-        <span>Graph</span>
+        <span>Insights</span>
       </button>
       <button class="nav-btn utility-btn" data-view="setup" type="button">
         <span class="nav-dot setup"></span>
@@ -179,19 +179,19 @@
         <section class="view" data-view="branches">
           <div class="page-shell page-branches">
             <header class="page-head">
-              <p class="page-kicker">Branch lanes</p>
+                    <p class="page-kicker">Workstreams</p>
               <h1>Workstreams and handoffs</h1>
-              <p id="branchesPageMeta" class="page-copy">Inspect branch-level work, see which agent touched a lane, and follow the handoff path.</p>
+          <p id="branchesPageMeta" class="page-copy">Inspect workstreams, see which agent touched them, and follow the handoff path.</p>
             </header>
 
               <div class="branches-page-grid">
                 <aside id="branchDetailPanel" class="panel editorial-rail branch-summary-rail">
-                  <div id="branchDetailEmpty" class="empty-state">Select a branch lane to inspect cross-agent activity and checkpoint coverage.</div>
+                        <div id="branchDetailEmpty" class="empty-state">Select a workstream to inspect cross-agent activity and checkpoint coverage.</div>
 
                   <div id="branchDetailBody" class="branch-summary-body hidden">
                     <div>
                       <p class="section-label">Selected lane</p>
-                      <h3 id="branchDetailTitle">Choose a branch lane</h3>
+                            <h3 id="branchDetailTitle">Choose a workstream</h3>
                     </div>
                     <p id="branchLeadCopy" class="lead-copy"></p>
                     <div id="branchMeta" class="fact-grid editorial-facts"></div>
@@ -205,8 +205,8 @@
                   <section class="panel page-block">
                     <div class="section-row">
                       <div>
-                        <p class="section-label">Branches</p>
-                        <h2>Branch lanes</h2>
+                <p class="section-label">Workstreams</p>
+                        <h2>Workstreams</h2>
                       </div>
                       <span id="branchHeadline" class="chip">0 lanes</span>
                     </div>
@@ -266,7 +266,7 @@
                       <div>
                         <p class="section-label">Current session</p>
                         <h3 id="sessionFocusTitle">Choose a session</h3>
-                        <p id="sessionFocusMeta" class="page-copy compact-copy">Pick a branch lane, then choose a session to read the message stream and capture a checkpoint.</p>
+                    <p id="sessionFocusMeta" class="page-copy compact-copy">Pick a workstream, then choose a session to read the message stream and capture a checkpoint.</p>
                       </div>
                       <div class="reader-actions">
                         <button id="createCheckpointBtn" class="btn primary" type="button">Create checkpoint</button>
@@ -275,8 +275,8 @@
                     </div>
 
                     <div class="utility-inline">
-                      <button id="previewSessionKnowledgeBtn" class="btn quiet" type="button">Preview knowledge</button>
-                      <button id="extractSessionKnowledgeBtn" class="btn quiet" type="button">Extract selected</button>
+                      <button id="previewSessionKnowledgeBtn" class="btn quiet" type="button">Preview insights</button>
+                      <button id="extractSessionKnowledgeBtn" class="btn quiet" type="button">Save selected insights</button>
                     </div>
                   </section>
 
@@ -319,7 +319,7 @@
                         <section id="sessionKnowledgePreviewPanel" class="panel subpanel hidden">
                           <div class="section-row small">
                             <div>
-                              <p class="section-label">Knowledge preview</p>
+                  <p class="section-label">Insights preview</p>
                               <h4>Review extracted candidates</h4>
                             </div>
                             <div class="row-actions">
@@ -360,7 +360,7 @@
             <header class="page-head">
               <p class="page-kicker">Checkpoints</p>
               <h1>Restore points and explanations</h1>
-              <p id="checkpointsPageMeta" class="page-copy">Use checkpoints to explain a branch state or rewind a workspace to a known snapshot.</p>
+          <p id="checkpointsPageMeta" class="page-copy">Use checkpoints to explain a workstream state or rewind a workspace to a known snapshot.</p>
             </header>
 
             <div class="checkpoints-layout">
@@ -388,8 +388,8 @@
                 </header>
 
                 <div class="utility-inline">
-                  <button id="previewCheckpointKnowledgeBtn" class="btn quiet" type="button">Preview knowledge</button>
-                  <button id="extractCheckpointKnowledgeBtn" class="btn quiet" type="button">Extract selected</button>
+                <button id="previewCheckpointKnowledgeBtn" class="btn quiet" type="button">Preview insights</button>
+                <button id="extractCheckpointKnowledgeBtn" class="btn quiet" type="button">Save selected insights</button>
                 </div>
 
                 <div id="checkpointDetailEmpty" class="empty-state">Choose a checkpoint to inspect its summary, linked branch or session, and stored snapshot shape.</div>
@@ -415,7 +415,7 @@
                   <section id="checkpointKnowledgePreviewPanel" class="panel subpanel hidden">
                     <div class="section-row small">
                       <div>
-                        <p class="section-label">Knowledge preview</p>
+                  <p class="section-label">Insights preview</p>
                         <h4>Review extracted candidates</h4>
                       </div>
                       <div class="row-actions">
@@ -436,15 +436,15 @@
         <section class="view" data-view="knowledge">
           <div class="page-shell utility-page">
             <header class="page-head compact-head">
-              <p class="page-kicker">Graph utility</p>
-              <h1>Structured graph</h1>
-              <p id="knowledgePageMeta" class="page-copy">Inspect the visible graph stored in SQLite when you need the current structured memory, not the conversation.</p>
+              <p class="page-kicker">Insights utility</p>
+              <h1>Reviewed insights</h1>
+              <p id="knowledgePageMeta" class="page-copy">Inspect the visible graph and reviewed insights stored in SQLite when you need durable project memory, not the raw conversation.</p>
             </header>
             <div class="utility-layout">
               <aside class="panel rail-panel utility-rail">
                 <div class="section-row">
                   <div>
-                    <p class="section-label">Project graph</p>
+                    <p class="section-label">Project insights</p>
                     <h2>Visible structure</h2>
                   </div>
                   <label class="toggle">
@@ -462,7 +462,7 @@
               <section class="panel utility-table-panel">
                 <div class="section-row">
                   <div>
-                    <p class="section-label">Current graph snapshot</p>
+                    <p class="section-label">Current insight snapshot</p>
                     <h2>Visible nodes</h2>
                   </div>
                 </div>

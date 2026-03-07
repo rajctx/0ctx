@@ -1,12 +1,10 @@
-# Docs Placeholder
+# Docs Index
 
-The previous docs set was intentionally pruned.
+Current product and execution references:
 
-For now, use these as the current source of truth:
-
+- `docs/PRODUCT_REMEDIATION_PLAN.md`
+- `docs/LINEAR_BACKLOG.md`
 - `README.md`
 - `AGENTS.md`
 - CLI help via `0ctx --help` and subcommand help
-- the source code in `packages/*` and `desktop-app/`
-
-The docs set will be rewritten later around the current product contract.
+- source code in `packages/*` and `desktop-app/`

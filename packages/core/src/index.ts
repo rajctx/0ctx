@@ -22,6 +22,7 @@ export type {
     CheckpointPayloadRecord,
     BranchLaneSummary,
     AgentSessionSummary,
+    WorkstreamBrief,
     SessionMessage,
     CheckpointSummary,
     SessionDetail,

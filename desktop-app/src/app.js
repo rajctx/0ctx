@@ -1,8 +1,8 @@
 const VIEW_META = {
   branches: {
-    eyebrow: 'Branch lanes',
-    title: 'Branch lanes',
-    summary: 'Track workstreams by branch or worktree, then inspect which agent touched each lane and when.',
+    eyebrow: 'Workstreams',
+    title: 'Workstreams',
+    summary: 'Track workstreams by branch or worktree, then inspect which agent touched each workstream and when.',
     primaryLabel: 'Open sessions',
     primaryAction: 'go-sessions'
   },
@@ -28,10 +28,10 @@ const VIEW_META = {
     primaryAction: 'focus-create'
   },
   knowledge: {
-    eyebrow: 'Graph utility',
-    title: 'Structured graph',
-    summary: 'Inspect the visible graph stored in SQLite when you need the current structured memory, not the conversation.',
-    primaryLabel: 'Toggle hidden nodes',
+    eyebrow: 'Insights utility',
+    title: 'Reviewed insights',
+    summary: 'Inspect the visible graph and reviewed insight nodes when you need durable project memory, not the raw conversation.',
+    primaryLabel: 'Toggle hidden records',
     primaryAction: 'toggle-hidden'
   },
   setup: {
@@ -44,11 +44,11 @@ const VIEW_META = {
 };
 
 const SEARCH_HINTS = {
-  branches: 'Filter branches, agents, or commits',
+  branches: 'Filter workstreams, agents, or commits',
   sessions: 'Filter sessions and messages',
   checkpoints: 'Filter checkpoints, sessions, or commits',
   workspaces: 'Filter projects by name or repository path',
-  knowledge: 'Filter visible graph nodes',
+  knowledge: 'Filter reviewed insights and graph nodes',
   setup: 'Filter agent integrations and setup state'
 };
 
@@ -402,7 +402,7 @@ function formatReason(value) {
 
 function renderKnowledgeCandidates(candidates, scope) {
   if (!Array.isArray(candidates) || candidates.length === 0) {
-    return '<div class="empty-state">No extractable knowledge candidates were found in this source.</div>';
+    return '<div class="empty-state">No extractable insight candidates were found in this source.</div>';
   }
   const selected = new Set(selectedKnowledgeKeys(scope));
   return candidates.map((candidate) => `
@@ -518,6 +518,7 @@ function formatIntegrationNote(note) {
   const value = String(note || '').trim().toLowerCase();
   if (!value) return '';
   if (value === 'preview-notify-archive') return 'Preview: notify + archive';
+  if (value === 'preview-hook') return 'Preview integration';
   if (value === 'preview-installed') return 'Preview installed';
   if (value === 'preview-not-selected') return 'Preview optional';
   if (value === 'installed') return 'Installed';
@@ -614,8 +615,8 @@ function describeBranchLane(lane) {
     ? `${normalizeBranch(lane.branch)} | ${basenameFromPath(lane.worktreePath)}`
     : normalizeBranch(lane?.branch);
   const preview = lane?.lastAgent
-    ? `${lane.lastAgent} touched this lane most recently.`
-    : 'No agent activity recorded yet for this lane.';
+    ? `${lane.lastAgent} touched this workstream most recently.`
+    : 'No agent activity recorded yet for this workstream.';
   return {
     title,
     preview,
@@ -745,7 +746,7 @@ function renderChrome() {
   document.getElementById('sideWorkspaceBranches').textContent = String(state.branches.length);
   document.getElementById('sideWorkspaceSessions').textContent = String(state.allSessions.length);
   document.getElementById('sideBinding').textContent = Array.isArray(context?.paths) && context.paths.length > 0
-    ? 'Bound to a repo path. Daily work now flows through branches, sessions, and checkpoints.'
+    ? 'Bound to a repo path. Daily work now flows through workstreams, sessions, and checkpoints.'
     : 'Choose a repo folder to route future capture here automatically.';
 
   const auth = state.health?.auth;
@@ -788,14 +789,14 @@ function renderRuntimeBanner() {
   function renderBranches() {
     const branches = state.branches.filter((lane) => matches(`${lane.branch} ${lane.worktreePath || ''} ${lane.lastAgent || ''} ${lane.lastCommitSha || ''}`));
     const context = activeContext();
-    document.getElementById('branchHeadline').textContent = `${branches.length} lane${branches.length === 1 ? '' : 's'}`;
+    document.getElementById('branchHeadline').textContent = `${branches.length} workstream${branches.length === 1 ? '' : 's'}`;
     document.getElementById('branchSessionCount').textContent = `${state.sessions.length} session${state.sessions.length === 1 ? '' : 's'}`;
   const branchesPageMeta = document.getElementById('branchesPageMeta');
   if (branchesPageMeta) {
     branchesPageMeta.textContent = state.runtimeIssue
-      ? 'Update the local runtime to enable branch lanes, branch sessions, and handoff timelines.'
+      ? 'Update the local runtime to enable workstreams, workstream sessions, and handoff timelines.'
       : context
-        ? `${context.name} has ${branches.length} tracked branch lane${branches.length === 1 ? '' : 's'} in the current view.`
+        ? `${context.name} has ${branches.length} tracked workstream${branches.length === 1 ? '' : 's'} in the current view.`
         : 'Choose a workspace to inspect branch-level work.';
   }
 
@@ -818,8 +819,8 @@ function renderRuntimeBanner() {
       `;
       }).join('')
       : state.runtimeIssue
-        ? '<div class="empty-state">This desktop build needs a newer local runtime before branch lanes can load.</div>'
-        : '<div class="empty-state">No branch lanes yet. Capture one agent session in this repo, then refresh.</div>';
+        ? '<div class="empty-state">This desktop build needs a newer local runtime before workstreams can load.</div>'
+        : '<div class="empty-state">No workstreams yet. Capture one agent session in this repo, then refresh.</div>';
 
   document.getElementById('branchSessionList').innerHTML = state.sessions.length > 0
     ? state.sessions.map((session) => {
@@ -837,7 +838,7 @@ function renderRuntimeBanner() {
         </article>
       `;
       }).join('')
-      : '<div class="empty-state">Select a branch lane to inspect the sessions captured on it.</div>';
+      : '<div class="empty-state">Select a workstream to inspect the sessions captured on it.</div>';
 
     if (state.runtimeIssue && branches.length === 0) {
       document.getElementById('branchDetailTitle').textContent = 'Update the local runtime';
@@ -864,12 +865,12 @@ function renderRuntimeBanner() {
     const detailBody = document.getElementById('branchDetailBody');
     const empty = document.getElementById('branchDetailEmpty');
     if (!lane) {
-      document.getElementById('branchDetailTitle').textContent = 'Choose a branch lane';
+      document.getElementById('branchDetailTitle').textContent = 'Choose a workstream';
       document.getElementById('branchLeadCopy').textContent = '';
       document.getElementById('branchMeta').innerHTML = '';
-      document.getElementById('branchSessionList').innerHTML = '<div class="empty-state">Choose a lane to see the captured sessions on it.</div>';
+      document.getElementById('branchSessionList').innerHTML = '<div class="empty-state">Choose a workstream to see the captured sessions on it.</div>';
       document.getElementById('handoffList').innerHTML = '<div class="empty-state">No handoff history yet.</div>';
-      empty.innerHTML = 'Select a branch lane to inspect cross-agent activity and checkpoint coverage.';
+      empty.innerHTML = 'Select a workstream to inspect cross-agent activity and checkpoint coverage.';
       empty.classList.remove('hidden');
       detailBody.classList.add('hidden');
       return;
@@ -878,16 +879,16 @@ function renderRuntimeBanner() {
     document.getElementById('branchDetailTitle').textContent = describeBranchLane(lane).title;
     document.getElementById('branchLeadCopy').textContent = [
       `${describeBranchLane(lane).title} carries ${lane.sessionCount} captured session${lane.sessionCount === 1 ? '' : 's'} and ${lane.checkpointCount} checkpoint${lane.checkpointCount === 1 ? '' : 's'}.`,
-      lane.lastAgent ? `The most recent handoff came from ${lane.lastAgent}` : 'No agent has touched this lane yet.',
+      lane.lastAgent ? `The most recent handoff came from ${lane.lastAgent}` : 'No agent has touched this workstream yet.',
       lane.lastActivityAt ? `${formatRelativeTime(lane.lastActivityAt)}.` : ''
     ].join(' ').trim();
     empty.classList.add('hidden');
     detailBody.classList.remove('hidden');
     const meta = [
-      { label: 'Lane', value: normalizeBranch(lane.branch) },
+      { label: 'Workstream', value: normalizeBranch(lane.branch) },
       { label: 'Last agent', value: lane.lastAgent || 'unknown' },
       { label: 'Latest commit', value: lane.lastCommitSha || 'none' },
-      { label: 'Agents on lane', value: lane.agentSet?.length ? lane.agentSet.join(', ') : 'none' },
+      { label: 'Agents on workstream', value: lane.agentSet?.length ? lane.agentSet.join(', ') : 'none' },
       { label: 'Worktree', value: lane.worktreePath || 'Primary workspace root' }
     ];
   document.getElementById('branchMeta').innerHTML = meta.map((item) => `<article><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong></article>`).join('');
@@ -905,7 +906,7 @@ function renderRuntimeBanner() {
           ])}
         </article>
       `).join('')
-    : '<div class="empty-state">No handoff history recorded for this branch lane yet.</div>';
+    : '<div class="empty-state">No handoff history recorded for this workstream yet.</div>';
 }
 function renderSessions() {
   const sessions = state.sessions.filter((session) => matches(`${session.sessionId} ${session.summary || ''} ${session.branch || ''} ${session.commitSha || ''} ${session.agent || ''}`));
@@ -923,15 +924,15 @@ function renderSessions() {
       : lane
         ? `Reading sessions for ${describeBranchLane(lane).title}. Choose a session to inspect its messages.`
         : context
-          ? `Choose a branch lane inside ${context.name}, then open a session to read the message stream.`
-          : 'Choose a workspace and branch lane before reading captured sessions.';
+        ? `Choose a workstream inside ${context.name}, then open a session to read the message stream.`
+          : 'Choose a workspace and workstream before reading captured sessions.';
   }
   document.getElementById('sessionFocusTitle').textContent = sessionSummary?.title || (lane ? describeBranchLane(lane).title : 'Choose a session');
   document.getElementById('sessionFocusMeta').textContent = session
     ? `${sessionSummary?.preview || 'Read the stream below.'} ${session.agent ? `Agent: ${session.agent}.` : ''}`.trim()
     : lane
-      ? `Selected lane: ${describeBranchLane(lane).title}. Choose a session to read its message stream and create a checkpoint.`
-      : 'Pick a branch lane, then choose a session to read the message stream and capture a checkpoint.';
+      ? `Selected workstream: ${describeBranchLane(lane).title}. Choose a session to read its message stream and create a checkpoint.`
+      : 'Pick a workstream, then choose a session to read the message stream and capture a checkpoint.';
 
   document.getElementById('sessionList').innerHTML = sessions.length > 0
     ? sessions.map((session) => {
@@ -949,7 +950,7 @@ function renderSessions() {
         </article>
       `;
     }).join('')
-    : '<div class="empty-state">No sessions are loaded for this branch lane yet.</div>';
+    : '<div class="empty-state">No sessions are loaded for this workstream yet.</div>';
 
   document.getElementById('turnList').innerHTML = turns.length > 0
     ? turns.map((turn) => {
@@ -1043,7 +1044,7 @@ function renderSessions() {
     { label: 'Branch', value: turn.branch || 'none' },
     { label: 'Commit', value: turn.commitSha || 'none' },
     { label: 'Payload bytes', value: turn.payloadBytes != null ? String(turn.payloadBytes) : 'none' },
-    { label: 'Visibility', value: turn.hidden ? 'Hidden by default' : 'Visible in knowledge view' }
+    { label: 'Visibility', value: turn.hidden ? 'Hidden by default' : 'Visible in insights view' }
   ];
   document.getElementById('turnTechnical').innerHTML = technical.map((item) => {
     return `<article><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong></article>`;
@@ -1131,9 +1132,9 @@ function renderWorkspaces() {
           hint: 'Capture state reflects the local runtime plus installed integrations.'
         },
         {
-          title: 'Branch lanes',
-          detail: `${state.branches.length} tracked lane${state.branches.length === 1 ? '' : 's'}`,
-          hint: 'Branches and worktrees stay grouped inside this workspace.'
+          title: 'Workstreams',
+          detail: `${state.branches.length} tracked workstream${state.branches.length === 1 ? '' : 's'}`,
+          hint: 'Branches and worktrees stay grouped as workstreams inside this workspace.'
         },
         {
           title: 'Captured sessions',
@@ -1190,7 +1191,7 @@ function renderWorkspaces() {
         </article>
       `;
     }).join('')
-    : '<div class="empty-state">No checkpoints yet for this branch lane.</div>';
+    : '<div class="empty-state">No checkpoints yet for this workstream.</div>';
 
   const sessionCard = document.getElementById('checkpointSessionCard');
   const linkedSession = state.checkpointSessionDetail?.session || activeSession();
@@ -1251,7 +1252,7 @@ function renderWorkspaces() {
     document.getElementById('checkpointLeadCopy').textContent = [
       checkpointSummary.title,
       checkpoint.branch
-        ? `tracks the ${normalizeBranch(checkpoint.branch)} lane`
+    ? `tracks the ${normalizeBranch(checkpoint.branch)} workstream`
         : 'captures a workspace snapshot',
       `from ${formatRelativeTime(checkpoint.createdAt)}.`,
       checkpoint.sessionId
@@ -1302,14 +1303,14 @@ function renderWorkspaces() {
     if (knowledgePageMeta) {
       const context = activeContext();
       knowledgePageMeta.textContent = context
-        ? `${context.name} currently exposes ${nodes.length} visible node${nodes.length === 1 ? '' : 's'} in the structured graph${state.includeHidden ? ', including hidden capture records.' : '.'}`
-        : 'Inspect the visible graph stored in SQLite when you need the current structured memory, not the conversation.';
+        ? `${context.name} currently exposes ${nodes.length} visible node${nodes.length === 1 ? '' : 's'} in the structured graph${state.includeHidden ? ', including hidden capture records.' : ', plus reviewed insights.'}`
+        : 'Inspect the visible graph and reviewed insights stored in SQLite when you need durable project memory, not the raw conversation.';
     }
 
     const explainer = [
       {
-        title: 'Use this for project memory',
-        detail: 'Graph is the durable structured layer: decisions, constraints, goals, assumptions, questions, and artifacts already written into the workspace.'
+        title: 'Use this for reviewed memory',
+        detail: 'Insights are the durable structured layer: decisions, constraints, goals, assumptions, questions, and artifacts already written into the workspace.'
       },
       {
         title: 'Conversations stay separate by default',
@@ -1317,7 +1318,7 @@ function renderWorkspaces() {
       },
       {
         title: 'Sessions and checkpoints feed this layer',
-        detail: 'Use Sessions to read the conversation and Checkpoints to explain or rewind workspace state. Use Graph to inspect the memory that survives beyond a single run.'
+        detail: 'Use Sessions to read the conversation and Checkpoints to explain or rewind workspace state. Use Insights to inspect the memory that survives beyond a single run.'
       }
     ];
     document.getElementById('knowledgeExplainer').innerHTML = explainer.map((item) => {
@@ -1332,7 +1333,7 @@ function renderWorkspaces() {
           <td>${esc(formatTime(node.createdAt))}</td>
         </tr>
       `).join('')
-    : '<tr><td colspan="4"><div class="empty-state">No knowledge nodes match the current filter.</div></td></tr>';
+    : '<tr><td colspan="4"><div class="empty-state">No insight nodes match the current filter.</div></td></tr>';
 }
 
   function renderSetup() {
@@ -1349,7 +1350,7 @@ function renderWorkspaces() {
         ? state.runtimeIssue.detail
         : installed.length > 0
           ? `${installed.length} integration${installed.length === 1 ? '' : 's'} are installed on this machine. Use this screen only when you need to add another agent, run a smoke test, or repair the runtime.`
-          : 'Install the integrations you actually use, then leave this screen. Daily work should happen in branches, sessions, and checkpoints.';
+    : 'Install the integrations you actually use, then leave this screen. Daily work should happen in workstreams, sessions, and checkpoints.';
     }
     document.getElementById('hookSummary').textContent = `${installed.length} installed / ${hooks.length}`;
     document.getElementById('hookList').innerHTML = filteredHooks.length > 0
@@ -1778,7 +1779,7 @@ async function createCheckpointFromActiveSession() {
     const promoted = Number(knowledge?.createdCount || 0);
     const reused = Number(knowledge?.reusedCount || 0);
     const knowledgeSuffix = promoted > 0 || reused > 0
-      ? ` | knowledge ${promoted} new, ${reused} reused`
+      ? ` | insights ${promoted} new, ${reused} reused`
       : '';
     setStatus(`Created checkpoint ${result?.name || result?.id || ''}${knowledgeSuffix}`.trim());
   } catch (error) {
@@ -1788,7 +1789,7 @@ async function createCheckpointFromActiveSession() {
 
 async function previewKnowledgeFromActiveSession() {
   if (!state.activeContextId || !state.activeSessionId) {
-    setStatus('Select a session before previewing knowledge.');
+    setStatus('Select a session before previewing insights.');
     return;
   }
   try {
@@ -1807,22 +1808,22 @@ async function previewKnowledgeFromActiveSession() {
     const selected = preferred.length > 0 ? preferred : fallback;
     setSelectedKnowledgeKeys('session', selected);
     renderAll();
-    setStatus(`Knowledge preview ready: ${String(result?.candidateCount || 0)} candidates, ${String(result?.createCount || 0)} new, ${selected.length} preselected.`);
+    setStatus(`Insight preview ready: ${String(result?.candidateCount || 0)} candidates, ${String(result?.createCount || 0)} new, ${selected.length} preselected.`);
   } catch (error) {
-    setStatus(`Preview knowledge failed: ${String(error)}`);
+    setStatus(`Preview insights failed: ${String(error)}`);
   }
 }
 
 async function extractKnowledgeFromActiveSession() {
   if (!state.activeContextId || !state.activeSessionId) {
-    setStatus('Select a session before extracting knowledge.');
+    setStatus('Select a session before saving insights.');
     return;
   }
   try {
     const preview = activeSessionKnowledgePreview();
     const candidateKeys = preview ? selectedKnowledgeKeys('session') : undefined;
     if (preview && candidateKeys.length === 0) {
-      setStatus('Select at least one knowledge candidate before extracting.');
+      setStatus('Select at least one insight candidate before saving.');
       return;
     }
     const result = await daemon('extractSessionKnowledge', {
@@ -1838,15 +1839,15 @@ async function extractKnowledgeFromActiveSession() {
     if (nodeCount > 0) {
       setView('knowledge');
     }
-    setStatus(`Knowledge extraction completed: ${String(result?.createdCount || 0)} created, ${String(result?.reusedCount || 0)} reused.`);
+    setStatus(`Insights saved: ${String(result?.createdCount || 0)} created, ${String(result?.reusedCount || 0)} reused.`);
   } catch (error) {
-    setStatus(`Extract knowledge failed: ${String(error)}`);
+    setStatus(`Save insights failed: ${String(error)}`);
   }
 }
 
 async function previewKnowledgeFromActiveCheckpoint() {
   if (!state.activeCheckpointId) {
-    setStatus('Select a checkpoint before previewing knowledge.');
+    setStatus('Select a checkpoint before previewing insights.');
     return;
   }
   try {
@@ -1864,22 +1865,22 @@ async function previewKnowledgeFromActiveCheckpoint() {
     const selected = preferred.length > 0 ? preferred : fallback;
     setSelectedKnowledgeKeys('checkpoint', selected);
     renderAll();
-    setStatus(`Checkpoint preview ready: ${String(result?.candidateCount || 0)} candidates, ${String(result?.createCount || 0)} new, ${selected.length} preselected.`);
+    setStatus(`Checkpoint insight preview ready: ${String(result?.candidateCount || 0)} candidates, ${String(result?.createCount || 0)} new, ${selected.length} preselected.`);
   } catch (error) {
-    setStatus(`Preview checkpoint knowledge failed: ${String(error)}`);
+    setStatus(`Preview checkpoint insights failed: ${String(error)}`);
   }
 }
 
 async function extractKnowledgeFromActiveCheckpoint() {
   if (!state.activeCheckpointId) {
-    setStatus('Select a checkpoint before extracting knowledge.');
+    setStatus('Select a checkpoint before saving insights.');
     return;
   }
   try {
     const preview = activeCheckpointKnowledgePreview();
     const candidateKeys = preview ? selectedKnowledgeKeys('checkpoint') : undefined;
     if (preview && candidateKeys.length === 0) {
-      setStatus('Select at least one checkpoint knowledge candidate before extracting.');
+      setStatus('Select at least one checkpoint insight candidate before saving.');
       return;
     }
     const result = await daemon('extractCheckpointKnowledge', {
@@ -1895,9 +1896,9 @@ async function extractKnowledgeFromActiveCheckpoint() {
     if (nodeCount > 0) {
       setView('knowledge');
     }
-    setStatus(`Checkpoint extraction completed: ${String(result?.createdCount || 0)} created, ${String(result?.reusedCount || 0)} reused.`);
+    setStatus(`Checkpoint insights saved: ${String(result?.createdCount || 0)} created, ${String(result?.reusedCount || 0)} reused.`);
   } catch (error) {
-    setStatus(`Extract checkpoint knowledge failed: ${String(error)}`);
+    setStatus(`Save checkpoint insights failed: ${String(error)}`);
   }
 }
 

@@ -905,10 +905,7 @@ export class SyncEngine {
                 name: sanitize(checkpoint.name, 'name') as string,
                 summary: sanitize(checkpoint.summary ?? null, 'summary') as string | null
             })),
-            nodePayloads: (dump.nodePayloads ?? []).map((payload) => ({
-                ...payload,
-                payload: sanitize(payload.payload)
-            })),
+            nodePayloads: [],
             checkpointPayloads: []
         };
     }

@@ -246,7 +246,7 @@ export class Graph {
         if (/^(run|open|refresh|restart|copy|paste|install|reinstall)\b/.test(normalized)) {
             return true;
         }
-        if (/\b(bridge error|runtime issue|runtime unavailable|preview knowledge failed|extract knowledge failed|create checkpoint failed)\b/.test(normalized)) {
+        if (/\b(bridge error|runtime issue|runtime unavailable|preview knowledge failed|extract knowledge failed|preview insights failed|save insights failed|save checkpoint insights failed|create checkpoint failed)\b/.test(normalized)) {
             return true;
         }
         if (

@@ -73,16 +73,21 @@ describe('hook install workflow', () => {
         expect(fs.readFileSync(first.codexConfigPath, 'utf8')).not.toContain('--context-id=ctx-1');
         const claudeConfig = JSON.parse(fs.readFileSync(first.claudeConfigPath, 'utf8')) as {
             hooks?: {
+                SessionStart?: Array<{ hooks?: Array<{ command?: string }> }>;
                 Stop?: Array<{ hooks?: Array<{ command?: string }> }>;
                 SubagentStop?: Array<{ hooks?: Array<{ command?: string }> }>;
             };
         };
+        const claudeSessionStartCommands = (claudeConfig.hooks?.SessionStart ?? [])
+            .flatMap(group => (group.hooks ?? []).map(entry => String(entry.command ?? '')));
         const claudeStopCommands = (claudeConfig.hooks?.Stop ?? [])
             .flatMap(group => (group.hooks ?? []).map(entry => String(entry.command ?? '')));
         const claudeSubagentCommands = (claudeConfig.hooks?.SubagentStop ?? [])
             .flatMap(group => (group.hooks ?? []).map(entry => String(entry.command ?? '')));
+        expect(claudeSessionStartCommands.some(command => command.includes('connector hook session-start'))).toBe(true);
         expect(claudeStopCommands.some(command => command.includes('--agent=claude'))).toBe(true);
         expect(claudeSubagentCommands.some(command => command.includes('--agent=claude'))).toBe(true);
+        expect(claudeSessionStartCommands.some(command => command.includes('--context-id='))).toBe(false);
         expect(claudeStopCommands.some(command => command.includes('--context-id='))).toBe(false);
         expect(claudeSubagentCommands.some(command => command.includes('--context-id='))).toBe(false);
 
@@ -105,14 +110,15 @@ describe('hook install workflow', () => {
         expect(cursor?.status).toBe('Supported');
         expect(cursor?.installed).toBe(true);
         expect(String(cursor?.command ?? '')).not.toContain('--repo-root');
-        expect(String(cursor?.command ?? '')).toContain('--context-id=ctx-1');
+        expect(String(cursor?.command ?? '')).not.toContain('--context-id=ctx-1');
+        expect(String(cursor?.notes ?? '')).toContain('preview');
         expect(factory?.status).toBe('Skipped');
         expect(factory?.installed).toBe(false);
         expect(antigravity?.status).toBe('Skipped');
         expect(antigravity?.installed).toBe(false);
     });
 
-    it('installs Claude Stop and SubagentStop hooks without baking a context id', () => {
+    it('installs Claude SessionStart, Stop, and SubagentStop hooks without baking a context id', () => {
         const repoRoot = createTempDir();
         process.env.CTX_HOOK_STATE_PATH = path.join(repoRoot, '.0ctx', 'hooks-state.json');
 
@@ -127,15 +133,23 @@ describe('hook install workflow', () => {
 
         const parsed = JSON.parse(fs.readFileSync(result.claudeConfigPath, 'utf8')) as {
             hooks?: {
+                SessionStart?: Array<{ hooks?: Array<{ type?: string; command?: string }> }>;
                 Stop?: Array<{ hooks?: Array<{ type?: string; command?: string }> }>;
                 SubagentStop?: Array<{ hooks?: Array<{ type?: string; command?: string }> }>;
             };
         };
+        const sessionStartHooks = parsed.hooks?.SessionStart ?? [];
         const stopHooks = parsed.hooks?.Stop ?? [];
         const subagentStopHooks = parsed.hooks?.SubagentStop ?? [];
 
+        expect(sessionStartHooks.length).toBeGreaterThan(0);
         expect(stopHooks.length).toBeGreaterThan(0);
         expect(subagentStopHooks.length).toBeGreaterThan(0);
+        expect(
+            sessionStartHooks.some(group =>
+                (group.hooks ?? []).some(entry => String(entry.command ?? '').includes('connector hook session-start --agent=claude'))
+            )
+        ).toBe(true);
         expect(
             stopHooks.some(group =>
                 (group.hooks ?? []).some(entry => String(entry.command ?? '').includes('--agent=claude'))
@@ -148,6 +162,11 @@ describe('hook install workflow', () => {
         ).toBe(true);
         expect(
             stopHooks.some(group =>
+                (group.hooks ?? []).some(entry => String(entry.command ?? '').includes('--context-id='))
+            )
+        ).toBe(false);
+        expect(
+            sessionStartHooks.some(group =>
                 (group.hooks ?? []).some(entry => String(entry.command ?? '').includes('--context-id='))
             )
         ).toBe(false);
@@ -177,13 +196,18 @@ describe('hook install workflow', () => {
 
         const parsed = JSON.parse(fs.readFileSync(result.claudeGlobalConfigPath, 'utf8')) as {
             hooks?: {
+                SessionStart?: Array<{ hooks?: Array<{ type?: string; command?: string }> }>;
                 Stop?: Array<{ hooks?: Array<{ type?: string; command?: string }> }>;
                 SubagentStop?: Array<{ hooks?: Array<{ type?: string; command?: string }> }>;
             };
         };
+        const sessionStartHooks = parsed.hooks?.SessionStart ?? [];
         const stopHooks = parsed.hooks?.Stop ?? [];
         const subagentStopHooks = parsed.hooks?.SubagentStop ?? [];
 
+        expect(sessionStartHooks.some(group =>
+            (group.hooks ?? []).some(entry => String(entry.command ?? '').includes('connector hook session-start --agent=claude'))
+        )).toBe(true);
         expect(stopHooks.some(group =>
             (group.hooks ?? []).some(entry => String(entry.command ?? '').includes('--agent=claude'))
         )).toBe(true);
@@ -191,6 +215,9 @@ describe('hook install workflow', () => {
             (group.hooks ?? []).some(entry => String(entry.command ?? '').includes('--agent=claude'))
         )).toBe(true);
         expect(stopHooks.some(group =>
+            (group.hooks ?? []).some(entry => String(entry.command ?? '').includes('--context-id='))
+        )).toBe(false);
+        expect(sessionStartHooks.some(group =>
             (group.hooks ?? []).some(entry => String(entry.command ?? '').includes('--context-id='))
         )).toBe(false);
         expect(subagentStopHooks.some(group =>
@@ -219,6 +246,8 @@ describe('hook install workflow', () => {
         expect(promptEntries.length).toBeGreaterThan(0);
         expect(hookEntries.some(entry => String(entry.command ?? '').includes('--agent=windsurf'))).toBe(true);
         expect(promptEntries.some(entry => String(entry.command ?? '').includes('--agent=windsurf'))).toBe(true);
+        expect(hookEntries.some(entry => String(entry.command ?? '').includes('--context-id='))).toBe(false);
+        expect(promptEntries.some(entry => String(entry.command ?? '').includes('--context-id='))).toBe(false);
     });
 
     it('installs Factory hook into .factory settings', () => {
@@ -235,6 +264,9 @@ describe('hook install workflow', () => {
 
         const parsed = JSON.parse(fs.readFileSync(result.factoryConfigPath, 'utf8')) as {
             hooks?: {
+                SessionStart?: Array<{
+                    hooks?: Array<{ type?: string; command?: string }>;
+                }>;
                 Stop?: Array<{
                     hooks?: Array<{ type?: string; command?: string }>;
                 }>;
@@ -243,11 +275,18 @@ describe('hook install workflow', () => {
                 }>;
             };
         };
+        const sessionStartHooks = parsed.hooks?.SessionStart ?? [];
         const stopHooks = parsed.hooks?.Stop ?? [];
         const subagentStopHooks = parsed.hooks?.SubagentStop ?? [];
 
+        expect(sessionStartHooks.length).toBeGreaterThan(0);
         expect(stopHooks.length).toBeGreaterThan(0);
         expect(subagentStopHooks.length).toBeGreaterThan(0);
+        expect(
+            sessionStartHooks.some(group =>
+                (group.hooks ?? []).some(entry => String(entry.command ?? '').includes('connector hook session-start --agent=factory'))
+            )
+        ).toBe(true);
         expect(
             stopHooks.some(group =>
                 (group.hooks ?? []).some(entry => String(entry.command ?? '').includes('--agent=factory'))
@@ -260,6 +299,11 @@ describe('hook install workflow', () => {
         ).toBe(true);
         expect(
             stopHooks.some(group =>
+                (group.hooks ?? []).some(entry => String(entry.command ?? '').includes('--context-id='))
+            )
+        ).toBe(false);
+        expect(
+            sessionStartHooks.some(group =>
                 (group.hooks ?? []).some(entry => String(entry.command ?? '').includes('--context-id='))
             )
         ).toBe(false);
@@ -334,6 +378,22 @@ describe('hook install workflow', () => {
         expect(selected).toBe('ctx-current');
     });
 
+    it('does not fall back to the only context when no repo path matches', () => {
+        const repoRoot = createTempDir();
+        const selected = selectHookContextId(
+            [
+                {
+                    id: 'ctx-only',
+                    paths: [path.join(repoRoot, 'other-repo')]
+                }
+            ],
+            repoRoot,
+            null
+        );
+
+        expect(selected).toBeNull();
+    });
+
     it('cleans legacy managed commands from .factory/settings.local.json', () => {
         const repoRoot = createTempDir();
         process.env.CTX_HOOK_STATE_PATH = path.join(repoRoot, '.0ctx', 'hooks-state.json');
@@ -341,6 +401,16 @@ describe('hook install workflow', () => {
         fs.mkdirSync(path.dirname(localConfigPath), { recursive: true });
         fs.writeFileSync(localConfigPath, JSON.stringify({
             hooks: {
+                SessionStart: [
+                    {
+                        hooks: [
+                            {
+                                type: 'command',
+                                command: '0ctx connector hook session-start --agent=factory'
+                            }
+                        ]
+                    }
+                ],
                 Stop: [
                     {
                         hooks: [
@@ -375,15 +445,19 @@ describe('hook install workflow', () => {
 
         const localConfig = JSON.parse(fs.readFileSync(localConfigPath, 'utf8')) as {
             hooks?: {
+                SessionStart?: Array<{ hooks?: Array<{ command?: string }> }>;
                 Stop?: Array<{ hooks?: Array<{ command?: string }> }>;
                 SubagentStop?: Array<{ hooks?: Array<{ command?: string }> }>;
             };
         };
+        const sessionStartCommands = (localConfig.hooks?.SessionStart ?? [])
+            .flatMap(group => (group.hooks ?? []).map(entry => String(entry.command ?? '')));
         const stopCommands = (localConfig.hooks?.Stop ?? [])
             .flatMap(group => (group.hooks ?? []).map(entry => String(entry.command ?? '')));
         const subagentCommands = (localConfig.hooks?.SubagentStop ?? [])
             .flatMap(group => (group.hooks ?? []).map(entry => String(entry.command ?? '')));
 
+        expect(sessionStartCommands.some(command => command.includes('connector hook session-start'))).toBe(false);
         expect(stopCommands.some(command => command.includes('keep-me'))).toBe(true);
         expect(stopCommands.some(command => command.includes('--agent=antigravity'))).toBe(false);
         expect(subagentCommands.some(command => command.includes('--agent=factory'))).toBe(false);
@@ -400,6 +474,16 @@ describe('hook install workflow', () => {
         fs.mkdirSync(path.dirname(homeConfigPath), { recursive: true });
         fs.writeFileSync(homeConfigPath, JSON.stringify({
             hooks: {
+                SessionStart: [
+                    {
+                        hooks: [
+                            {
+                                type: 'command',
+                                command: '0ctx connector hook session-start --agent=factory'
+                            }
+                        ]
+                    }
+                ],
                 Stop: [
                     {
                         hooks: [
@@ -435,15 +519,19 @@ describe('hook install workflow', () => {
 
         const homeConfig = JSON.parse(fs.readFileSync(homeConfigPath, 'utf8')) as {
             hooks?: {
+                SessionStart?: Array<{ hooks?: Array<{ command?: string }> }>;
                 Stop?: Array<{ hooks?: Array<{ command?: string }> }>;
                 SubagentStop?: Array<{ hooks?: Array<{ command?: string }> }>;
             };
         };
+        const sessionStartCommands = (homeConfig.hooks?.SessionStart ?? [])
+            .flatMap(group => (group.hooks ?? []).map(entry => String(entry.command ?? '')));
         const stopCommands = (homeConfig.hooks?.Stop ?? [])
             .flatMap(group => (group.hooks ?? []).map(entry => String(entry.command ?? '')));
         const subagentCommands = (homeConfig.hooks?.SubagentStop ?? [])
             .flatMap(group => (group.hooks ?? []).map(entry => String(entry.command ?? '')));
 
+        expect(sessionStartCommands.some(command => command.includes('connector hook session-start'))).toBe(false);
         expect(stopCommands.some(command => command.includes('keep-stop'))).toBe(true);
         expect(stopCommands.some(command => command.includes('connector hook ingest'))).toBe(false);
         expect(subagentCommands.some(command => command.includes('connector hook ingest'))).toBe(false);

@@ -147,7 +147,8 @@ const SOCKET_PATH = os.platform() === 'win32'
 
 const SUPPORTED_CLIENTS: SupportedClient[] = ['claude', 'cursor', 'windsurf', 'codex', 'antigravity'];
 const SUPPORTED_HOOK_INSTALL_CLIENTS: HookInstallClient[] = ['claude', 'cursor', 'windsurf', 'codex', 'factory', 'antigravity'];
-const DEFAULT_HOOK_INSTALL_CLIENTS: HookInstallClient[] = ['claude', 'cursor', 'windsurf', 'factory', 'antigravity'];
+const DEFAULT_HOOK_INSTALL_CLIENTS: HookInstallClient[] = ['claude', 'factory', 'antigravity'];
+const DEFAULT_ENABLE_MCP_CLIENTS: SupportedClient[] = ['claude', 'cursor', 'windsurf', 'antigravity'];
 const CLI_VERSION = (() => {
     try {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -244,6 +245,14 @@ function parseHookClients(raw: string | boolean | undefined): HookInstallClient[
         .filter((item): item is HookInstallClient => item === 'factory' || SUPPORTED_CLIENTS.includes(item as SupportedClient));
 
     return parsed.length > 0 ? parsed : DEFAULT_HOOK_INSTALL_CLIENTS;
+}
+
+function parseEnableMcpClients(raw: string | boolean | undefined): SupportedClient[] {
+    if (!raw || typeof raw !== 'string') return DEFAULT_ENABLE_MCP_CLIENTS;
+    const normalized = raw.trim().toLowerCase();
+    if (!normalized) return DEFAULT_ENABLE_MCP_CLIENTS;
+    if (normalized === 'none') return [];
+    return parseClients(raw);
 }
 
 async function isDaemonReachable(): Promise<{ ok: boolean; error?: string; health?: any }> {
@@ -991,6 +1000,206 @@ async function commandInstall(flags: Record<string, string | boolean>): Promise<
     const checks = await isDaemonReachable();
     p.outro(color.green(`Installation complete! Daemon is ${checks.ok ? 'running' : 'degraded'}.`));
     return checks.ok ? 0 : 1;
+}
+
+async function commandEnable(flags: Record<string, string | boolean>): Promise<number> {
+    const quiet = Boolean(flags.quiet);
+    const asJson = Boolean(flags.json);
+    const skipBootstrap = Boolean(flags['skip-bootstrap']);
+    const skipHooks = Boolean(flags['skip-hooks']);
+    const repoRoot = resolveRepoRoot(parseOptionalStringFlag(flags['repo-root'] ?? flags.repoRoot));
+    const requestedName = parseOptionalStringFlag(flags.name ?? flags['workspace-name'] ?? flags.workspaceName);
+    const workspaceName = requestedName ?? (path.basename(repoRoot) || 'Workspace');
+    const hookClients = parseHookClients(flags.clients);
+    const mcpClients = parseEnableMcpClients(flags['mcp-clients'] ?? flags.mcpClients);
+    const mcpProfile = parseOptionalStringFlag(flags['mcp-profile'] ?? flags.profile) ?? 'core';
+
+    const p = (!quiet && !asJson) ? await import('@clack/prompts') : null;
+    const s = p?.spinner() ?? null;
+
+    if (p) {
+        p.intro(color.bgBlue(color.black(' 0ctx enable ')));
+        s?.start('Preparing local runtime');
+    }
+
+    const steps: Array<{
+        id: string;
+        status: CheckStatus;
+        message: string;
+        details?: Record<string, unknown>;
+    }> = [];
+
+    const installCode = await commandInstall({ ...flags, quiet: true, json: false, 'skip-bootstrap': true });
+    steps.push({
+        id: 'runtime',
+        status: installCode === 0 ? 'pass' : 'fail',
+        message: installCode === 0
+            ? 'Local runtime is ready.'
+            : 'Failed to start or verify the local runtime.'
+    });
+    if (installCode !== 0) {
+        if (s) s.stop(color.red('Runtime preparation failed'));
+        if (asJson) {
+            console.log(JSON.stringify({ ok: false, repoRoot, steps }, null, 2));
+        } else {
+            console.error('enable_runtime_failed: unable to prepare the local runtime');
+            p?.outro(color.red('Enable failed'));
+        }
+        return 1;
+    }
+
+    if (s) s.message('Resolving workspace');
+
+    const contexts = await sendToDaemon('listContexts', {}) as Array<{ id?: string; name?: string; paths?: string[] }>;
+    let contextId = selectHookContextId(contexts, repoRoot, null);
+    let created = false;
+
+    if (!contextId) {
+        const createdContext = await sendToDaemon('createContext', {
+            name: workspaceName,
+            paths: [repoRoot]
+        }) as { id?: string; contextId?: string; name?: string };
+        contextId = createdContext?.id ?? createdContext?.contextId ?? null;
+        created = Boolean(contextId);
+    }
+
+    if (!contextId) {
+        steps.push({
+            id: 'workspace',
+            status: 'fail',
+            message: 'Failed to resolve or create a workspace for the repository.'
+        });
+        if (s) s.stop(color.red('Workspace resolution failed'));
+        if (asJson) {
+            console.log(JSON.stringify({ ok: false, repoRoot, steps }, null, 2));
+        } else {
+            console.error('enable_workspace_failed: unable to resolve or create a workspace');
+            p?.outro(color.red('Enable failed'));
+        }
+        return 1;
+    }
+
+    await sendToDaemon('switchContext', { contextId });
+    steps.push({
+        id: 'workspace',
+        status: 'pass',
+        message: created
+            ? `Created and selected workspace '${workspaceName}'.`
+            : 'Selected the workspace bound to this repository.',
+        details: {
+            contextId,
+            repoRoot,
+            created
+        }
+    });
+
+    let bootstrapResults: BootstrapResult[] = [];
+    if (!skipBootstrap && mcpClients.length > 0) {
+        if (s) s.message('Registering MCP clients');
+        bootstrapResults = runBootstrap(mcpClients, false, undefined, mcpProfile);
+        const failedBootstrap = bootstrapResults.some(result => result.status === 'failed');
+        steps.push({
+            id: 'mcp',
+            status: failedBootstrap ? 'fail' : 'pass',
+            message: failedBootstrap
+                ? 'One or more MCP registrations failed.'
+                : 'MCP registration completed.',
+            details: {
+                clients: mcpClients,
+                profile: mcpProfile,
+                results: bootstrapResults
+            }
+        });
+        if (failedBootstrap) {
+            if (s) s.stop(color.red('MCP registration failed'));
+            if (asJson) {
+                console.log(JSON.stringify({ ok: false, repoRoot, contextId, steps }, null, 2));
+            } else {
+                await printBootstrapResults(bootstrapResults, false);
+                p?.outro(color.red('Enable failed'));
+            }
+            return 1;
+        }
+    } else {
+        steps.push({
+            id: 'mcp',
+            status: 'warn',
+            message: skipBootstrap
+                ? 'Skipped MCP registration.'
+                : 'No MCP clients selected for registration.',
+            details: {
+                clients: mcpClients,
+                profile: mcpProfile
+            }
+        });
+    }
+
+    let hookSummary: ReturnType<typeof installHooks> | null = null;
+    if (!skipHooks && hookClients.length > 0) {
+        if (s) s.message('Installing capture integrations');
+        hookSummary = installHooks({
+            projectRoot: repoRoot,
+            contextId,
+            clients: hookClients,
+            installClaudeGlobal: Boolean(flags.global)
+        });
+        steps.push({
+            id: 'capture',
+            status: 'pass',
+            message: 'Capture integrations installed.',
+            details: {
+                clients: hookClients,
+                changed: hookSummary.changed,
+                statePath: hookSummary.statePath,
+                projectConfigPath: hookSummary.projectConfigPath
+            }
+        });
+    } else {
+        steps.push({
+            id: 'capture',
+            status: 'warn',
+            message: skipHooks
+                ? 'Skipped capture integration installation.'
+                : 'No capture integrations selected for installation.',
+            details: {
+                clients: hookClients
+            }
+        });
+    }
+
+    if (s) s.stop(color.green('0ctx is enabled for this repository'));
+
+    if (asJson) {
+        console.log(JSON.stringify({
+            ok: true,
+            repoRoot,
+            contextId,
+            workspaceName,
+            created,
+            hookClients,
+            mcpClients,
+            mcpProfile,
+            steps,
+            bootstrapResults,
+            hooks: hookSummary
+        }, null, 2));
+        return 0;
+    }
+
+    console.log('');
+    console.log(color.bold('0ctx is ready for this repository'));
+    console.log(color.dim(`Repo:      ${repoRoot}`));
+    console.log(color.dim(`Workspace: ${workspaceName}`));
+    console.log(color.dim(`Context:   ${contextId}`));
+    if (!skipBootstrap && mcpClients.length > 0) {
+        console.log(color.dim(`MCP:       ${mcpClients.join(', ')} (${mcpProfile})`));
+    }
+    if (!skipHooks && hookClients.length > 0) {
+        console.log(color.dim(`Capture:   ${hookClients.join(', ')}`));
+    }
+    console.log('');
+    p?.outro(color.green('Use your agent normally in this repo. 0ctx will route capture by repo path.'));
+    return 0;
 }
 
 async function collectDoctorChecks(flags: Record<string, string | boolean>): Promise<{
@@ -2331,23 +2540,15 @@ function extractSupportedHookAgent(raw: string | null): HookSupportedAgent | nul
     return null;
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+    return value && typeof value === 'object' && !Array.isArray(value)
+        ? value as Record<string, unknown>
+        : null;
+}
+
 async function resolveContextIdForHookIngest(repoRoot: string, explicitContextId: string | null): Promise<string | null> {
     const contexts = await sendToDaemon('listContexts', {}) as Array<{ id: string; paths?: string[] }>;
-    const selected = selectHookContextId(contexts, repoRoot, explicitContextId);
-    if (selected) return selected;
-
-    // Fallback to active context so hook ingestion still works in existing
-    // projects that were created before path binding was added.
-    try {
-        const active = await sendToDaemon('getActiveContext', {}) as { id?: string } | null;
-        if (typeof active?.id === 'string' && active.id.trim().length > 0) {
-            return active.id;
-        }
-    } catch {
-        // Best-effort only; missing active context falls back to explicit error.
-    }
-
-    return null;
+    return selectHookContextId(contexts, repoRoot, explicitContextId);
 }
 
 async function resolveHookContextPaths(contextId: string): Promise<string[] | null> {
@@ -2372,14 +2573,6 @@ async function validateHookIngestWorkspace(options: {
     error: string | null;
 }> {
     const captureRoot = resolveHookCaptureRoot(options.agent, options.payload, options.repoRoot) ?? path.resolve(options.repoRoot);
-    if (options.agent !== 'factory' && options.agent !== 'antigravity') {
-        return {
-            ok: true,
-            captureRoot,
-            error: null
-        };
-    }
-
     const contextPaths = await resolveHookContextPaths(options.contextId);
     if (contextPaths === null) {
         return {
@@ -2543,7 +2736,7 @@ async function ensureChatCommitNode(options: {
 
 async function commandConnectorHook(action: string | undefined, flags: Record<string, string | boolean>): Promise<number> {
     const safeAction = action ?? 'status';
-    const validActions = ['install', 'status', 'ingest', 'prune'];
+    const validActions = ['install', 'status', 'ingest', 'prune', 'session-start'];
     if (!validActions.includes(safeAction)) {
         console.error(`Unknown connector hook action: '${action ?? ''}'`);
         console.error(`Valid actions: ${validActions.join(', ')}`);
@@ -2605,7 +2798,7 @@ async function commandConnectorHook(action: string | undefined, flags: Record<st
         } else if (!quiet) {
             console.log(`hook_install: ${dryRun ? 'dry-run' : (result.changed ? 'updated' : 'already up-to-date')}`);
             console.log(`project_root: ${result.projectRoot}`);
-            console.log(`context_id: ${result.contextId ?? 'n/a (auto-resolve failed; capture may require --context-id)'}`);
+            console.log(`context_id: ${result.contextId ?? 'n/a (repo path will resolve at capture time)'}`);
             console.log(`project_config: ${result.projectConfigPath}`);
             console.log(`state_path: ${result.statePath}`);
             console.log(`claude_config: ${result.claudeConfigPath}`);
@@ -2680,16 +2873,94 @@ async function commandConnectorHook(action: string | undefined, flags: Record<st
     const payloadText = inputFile
         ? fs.readFileSync(path.resolve(inputFile), 'utf8')
         : inlinePayload ?? readStdinPayload();
-    if (!payloadText || payloadText.trim().length === 0) {
+    if (safeAction !== 'session-start' && (!payloadText || payloadText.trim().length === 0)) {
         console.error('connector_hook_ingest_requires_payload: provide --input-file, --payload, or stdin');
         return 1;
     }
 
-    let parsedPayload: unknown;
-    try {
-        parsedPayload = JSON.parse(payloadText);
-    } catch {
-        parsedPayload = { content: payloadText };
+    let parsedPayload: unknown = {};
+    if (payloadText && payloadText.trim().length > 0) {
+        try {
+            parsedPayload = JSON.parse(payloadText);
+        } catch {
+            parsedPayload = { content: payloadText };
+        }
+    }
+
+    if (safeAction === 'session-start') {
+        if (agent !== 'claude' && agent !== 'factory') {
+            if (asJson) {
+                console.log(JSON.stringify({
+                    ok: true,
+                    injected: false,
+                    reason: 'unsupported_agent'
+                }, null, 2));
+            }
+            return 0;
+        }
+
+        const rawPayload = asRecord(parsedPayload) ?? {};
+        const requestedRepoRoot = parseOptionalStringFlag(flags['repo-root']);
+        const repoRoot = resolveHookCaptureRoot(
+            agent,
+            rawPayload,
+            requestedRepoRoot ? resolveRepoRoot(requestedRepoRoot) : null
+        ) ?? resolveRepoRoot(requestedRepoRoot);
+        const explicitContextId = parseOptionalStringFlag(flags['context-id'] ?? flags.contextId);
+        const contextId = await resolveContextIdForHookIngest(repoRoot, explicitContextId);
+        if (!contextId) {
+            if (asJson) {
+                console.log(JSON.stringify({
+                    ok: true,
+                    injected: false,
+                    reason: 'context_missing'
+                }, null, 2));
+            }
+            return 0;
+        }
+
+        const workspaceCheck = await validateHookIngestWorkspace({
+            agent,
+            contextId,
+            repoRoot,
+            payload: rawPayload
+        });
+        if (!workspaceCheck.ok) {
+            if (asJson) {
+                console.log(JSON.stringify({
+                    ok: true,
+                    injected: false,
+                    reason: 'workspace_mismatch',
+                    captureRoot: workspaceCheck.captureRoot
+                }, null, 2));
+            }
+            return 0;
+        }
+
+        const captureRoot = workspaceCheck.captureRoot;
+        const branch = safeGitValue(captureRoot, ['rev-parse', '--abbrev-ref', 'HEAD']);
+        const summary = await sendToDaemon('getWorkstreamBrief', {
+            contextId,
+            branch,
+            worktreePath: captureRoot,
+            sessionLimit: 3,
+            checkpointLimit: 2
+        }) as { workspaceName?: string; contextText?: string };
+
+        if (asJson) {
+            console.log(JSON.stringify({
+                ok: true,
+                injected: true,
+                contextId,
+                workspaceName: summary.workspaceName,
+                captureRoot,
+                branch,
+                context: summary.contextText
+            }, null, 2));
+        } else if (typeof summary.contextText === 'string' && summary.contextText.trim().length > 0) {
+            process.stdout.write(summary.contextText);
+        }
+        return 0;
     }
 
     const normalized = normalizeHookPayload(agent, parsedPayload);
@@ -3936,6 +4207,9 @@ Usage:
   0ctx shell
   0ctx version [--verbose] [--json]
   0ctx --version | -v
+  0ctx enable [--repo-root=<path>] [--name=<workspace>] [--clients=all|claude,cursor,windsurf,codex,factory,antigravity]
+              [--mcp-clients=none|all|claude,cursor,windsurf,codex,antigravity]
+              [--skip-bootstrap] [--skip-hooks] [--mcp-profile=all|core|recall|ops] [--json]
   0ctx setup [--clients=all|claude,cursor,windsurf,codex,antigravity] [--no-open] [--json] [--validate]
              [--require-cloud] [--wait-cloud-ready]
              [--cloud-wait-timeout-ms=60000] [--cloud-wait-interval-ms=2000]
@@ -3954,16 +4228,17 @@ Usage:
   0ctx status [--json] [--compact]
   0ctx repair [--clients=...] [--deep] [--json]
   0ctx reset [--confirm] [--full] [--include-auth] [--json]
-  0ctx branches [--context-id=<id>] [--limit=100] [--json]
-  0ctx sessions [--context-id=<id>] [--branch=<name>] [--session-id=<id>] [--worktree-path=<path>] [--limit=100] [--json]
-  0ctx checkpoints [list] [--context-id=<id>] [--branch=<name>] [--worktree-path=<path>] [--limit=100] [--json]
-  0ctx checkpoints create --context-id=<id> --session-id=<id> [--name="..."] [--summary="..."] [--json]
-  0ctx checkpoints show --context-id=<id> --checkpoint-id=<id> [--json]
-  0ctx extract session --context-id=<id> --session-id=<id> [--preview] [--keys=key1,key2] [--max-nodes=12] [--json]
+  0ctx workstreams [--repo-root=<path>] [--context-id=<id>] [--limit=100] [--json]
+  0ctx branches [--repo-root=<path>] [--context-id=<id>] [--limit=100] [--json]
+  0ctx sessions [--repo-root=<path>] [--context-id=<id>] [--branch=<name>] [--session-id=<id>] [--worktree-path=<path>] [--limit=100] [--json]
+  0ctx checkpoints [list] [--repo-root=<path>] [--context-id=<id>] [--branch=<name>] [--worktree-path=<path>] [--limit=100] [--json]
+  0ctx checkpoints create [--repo-root=<path>] [--context-id=<id>] --session-id=<id> [--name="..."] [--summary="..."] [--json]
+  0ctx checkpoints show [--repo-root=<path>] [--context-id=<id>] --checkpoint-id=<id> [--json]
+  0ctx extract session [--repo-root=<path>] [--context-id=<id>] --session-id=<id> [--preview] [--keys=key1,key2] [--max-nodes=12] [--json]
   0ctx extract checkpoint --checkpoint-id=<id> [--preview] [--keys=key1,key2] [--max-nodes=12] [--json]
-  0ctx resume --context-id=<id> --session-id=<id> [--json]
-  0ctx rewind --context-id=<id> --checkpoint-id=<id> [--json]
-  0ctx explain --context-id=<id> --checkpoint-id=<id> [--json]
+  0ctx resume [--repo-root=<path>] [--context-id=<id>] --session-id=<id> [--json]
+  0ctx rewind [--repo-root=<path>] [--context-id=<id>] --checkpoint-id=<id> [--json]
+  0ctx explain [--repo-root=<path>] [--context-id=<id>] --checkpoint-id=<id> [--json]
   0ctx logs [--no-open] [--snapshot] [--limit=50] [--since-hours=N] [--grep=text] [--errors-only]
   0ctx recall [--mode=auto|temporal|topic|graph] [--query="..."] [--since-hours=24] [--limit=10] [--depth=2] [--max-nodes=30] [--start] [--json]
   0ctx recall feedback --node-id=<id> (--helpful|--not-helpful) [--reason="..."] [--context-id=<id>] [--json]
@@ -4001,9 +4276,11 @@ Connector:
   0ctx connector hook install [--clients=all|claude,cursor,windsurf,codex,factory,antigravity] [--context-id=<id>] [--global]
   0ctx connector hook status [--json]
   0ctx connector hook prune [--days=30] [--json]
+  0ctx connector hook session-start --agent=claude|factory [--context-id=<id>] [--repo-root=<path>]
+                                   [--input-file=<path>|--payload='<json>'|stdin] [--json]
   0ctx connector hook ingest --agent=claude|windsurf|codex|cursor|factory|antigravity [--context-id=<id>] [--repo-root=<path>]
                              [--input-file=<path>|--payload='<json>'|stdin]
-  0ctx hook install|status|prune|ingest  Alias for "0ctx connector hook ..."
+  0ctx hook install|status|prune|session-start|ingest  Alias for "0ctx connector hook ..."
   0ctx connector queue status [--json]
   0ctx connector queue drain [--max-batches=10] [--batch-size=200] [--wait] [--strict|--fail-on-retry] [--timeout-ms=120000] [--poll-ms=1000] [--json]
   0ctx connector queue purge [--all|--older-than-hours=N|--min-attempts=N] [--dry-run|--confirm] [--json]
@@ -4128,15 +4405,30 @@ function getContextIdFlag(flags: Record<string, string | boolean>): string | nul
     return null;
 }
 
-async function resolveCommandContextId(flags: Record<string, string | boolean>): Promise<string | null> {
+async function resolveCommandContextId(
+    flags: Record<string, string | boolean>,
+    options: { allowActiveFallback?: boolean } = {}
+): Promise<string | null> {
     const explicit = getContextIdFlag(flags);
     if (explicit) return explicit;
+
+    const requestedRepoRoot = parseOptionalStringFlag(flags['repo-root'] ?? flags.repoRoot);
     try {
-        const active = await sendToDaemon('getActiveContext', {}) as { id?: string } | null;
-        return typeof active?.id === 'string' && active.id.trim().length > 0 ? active.id : null;
+        const contexts = await sendToDaemon('listContexts', {}) as Array<{ id?: string; paths?: string[] }> | null;
+        if (Array.isArray(contexts)) {
+            const repoRoot = resolveRepoRoot(requestedRepoRoot);
+            const byRepo = selectHookContextId(contexts, repoRoot, null);
+            if (byRepo) return byRepo;
+        }
+
+        if (options.allowActiveFallback !== false) {
+            const active = await sendToDaemon('getActiveContext', {}) as { id?: string } | null;
+            return typeof active?.id === 'string' && active.id.trim().length > 0 ? active.id : null;
+        }
     } catch {
         return null;
     }
+    return null;
 }
 
 async function requireCommandContextId(
@@ -4145,7 +4437,7 @@ async function requireCommandContextId(
 ): Promise<string | null> {
     const contextId = await resolveCommandContextId(flags);
     if (!contextId) {
-        console.error(`Missing context for \`${commandLabel}\`. Use '--context-id=<contextId>' or switch an active workspace first.`);
+        console.error(`Missing workspace for \`${commandLabel}\`. Run this inside a bound repo, pass '--repo-root=<path>', or use '--context-id=<contextId>' for support workflows.`);
         return null;
     }
     return contextId;
@@ -4181,9 +4473,9 @@ async function commandBranches(flags: Record<string, string | boolean>): Promise
             agentSet?: string[];
         }>;
         return printJsonOrValue(asJson, result, () => {
-            console.log('\nBranches\n');
+            console.log('\nWorkstreams\n');
             if (!result.length) {
-                console.log('  No branch lanes found.\n');
+                console.log('  No workstreams found.\n');
                 return;
             }
             for (const lane of result) {
@@ -4199,7 +4491,7 @@ async function commandBranches(flags: Record<string, string | boolean>): Promise
             }
         });
     } catch (error) {
-        console.error('Failed to list branches:', error instanceof Error ? error.message : String(error));
+        console.error('Failed to list workstreams:', error instanceof Error ? error.message : String(error));
         return 1;
     }
 }
@@ -4224,7 +4516,7 @@ async function commandSessions(flags: Record<string, string | boolean>): Promise
                 console.log(`  Session: ${sessionId}`);
                 console.log(`  Summary: ${detail.session?.summary ?? '-'}`);
                 console.log(`  Agent: ${detail.session?.agent ?? '-'}`);
-                console.log(`  Branch: ${detail.session?.branch ?? '-'}`);
+                console.log(`  Workstream: ${detail.session?.branch ?? '-'}`);
                 console.log(`  Commit: ${detail.session?.commitSha ?? '-'}`);
                 console.log(`  Messages: ${detail.messages.length}`);
                 console.log(`  Checkpoints: ${detail.checkpointCount}`);
@@ -4250,7 +4542,7 @@ async function commandSessions(flags: Record<string, string | boolean>): Promise
             for (const session of sessions as Array<Record<string, unknown>>) {
                 console.log(`  ${String(session.sessionId ?? '-')}`);
                 console.log(`    ${String(session.summary ?? '-')}`);
-                console.log(`    Branch: ${String(session.branch ?? '-')}`);
+                console.log(`    Workstream: ${String(session.branch ?? '-')}`);
                 console.log(`    Agent: ${String(session.agent ?? '-')}`);
                 console.log(`    Turns: ${String(session.turnCount ?? 0)}`);
                 console.log(`    Last: ${session.lastTurnAt ? new Date(Number(session.lastTurnAt)).toLocaleString() : '-'}`);
@@ -4290,7 +4582,7 @@ async function commandCheckpoints(
                 const checkpoint = result as { id?: string; branch?: string | null; commitSha?: string | null; summary?: string | null };
                 console.log('\nCheckpoint Created\n');
                 console.log(`  Id: ${checkpoint.id ?? '-'}`);
-                console.log(`  Branch: ${checkpoint.branch ?? '-'}`);
+                console.log(`  Workstream: ${checkpoint.branch ?? '-'}`);
                 console.log(`  Commit: ${checkpoint.commitSha ?? '-'}`);
                 console.log(`  Summary: ${checkpoint.summary ?? '-'}`);
                 console.log('');
@@ -4309,7 +4601,7 @@ async function commandCheckpoints(
                 console.log(`  Id: ${checkpointId}`);
                 console.log(`  Name: ${String(detail.checkpoint?.name ?? '-')}`);
                 console.log(`  Kind: ${String(detail.checkpoint?.kind ?? '-')}`);
-                console.log(`  Branch: ${String(detail.checkpoint?.branch ?? '-')}`);
+                console.log(`  Workstream: ${String(detail.checkpoint?.branch ?? '-')}`);
                 console.log(`  Session: ${String(detail.checkpoint?.sessionId ?? '-')}`);
                 console.log(`  Snapshot nodes: ${String(detail.snapshotNodeCount ?? 0)}`);
                 console.log(`  Payload: ${detail.payloadAvailable ? 'available' : 'missing'}`);
@@ -4330,7 +4622,7 @@ async function commandCheckpoints(
             for (const checkpoint of checkpoints as Array<Record<string, unknown>>) {
                 console.log(`  ${String(checkpoint.id ?? checkpoint.checkpointId ?? '-')}`);
                 console.log(`    ${String(checkpoint.summary ?? checkpoint.name ?? '-')}`);
-                console.log(`    Branch: ${String(checkpoint.branch ?? '-')}`);
+                console.log(`    Workstream: ${String(checkpoint.branch ?? '-')}`);
                 console.log(`    Session: ${String(checkpoint.sessionId ?? '-')}`);
                 console.log(`    Kind: ${String(checkpoint.kind ?? '-')}`);
                 console.log(`    Created: ${checkpoint.createdAt ? new Date(Number(checkpoint.createdAt)).toLocaleString() : '-'}`);
@@ -4359,7 +4651,7 @@ async function commandResume(flags: Record<string, string | boolean>): Promise<n
             console.log('\nResume Session\n');
             console.log(`  Session: ${sessionId}`);
             console.log(`  Summary: ${String(detail.session?.summary ?? '-')}`);
-            console.log(`  Branch: ${String(detail.session?.branch ?? '-')}`);
+            console.log(`  Workstream: ${String(detail.session?.branch ?? '-')}`);
             console.log(`  Agent: ${String(detail.session?.agent ?? '-')}`);
             console.log(`  Checkpoints: ${String(detail.checkpointCount ?? 0)}`);
             console.log('');
@@ -4386,7 +4678,7 @@ async function commandRewind(flags: Record<string, string | boolean>): Promise<n
             console.log('\nRewind Complete\n');
             console.log(`  Checkpoint: ${checkpointId}`);
             console.log(`  Name: ${String(detail.checkpoint?.name ?? '-')}`);
-            console.log(`  Branch: ${String(detail.checkpoint?.branch ?? '-')}`);
+            console.log(`  Workstream: ${String(detail.checkpoint?.branch ?? '-')}`);
             console.log('');
         });
     } catch (error) {
@@ -4411,7 +4703,7 @@ async function commandExplain(flags: Record<string, string | boolean>): Promise<
             console.log('\nCheckpoint Explanation\n');
             console.log(`  Checkpoint: ${checkpointId}`);
             console.log(`  Summary: ${String(detail.checkpoint?.summary ?? detail.checkpoint?.name ?? '-')}`);
-            console.log(`  Branch: ${String(detail.checkpoint?.branch ?? '-')}`);
+            console.log(`  Workstream: ${String(detail.checkpoint?.branch ?? '-')}`);
             console.log(`  Session: ${String(detail.checkpoint?.sessionId ?? '-')}`);
             console.log(`  Snapshot nodes: ${String(detail.snapshotNodeCount ?? 0)}`);
             console.log(`  Snapshot edges: ${String(detail.snapshotEdgeCount ?? 0)}`);
@@ -4684,6 +4976,9 @@ function resolveCommandOperation(parsed: ParsedArgs): string {
     if (parsed.command === 'checkpoints') {
         return parsed.subcommand ? `cli.checkpoints.${parsed.subcommand}` : 'cli.checkpoints.list';
     }
+    if (parsed.command === 'workstreams') {
+        return 'cli.workstreams';
+    }
     return `cli.${parsed.command}`;
 }
 
@@ -4814,6 +5109,8 @@ async function main(): Promise<number> {
     const operation = resolveCommandOperation(parsed);
     return runCommandWithOpsSummary(operation, async () => {
         switch (parsed.command) {
+            case 'enable':
+                return commandEnable(parsed.flags);
             case 'setup':
                 return commandSetup(parsed.flags);
             case 'install':
@@ -4832,6 +5129,7 @@ async function main(): Promise<number> {
                 return commandReset(parsed.flags);
             case 'version':
                 return commandVersion(parsed.flags);
+            case 'workstreams':
             case 'branches':
                 return commandBranches(parsed.flags);
             case 'sessions':

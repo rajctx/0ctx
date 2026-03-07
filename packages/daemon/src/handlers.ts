@@ -1,4 +1,14 @@
-import type { Graph, AuditAction, AuditMetadata, AuditEntry, SearchResult } from '@0ctx/core';
+import type {
+    Graph,
+    AuditAction,
+    AuditMetadata,
+    AuditEntry,
+    SearchResult,
+    BranchLaneSummary,
+    AgentSessionSummary,
+    CheckpointSummary,
+    WorkstreamBrief
+} from '@0ctx/core';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -26,6 +36,7 @@ const CONTEXT_REQUIRED_METHODS = new Set([
     'listChatSessions',
     'listChatTurns',
     'listBranchLanes',
+    'getWorkstreamBrief',
     'listBranchSessions',
     'listSessionMessages',
     'listBranchCheckpoints',
@@ -182,6 +193,131 @@ function parseStringArray(value: unknown): string[] | undefined {
 function parseDepth(value: unknown, fallback = 2): number {
     if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
     return Math.max(1, Math.min(5, Math.floor(value)));
+}
+
+function truncateBriefLine(value: string, max = 88): string {
+    const normalized = value.replace(/\s+/g, ' ').trim();
+    if (normalized.length <= max) return normalized;
+    return `${normalized.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
+}
+
+function formatRelativeAge(timestamp: number, now = Date.now()): string {
+    const delta = Math.max(0, now - timestamp);
+    const minute = 60_000;
+    const hour = 60 * minute;
+    const day = 24 * hour;
+    if (delta < minute) return 'just now';
+    if (delta < hour) return `${Math.max(1, Math.floor(delta / minute))}m ago`;
+    if (delta < day) return `${Math.max(1, Math.floor(delta / hour))}h ago`;
+    return `${Math.max(1, Math.floor(delta / day))}d ago`;
+}
+
+function buildWorkstreamBrief(
+    graph: Graph,
+    contextId: string,
+    options: {
+        branch?: string | null;
+        worktreePath?: string | null;
+        sessionLimit?: number;
+        checkpointLimit?: number;
+    }
+): WorkstreamBrief {
+    const context = graph.getContext(contextId);
+    if (!context) {
+        throw new Error(`Context ${contextId} not found`);
+    }
+
+    const branch = typeof options.branch === 'string' && options.branch.trim().length > 0
+        ? options.branch.trim()
+        : null;
+    const worktreePath = typeof options.worktreePath === 'string' && options.worktreePath.trim().length > 0
+        ? options.worktreePath.trim()
+        : null;
+    const sessionLimit = parsePositiveInt(options.sessionLimit, 3, 20);
+    const checkpointLimit = parsePositiveInt(options.checkpointLimit, 2, 20);
+
+    let lane: BranchLaneSummary | null = null;
+    let recentSessions: AgentSessionSummary[] = [];
+    let latestCheckpoints: CheckpointSummary[] = [];
+
+    if (branch) {
+        const lanes = graph.listBranchLanes(contextId, 200);
+        lane = lanes.find((entry) => entry.branch === branch && (!worktreePath || entry.worktreePath === worktreePath))
+            ?? lanes.find((entry) => entry.branch === branch)
+            ?? null;
+
+        recentSessions = graph.listBranchSessions(contextId, branch, {
+            worktreePath,
+            limit: sessionLimit
+        });
+        if (recentSessions.length === 0 && worktreePath) {
+            recentSessions = graph.listBranchSessions(contextId, branch, {
+                limit: sessionLimit
+            });
+        }
+
+        latestCheckpoints = graph.listBranchCheckpoints(contextId, branch, {
+            worktreePath,
+            limit: checkpointLimit
+        });
+        if (latestCheckpoints.length === 0 && worktreePath) {
+            latestCheckpoints = graph.listBranchCheckpoints(contextId, branch, {
+                limit: checkpointLimit
+            });
+        }
+    }
+
+    const lines = [
+        '0ctx project memory',
+        `Workspace: ${context.name}`,
+        `Current workstream: ${branch ?? 'no git branch detected'}`
+    ];
+
+    if (lane) {
+        const laneFacts = [
+            typeof lane.sessionCount === 'number' ? `${lane.sessionCount} sessions` : null,
+            typeof lane.checkpointCount === 'number' ? `${lane.checkpointCount} checkpoints` : null,
+            lane.lastAgent ? `last agent ${lane.lastAgent}` : null
+        ].filter((value): value is string => Boolean(value));
+        if (laneFacts.length > 0) {
+            lines.push(`Tracked activity: ${laneFacts.join(', ')}.`);
+        }
+    }
+
+    if (recentSessions.length > 0) {
+        lines.push('', 'Recent sessions:');
+        for (const session of recentSessions) {
+            lines.push(`- ${session.agent ?? 'agent'} · ${formatRelativeAge(session.lastTurnAt)} · ${truncateBriefLine(session.summary)}`);
+        }
+    }
+
+    if (latestCheckpoints.length > 0) {
+        lines.push('', 'Latest checkpoints:');
+        for (const checkpoint of latestCheckpoints) {
+            const label = checkpoint.name?.trim().length ? checkpoint.name : checkpoint.summary;
+            lines.push(`- ${truncateBriefLine(label)} · ${formatRelativeAge(checkpoint.createdAt)}`);
+        }
+    }
+
+    if (recentSessions.length === 0 && latestCheckpoints.length === 0) {
+        lines.push('', 'No captured sessions or checkpoints for this workstream yet.');
+    }
+
+    return {
+        contextId,
+        workspaceName: context.name,
+        branch,
+        worktreePath,
+        tracked: Boolean(lane),
+        sessionCount: lane?.sessionCount ?? recentSessions.length,
+        checkpointCount: lane?.checkpointCount ?? latestCheckpoints.length,
+        lastAgent: lane?.lastAgent ?? null,
+        lastCommitSha: lane?.lastCommitSha ?? null,
+        lastActivityAt: lane?.lastActivityAt ?? null,
+        recentSessions,
+        latestCheckpoints,
+        contextText: lines.join('\n')
+    };
 }
 
 interface RecallFeedbackSignal {
@@ -625,13 +761,13 @@ export function handleRequest(
     if (req.method === 'getCapabilities') {
         return {
             apiVersion: '2',
-            features: ['sessions', 'health', 'capabilities', 'audit_logs', 'audit_verify', 'metrics', 'backup_restore', 'auth', 'sync', 'sync_policies', 'blackboard_events', 'task_leases', 'quality_gates', 'recall', 'recall_feedback', 'chat_payloads', 'hook_health'],
+            features: ['sessions', 'workstream_briefs', 'health', 'capabilities', 'audit_logs', 'audit_verify', 'metrics', 'backup_restore', 'auth', 'sync', 'sync_policies', 'blackboard_events', 'task_leases', 'quality_gates', 'recall', 'recall_feedback', 'chat_payloads', 'hook_health'],
             methods: [
                 'listContexts', 'createContext', 'deleteContext', 'switchContext', 'getActiveContext',
                 'addNode', 'getNode', 'updateNode', 'getByKey', 'deleteNode',
                 'addEdge', 'getSubgraph', 'search', 'getGraphData',
                   'listChatSessions', 'listChatTurns', 'getNodePayload', 'getHookHealth',
-                  'listBranchLanes', 'listBranchSessions', 'listSessionMessages',
+                  'listBranchLanes', 'getWorkstreamBrief', 'listBranchSessions', 'listSessionMessages',
                   'listBranchCheckpoints', 'getSessionDetail', 'getCheckpointDetail',
                   'getHandoffTimeline', 'previewSessionKnowledge', 'previewCheckpointKnowledge',
                   'extractSessionKnowledge', 'extractCheckpointKnowledge',
@@ -1235,6 +1371,13 @@ export function handleRequest(
         }
         case 'listBranchLanes':
             return graph.listBranchLanes(contextId!, params.limit as number | undefined);
+        case 'getWorkstreamBrief':
+            return buildWorkstreamBrief(graph, contextId!, {
+                branch: typeof params.branch === 'string' ? params.branch : null,
+                worktreePath: typeof params.worktreePath === 'string' ? params.worktreePath : null,
+                sessionLimit: params.sessionLimit as number | undefined,
+                checkpointLimit: params.checkpointLimit as number | undefined
+            });
         case 'listBranchSessions': {
             const branch = typeof params.branch === 'string' ? params.branch : null;
             if (!branch || branch.trim().length === 0) {

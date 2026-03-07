@@ -19,6 +19,16 @@
           }
         ]
       }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "0ctx connector hook session-start --agent=factory"
+          }
+        ]
+      }
     ]
   }
 }

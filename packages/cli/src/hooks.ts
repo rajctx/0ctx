@@ -84,6 +84,7 @@ export interface TranscriptCaptureData {
 }
 
 const SUPPORTED_HOOK_AGENTS: HookSupportedAgent[] = ['claude', 'windsurf', 'codex', 'cursor', 'factory', 'antigravity'];
+const PREVIEW_HOOK_AGENTS = new Set<HookSupportedAgent>(['codex', 'cursor', 'windsurf']);
 const CODEX_NOTIFY_BEGIN = '# BEGIN 0ctx-codex-notify';
 const CODEX_NOTIFY_END = '# END 0ctx-codex-notify';
 const GENERIC_CAPTURE_ROOT_KEYS = [
@@ -130,7 +131,11 @@ function defaultHookAgents(now: number): HookAgentState[] {
         installed: false,
         command: null,
         updatedAt: now,
-        notes: agent === 'codex' ? 'preview-notify-archive' : 'supported'
+        notes: agent === 'codex'
+            ? 'preview-notify-archive'
+            : PREVIEW_HOOK_AGENTS.has(agent)
+                ? 'preview-hook'
+                : 'supported'
     }));
 }
 
@@ -145,16 +150,22 @@ function buildHookCommand(
     agent: HookSupportedAgent,
     _projectRoot: string,
     cliCommand: string,
-    contextId: string | null
+    _contextId: string | null
 ): string {
-    if (agent === 'claude' || agent === 'factory' || agent === 'antigravity') {
-        return `${cliCommand} connector hook ingest --quiet --agent=${agent}`;
-    }
     if (agent === 'codex') {
         return `${cliCommand} connector hook ingest --quiet --agent=codex --payload`;
     }
-    const contextFlag = contextId ? ` --context-id=${contextId}` : '';
-    return `${cliCommand} connector hook ingest --quiet --agent=${agent}${contextFlag}`;
+    if (agent === 'claude' || agent === 'factory' || agent === 'antigravity' || agent === 'windsurf' || agent === 'cursor') {
+        return `${cliCommand} connector hook ingest --quiet --agent=${agent}`;
+    }
+    return `${cliCommand} connector hook ingest --quiet --agent=${agent}`;
+}
+
+function buildSessionStartCommand(
+    agent: Extract<HookSupportedAgent, 'claude' | 'factory'>,
+    cliCommand: string
+): string {
+    return `${cliCommand} connector hook session-start --agent=${agent}`;
 }
 
 function toTomlString(value: string): string {
@@ -279,7 +290,9 @@ function writeJsonConfig(configPath: string, value: Record<string, unknown>, dry
 
 function isManagedHookCommand(command: unknown, agent: HookSupportedAgent): boolean {
     if (typeof command !== 'string') return false;
-    if (!command.includes('0ctx connector hook ingest')) return false;
+    if (!command.includes('0ctx connector hook ingest') && !command.includes('0ctx connector hook session-start')) {
+        return false;
+    }
     if (agent === 'factory') {
         return command.includes('--agent=factory')
             || command.includes('--agent=antigravity');
@@ -392,7 +405,8 @@ function ensureClaudeHookConfig(options: {
     cliCommand: string;
     dryRun: boolean;
 }): HookConfigResult {
-    const command = buildHookCommand('claude', process.cwd(), options.cliCommand, options.contextId);
+    const captureCommand = buildHookCommand('claude', process.cwd(), options.cliCommand, options.contextId);
+    const sessionStartCommand = buildSessionStartCommand('claude', options.cliCommand);
     const read = readJsonConfig(options.configPath);
     const config: Record<string, unknown> = read.value ?? {};
     if (read.reason) {
@@ -415,7 +429,12 @@ function ensureClaudeHookConfig(options: {
     }
 
     const hooksRoot = (hooksValue ?? {}) as Record<string, unknown>;
-    for (const eventName of ['Stop', 'SubagentStop'] as const) {
+    const eventCommands: Array<readonly [string, string]> = [
+        ['SessionStart', sessionStartCommand],
+        ['Stop', captureCommand],
+        ['SubagentStop', captureCommand]
+    ];
+    for (const [eventName, command] of eventCommands) {
         const eventGroups = ensureHookEventArray(hooksRoot, eventName);
         if (eventGroups.reason) {
             return {
@@ -495,7 +514,8 @@ function ensureFactoryHookConfig(options: {
     dryRun: boolean;
 }): HookConfigResult {
     const configPath = path.join(options.projectRoot, '.factory', 'settings.json');
-    const command = buildHookCommand('factory', options.projectRoot, options.cliCommand, options.contextId);
+    const captureCommand = buildHookCommand('factory', options.projectRoot, options.cliCommand, options.contextId);
+    const sessionStartCommand = buildSessionStartCommand('factory', options.cliCommand);
     const read = readJsonConfig(configPath);
     const config: Record<string, unknown> = read.value ?? {};
     if (read.reason) {
@@ -518,7 +538,12 @@ function ensureFactoryHookConfig(options: {
     }
 
     const hooksRoot = (hooksValue ?? {}) as Record<string, unknown>;
-    for (const eventName of ['Stop', 'SubagentStop'] as const) {
+    const eventCommands: Array<readonly [string, string]> = [
+        ['SessionStart', sessionStartCommand],
+        ['Stop', captureCommand],
+        ['SubagentStop', captureCommand]
+    ];
+    for (const [eventName, command] of eventCommands) {
         const eventGroups = ensureHookEventArray(hooksRoot, eventName);
         if (eventGroups.reason) {
             return {
@@ -586,7 +611,7 @@ function ensureFactoryHookConfig(options: {
         const cleanup = removeManagedHookCommandsFromConfig({
             configPath: cleanupPath,
             agent: 'factory',
-            events: ['Stop', 'SubagentStop'],
+            events: ['SessionStart', 'Stop', 'SubagentStop'],
             dryRun: options.dryRun
         });
         cleanupChanged = cleanupChanged || cleanup.changed;
@@ -1050,9 +1075,13 @@ export function installHooks(options: {
     }
     if (selectedClients.has('windsurf') && !windsurfHook.configured) {
         warnings.push(`Windsurf hook was not configured: ${windsurfHook.reason ?? 'unknown reason'}.`);
+    } else if (selectedClients.has('windsurf') && windsurfHook.configured) {
+        warnings.push('Windsurf capture is preview-grade: hooks are installed, but 0ctx does not treat Windsurf as GA yet.');
     }
     if (selectedClients.has('cursor') && !cursorHook.configured) {
         warnings.push(`Cursor hook was not configured: ${cursorHook.reason ?? 'unknown reason'}.`);
+    } else if (selectedClients.has('cursor') && cursorHook.configured) {
+        warnings.push('Cursor capture is preview-grade: hooks are installed, but 0ctx does not treat Cursor as GA yet.');
     }
     if (selectedClients.has('factory') && !factoryHook.configured) {
         warnings.push(`Factory hook was not configured: ${factoryHook.reason ?? 'unknown reason'}.`);
@@ -1075,9 +1104,9 @@ export function installHooks(options: {
         const nextStatus: HookAgentState['status'] = installed ? 'Supported' : 'Skipped';
         const nextCommand = installed ? buildHookCommand(supportedAgent, projectRoot, cliCommand, contextId) : null;
         const nextNotes = !selected
-            ? (supportedAgent === 'codex' ? 'preview-not-selected' : 'not-selected')
+            ? (PREVIEW_HOOK_AGENTS.has(supportedAgent) ? 'preview-not-selected' : 'not-selected')
             : installed
-                ? (supportedAgent === 'codex' ? 'preview-installed' : 'installed')
+                ? (PREVIEW_HOOK_AGENTS.has(supportedAgent) ? 'preview-installed' : 'installed')
                 : `not-installed: ${installResult.reason ?? 'hook-config-failed'}`;
         const unchanged = previous
             && previous.status === nextStatus
@@ -1906,16 +1935,11 @@ export function selectHookContextId(
         const byPath = contexts.find(context => (context.paths ?? []).some(rawPath => {
             const normalizedPath = path.resolve(rawPath).toLowerCase();
             return normalizedRoot === normalizedPath
-                || normalizedRoot.startsWith(`${normalizedPath}${path.sep}`)
-                || normalizedPath.startsWith(`${normalizedRoot}${path.sep}`);
+                || normalizedRoot.startsWith(`${normalizedPath}${path.sep}`);
         }));
         if (byPath?.id) {
             return byPath.id;
         }
-    }
-
-    if (contexts.length === 1) {
-        return contexts[0]?.id ?? null;
     }
 
     return null;

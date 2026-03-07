@@ -306,6 +306,27 @@ describe('daemon request handling', () => {
             expect(lanes[0].lastAgent).toBe('factory');
             expect(lanes[0].sessionCount).toBe(1);
 
+            const brief = handleRequest(graph, 'conn-branch', {
+                method: 'getWorkstreamBrief',
+                sessionToken: session.sessionToken,
+                params: {
+                    contextId: context.id,
+                    branch: 'feature/branch-lane',
+                    worktreePath: 'C:/repo'
+                }
+            }, runtime()) as {
+                workspaceName: string;
+                branch: string | null;
+                tracked: boolean;
+                recentSessions: Array<{ sessionId: string }>;
+                contextText: string;
+            };
+            expect(brief.workspaceName).toBe('branch-context');
+            expect(brief.branch).toBe('feature/branch-lane');
+            expect(brief.tracked).toBe(true);
+            expect(brief.recentSessions[0]?.sessionId).toBe('session-branch-1');
+            expect(brief.contextText).toContain('Current workstream: feature/branch-lane');
+
             const sessions = handleRequest(graph, 'conn-branch', {
                 method: 'listBranchSessions',
                 sessionToken: session.sessionToken,

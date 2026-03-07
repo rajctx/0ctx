@@ -237,13 +237,7 @@ describe('sync-engine pull merge behavior', () => {
 
             expect(payload.context.paths).toEqual([]);
             expect(payload.nodes[0].content).toContain('[REDACTED_SECRET]');
-            expect(payload.nodePayloads?.[0].payload).toMatchObject({
-                apiKey: '[REDACTED_SECRET]',
-                repositoryRoot: '[REDACTED_PATH]',
-                transcriptPath: '[REDACTED_PATH]'
-            });
-            expect(JSON.stringify(payload.nodePayloads)).toContain('[REDACTED_SECRET]');
-            expect(JSON.stringify(payload.nodePayloads)).not.toContain('C:/Users/Rajesh');
+            expect(payload.nodePayloads).toEqual([]);
             expect(payload.checkpointPayloads).toEqual([]);
 
             const reloadedDump = graph.exportContextDump(context.id);

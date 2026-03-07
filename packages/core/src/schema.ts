@@ -201,6 +201,22 @@ export interface CheckpointSummary {
     agentSet: string[];
 }
 
+export interface WorkstreamBrief {
+    contextId: string;
+    workspaceName: string;
+    branch: string | null;
+    worktreePath: string | null;
+    tracked: boolean;
+    sessionCount: number;
+    checkpointCount: number;
+    lastAgent: string | null;
+    lastCommitSha: string | null;
+    lastActivityAt: number | null;
+    recentSessions: AgentSessionSummary[];
+    latestCheckpoints: CheckpointSummary[];
+    contextText: string;
+}
+
 export interface SessionDetail {
     session: AgentSessionSummary | null;
     messages: SessionMessage[];

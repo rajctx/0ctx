@@ -126,6 +126,136 @@ server.setRequestHandler(CallToolRequestSchema, async (req: any) => {
                 const results = await callDaemon('search', { contextId, query: args.query, limit: args.limit ?? 10 });
                 return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(results, null, 2) }] } };
             }
+            case 'ctx_list_workstreams': {
+                const contextId = pickContextId(args);
+                const lanes = await callDaemon('listBranchLanes', { contextId, limit: args.limit ?? 100 });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(lanes, null, 2) }] } };
+            }
+            case 'ctx_get_workstream_brief': {
+                const contextId = pickContextId(args);
+                const brief = await callDaemon('getWorkstreamBrief', {
+                    contextId,
+                    branch: args.branch,
+                    worktreePath: args.worktreePath,
+                    sessionLimit: args.sessionLimit,
+                    checkpointLimit: args.checkpointLimit
+                });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(brief, null, 2) }] } };
+            }
+            case 'ctx_list_workstream_sessions': {
+                const contextId = pickContextId(args);
+                const sessions = await callDaemon('listBranchSessions', {
+                    contextId,
+                    branch: args.branch,
+                    worktreePath: args.worktreePath,
+                    limit: args.limit ?? 100
+                });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(sessions, null, 2) }] } };
+            }
+            case 'ctx_get_session': {
+                const contextId = pickContextId(args);
+                const session = await callDaemon('getSessionDetail', { contextId, sessionId: args.sessionId });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(session, null, 2) }] } };
+            }
+            case 'ctx_list_session_messages': {
+                const contextId = pickContextId(args);
+                const messages = await callDaemon('listSessionMessages', {
+                    contextId,
+                    sessionId: args.sessionId,
+                    limit: args.limit ?? 500
+                });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(messages, null, 2) }] } };
+            }
+            case 'ctx_list_workstream_checkpoints': {
+                const contextId = pickContextId(args);
+                const checkpoints = await callDaemon('listBranchCheckpoints', {
+                    contextId,
+                    branch: args.branch,
+                    worktreePath: args.worktreePath,
+                    limit: args.limit ?? 100
+                });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(checkpoints, null, 2) }] } };
+            }
+            case 'ctx_get_checkpoint': {
+                const checkpoint = await callDaemon('getCheckpointDetail', { checkpointId: args.checkpointId });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(checkpoint, null, 2) }] } };
+            }
+            case 'ctx_get_handoff_timeline': {
+                const contextId = pickContextId(args);
+                const timeline = await callDaemon('getHandoffTimeline', {
+                    contextId,
+                    branch: args.branch,
+                    worktreePath: args.worktreePath,
+                    limit: args.limit ?? 100
+                });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(timeline, null, 2) }] } };
+            }
+            case 'ctx_create_session_checkpoint': {
+                const contextId = pickContextId(args);
+                const checkpoint = await callDaemon('createSessionCheckpoint', {
+                    contextId,
+                    sessionId: args.sessionId,
+                    name: args.name,
+                    summary: args.summary,
+                    kind: args.kind
+                });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(checkpoint, null, 2) }] } };
+            }
+            case 'ctx_resume_session': {
+                const contextId = pickContextId(args);
+                const detail = await callDaemon('resumeSession', { contextId, sessionId: args.sessionId });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(detail, null, 2) }] } };
+            }
+            case 'ctx_rewind_checkpoint': {
+                const contextId = pickContextId(args);
+                const detail = await callDaemon('rewindCheckpoint', { contextId, checkpointId: args.checkpointId });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(detail, null, 2) }] } };
+            }
+            case 'ctx_explain_checkpoint': {
+                const contextId = pickContextId(args);
+                const detail = await callDaemon('explainCheckpoint', { contextId, checkpointId: args.checkpointId });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(detail, null, 2) }] } };
+            }
+            case 'ctx_preview_insights': {
+                const contextId = pickContextId(args);
+                if (typeof args.checkpointId === 'string' && args.checkpointId.length > 0) {
+                    const preview = await callDaemon('previewCheckpointKnowledge', {
+                        checkpointId: args.checkpointId,
+                        maxNodes: args.maxNodes
+                    });
+                    return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(preview, null, 2) }] } };
+                }
+                if (typeof args.sessionId === 'string' && args.sessionId.length > 0) {
+                    const preview = await callDaemon('previewSessionKnowledge', {
+                        contextId,
+                        sessionId: args.sessionId,
+                        maxNodes: args.maxNodes
+                    });
+                    return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(preview, null, 2) }] } };
+                }
+                throw new Error("ctx_preview_insights requires either 'sessionId' or 'checkpointId'.");
+            }
+            case 'ctx_extract_insights': {
+                const contextId = pickContextId(args);
+                if (typeof args.checkpointId === 'string' && args.checkpointId.length > 0) {
+                    const extraction = await callDaemon('extractCheckpointKnowledge', {
+                        checkpointId: args.checkpointId,
+                        maxNodes: args.maxNodes,
+                        candidateKeys: args.candidateKeys
+                    });
+                    return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(extraction, null, 2) }] } };
+                }
+                if (typeof args.sessionId === 'string' && args.sessionId.length > 0) {
+                    const extraction = await callDaemon('extractSessionKnowledge', {
+                        contextId,
+                        sessionId: args.sessionId,
+                        maxNodes: args.maxNodes,
+                        candidateKeys: args.candidateKeys
+                    });
+                    return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(extraction, null, 2) }] } };
+                }
+                throw new Error("ctx_extract_insights requires either 'sessionId' or 'checkpointId'.");
+            }
             case 'ctx_recall': {
                 const contextId = pickContextId(args);
                 const recall = await callDaemon('recall', {

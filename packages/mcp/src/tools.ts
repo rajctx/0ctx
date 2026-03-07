@@ -87,6 +87,192 @@ export const tools = [
         },
     },
     {
+        name: 'ctx_list_workstreams',
+        description: 'List workstreams for the active workspace. A workstream maps to a branch or worktree.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                limit: { type: 'number', description: 'Maximum number of workstreams to return (default 100).' },
+                contextId: { type: 'string', description: 'Optional explicit context ID override for this operation.' },
+            },
+            required: [],
+        },
+    },
+    {
+        name: 'ctx_get_workstream_brief',
+        description: 'Get a compact workstream brief suitable for injecting into an agent session or summarizing the current lane.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                branch: { type: 'string', description: 'Optional branch name for the workstream.' },
+                worktreePath: { type: 'string', description: 'Optional worktree path for a specific lane.' },
+                sessionLimit: { type: 'number', description: 'Maximum number of recent sessions to include (default 3).' },
+                checkpointLimit: { type: 'number', description: 'Maximum number of checkpoints to include (default 2).' },
+                contextId: { type: 'string', description: 'Optional explicit context ID override for this operation.' },
+            },
+            required: [],
+        },
+    },
+    {
+        name: 'ctx_list_workstream_sessions',
+        description: 'List sessions captured on a specific workstream.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                branch: { type: 'string', description: 'Branch name for the workstream.' },
+                worktreePath: { type: 'string', description: 'Optional worktree path for a specific lane.' },
+                limit: { type: 'number', description: 'Maximum number of sessions to return (default 100).' },
+                contextId: { type: 'string', description: 'Optional explicit context ID override for this operation.' },
+            },
+            required: ['branch'],
+        },
+    },
+    {
+        name: 'ctx_get_session',
+        description: 'Get a session detail payload including its summary, messages, and latest checkpoint.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                sessionId: { type: 'string', description: 'Session ID to inspect.' },
+                contextId: { type: 'string', description: 'Optional explicit context ID override for this operation.' },
+            },
+            required: ['sessionId'],
+        },
+    },
+    {
+        name: 'ctx_list_session_messages',
+        description: 'List transcript-derived messages for a session.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                sessionId: { type: 'string', description: 'Session ID to inspect.' },
+                limit: { type: 'number', description: 'Maximum number of messages to return (default 500).' },
+                contextId: { type: 'string', description: 'Optional explicit context ID override for this operation.' },
+            },
+            required: ['sessionId'],
+        },
+    },
+    {
+        name: 'ctx_list_workstream_checkpoints',
+        description: 'List checkpoints created on a specific workstream.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                branch: { type: 'string', description: 'Branch name for the workstream.' },
+                worktreePath: { type: 'string', description: 'Optional worktree path for a specific lane.' },
+                limit: { type: 'number', description: 'Maximum number of checkpoints to return (default 100).' },
+                contextId: { type: 'string', description: 'Optional explicit context ID override for this operation.' },
+            },
+            required: ['branch'],
+        },
+    },
+    {
+        name: 'ctx_get_checkpoint',
+        description: 'Get the full detail for a checkpoint, including snapshot counts.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                checkpointId: { type: 'string', description: 'Checkpoint ID to inspect.' },
+                contextId: { type: 'string', description: 'Optional explicit context ID override for this operation.' },
+            },
+            required: ['checkpointId'],
+        },
+    },
+    {
+        name: 'ctx_get_handoff_timeline',
+        description: 'List recent agent handoffs on a workstream or across the active workspace.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                branch: { type: 'string', description: 'Optional branch filter.' },
+                worktreePath: { type: 'string', description: 'Optional worktree path filter.' },
+                limit: { type: 'number', description: 'Maximum number of handoff entries to return (default 100).' },
+                contextId: { type: 'string', description: 'Optional explicit context ID override for this operation.' },
+            },
+            required: [],
+        },
+    },
+    {
+        name: 'ctx_create_session_checkpoint',
+        description: 'Create a checkpoint from a captured session so the workstream can be resumed or explained later.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                sessionId: { type: 'string', description: 'Session ID to checkpoint.' },
+                name: { type: 'string', description: 'Optional checkpoint name.' },
+                summary: { type: 'string', description: 'Optional checkpoint summary override.' },
+                kind: { type: 'string', enum: ['manual', 'session', 'legacy'], description: 'Optional checkpoint kind.' },
+                contextId: { type: 'string', description: 'Optional explicit context ID override for this operation.' },
+            },
+            required: ['sessionId'],
+        },
+    },
+    {
+        name: 'ctx_resume_session',
+        description: 'Resume a session by loading its detail and linked checkpoint state.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                sessionId: { type: 'string', description: 'Session ID to resume.' },
+                contextId: { type: 'string', description: 'Optional explicit context ID override for this operation.' },
+            },
+            required: ['sessionId'],
+        },
+    },
+    {
+        name: 'ctx_rewind_checkpoint',
+        description: 'Rewind the active workspace to a checkpoint snapshot.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                checkpointId: { type: 'string', description: 'Checkpoint ID to restore.' },
+                contextId: { type: 'string', description: 'Optional explicit context ID override for this operation.' },
+            },
+            required: ['checkpointId'],
+        },
+    },
+    {
+        name: 'ctx_explain_checkpoint',
+        description: 'Explain a checkpoint by returning its metadata and snapshot scope.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                checkpointId: { type: 'string', description: 'Checkpoint ID to explain.' },
+                contextId: { type: 'string', description: 'Optional explicit context ID override for this operation.' },
+            },
+            required: ['checkpointId'],
+        },
+    },
+    {
+        name: 'ctx_preview_insights',
+        description: 'Preview reviewed insight candidates for a session or checkpoint.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                sessionId: { type: 'string', description: 'Optional session ID to preview insight candidates from.' },
+                checkpointId: { type: 'string', description: 'Optional checkpoint ID to preview insight candidates from.' },
+                maxNodes: { type: 'number', description: 'Maximum number of candidates to return (default 12).' },
+                contextId: { type: 'string', description: 'Optional explicit context ID override for this operation.' },
+            },
+            required: [],
+        },
+    },
+    {
+        name: 'ctx_extract_insights',
+        description: 'Persist selected reviewed insight candidates from a session or checkpoint.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                sessionId: { type: 'string', description: 'Optional session ID to extract insight candidates from.' },
+                checkpointId: { type: 'string', description: 'Optional checkpoint ID to extract insight candidates from.' },
+                candidateKeys: { type: 'array', items: { type: 'string' }, description: 'Optional candidate keys to persist; omit to extract all returned candidates.' },
+                maxNodes: { type: 'number', description: 'Maximum number of candidates to inspect (default 12).' },
+                contextId: { type: 'string', description: 'Optional explicit context ID override for this operation.' },
+            },
+            required: [],
+        },
+    },
+    {
         name: 'ctx_recall',
         description: 'Unified recall before starting work. Combines temporal, topic, and graph context into one payload.',
         inputSchema: {
@@ -425,6 +611,20 @@ const TOOL_SCOPE_BY_NAME: Record<string, ToolScope> = {
     ctx_get: 'core',
     ctx_query: 'core',
     ctx_search: 'core',
+    ctx_list_workstreams: 'core',
+    ctx_get_workstream_brief: 'core',
+    ctx_list_workstream_sessions: 'core',
+    ctx_get_session: 'core',
+    ctx_list_session_messages: 'core',
+    ctx_list_workstream_checkpoints: 'core',
+    ctx_get_checkpoint: 'core',
+    ctx_get_handoff_timeline: 'core',
+    ctx_create_session_checkpoint: 'core',
+    ctx_resume_session: 'core',
+    ctx_rewind_checkpoint: 'core',
+    ctx_explain_checkpoint: 'core',
+    ctx_preview_insights: 'core',
+    ctx_extract_insights: 'core',
     ctx_supersede: 'core',
     ctx_checkpoint: 'core',
     ctx_rewind: 'core',
