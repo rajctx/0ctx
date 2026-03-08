@@ -132,6 +132,19 @@ interface HookHealthDetails {
     agents: HookHealthAgentCheck[];
 }
 
+interface RepoReadinessSummary {
+    repoRoot: string;
+    contextId: string | null;
+    workspaceName: string | null;
+    workstream: string | null;
+    sessionCount: number | null;
+    checkpointCount: number | null;
+    syncPolicy: string | null;
+    captureReadyAgents: HookSupportedAgent[];
+    captureMissingAgents: HookInstallClient[];
+    captureManagedForRepo: boolean;
+}
+
 interface ParsedArgs {
     command: string;
     subcommand?: string;
@@ -486,6 +499,122 @@ async function collectHookHealth(): Promise<{
     };
 }
 
+function getCurrentWorkstream(repoRoot: string): string | null {
+    return safeGitValue(repoRoot, ['branch', '--show-current'])
+        ?? safeGitValue(repoRoot, ['rev-parse', '--abbrev-ref', 'HEAD']);
+}
+
+function formatLabelValue(label: string, value: string): string {
+    return `${color.dim(label.padEnd(12))} : ${value}`;
+}
+
+function formatAgentName(agent: string): string {
+    switch (agent) {
+        case 'claude':
+            return 'Claude';
+        case 'factory':
+            return 'Factory';
+        case 'antigravity':
+            return 'Antigravity';
+        case 'codex':
+            return 'Codex';
+        case 'cursor':
+            return 'Cursor';
+        case 'windsurf':
+            return 'Windsurf';
+        default:
+            return agent;
+    }
+}
+
+function formatAgentList(agents: string[]): string {
+    if (agents.length === 0) return 'none';
+    return agents.map(formatAgentName).join(', ');
+}
+
+async function collectRepoReadiness(options: {
+    repoRoot?: string | null;
+    contextId?: string | null;
+    hookDetails?: HookHealthDetails | null;
+} = {}): Promise<RepoReadinessSummary | null> {
+    const repoRoot = resolveRepoRoot(options.repoRoot ?? null);
+    const contexts = await sendToDaemon('listContexts', {}) as Array<{ id?: string; name?: string; paths?: string[] }> | null;
+    if (!Array.isArray(contexts)) {
+        return null;
+    }
+
+    const matchedContextId = options.contextId
+        ?? selectHookContextId(contexts, repoRoot, null);
+    const matchedContext = typeof matchedContextId === 'string'
+        ? contexts.find(context => context?.id === matchedContextId) ?? null
+        : null;
+
+    if (!matchedContextId || !matchedContext) {
+        return {
+            repoRoot,
+            contextId: null,
+            workspaceName: null,
+            workstream: getCurrentWorkstream(repoRoot),
+            sessionCount: null,
+            checkpointCount: null,
+            syncPolicy: null,
+            captureReadyAgents: [],
+            captureMissingAgents: [...DEFAULT_HOOK_INSTALL_CLIENTS],
+            captureManagedForRepo: false
+        };
+    }
+
+    const branch = getCurrentWorkstream(repoRoot);
+    const pack = await sendToDaemon('getAgentContextPack', {
+        contextId: matchedContextId,
+        branch,
+        sessionLimit: 3,
+        checkpointLimit: 2,
+        handoffLimit: 3
+    }) as {
+        workspaceName?: string;
+        branch?: string | null;
+        workstream?: { sessionCount?: number; checkpointCount?: number };
+    } | null;
+    const syncPolicyResult = await sendToDaemon('getSyncPolicy', { contextId: matchedContextId }) as
+        | string
+        | { syncPolicy?: string | null }
+        | null;
+    const syncPolicy = typeof syncPolicyResult === 'string'
+        ? syncPolicyResult
+        : (typeof syncPolicyResult?.syncPolicy === 'string' ? syncPolicyResult.syncPolicy : null);
+
+    const hookDetails = options.hookDetails ?? (await collectHookHealth()).details;
+    const hookProjectRoot = hookDetails.projectRoot ? path.resolve(hookDetails.projectRoot) : null;
+    const captureManagedForRepo = hookProjectRoot === repoRoot;
+    const captureReadyAgents = captureManagedForRepo
+        ? hookDetails.agents
+            .filter(agent => agent.configExists && agent.commandPresent)
+            .map(agent => agent.agent)
+            .filter((agent): agent is HookSupportedAgent => Boolean(agent))
+        : [];
+    const captureMissingAgents = DEFAULT_HOOK_INSTALL_CLIENTS.filter(
+        agent => !captureReadyAgents.includes(agent as HookSupportedAgent)
+    );
+
+    return {
+        repoRoot,
+        contextId: matchedContextId,
+        workspaceName: typeof pack?.workspaceName === 'string'
+            ? pack.workspaceName
+            : (typeof matchedContext.name === 'string' ? matchedContext.name : null),
+        workstream: typeof pack?.branch === 'string' && pack.branch.trim().length > 0
+            ? pack.branch
+            : branch,
+        sessionCount: typeof pack?.workstream?.sessionCount === 'number' ? pack.workstream.sessionCount : null,
+        checkpointCount: typeof pack?.workstream?.checkpointCount === 'number' ? pack.workstream.checkpointCount : null,
+        syncPolicy,
+        captureReadyAgents,
+        captureMissingAgents,
+        captureManagedForRepo
+    };
+}
+
 function resolveDaemonEntrypoint(): string {
     const candidates = [
         path.resolve(__dirname, 'daemon.js'),
@@ -761,43 +890,99 @@ async function commandStatus(flags: Record<string, string | boolean> = {}): Prom
         return payload.ok ? 0 : 1;
     }
 
-    const info: Record<string, string> = {
-        'Socket': payload.paths.socket,
-        'Database': payload.paths.database,
-        'Master Key': payload.paths.masterKeyPresent ? color.green('present') : color.yellow('missing')
-    };
-
     if (!payload.daemon.running) {
+        const info: string[] = [];
         if (payload.daemon.error) {
-            info['Error'] = color.red(payload.daemon.error);
+            info.push(formatLabelValue('Runtime', color.red(payload.daemon.error)));
         }
-        payload.daemon.recoverySteps.forEach((step, idx) => {
-            info[`Recover ${idx + 1}`] = color.yellow(step);
-        });
-    } else {
-        if (payload.capabilities) {
-            info['API Version'] = payload.capabilities.apiVersion;
-            info['RPC Methods'] = String(payload.capabilities.methodCount);
-            if (payload.capabilities.missingFeatures.includes('recall')) {
-                info['Recall API'] = color.yellow('missing (restart daemon after update)');
-            }
+        for (const [idx, step] of payload.daemon.recoverySteps.entries()) {
+            info.push(formatLabelValue(`Recover ${idx + 1}`, color.yellow(step)));
         }
-        if (payload.apiError) {
-            info['API Error'] = color.red(payload.apiError);
-        }
+        p.note(info.join('\n'), 'Runtime Unavailable');
+        p.outro(color.yellow('0ctx runtime is unavailable on this machine.'));
+        return 1;
     }
+
+    if (payload.capabilities && payload.capabilities.missingFeatures.length > 0) {
+        const info = [
+            formatLabelValue('Runtime', color.yellow('needs upgrade')),
+            formatLabelValue('Missing', payload.capabilities.missingFeatures.join(', ')),
+            formatLabelValue('Next step', '0ctx enable')
+        ];
+        p.note(info.join('\n'), 'Runtime Readiness');
+        p.outro(color.yellow('0ctx runtime is reachable, but this CLI expects newer capabilities.'));
+        return 1;
+    }
+
+    const repoRootHint = findGitRepoRoot(null);
+    if (!repoRootHint) {
+        p.note(
+            [
+                formatLabelValue('Runtime', color.green('ready')),
+                formatLabelValue('Directory', 'Not inside a git repo'),
+                formatLabelValue('Next step', 'cd <repo> && 0ctx enable')
+            ].join('\n'),
+            'Local Product Path'
+        );
+        p.outro(color.green('0ctx runtime is ready.'));
+        return 0;
+    }
+
+    let repoReadiness: RepoReadinessSummary | null = null;
+    try {
+        repoReadiness = await collectRepoReadiness({ repoRoot: repoRootHint });
+    } catch {
+        repoReadiness = null;
+    }
+
+    if (!repoReadiness) {
+        p.note(
+            [
+                formatLabelValue('Runtime', color.green('ready')),
+                formatLabelValue('Repo', repoRootHint),
+                formatLabelValue('Next step', '0ctx enable')
+            ].join('\n'),
+            'Repo Readiness'
+        );
+        p.outro(color.green('0ctx runtime is ready.'));
+        return 0;
+    }
+
+    if (!repoReadiness.contextId || !repoReadiness.workspaceName) {
+        p.note(
+            [
+                formatLabelValue('Repo', repoReadiness.repoRoot),
+                formatLabelValue('Workspace', color.yellow('not enabled')),
+                formatLabelValue('Workstream', repoReadiness.workstream ?? '-'),
+                formatLabelValue('Next step', '0ctx enable')
+            ].join('\n'),
+            'Repo Readiness'
+        );
+        p.outro(color.yellow('This repo is not enabled for 0ctx yet.'));
+        return 1;
+    }
+
+    const captureLine = repoReadiness.captureManagedForRepo
+        ? (repoReadiness.captureMissingAgents.length === 0
+            ? `${formatAgentList(repoReadiness.captureReadyAgents)} ready`
+            : `${formatAgentList(repoReadiness.captureReadyAgents)} ready${repoReadiness.captureReadyAgents.length > 0 ? '; ' : ''}${formatAgentList(repoReadiness.captureMissingAgents)} not installed`)
+        : 'Run 0ctx enable to install supported capture integrations';
+    const historySummary = repoReadiness.sessionCount === null
+        ? 'No workstream history yet'
+        : `${repoReadiness.sessionCount} sessions, ${repoReadiness.checkpointCount ?? 0} checkpoints`;
 
     p.note(
-        Object.entries(info).map(([k, v]) => `${color.dim(k.padEnd(12))} : ${v}`).join('\n'),
-        'System Details'
+        [
+            formatLabelValue('Repo', repoReadiness.repoRoot),
+            formatLabelValue('Workspace', repoReadiness.workspaceName),
+            formatLabelValue('Workstream', repoReadiness.workstream ?? '-'),
+            formatLabelValue('Capture', captureLine),
+            formatLabelValue('History', historySummary),
+            formatLabelValue('Sync', String(repoReadiness.syncPolicy ?? 'metadata_only'))
+        ].join('\n'),
+        'Repo Readiness'
     );
-    if (!payload.daemon.running) {
-        p.outro(color.yellow('Daemon degraded or offline'));
-    } else if (payload.capabilities && payload.capabilities.missingFeatures.length > 0) {
-        p.outro(color.yellow(`Daemon reachable but missing capabilities: ${payload.capabilities.missingFeatures.join(', ')}`));
-    } else {
-        p.outro('All systems operational');
-    }
+    p.outro(color.green('Use a supported agent normally in this repo. 0ctx will inject context and route capture automatically.'));
 
     return payload.ok ? 0 : 1;
 }
@@ -1144,6 +1329,7 @@ async function commandEnable(flags: Record<string, string | boolean>): Promise<n
     }
 
     let hookSummary: ReturnType<typeof installHooks> | null = null;
+    let hookHealthDetails: HookHealthDetails | null = null;
     if (!skipHooks && hookClients.length > 0) {
         if (s) s.message('Installing capture integrations');
         hookSummary = installHooks({
@@ -1163,6 +1349,7 @@ async function commandEnable(flags: Record<string, string | boolean>): Promise<n
                 projectConfigPath: hookSummary.projectConfigPath
             }
         });
+        hookHealthDetails = (await collectHookHealth()).details;
     } else {
         steps.push({
             id: 'capture',
@@ -1195,19 +1382,38 @@ async function commandEnable(flags: Record<string, string | boolean>): Promise<n
         return 0;
     }
 
-    console.log('');
-    console.log(color.bold('0ctx is ready for this repository'));
-    console.log(color.dim(`Repo:      ${repoRoot}`));
-    console.log(color.dim(`Workspace: ${workspaceName}`));
-    console.log(color.dim(`Context:   ${contextId}`));
-    if (!skipBootstrap && mcpClients.length > 0) {
-        console.log(color.dim(`MCP:       ${mcpClients.join(', ')} (${mcpProfile})`));
-    }
-    if (!skipHooks && hookClients.length > 0) {
-        console.log(color.dim(`Capture:   ${hookClients.join(', ')}`));
-    }
-    console.log('');
-    p?.outro(color.green('Use your agent normally in this repo. 0ctx will route capture by repo path.'));
+    const repoReadiness = await collectRepoReadiness({
+        repoRoot,
+        contextId,
+        hookDetails: hookHealthDetails
+    });
+
+    const info = repoReadiness
+        ? [
+            formatLabelValue('Repo', repoReadiness.repoRoot),
+            formatLabelValue('Workspace', repoReadiness.workspaceName ?? workspaceName),
+            formatLabelValue('Workstream', repoReadiness.workstream ?? '-'),
+            formatLabelValue(
+                'Capture',
+                repoReadiness.captureMissingAgents.length === 0
+                    ? `${formatAgentList(repoReadiness.captureReadyAgents)} ready`
+                    : `${formatAgentList(repoReadiness.captureReadyAgents)} ready${repoReadiness.captureReadyAgents.length > 0 ? '; ' : ''}${formatAgentList(repoReadiness.captureMissingAgents)} not installed`
+            ),
+            formatLabelValue(
+                'History',
+                repoReadiness.sessionCount === null
+                    ? 'No captured workstream history yet'
+                    : `${repoReadiness.sessionCount} sessions, ${repoReadiness.checkpointCount ?? 0} checkpoints`
+            ),
+            formatLabelValue('Sync', String(repoReadiness.syncPolicy ?? 'metadata_only'))
+        ]
+        : [
+            formatLabelValue('Repo', repoRoot),
+            formatLabelValue('Workspace', workspaceName)
+        ];
+
+    p?.note(info.join('\n'), 'Repo Readiness');
+    p?.outro(color.green('Use a supported agent normally in this repo. 0ctx will inject current context and route capture automatically.'));
     return 0;
 }
 

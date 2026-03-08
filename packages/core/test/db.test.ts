@@ -76,6 +76,34 @@ describe('openDb migrations', () => {
         }
     });
 
+    it('normalizes legacy full_sync contexts to metadata_only on upgrade', () => {
+        const dbPath = createTempDbPath();
+        const db = openDb({ dbPath });
+        try {
+            const now = Date.now();
+            db.prepare(`
+        INSERT INTO contexts (id, name, paths, createdAt, syncPolicy)
+        VALUES (?, ?, ?, ?, ?)
+      `).run('ctx-sync', 'ctx', '[]', now, 'full_sync');
+            db.prepare(`
+        INSERT INTO schema_meta (key, value)
+        VALUES ('schema_version', '9')
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+      `).run();
+        } finally {
+            db.close();
+        }
+
+        const reopened = openDb({ dbPath });
+        try {
+            expect(getSchemaVersion(reopened)).toBe(CURRENT_SCHEMA_VERSION);
+            const row = reopened.prepare('SELECT syncPolicy FROM contexts WHERE id = ?').get('ctx-sync') as { syncPolicy: string };
+            expect(row.syncPolicy).toBe('metadata_only');
+        } finally {
+            reopened.close();
+        }
+    });
+
     it('backfills legacy chat artifacts and upgrades legacy databases to the current schema', () => {
         const dbPath = createTempDbPath();
         const db = openDb({ dbPath });

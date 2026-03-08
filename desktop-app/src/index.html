@@ -263,7 +263,7 @@
             <header class="page-head">
               <p class="page-kicker">Captured sessions</p>
               <h1>Read the message stream</h1>
-              <p id="sessionsPageMeta" class="page-copy">Choose a session, read its messages, and only open raw payload when you need the underlying capture.</p>
+              <p id="sessionsPageMeta" class="page-copy">Choose a session, read its messages, and only open support data when you need the underlying capture.</p>
             </header>
 
             <div class="page-grid page-grid-sessions">
@@ -277,7 +277,7 @@
                 <p id="sessionFocusMeta" class="page-copy compact-copy">Pick a workstream, then choose a session to read the message stream and capture a checkpoint.</p>
                 <div class="action-stack">
                   <button id="createCheckpointBtn" class="btn primary wide" type="button">Create checkpoint</button>
-                  <button id="togglePayload" class="btn tertiary wide" type="button">Show raw payload</button>
+                  <button id="togglePayload" class="btn tertiary wide" type="button">Support: show raw payload</button>
                 </div>
                 <div class="utility-inline">
                   <button id="previewSessionKnowledgeBtn" class="btn quiet" type="button">Preview insights</button>
@@ -311,7 +311,7 @@
                 </div>
 
                 <section class="panel reader-panel">
-                  <div id="turnDetailEmpty" class="empty-state">Select a message to inspect its text, companion context, and raw payload when needed.</div>
+                  <div id="turnDetailEmpty" class="empty-state">Select a message to inspect its text and companion context. Raw payload stays in support mode.</div>
 
                   <div id="turnDetailBody" class="reader-body hidden">
                     <div class="reader-header-block">
@@ -358,12 +358,12 @@
                     <section id="payloadPanel" class="panel subpanel hidden">
                       <div class="section-row small">
                         <div>
-                          <p class="section-label">Raw payload</p>
+                          <p class="section-label">Support data</p>
                           <h4 id="payloadTitle">Captured sidecar payload</h4>
                         </div>
                         <span id="payloadBadge" class="chip">none</span>
                       </div>
-                      <pre id="payloadText">Select a message in Sessions to inspect payload.</pre>
+                      <pre id="payloadText">Open support mode on a selected message to inspect the stored payload.</pre>
                     </section>
                   </div>
                 </section>

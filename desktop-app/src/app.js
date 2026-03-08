@@ -9,7 +9,7 @@ const VIEW_META = {
   sessions: {
     eyebrow: 'Captured sessions',
     title: 'Sessions and messages',
-    summary: 'Choose a session, read the message stream, and inspect raw payload only when you need more detail.',
+    summary: 'Choose a session, read the message stream, and open support data only when you need deeper capture detail.',
     primaryLabel: 'Create checkpoint',
     primaryAction: 'create-checkpoint'
   },
@@ -83,6 +83,8 @@ const MUTATION_EVENT_TYPES = new Set([
 
 const EVENT_POLL_MS = 2500;
 const HEALTH_REFRESH_MS = 60000;
+const GA_INTEGRATIONS = new Set(['claude', 'factory', 'antigravity']);
+const PREVIEW_INTEGRATIONS = new Set(['codex', 'cursor', 'windsurf']);
 
 let eventPollTimer = null;
 let healthRefreshTimer = null;
@@ -491,11 +493,10 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function selectedPayloadMeta() {
-  const payload = state.payload;
-  if (!payload || typeof payload !== 'object') return {};
-  const meta = payload.meta;
-  return meta && typeof meta === 'object' ? meta : {};
+function resetPayloadState() {
+  state.payload = null;
+  state.payloadNodeId = null;
+  state.payloadExpanded = false;
 }
 
 function bindById(id, eventName, handler) {
@@ -553,6 +554,22 @@ function installedAgents() {
   return Array.isArray(state.hook?.agents) ? state.hook.agents.filter((agent) => agent.installed) : [];
 }
 
+function isGaIntegration(agent) {
+  return GA_INTEGRATIONS.has(String(agent || '').toLowerCase());
+}
+
+function isPreviewIntegration(agent) {
+  return PREVIEW_INTEGRATIONS.has(String(agent || '').toLowerCase());
+}
+
+function installedGaAgents() {
+  return installedAgents().filter((agent) => isGaIntegration(agent.agent));
+}
+
+function installedPreviewAgents() {
+  return installedAgents().filter((agent) => isPreviewIntegration(agent.agent));
+}
+
 function integrationType(agent) {
   return agent === 'codex' ? 'notify' : 'hook';
 }
@@ -608,7 +625,8 @@ function postureClass(value) {
 }
 
 function captureState() {
-  const hooks = installedAgents();
+  const gaHooks = installedGaAgents();
+  const previewHooks = installedPreviewAgents();
   if (state.sessions.length > 0) {
     return {
       label: 'Live',
@@ -616,11 +634,18 @@ function captureState() {
       detail: `${state.sessions.length} captured session${state.sessions.length === 1 ? '' : 's'}`
     };
   }
-  if (hooks.length > 0) {
+  if (gaHooks.length > 0) {
     return {
       label: 'Armed',
       className: 'badge degraded',
-      detail: `Integrations installed for ${integrationListText(hooks)}`
+      detail: `GA integrations installed for ${integrationListText(gaHooks)}`
+    };
+  }
+  if (previewHooks.length > 0) {
+    return {
+      label: 'Preview',
+      className: 'badge degraded',
+      detail: `Preview integrations installed for ${integrationListText(previewHooks)}`
     };
   }
   return {
@@ -637,7 +662,7 @@ function currentRepoRoot() {
 }
 
 function preferredClients() {
-  const agents = installedAgents().map((agent) => agent.agent);
+  const agents = installedGaAgents().map((agent) => agent.agent);
   if (agents.length > 0) {
     return [...new Set(agents)].join(',');
   }
@@ -645,9 +670,8 @@ function preferredClients() {
 }
 
 function preferredAgent() {
-  const installed = installedAgents();
-  const nonCodex = installed.find((agent) => agent.agent !== 'codex');
-  return (nonCodex || installed[0] || { agent: 'factory' }).agent;
+  const installed = installedGaAgents();
+  return (installed[0] || { agent: 'factory' }).agent;
 }
 
 function hookInstallCommand() {
@@ -742,9 +766,7 @@ function resetBranchScopedState() {
   state.sessionKnowledgeSelectedKeys = [];
   state.turns = [];
   state.activeTurnId = null;
-  state.payload = null;
-  state.payloadNodeId = null;
-  state.payloadExpanded = false;
+  resetPayloadState();
   state.checkpoints = [];
   state.activeCheckpointId = null;
   state.checkpointDetail = null;
@@ -1325,9 +1347,9 @@ function renderSessions() {
     empty.classList.remove('hidden');
     body.classList.add('hidden');
     toggle.disabled = true;
-    toggle.textContent = 'Show raw payload';
+    toggle.textContent = 'Support: show raw payload';
     document.getElementById('payloadPanel').classList.add('hidden');
-    document.getElementById('payloadText').textContent = 'Select a message in Sessions to inspect payload.';
+    document.getElementById('payloadText').textContent = 'Open support mode on a selected message to inspect the stored payload.';
     document.getElementById('payloadBadge').textContent = 'none';
     document.getElementById('turnPrimaryLabel').textContent = 'Message';
     document.getElementById('turnSecondaryLabel').textContent = 'Related context';
@@ -1363,7 +1385,7 @@ function renderSessions() {
   const meta = [
     { label: 'Captured', value: formatTime(turn.createdAt) },
     { label: 'Session checkpoints', value: String(state.sessionDetail?.checkpointCount || 0) },
-    { label: 'Raw data', value: turn.hasPayload ? 'Available on demand' : 'No sidecar payload' },
+    { label: 'Support data', value: turn.hasPayload ? 'Available on demand' : 'No sidecar payload' },
     { label: 'Session summary', value: short(state.sessionDetail?.session?.summary || turn.sessionId || 'No session summary stored', 88) }
   ];
   document.getElementById('turnMeta').innerHTML = meta.map((item) => {
@@ -1385,7 +1407,7 @@ function renderSessions() {
   }).join('');
 
   toggle.disabled = !turn.hasPayload;
-  toggle.textContent = turn.hasPayload ? (state.payloadExpanded ? 'Hide raw payload' : 'Show raw payload') : 'No raw payload';
+  toggle.textContent = turn.hasPayload ? (state.payloadExpanded ? 'Hide support payload' : 'Support: show raw payload') : 'No support payload';
   const payloadPanel = document.getElementById('payloadPanel');
   payloadPanel.classList.toggle('hidden', !turn.hasPayload || !state.payloadExpanded);
   document.getElementById('payloadBadge').textContent = turn.payloadBytes != null ? `${turn.payloadBytes} bytes` : 'payload';
@@ -1393,7 +1415,7 @@ function renderSessions() {
     ? 'Captured sidecar payload'
     : 'No payload stored for this message';
   document.getElementById('payloadText').textContent = turn.hasPayload
-    ? (state.payload ? jsonText(state.payload) : 'Payload not loaded yet.')
+    ? (state.payload ? jsonText(state.payload) : 'Support payload not loaded yet.')
     : 'This message has no raw payload sidecar.';
 
   const preview = activeSessionKnowledgePreview();
@@ -1671,24 +1693,29 @@ function renderWorkspaces() {
 }
 
   function renderSetup() {
-    document.getElementById('setupCommand').textContent = enableCommand();
-    document.getElementById('hookInstallCommand').textContent = hookInstallCommand();
-    document.getElementById('hookIngestCommand').textContent = hookIngestCommand();
+  document.getElementById('setupCommand').textContent = enableCommand();
+  document.getElementById('hookInstallCommand').textContent = hookInstallCommand();
+  document.getElementById('hookIngestCommand').textContent = hookIngestCommand();
 
-    const hooks = Array.isArray(state.hook?.agents) ? state.hook.agents : [];
-    const installed = hooks.filter((hook) => hook.installed);
-    const filteredHooks = hooks.filter((hook) => matches(`${hook.agent} ${hook.status} ${hook.notes || ''} ${hook.command || ''}`));
-    const setupPageMeta = document.getElementById('setupPageMeta');
-    if (setupPageMeta) {
-      setupPageMeta.textContent = state.runtimeIssue
-        ? state.runtimeIssue.detail
-        : installed.length > 0
-          ? `${installed.length} integration${installed.length === 1 ? '' : 's'} are installed on this machine. Use this screen only when you need to enable another repo, add another agent, run a smoke test, or repair the runtime.`
-          : 'Enable the repo, install the integrations you actually use, then leave this screen. Daily work should happen in workstreams, sessions, and checkpoints.';
-    }
-    document.getElementById('hookSummary').textContent = `${installed.length} installed / ${hooks.length}`;
-    document.getElementById('hookList').innerHTML = filteredHooks.length > 0
-      ? filteredHooks.map((hook) => `
+  const hooks = Array.isArray(state.hook?.agents) ? state.hook.agents : [];
+  const gaHooks = hooks.filter((hook) => isGaIntegration(hook.agent));
+  const previewHooks = hooks.filter((hook) => isPreviewIntegration(hook.agent));
+  const installedGa = gaHooks.filter((hook) => hook.installed);
+  const installedPreview = previewHooks.filter((hook) => hook.installed);
+  const filteredHooks = gaHooks.filter((hook) => matches(`${hook.agent} ${hook.status} ${hook.notes || ''} ${hook.command || ''}`));
+  const setupPageMeta = document.getElementById('setupPageMeta');
+  if (setupPageMeta) {
+    setupPageMeta.textContent = state.runtimeIssue
+      ? state.runtimeIssue.detail
+      : installedGa.length > 0
+        ? `${installedGa.length} GA integration${installedGa.length === 1 ? '' : 's'} ${installedGa.length === 1 ? 'is' : 'are'} installed on this machine.${installedPreview.length > 0 ? ` ${installedPreview.length} preview integration${installedPreview.length === 1 ? '' : 's'} ${installedPreview.length === 1 ? 'is' : 'are'} installed separately.` : ''} Use this screen only when you need to enable another repo, add another agent, run a smoke test, or repair the runtime.`
+        : installedPreview.length > 0
+          ? `Only preview integrations are installed on this machine (${integrationListText(installedPreview)}). Install Claude, Factory, or Antigravity here when you want the GA path.`
+        : 'Enable the repo, install the integrations you actually use, then leave this screen. Daily work should happen in workstreams, sessions, and checkpoints.';
+  }
+  document.getElementById('hookSummary').textContent = `${installedGa.length} GA installed / ${gaHooks.length}`;
+  document.getElementById('hookList').innerHTML = filteredHooks.length > 0
+    ? filteredHooks.map((hook) => `
           <article class="list-item">
             <h4>${esc(integrationLabel(hook.agent))}</h4>
             <p>${esc(`${hook.status} | ${hook.installed ? `${integrationType(hook.agent)} installed` : `${integrationType(hook.agent)} not installed`}`)}</p>
@@ -1699,13 +1726,13 @@ function renderWorkspaces() {
             ${hook.command ? `<p>${esc(short(hook.command, 180))}</p>` : ''}
           </article>
         `).join('')
-      : hooks.length > 0
-        ? '<div class="empty-state">No integrations match the current filter.</div>'
-      : '<div class="empty-state">Integration health is unavailable until the daemon can read local setup state.</div>';
+      : gaHooks.length > 0
+        ? '<div class="empty-state">No GA integrations match the current filter.</div>'
+      : '<div class="empty-state">GA integration health is unavailable until the daemon can read local setup state.</div>';
 
-    const supportItems = [
-      {
-        title: 'Runtime posture',
+  const supportItems = [
+    {
+      title: 'Runtime posture',
       detail: formatPosture(state.health?.status || 'offline'),
       hint: state.runtimeIssue
         ? state.runtimeIssue.detail
@@ -1718,8 +1745,10 @@ function renderWorkspaces() {
     },
     {
       title: 'Installed integrations',
-      detail: installed.length > 0 ? integrationListText(installed) : 'None installed',
-      hint: 'Install only the agents you actually use on this machine.'
+      detail: installedGa.length > 0 ? integrationListText(installedGa) : 'No GA integrations installed',
+      hint: installedPreview.length > 0
+        ? `Preview installed separately: ${integrationListText(installedPreview)}`
+        : 'Install only the agents you actually use on this machine.'
       }
     ];
     document.getElementById('setupSupportList').innerHTML = supportItems.map((item) => `
@@ -2029,11 +2058,7 @@ async function refreshAll(options = {}) {
       state.turns = [];
       state.activeTurnId = null;
     });
-    await safeLoad('payload', async () => loadPayload(state.turns[0]?.nodeId || null), () => {
-      state.payload = null;
-      state.payloadNodeId = null;
-      state.payloadExpanded = false;
-    });
+    resetPayloadState();
     await safeLoad('checkpoints', loadCheckpoints, () => {
       state.checkpoints = [];
       state.activeCheckpointId = null;
@@ -2349,7 +2374,7 @@ function wire() {
     await loadSessions();
     await loadSessionDetail();
     await loadTurns();
-    await loadPayload(state.turns[0]?.nodeId || null);
+    resetPayloadState();
     await loadCheckpoints();
     await loadCheckpointDetail();
     await loadHandoff();
@@ -2397,10 +2422,20 @@ function wire() {
     renderAll();
   });
   bindById('togglePayload', 'click', () => {
-    const turn = selectedTurn();
-    if (!turn || !turn.hasPayload) return;
-    state.payloadExpanded = !state.payloadExpanded;
-    renderSessions();
+    void (async () => {
+      const turn = selectedTurn();
+      if (!turn || !turn.hasPayload) return;
+      const nextExpanded = !state.payloadExpanded;
+      state.payloadExpanded = nextExpanded;
+      if (nextExpanded && state.payloadNodeId !== turn.nodeId) {
+        await loadPayload(turn.nodeId);
+      }
+      if (!nextExpanded) {
+        state.payload = null;
+        state.payloadNodeId = turn.nodeId;
+      }
+      renderSessions();
+    })();
   });
 
   const createCheckpointBtn = document.getElementById('createCheckpointBtn');
@@ -2475,8 +2510,7 @@ function wire() {
         state.sessionKnowledgePreview = null;
         state.sessionKnowledgeSelectedKeys = [];
         state.activeTurnId = null;
-      state.payload = null;
-      state.payloadExpanded = false;
+      resetPayloadState();
         state.activeCheckpointId = null;
         state.checkpointDetail = null;
         state.checkpointSessionDetail = null;
@@ -2485,7 +2519,7 @@ function wire() {
       await loadSessions();
       await loadSessionDetail();
       await loadTurns();
-      await loadPayload(state.turns[0]?.nodeId || null);
+      resetPayloadState();
       await loadCheckpoints();
       await loadCheckpointDetail();
       await loadHandoff();
@@ -2506,11 +2540,10 @@ function wire() {
         state.sessionKnowledgePreview = null;
         state.sessionKnowledgeSelectedKeys = [];
         state.activeTurnId = null;
-      state.payload = null;
-      state.payloadExpanded = false;
+      resetPayloadState();
       await loadSessionDetail();
       await loadTurns();
-      await loadPayload(state.turns[0]?.nodeId || null);
+      resetPayloadState();
       await loadCheckpoints();
       await loadCheckpointDetail();
       await loadHandoff();
@@ -2525,8 +2558,7 @@ function wire() {
     const turnTarget = event.target.closest('[data-turn-id]');
     if (turnTarget) {
       state.activeTurnId = String(turnTarget.getAttribute('data-turn-id'));
-      state.payloadExpanded = false;
-      await loadPayload(state.activeTurnId);
+      resetPayloadState();
       if (turnTarget.dataset.openView) {
         setView(turnTarget.dataset.openView);
       }
@@ -2555,7 +2587,7 @@ function wire() {
       await loadSessions();
       await loadSessionDetail();
       await loadTurns();
-      await loadPayload(state.turns[0]?.nodeId || null);
+      resetPayloadState();
       await loadCheckpoints();
       await loadCheckpointDetail();
       await loadHandoff();

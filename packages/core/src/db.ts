@@ -4,7 +4,7 @@ import path from 'path';
 import os from 'os';
 
 const DB_PATH = path.join(os.homedir(), '.0ctx', '0ctx.db');
-export const CURRENT_SCHEMA_VERSION = 9;
+export const CURRENT_SCHEMA_VERSION = 10;
 
 export interface OpenDbOptions {
     dbPath?: string;
@@ -77,6 +77,11 @@ function migrate(db: Database.Database) {
     if (version < 9) {
         migrateToV9(db);
         setSchemaVersion(db, 9);
+    }
+
+    if (version < 10) {
+        migrateToV10(db);
+        setSchemaVersion(db, 10);
     }
 }
 
@@ -348,6 +353,16 @@ function migrateToV9(db: Database.Database) {
       ALTER TABLE contexts_v9 RENAME TO contexts;
 
       PRAGMA foreign_keys = ON;
+    `);
+}
+
+function migrateToV10(db: Database.Database) {
+    db.exec(`
+      UPDATE contexts
+      SET syncPolicy = 'metadata_only'
+      WHERE syncPolicy IS NULL
+         OR TRIM(syncPolicy) = ''
+         OR syncPolicy = 'full_sync'
     `);
 }
 
