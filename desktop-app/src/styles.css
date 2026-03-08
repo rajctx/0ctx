@@ -1058,6 +1058,24 @@ tbody td {
   vertical-align: top;
 }
 
+.utility-table-panel tbody tr {
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+
+.utility-table-panel tbody tr:hover td {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.utility-table-panel tbody tr.active td {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.utility-rail .subpanel {
+  display: grid;
+  gap: 14px;
+}
+
 .command-grid,
 .utility-stack,
 .compact-info-list {

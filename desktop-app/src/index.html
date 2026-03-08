@@ -487,6 +487,40 @@
                   <span id="knowledgeContext" class="chip">Workspace: none</span>
                 </div>
                 <div id="knowledgeExplainer" class="info-list compact-info-list"></div>
+
+                <section class="panel subpanel">
+                  <div class="section-row small">
+                    <div>
+                      <p class="section-label">Selected insight</p>
+                      <h4>Reviewed memory</h4>
+                    </div>
+                  </div>
+                  <div id="selectedInsightEmpty" class="empty-state">Select an insight to inspect its provenance and decide whether it should be promoted into another workspace.</div>
+                  <div id="selectedInsightBody" class="detail-stack hidden">
+                    <div class="reader-header-block">
+                      <p class="section-label">Insight summary</p>
+                      <h4 id="selectedInsightTitle">Choose an insight</h4>
+                    </div>
+                    <p id="selectedInsightCopy" class="page-copy compact-copy"></p>
+                    <div id="selectedInsightMeta" class="meta-grid compact-meta-grid"></div>
+                  </div>
+                </section>
+
+                <section class="panel subpanel">
+                  <div class="section-row small">
+                    <div>
+                      <p class="section-label">Cross-workspace promotion</p>
+                      <h4>Promote reviewed insight</h4>
+                    </div>
+                  </div>
+                  <label class="compare-select-wrap">
+                    <span class="sr-only">Choose a target workspace</span>
+                    <select id="insightTargetContext" aria-label="Choose a target workspace"></select>
+                  </label>
+                  <button id="promoteInsightBtn" class="btn tertiary wide" type="button">Promote to workspace</button>
+                  <p id="insightPromotionCopy" class="page-copy compact-copy">Choose another workspace and promote a reviewed insight explicitly. This does not silently merge project memory.</p>
+                  <div id="insightPromotionMeta" class="info-list compact-info-list"></div>
+                </section>
               </aside>
               <section class="panel utility-table-panel">
                 <div class="section-row">

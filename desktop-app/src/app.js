@@ -132,6 +132,9 @@ const state = {
   sessionKnowledgeSelectedKeys: [],
   checkpointKnowledgePreview: null,
   checkpointKnowledgeSelectedKeys: [],
+  activeInsightNodeId: null,
+  promotionTargetContextId: null,
+  lastInsightPromotion: null,
   payload: null,
   payloadNodeId: null,
   payloadExpanded: false,
@@ -578,6 +581,78 @@ function selectedCheckpoint() {
     || null;
 }
 
+function activeInsightNode() {
+  return state.graphNodes.find((node) => node.id === state.activeInsightNodeId) || null;
+}
+
+function contextById(contextId) {
+  return state.contexts.find((context) => context.id === contextId) || null;
+}
+
+function extractTagValue(tags, prefix) {
+  const values = Array.isArray(tags) ? tags : [];
+  const tag = values.find((value) => typeof value === 'string' && value.startsWith(prefix));
+  return tag ? tag.slice(prefix.length) : null;
+}
+
+function insightSummary(node) {
+  if (!node) {
+    return {
+      title: 'Choose an insight',
+      summary: '',
+      key: '',
+      type: '',
+      source: '',
+      branch: null,
+      worktreePath: null,
+      originContextId: null,
+      originNodeId: null,
+      createdAt: null
+    };
+  }
+  const combined = cleanConversationText(node.content || '');
+  return {
+    title: short(node.key || combined || node.id || 'Insight', 80),
+    summary: short(combined || 'No insight text is stored for this node yet.', 220),
+    key: node.key || '',
+    type: node.type || 'artifact',
+    source: extractTagValue(node.tags, 'source:') || node.source || 'workspace',
+    branch: extractTagValue(node.tags, 'branch:'),
+    worktreePath: extractTagValue(node.tags, 'worktree:'),
+    originContextId: extractTagValue(node.tags, 'origin_context:'),
+    originNodeId: extractTagValue(node.tags, 'origin_node:'),
+    createdAt: node.createdAt || null
+  };
+}
+
+function insightTargetContexts() {
+  return state.contexts.filter((context) => context.id !== state.activeContextId);
+}
+
+function syncInsightSelection(nodes) {
+  const available = Array.isArray(nodes) ? nodes : [];
+  if (available.length === 0) {
+    state.activeInsightNodeId = null;
+    return null;
+  }
+  const exists = available.find((node) => node.id === state.activeInsightNodeId);
+  if (exists) return exists;
+  state.activeInsightNodeId = available[0].id;
+  return available[0];
+}
+
+function syncPromotionTargetSelection() {
+  const targets = insightTargetContexts();
+  if (targets.length === 0) {
+    state.promotionTargetContextId = null;
+    return null;
+  }
+  const existing = targets.find((context) => context.id === state.promotionTargetContextId);
+  if (existing) return existing;
+  state.promotionTargetContextId = targets[0].id;
+  return targets[0];
+}
+
 function installedAgents() {
   return Array.isArray(state.hook?.agents) ? state.hook.agents.filter((agent) => agent.installed) : [];
 }
@@ -803,6 +878,9 @@ function resetBranchScopedState() {
   state.checkpointSessionDetail = null;
   state.checkpointKnowledgePreview = null;
   state.checkpointKnowledgeSelectedKeys = [];
+  state.activeInsightNodeId = null;
+  state.promotionTargetContextId = null;
+  state.lastInsightPromotion = null;
   state.handoff = [];
 }
 
@@ -1689,6 +1767,11 @@ function renderWorkspaces() {
     document.getElementById('knowledgeEdgeCount').textContent = String(state.graphEdges.length);
     document.getElementById('knowledgeContext').textContent = `Workspace: ${activeContext()?.name || 'none'}`;
     const nodes = state.graphNodes.filter((node) => matches(`${node.type || ''} ${node.content || ''} ${node.key || ''}`));
+    const selectedNode = syncInsightSelection(nodes);
+    const selectedInsight = insightSummary(selectedNode);
+    const targetContexts = insightTargetContexts();
+    const selectedTargetContext = syncPromotionTargetSelection();
+    const promoteSupported = methodSupported('promoteInsight');
     const knowledgePageMeta = document.getElementById('knowledgePageMeta');
     if (knowledgePageMeta) {
       const context = activeContext();
@@ -1714,16 +1797,99 @@ function renderWorkspaces() {
     document.getElementById('knowledgeExplainer').innerHTML = explainer.map((item) => {
       return `<article><strong>${esc(item.title)}</strong><p>${esc(item.detail)}</p></article>`;
     }).join('');
+
+    const selectedInsightEmpty = document.getElementById('selectedInsightEmpty');
+    const selectedInsightBody = document.getElementById('selectedInsightBody');
+    if (!selectedNode) {
+      selectedInsightEmpty.classList.remove('hidden');
+      selectedInsightBody.classList.add('hidden');
+      document.getElementById('selectedInsightTitle').textContent = 'Choose an insight';
+      document.getElementById('selectedInsightCopy').textContent = '';
+      document.getElementById('selectedInsightMeta').innerHTML = '';
+    } else {
+      selectedInsightEmpty.classList.add('hidden');
+      selectedInsightBody.classList.remove('hidden');
+      document.getElementById('selectedInsightTitle').textContent = selectedInsight.title;
+      document.getElementById('selectedInsightCopy').textContent = selectedInsight.summary;
+      const meta = [
+        { label: 'Type', value: humanizeLabel(selectedInsight.type) },
+        { label: 'Source', value: selectedInsight.source },
+        { label: 'Created', value: formatTime(selectedInsight.createdAt) },
+        { label: 'Key', value: selectedInsight.key || 'none' },
+        { label: 'Branch', value: selectedInsight.branch || 'none' },
+        { label: 'Worktree', value: selectedInsight.worktreePath ? basenameFromPath(selectedInsight.worktreePath) : 'none' },
+        { label: 'Origin workspace', value: contextById(selectedInsight.originContextId)?.name || selectedInsight.originContextId || 'current workspace' },
+        { label: 'Origin node', value: selectedInsight.originNodeId || 'local insight' }
+      ];
+      document.getElementById('selectedInsightMeta').innerHTML = meta
+        .map((item) => `<article><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong></article>`)
+        .join('');
+    }
+
+    const targetSelect = document.getElementById('insightTargetContext');
+    targetSelect.innerHTML = targetContexts.length > 0
+      ? targetContexts.map((context) => `
+          <option value="${esc(context.id)}" ${context.id === state.promotionTargetContextId ? 'selected' : ''}>
+            ${esc(context.name || context.id)}
+          </option>
+        `).join('')
+      : '<option value="">No other workspaces</option>';
+    targetSelect.disabled = targetContexts.length === 0;
+
+    const promoteButton = document.getElementById('promoteInsightBtn');
+    promoteButton.disabled = !promoteSupported || !selectedNode || !selectedTargetContext;
+
+    const promotionCopy = document.getElementById('insightPromotionCopy');
+    if (!promoteSupported) {
+      promotionCopy.textContent = 'Update the local runtime to promote reviewed insights across workspaces.';
+    } else if (!selectedNode) {
+      promotionCopy.textContent = 'Select an insight first. Promotion is always explicit and keeps project boundaries visible.';
+    } else if (!selectedTargetContext) {
+      promotionCopy.textContent = 'Create another workspace before promoting reviewed insights across projects.';
+    } else {
+      promotionCopy.textContent = `Promote this reviewed insight into ${selectedTargetContext.name}. The promoted node keeps provenance back to the source workspace and insight.`;
+    }
+
+    const promotionMeta = [];
+    if (selectedTargetContext) {
+      promotionMeta.push({ title: 'Target workspace', detail: selectedTargetContext.name });
+    }
+    if (selectedInsight.branch) {
+      promotionMeta.push({ title: 'Target workstream tag', detail: selectedInsight.branch });
+    }
+    const promotion = state.lastInsightPromotion;
+    if (promotion && promotion.sourceNodeId === selectedNode?.id) {
+      promotionMeta.push({
+        title: promotion.created ? 'Last promotion' : 'Last promotion reused',
+        detail: `${contextById(promotion.targetContextId)?.name || promotion.targetContextId} · ${short(promotion.targetNodeId || 'target node', 18)}`
+      });
+    }
+    document.getElementById('insightPromotionMeta').innerHTML = promotionMeta.length > 0
+      ? promotionMeta.map((item) => `<article><strong>${esc(item.title)}</strong><p>${esc(item.detail)}</p></article>`).join('')
+      : '<article><strong>Promotion is explicit</strong><p>Insights never cross workspaces silently. Promote only the reviewed memory you want another project to inherit.</p></article>';
+
     document.getElementById('knowledgeTable').innerHTML = nodes.length > 0
-      ? nodes.slice(0, 400).map((node) => `
-          <tr>
-            <td>${renderChip(node.type || 'artifact', 'beige')}</td>
-            <td>${esc(short(node.content || '', 140))}</td>
-          <td>${esc(node.key || '-')}</td>
-          <td>${esc(formatTime(node.createdAt))}</td>
-        </tr>
-      `).join('')
-    : '<tr><td colspan="4"><div class="empty-state">No insight nodes match the current filter.</div></td></tr>';
+      ? nodes.slice(0, 400).map((node) => {
+          const active = node.id === state.activeInsightNodeId ? ' class="active"' : '';
+          const summary = insightSummary(node);
+          const metaLine = [
+            summary.source,
+            summary.branch || null,
+            summary.originContextId ? 'Promoted insight' : null
+          ].filter(Boolean).join(' · ');
+          return `
+            <tr data-insight-id="${esc(node.id)}"${active}>
+              <td>${renderChip(node.type || 'artifact', 'beige')}</td>
+              <td>
+                <strong>${esc(short(summary.title, 72))}</strong>
+                ${metaLine ? `<div class="item-meta-line">${esc(metaLine)}</div>` : ''}
+              </td>
+              <td>${esc(node.key || '-')}</td>
+              <td>${esc(formatTime(node.createdAt))}</td>
+            </tr>
+          `;
+        }).join('')
+      : '<tr><td colspan="4"><div class="empty-state">No insight nodes match the current filter.</div></td></tr>';
 }
 
   function renderSetup() {
@@ -2317,6 +2483,44 @@ async function extractKnowledgeFromActiveCheckpoint() {
   }
 }
 
+async function promoteActiveInsight() {
+  const sourceContext = state.activeContextId;
+  const node = activeInsightNode();
+  const targetContextId = state.promotionTargetContextId;
+  if (!sourceContext || !node) {
+    setStatus('Select an insight before promoting it.');
+    return;
+  }
+  if (!targetContextId) {
+    setStatus('Choose another workspace before promoting this insight.');
+    return;
+  }
+  if (!methodSupported('promoteInsight')) {
+    setStatus('Update the local runtime before promoting reviewed insights across workspaces.');
+    return;
+  }
+
+  const activeLane = activeBranch();
+  const branch = extractTagValue(node.tags, 'branch:') || activeLane?.branch || undefined;
+  const worktreePath = extractTagValue(node.tags, 'worktree:') || activeLane?.worktreePath || undefined;
+  const targetContext = contextById(targetContextId);
+
+  try {
+    const result = await daemon('promoteInsight', {
+      contextId: targetContextId,
+      sourceContextId: sourceContext,
+      nodeId: node.id,
+      branch,
+      worktreePath
+    });
+    state.lastInsightPromotion = result;
+    renderAll();
+    setStatus(`Promoted insight to ${targetContext?.name || targetContextId} (${result?.created ? 'created' : 'reused'}).`);
+  } catch (error) {
+    setStatus(`Promote insight failed: ${String(error)}`);
+  }
+}
+
 async function explainActiveCheckpoint() {
   if (!state.activeCheckpointId) {
     setStatus('Select a checkpoint first.');
@@ -2492,6 +2696,7 @@ function wire() {
   if (extractCheckpointKnowledgeBtn) {
     extractCheckpointKnowledgeBtn.addEventListener('click', () => void extractKnowledgeFromActiveCheckpoint());
   }
+  bindById('promoteInsightBtn', 'click', () => void promoteActiveInsight());
   bindById('rewindCheckpointBtn', 'click', () => void rewindActiveCheckpoint());
   bindById('explainCheckpointBtn', 'click', () => void explainActiveCheckpoint());
 
@@ -2611,6 +2816,13 @@ function wire() {
       return;
     }
 
+    const insightTarget = event.target.closest('[data-insight-id]');
+    if (insightTarget) {
+      state.activeInsightNodeId = String(insightTarget.getAttribute('data-insight-id'));
+      renderAll();
+      return;
+    }
+
     const contextTarget = event.target.closest('[data-context-id]');
     if (contextTarget) {
       const contextId = String(contextTarget.getAttribute('data-context-id'));
@@ -2639,6 +2851,12 @@ function wire() {
         await loadBranchComparisonSafe();
         renderAll();
       })();
+      return;
+    }
+    const promotionTarget = event.target.closest('#insightTargetContext');
+    if (promotionTarget) {
+      state.promotionTargetContextId = String(promotionTarget.value || '').trim() || null;
+      renderAll();
       return;
     }
     const toggle = event.target.closest('[data-preview-toggle]');
