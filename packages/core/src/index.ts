@@ -23,6 +23,7 @@ export type {
     BranchLaneSummary,
     AgentSessionSummary,
     WorkstreamBrief,
+    WorkstreamBaselineComparison,
     WorkstreamComparison,
     AgentContextPack,
     SessionMessage,

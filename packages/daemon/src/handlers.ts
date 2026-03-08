@@ -8,6 +8,7 @@ import type {
     AgentSessionSummary,
     CheckpointSummary,
     WorkstreamBrief,
+    WorkstreamBaselineComparison,
     WorkstreamComparison,
     AgentContextPack
 } from '@0ctx/core';
@@ -234,6 +235,101 @@ function safeGitCurrentBranch(repoRoot: string): string | null {
         ?? safeGit(repoRoot, ['rev-parse', '--abbrev-ref', 'HEAD']);
 }
 
+function safeGitBranchExists(repoRoot: string, branch: string): boolean {
+    const result = spawnSync('git', ['-C', repoRoot, 'show-ref', '--verify', '--quiet', `refs/heads/${branch}`], {
+        windowsHide: true
+    });
+    return result.status === 0;
+}
+
+function safeGitDefaultBranch(repoRoot: string): string | null {
+    const remoteHead = safeGit(repoRoot, ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD']);
+    if (remoteHead) {
+        const normalized = remoteHead.replace(/^origin\//, '').trim();
+        if (normalized) return normalized;
+    }
+    for (const candidate of ['main', 'master', 'trunk', 'develop']) {
+        if (safeGitBranchExists(repoRoot, candidate)) {
+            return candidate;
+        }
+    }
+    return null;
+}
+
+function compareAgainstBaselineBranch(
+    repositoryRoot: string | null,
+    branch: string | null
+): WorkstreamBaselineComparison | null {
+    if (!repositoryRoot) return null;
+    const baselineBranch = safeGitDefaultBranch(repositoryRoot);
+    if (!baselineBranch) {
+        return {
+            branch: null,
+            repositoryRoot,
+            comparable: false,
+            sameBranch: false,
+            aheadCount: null,
+            behindCount: null,
+            mergeBaseSha: null,
+            summary: 'No default branch could be determined for this repository.'
+        };
+    }
+    if (!branch) {
+        return {
+            branch: baselineBranch,
+            repositoryRoot,
+            comparable: false,
+            sameBranch: false,
+            aheadCount: null,
+            behindCount: null,
+            mergeBaseSha: null,
+            summary: `Default branch is ${baselineBranch}, but the current workstream has no branch name.`
+        };
+    }
+    if (branch === baselineBranch) {
+        return {
+            branch: baselineBranch,
+            repositoryRoot,
+            comparable: true,
+            sameBranch: true,
+            aheadCount: 0,
+            behindCount: 0,
+            mergeBaseSha: safeGit(repositoryRoot, ['rev-parse', branch]),
+            summary: `${branch} is the default branch for this repository.`
+        };
+    }
+
+    const countText = safeGit(repositoryRoot, ['rev-list', '--left-right', '--count', `${branch}...${baselineBranch}`]);
+    const counts = countText
+        ? countText.split(/\s+/).map((entry) => Number(entry)).filter((entry) => Number.isFinite(entry))
+        : [];
+    const aheadCount = counts.length >= 2 ? counts[0] : null;
+    const behindCount = counts.length >= 2 ? counts[1] : null;
+    const mergeBaseSha = safeGit(repositoryRoot, ['merge-base', branch, baselineBranch]);
+
+    let summary = `Git divergence against ${baselineBranch} could not be computed.`;
+    if (aheadCount !== null && behindCount !== null) {
+        summary = aheadCount === 0 && behindCount === 0
+            ? `${branch} is in sync with ${baselineBranch}.`
+            : aheadCount > 0 && behindCount === 0
+                ? `${branch} is ${aheadCount} commit${aheadCount === 1 ? '' : 's'} ahead of ${baselineBranch}.`
+                : aheadCount === 0 && behindCount > 0
+                    ? `${branch} is ${behindCount} commit${behindCount === 1 ? '' : 's'} behind ${baselineBranch}.`
+                    : `${branch} is ${aheadCount} ahead and ${behindCount} behind ${baselineBranch}.`;
+    }
+
+    return {
+        branch: baselineBranch,
+        repositoryRoot,
+        comparable: aheadCount !== null && behindCount !== null,
+        sameBranch: false,
+        aheadCount,
+        behindCount,
+        mergeBaseSha,
+        summary
+    };
+}
+
 function resolveWorkstreamRepositoryRoot(
     graph: Graph,
     contextId: string,
@@ -300,6 +396,35 @@ function enrichWorkstreamLane(
     };
 }
 
+function resolveCurrentWorkstreamFromContextPaths(contextPaths: string[]): {
+    branch: string | null;
+    worktreePath: string | null;
+    repositoryRoot: string | null;
+} {
+    for (const candidate of contextPaths) {
+        if (typeof candidate !== 'string' || candidate.trim().length === 0) continue;
+        try {
+            const resolved = path.resolve(candidate);
+            const repositoryRoot = safeGit(resolved, ['rev-parse', '--show-toplevel']);
+            if (!repositoryRoot) continue;
+            const branch = safeGitCurrentBranch(repositoryRoot);
+            return {
+                branch: branch ?? null,
+                worktreePath: repositoryRoot,
+                repositoryRoot
+            };
+        } catch {
+            continue;
+        }
+    }
+
+    return {
+        branch: null,
+        worktreePath: null,
+        repositoryRoot: null
+    };
+}
+
 function buildWorkstreamBrief(
     graph: Graph,
     contextId: string,
@@ -317,13 +442,14 @@ function buildWorkstreamBrief(
     const contextPaths = Array.isArray(context.paths)
         ? context.paths.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
         : [];
+    const inferredCurrent = resolveCurrentWorkstreamFromContextPaths(contextPaths);
 
     const branch = typeof options.branch === 'string' && options.branch.trim().length > 0
         ? options.branch.trim()
-        : null;
+        : inferredCurrent.branch;
     const worktreePath = typeof options.worktreePath === 'string' && options.worktreePath.trim().length > 0
         ? options.worktreePath.trim()
-        : null;
+        : inferredCurrent.worktreePath;
     const sessionLimit = parsePositiveInt(options.sessionLimit, 3, 20);
     const checkpointLimit = parsePositiveInt(options.checkpointLimit, 2, 20);
 
@@ -358,6 +484,9 @@ function buildWorkstreamBrief(
         }
     }
 
+    const repositoryRoot = lane?.repositoryRoot ?? inferredCurrent.repositoryRoot ?? contextPaths[0] ?? null;
+    const baseline = compareAgainstBaselineBranch(repositoryRoot, branch);
+
     const lines = [
         '0ctx project memory',
         `Workspace: ${context.name}`,
@@ -387,6 +516,10 @@ function buildWorkstreamBrief(
         }
     }
 
+    if (baseline?.summary) {
+        lines.push(`Baseline: ${baseline.summary}`);
+    }
+
     if (recentSessions.length > 0) {
         lines.push('', 'Recent sessions:');
         for (const session of recentSessions) {
@@ -411,7 +544,7 @@ function buildWorkstreamBrief(
         workspaceName: context.name,
         branch,
         worktreePath,
-        repositoryRoot: lane?.repositoryRoot ?? contextPaths[0] ?? null,
+        repositoryRoot,
         tracked: Boolean(lane),
         sessionCount: lane?.sessionCount ?? recentSessions.length,
         checkpointCount: lane?.checkpointCount ?? latestCheckpoints.length,
@@ -423,6 +556,7 @@ function buildWorkstreamBrief(
         behindCount: lane?.behindCount ?? null,
         mergeBaseSha: lane?.mergeBaseSha ?? null,
         isCurrent: lane?.isCurrent ?? null,
+        baseline,
         recentSessions,
         latestCheckpoints,
         contextText: lines.join('\n')
@@ -473,6 +607,7 @@ function buildAgentContextPack(
         worktreePath: workstream.worktreePath,
         repositoryRoot: workstream.repositoryRoot,
         workstream,
+        baseline: workstream.baseline,
         recentSessions: workstream.recentSessions,
         latestCheckpoints: workstream.latestCheckpoints,
         handoffTimeline,

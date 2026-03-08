@@ -207,6 +207,17 @@ export interface CheckpointSummary {
     agentSet: string[];
 }
 
+export interface WorkstreamBaselineComparison {
+    branch: string | null;
+    repositoryRoot: string | null;
+    comparable: boolean;
+    sameBranch: boolean;
+    aheadCount: number | null;
+    behindCount: number | null;
+    mergeBaseSha: string | null;
+    summary: string;
+}
+
 export interface WorkstreamBrief {
     contextId: string;
     workspaceName: string;
@@ -224,6 +235,7 @@ export interface WorkstreamBrief {
     behindCount: number | null;
     mergeBaseSha: string | null;
     isCurrent: boolean | null;
+    baseline: WorkstreamBaselineComparison | null;
     recentSessions: AgentSessionSummary[];
     latestCheckpoints: CheckpointSummary[];
     contextText: string;
@@ -253,6 +265,7 @@ export interface AgentContextPack {
     worktreePath: string | null;
     repositoryRoot: string | null;
     workstream: WorkstreamBrief;
+    baseline: WorkstreamBaselineComparison | null;
     recentSessions: AgentSessionSummary[];
     latestCheckpoints: CheckpointSummary[];
     handoffTimeline: HandoffTimelineEntry[];

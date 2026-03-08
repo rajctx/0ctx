@@ -273,7 +273,7 @@ export function bootstrapMcpRegistration(options: BootstrapOptions): BootstrapRe
     const appDataDir = getAppDataDir(homeDir, options);
     const serverName = options.serverName || '0ctx';
     const entrypoint = resolveEntrypoint(options.entrypoint);
-    const profile = resolveMcpToolProfile(options.profile);
+    const profile = resolveMcpToolProfile(options.profile ?? 'core');
 
     const registration: Registration = {
         command: process.execPath,
@@ -371,7 +371,7 @@ export function runBootstrapFromCli(): number {
     const clients = parseClients(parseArgValue('--clients') || parseArgValue('--client'));
     const serverName = parseArgValue('--server-name') || '0ctx';
     const entrypoint = parseArgValue('--entrypoint');
-    const profile = parseArgValue('--profile') || parseArgValue('--mcp-profile') || undefined;
+    const profile = parseArgValue('--profile') || parseArgValue('--mcp-profile') || 'core';
 
     const results = bootstrapMcpRegistration({
         clients,

@@ -498,7 +498,16 @@ describe('daemon request handling', () => {
         try {
             const repoRoot = path.join(os.tmpdir(), `0ctx-workstream-repo-${Date.now()}`);
             tempDirs.push(repoRoot);
-            spawnSync('git', ['init', '--initial-branch', 'feature/runtime-shape', repoRoot], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['init', '--initial-branch', 'main', repoRoot], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', repoRoot, 'config', 'user.email', 'test@example.com'], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', repoRoot, 'config', 'user.name', '0ctx test'], { encoding: 'utf8', windowsHide: true });
+            spawnSync('powershell', ['-NoProfile', '-Command', `Set-Content -Path '${path.join(repoRoot, 'notes.txt')}' -Value 'base'`], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', repoRoot, 'add', '.'], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', repoRoot, 'commit', '-m', 'base'], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', repoRoot, 'checkout', '-b', 'feature/runtime-shape'], { encoding: 'utf8', windowsHide: true });
+            spawnSync('powershell', ['-NoProfile', '-Command', `Set-Content -Path '${path.join(repoRoot, 'notes.txt')}' -Value 'feature'`], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', repoRoot, 'add', '.'], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', repoRoot, 'commit', '-m', 'feature'], { encoding: 'utf8', windowsHide: true });
 
             const session = handleRequest(graph, 'conn-git', { method: 'createSession' }, runtime()) as { sessionToken: string };
             const context = handleRequest(graph, 'conn-git', {
@@ -577,11 +586,70 @@ describe('daemon request handling', () => {
                     branch: 'feature/runtime-shape',
                     worktreePath: repoRoot
                 }
-            }, runtime()) as { repositoryRoot: string | null; isCurrent: boolean | null; contextText: string };
+            }, runtime()) as {
+                repositoryRoot: string | null;
+                isCurrent: boolean | null;
+                baseline: { branch: string | null; aheadCount: number | null; behindCount: number | null; summary: string } | null;
+                contextText: string;
+            };
 
             expect(brief.repositoryRoot).toBe(repoRoot);
             expect(brief.isCurrent).toBe(true);
+            expect(brief.baseline?.branch).toBe('main');
+            expect(brief.baseline?.aheadCount).toBe(1);
+            expect(brief.baseline?.behindCount).toBe(0);
+            expect(brief.baseline?.summary).toContain('ahead of main');
             expect(brief.contextText).toContain('Git state: current local workstream.');
+            expect(brief.contextText).toContain('Baseline: feature/runtime-shape is 1 commit ahead of main.');
+
+            const pack = handleRequest(graph, 'conn-git', {
+                method: 'getAgentContextPack',
+                sessionToken: session.sessionToken,
+                params: {
+                    contextId: context.id,
+                    branch: 'feature/runtime-shape',
+                    worktreePath: repoRoot
+                }
+            }, runtime()) as {
+                baseline: { branch: string | null; aheadCount: number | null; behindCount: number | null; summary: string } | null;
+                promptText: string;
+            };
+
+            expect(pack.baseline?.branch).toBe('main');
+            expect(pack.baseline?.aheadCount).toBe(1);
+            expect(pack.promptText).toContain('Baseline: feature/runtime-shape is 1 commit ahead of main.');
+
+            const inferredBrief = handleRequest(graph, 'conn-git', {
+                method: 'getWorkstreamBrief',
+                sessionToken: session.sessionToken,
+                params: {
+                    contextId: context.id
+                }
+            }, runtime()) as {
+                branch: string | null;
+                worktreePath: string | null;
+                baseline: { branch: string | null; aheadCount: number | null; behindCount: number | null; summary: string } | null;
+            };
+
+            expect(inferredBrief.branch).toBe('feature/runtime-shape');
+            expect(path.resolve(String(inferredBrief.worktreePath))).toBe(path.resolve(repoRoot));
+            expect(inferredBrief.baseline?.branch).toBe('main');
+
+            const inferredPack = handleRequest(graph, 'conn-git', {
+                method: 'getAgentContextPack',
+                sessionToken: session.sessionToken,
+                params: {
+                    contextId: context.id
+                }
+            }, runtime()) as {
+                branch: string | null;
+                workstream: { branch: string | null };
+                baseline: { branch: string | null } | null;
+            };
+
+            expect(inferredPack.branch).toBe('feature/runtime-shape');
+            expect(inferredPack.workstream.branch).toBe('feature/runtime-shape');
+            expect(inferredPack.baseline?.branch).toBe('main');
         } finally {
             db.close();
         }

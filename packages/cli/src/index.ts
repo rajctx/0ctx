@@ -163,6 +163,8 @@ const SUPPORTED_CLIENTS: SupportedClient[] = ['claude', 'cursor', 'windsurf', 'c
 const SUPPORTED_HOOK_INSTALL_CLIENTS: HookInstallClient[] = ['claude', 'cursor', 'windsurf', 'codex', 'factory', 'antigravity'];
 const DEFAULT_MCP_CLIENTS: SupportedClient[] = ['claude', 'antigravity'];
 const DEFAULT_HOOK_INSTALL_CLIENTS: HookInstallClient[] = ['claude', 'factory', 'antigravity'];
+const PREVIEW_MCP_CLIENTS: SupportedClient[] = ['cursor', 'windsurf', 'codex'];
+const PREVIEW_HOOK_INSTALL_CLIENTS: HookInstallClient[] = ['cursor', 'windsurf', 'codex'];
 const DEFAULT_ENABLE_MCP_CLIENTS: SupportedClient[] = DEFAULT_MCP_CLIENTS;
 const CLI_VERSION = (() => {
     try {
@@ -240,6 +242,7 @@ function parseClients(raw: string | boolean | undefined): SupportedClient[] {
     if (!raw || typeof raw !== 'string') return DEFAULT_MCP_CLIENTS;
     const normalized = raw.trim().toLowerCase();
     if (!normalized || normalized === 'ga') return DEFAULT_MCP_CLIENTS;
+    if (normalized === 'preview') return PREVIEW_MCP_CLIENTS;
     if (normalized === 'all') return SUPPORTED_CLIENTS;
 
     const parsed = normalized
@@ -254,6 +257,7 @@ function parseHookClients(raw: string | boolean | undefined): HookInstallClient[
     if (!raw || typeof raw !== 'string') return DEFAULT_HOOK_INSTALL_CLIENTS;
     const normalized = raw.trim().toLowerCase();
     if (!normalized || normalized === 'ga') return DEFAULT_HOOK_INSTALL_CLIENTS;
+    if (normalized === 'preview') return PREVIEW_HOOK_INSTALL_CLIENTS;
     if (normalized === 'all') return SUPPORTED_HOOK_INSTALL_CLIENTS;
 
     const parsed = normalized
@@ -992,7 +996,7 @@ async function commandBootstrap(flags: Record<string, string | boolean>): Promis
     const clients = parseClients(flags.clients);
     const dryRun = Boolean(flags['dry-run']);
     const entrypoint = parseOptionalStringFlag(flags.entrypoint) ?? undefined;
-    const mcpProfile = parseOptionalStringFlag(flags['mcp-profile'] ?? flags.profile) ?? undefined;
+    const mcpProfile = parseOptionalStringFlag(flags['mcp-profile'] ?? flags.profile) ?? 'core';
 
     if (!Boolean(flags.quiet) && !Boolean(flags.json)) {
         p.intro(color.bgBlue(color.black(' 0ctx bootstrap ')));
@@ -1011,7 +1015,7 @@ async function commandBootstrap(flags: Record<string, string | boolean>): Promis
     }
 
     if (Boolean(flags.json)) {
-        console.log(JSON.stringify({ dryRun, clients, mcpProfile: mcpProfile ?? 'all', results }, null, 2));
+        console.log(JSON.stringify({ dryRun, clients, mcpProfile, results }, null, 2));
     }
     return results.some((result: BootstrapResult) => result.status === 'failed') ? 1 : 0;
 }
@@ -4435,23 +4439,23 @@ Usage:
   0ctx --version | -v
 
 Recommended daily flow:
-  0ctx enable [--repo-root=<path>] [--name=<workspace>] [--clients=ga|all|claude,cursor,windsurf,codex,factory,antigravity]
-              [--mcp-clients=none|ga|all|claude,cursor,windsurf,codex,antigravity]
+  0ctx enable [--repo-root=<path>] [--name=<workspace>] [--clients=ga|preview|all|claude,cursor,windsurf,codex,factory,antigravity]
+              [--mcp-clients=none|ga|preview|all|claude,cursor,windsurf,codex,antigravity]
               [--skip-bootstrap] [--skip-hooks] [--mcp-profile=all|core|recall|ops] [--json]
 
 Support / legacy:
-  0ctx setup [--clients=ga|all|claude,cursor,windsurf,codex,antigravity] [--no-open] [--json] [--validate]
+  0ctx setup [--clients=ga|preview|all|claude,cursor,windsurf,codex,antigravity] [--no-open] [--json] [--validate]
              [--require-cloud] [--wait-cloud-ready]
              [--cloud-wait-timeout-ms=60000] [--cloud-wait-interval-ms=2000]
              [--create-context=<name>] [--dashboard-query[=k=v&...]]
              [--skip-service] [--skip-bootstrap] [--skip-hooks] [--hooks-dry-run]
              [--mcp-profile=all|core|recall|ops]
-  0ctx install [--clients=ga|all|claude,cursor,windsurf,codex,antigravity] [--json] [--skip-bootstrap] [--mcp-profile=all|core|recall|ops]
+  0ctx install [--clients=ga|preview|all|claude,cursor,windsurf,codex,antigravity] [--json] [--skip-bootstrap] [--mcp-profile=all|core|recall|ops]
   0ctx bootstrap [--dry-run] [--clients=...] [--entrypoint=/path/to/mcp-server.js]
                  [--mcp-profile=all|core|recall|ops] [--json]
   0ctx mcp [setup|bootstrap|validate]
   0ctx mcp                     Interactive MCP setup/selection flow
-  0ctx mcp setup [--clients=ga|all|claude,cursor,windsurf,codex,antigravity] [--mcp-profile=all|core|recall|ops] [--no-open]
+  0ctx mcp setup [--clients=ga|preview|all|claude,cursor,windsurf,codex,antigravity] [--mcp-profile=all|core|recall|ops] [--no-open]
   0ctx mcp bootstrap [--dry-run] [--clients=...] [--mcp-profile=all|core|recall|ops]
   0ctx mcp validate [--clients=...] [--mcp-profile=...]
   0ctx doctor [--json] [--clients=...]
@@ -4489,6 +4493,7 @@ Capture support:
 
 Client scope defaults:
   ga      Supported-by-default product path
+  preview Preview-only integrations
   all     Include preview integrations too
 
 Authentication:
@@ -4517,9 +4522,9 @@ Connector:
   0ctx connector verify [--require-cloud] [--json]
   0ctx connector register [--force] [--local-only] [--require-cloud] [--json]
   0ctx connector run [--once] [--interval-ms=5000] [--no-daemon-autostart]
-  0ctx connector hook install [--clients=ga|all|claude,cursor,windsurf,codex,factory,antigravity] [--repo-root=<path>] [--global]
+  0ctx connector hook install [--clients=ga|preview|all|claude,cursor,windsurf,codex,factory,antigravity] [--repo-root=<path>] [--global]
   0ctx connector hook status [--json]
-  0ctx connector hook prune [--days=30] [--json]
+  0ctx connector hook prune [--days=14] [--json]
 0ctx connector hook session-start --agent=claude|factory|antigravity [--repo-root=<path>]
                                     [--input-file=<path>|--payload='<json>'|stdin] [--json]
   0ctx connector hook ingest --agent=claude|windsurf|codex|cursor|factory|antigravity [--repo-root=<path>]
