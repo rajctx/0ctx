@@ -348,7 +348,11 @@ function describeWorkstreamSync(lane) {
   if (!lane) return '';
   const localChanges = describeWorkingTreeState(lane);
   let summary = '';
-  if (lane.baseline && typeof lane.baseline.summary === 'string' && lane.baseline.summary.trim()) {
+  if (lane.isDetachedHead === true && lane.currentHeadSha) {
+    summary = `Detached HEAD at ${commitShort(lane.currentHeadSha)}`;
+  } else if (lane.headDiffersFromCaptured === true && lane.lastCommitSha && lane.currentHeadSha) {
+    summary = `Capture drift: ${commitShort(lane.lastCommitSha)} -> ${commitShort(lane.currentHeadSha)}`;
+  } else if (lane.baseline && typeof lane.baseline.summary === 'string' && lane.baseline.summary.trim()) {
     summary = lane.baseline.summary;
   } else if (typeof lane.aheadCount === 'number' && typeof lane.behindCount === 'number' && lane.upstream) {
     if (lane.aheadCount === 0 && lane.behindCount === 0) {
@@ -711,7 +715,9 @@ function hookIngestCommand() {
 }
 
 function describeBranchLane(lane) {
-  const title = lane?.worktreePath
+  const title = lane?.isDetachedHead && lane?.currentHeadSha
+    ? `detached HEAD @ ${commitShort(lane.currentHeadSha)}`
+    : lane?.worktreePath
     ? `${normalizeBranch(lane.branch)} | ${basenameFromPath(lane.worktreePath)}`
     : normalizeBranch(lane?.branch);
   const syncState = describeWorkstreamSync(lane);
@@ -1209,9 +1215,12 @@ function renderRuntimeBanner() {
     detailBody.classList.remove('hidden');
     const meta = [
       { label: 'Workstream', value: normalizeBranch(lane.branch) },
+      { label: 'Checked-out HEAD', value: lane.currentHeadSha ? commitShort(lane.currentHeadSha) : 'unknown' },
+      { label: 'HEAD ref', value: lane.currentHeadRef || (lane.isDetachedHead ? 'detached' : 'unknown') },
       { label: 'Last agent', value: lane.lastAgent || 'unknown' },
       { label: 'Latest commit', value: lane.lastCommitSha || 'none' },
       { label: 'Git state', value: describeWorkstreamSync(lane) || 'unknown' },
+      { label: 'Capture drift', value: lane.headDiffersFromCaptured === true ? 'yes' : lane.headDiffersFromCaptured === false ? 'no' : 'unknown' },
       { label: 'Baseline', value: lane.baseline?.summary || 'No default-branch baseline available' },
       { label: 'Upstream', value: lane.upstream || 'not configured' },
       { label: 'Agents on workstream', value: lane.agentSet?.length ? lane.agentSet.join(', ') : 'none' },

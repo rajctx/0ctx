@@ -9,6 +9,7 @@ describe('@0ctx/cli build artifact source', () => {
 
         expect(source).toContain("case 'install'");
         expect(source).toContain("case 'enable'");
+        expect(source).toContain("case 'agent-context'");
         expect(source).toContain("case 'workstreams'");
         expect(source).toContain("case 'bootstrap'");
         expect(source).toContain("case 'doctor'");
@@ -51,7 +52,9 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("0ctx repair [--clients=...] [--deep] [--json]");
         expect(source).toContain("0ctx reset [--confirm] [--full] [--include-auth] [--json]");
         expect(source).toContain("0ctx workstreams [--repo-root=<path>] [--limit=100] [--json]");
+        expect(source).toContain("0ctx workstreams current [--repo-root=<path>] [--branch=<name>] [--worktree-path=<path>]");
         expect(source).toContain("0ctx workstreams compare [--repo-root=<path>] --source=<branch> --target=<branch>");
+        expect(source).toContain("0ctx agent-context [--repo-root=<path>] [--branch=<name>] [--worktree-path=<path>]");
         expect(source).toContain("0ctx branches [--repo-root=<path>] [--limit=100] [--json]");
         expect(source).toContain("0ctx branches compare [--repo-root=<path>] --source=<branch> --target=<branch>");
         expect(source).toContain("0ctx sessions [--repo-root=<path>] [--branch=<name>] [--session-id=<id>] [--worktree-path=<path>] [--limit=100] [--json]");
@@ -83,6 +86,9 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("0ctx connector hook prune [--days=14] [--json]");
         expect(source).toContain("0ctx connector hook session-start --agent=claude|factory|antigravity [--repo-root=<path>]");
         expect(source).toContain("sendToDaemon('getAgentContextPack'");
+        expect(source).toContain("sendToDaemon('getWorkstreamBrief'");
+        expect(source).toContain("reason: 'repo_entrypoint'");
+        expect(source).toContain("'cli.workstreams.current'");
         expect(source).toContain("0ctx connector hook ingest --agent=claude|windsurf|codex|cursor|factory|antigravity [--repo-root=<path>]");
         expect(source).toContain('0ctx hook install|status|prune|session-start|ingest  Alias for "0ctx connector hook ..."');
         expect(source).toContain("0ctx connector queue status [--json]");

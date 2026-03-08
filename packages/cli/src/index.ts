@@ -4444,9 +4444,13 @@ Usage:
 
 Daily use:
   0ctx workstreams [--repo-root=<path>] [--limit=100] [--json]
+  0ctx workstreams current [--repo-root=<path>] [--branch=<name>] [--worktree-path=<path>]
+                         [--session-limit=3] [--checkpoint-limit=2] [--json]
   0ctx workstreams compare [--repo-root=<path>] --source=<branch> --target=<branch>
                           [--source-worktree-path=<path>] [--target-worktree-path=<path>]
                           [--session-limit=3] [--checkpoint-limit=2] [--json]
+  0ctx agent-context [--repo-root=<path>] [--branch=<name>] [--worktree-path=<path>]
+                     [--session-limit=3] [--checkpoint-limit=2] [--handoff-limit=5] [--json]
   0ctx sessions [--repo-root=<path>] [--branch=<name>] [--session-id=<id>] [--worktree-path=<path>] [--limit=100] [--json]
   0ctx checkpoints [list] [--repo-root=<path>] [--branch=<name>] [--worktree-path=<path>] [--limit=100] [--json]
   0ctx checkpoints create [--repo-root=<path>] [--session-id=<id>] [--name="..."] [--summary="..."] [--json]
@@ -4505,9 +4509,13 @@ Advanced / machine management:
   0ctx repair [--clients=...] [--deep] [--json]
   0ctx reset [--confirm] [--full] [--include-auth] [--json]
   0ctx workstreams [--repo-root=<path>] [--limit=100] [--json]
+  0ctx workstreams current [--repo-root=<path>] [--branch=<name>] [--worktree-path=<path>]
+                           [--session-limit=3] [--checkpoint-limit=2] [--json]
   0ctx workstreams compare [--repo-root=<path>] --source=<branch> --target=<branch>
                         [--source-worktree-path=<path>] [--target-worktree-path=<path>]
                         [--session-limit=3] [--checkpoint-limit=2] [--json]
+  0ctx agent-context [--repo-root=<path>] [--branch=<name>] [--worktree-path=<path>]
+                     [--session-limit=3] [--checkpoint-limit=2] [--handoff-limit=5] [--json]
   0ctx branches [--repo-root=<path>] [--limit=100] [--json]
   0ctx branches compare [--repo-root=<path>] --source=<branch> --target=<branch>
                      [--source-worktree-path=<path>] [--target-worktree-path=<path>]
@@ -4801,11 +4809,116 @@ function short(value: string, max = 120): string {
 
 async function commandBranches(args: string[], flags: Record<string, string | boolean>): Promise<number> {
     const subcommand = String(args[0] || '').trim().toLowerCase();
-    const commandLabel = subcommand === 'compare' ? '0ctx workstreams compare' : '0ctx workstreams';
+    const commandLabel = subcommand === 'compare'
+        ? '0ctx workstreams compare'
+        : (subcommand === 'current' ? '0ctx workstreams current' : '0ctx workstreams');
     const contextId = await requireCommandContextId(flags, commandLabel);
     if (!contextId) return 1;
     const asJson = Boolean(flags.json);
     try {
+        if (subcommand === 'current') {
+            const scope = resolveCommandWorkstreamScope(flags);
+            const sessionLimit = parsePositiveIntegerFlag(flags['session-limit'] ?? flags.sessionLimit, 3);
+            const checkpointLimit = parsePositiveIntegerFlag(flags['checkpoint-limit'] ?? flags.checkpointLimit, 2);
+            const result = await sendToDaemon('getWorkstreamBrief', {
+                contextId,
+                branch: scope.branch,
+                worktreePath: scope.worktreePath,
+                sessionLimit,
+                checkpointLimit
+            }) as {
+                workspaceName: string;
+                branch: string | null;
+                worktreePath?: string | null;
+                currentHeadSha?: string | null;
+                currentHeadRef?: string | null;
+                isDetachedHead?: boolean | null;
+                headDiffersFromCaptured?: boolean | null;
+                sessionCount: number;
+                checkpointCount: number;
+                lastAgent?: string | null;
+                lastCommitSha?: string | null;
+                lastActivityAt?: number | null;
+                upstream?: string | null;
+                aheadCount?: number | null;
+                behindCount?: number | null;
+                mergeBaseSha?: string | null;
+                isCurrent?: boolean | null;
+                hasUncommittedChanges?: boolean | null;
+                stagedChangeCount?: number | null;
+                unstagedChangeCount?: number | null;
+                untrackedCount?: number | null;
+                baseline?: { summary?: string | null } | null;
+                recentSessions?: Array<{ summary?: string | null; agent?: string | null }>;
+                latestCheckpoints?: Array<{ name?: string | null; summary?: string | null }>;
+                insights?: Array<{ type?: string | null; content?: string | null }>;
+            };
+            return printJsonOrValue(asJson, result, () => {
+                const workstreamName = result.branch
+                    || (result.isDetachedHead && result.currentHeadSha ? `detached HEAD @ ${String(result.currentHeadSha).slice(0, 12)}` : 'unknown workstream');
+                const workstreamLabel = `${workstreamName}${result.worktreePath ? ` (${result.worktreePath})` : ''}`;
+                console.log('\nCurrent Workstream\n');
+                console.log(`  Workspace: ${result.workspaceName}`);
+                console.log(`  Workstream: ${workstreamLabel}`);
+                console.log(`  Sessions: ${result.sessionCount} | Checkpoints: ${result.checkpointCount}`);
+                if (result.lastActivityAt) {
+                    console.log(`  Last activity: ${new Date(result.lastActivityAt).toLocaleString()}`);
+                }
+                if (result.lastAgent) {
+                    console.log(`  Last agent: ${result.lastAgent}`);
+                }
+                if (result.lastCommitSha) {
+                    console.log(`  Last commit: ${String(result.lastCommitSha).slice(0, 12)}`);
+                }
+                if (result.isDetachedHead && result.currentHeadSha) {
+                    console.log(`  HEAD: detached @ ${String(result.currentHeadSha).slice(0, 12)}`);
+                } else if (result.currentHeadSha) {
+                    const refLabel = result.currentHeadRef ? ` | ${result.currentHeadRef}` : '';
+                    console.log(`  HEAD: ${String(result.currentHeadSha).slice(0, 12)}${refLabel}`);
+                }
+                if (result.upstream) {
+                    const ahead = typeof result.aheadCount === 'number' ? result.aheadCount : '?';
+                    const behind = typeof result.behindCount === 'number' ? result.behindCount : '?';
+                    console.log(`  Git: ${result.upstream} | ahead ${ahead} | behind ${behind}`);
+                } else if (result.isCurrent === true) {
+                    console.log('  Git: current local workstream');
+                }
+                if (result.mergeBaseSha) {
+                    console.log(`  Merge base: ${String(result.mergeBaseSha).slice(0, 12)}`);
+                }
+                if (result.headDiffersFromCaptured && result.lastCommitSha && result.currentHeadSha) {
+                    console.log(`  Capture drift: ${String(result.lastCommitSha).slice(0, 12)} -> ${String(result.currentHeadSha).slice(0, 12)}`);
+                }
+                if (result.hasUncommittedChanges) {
+                    console.log(`  Local changes: staged ${result.stagedChangeCount ?? 0} | unstaged ${result.unstagedChangeCount ?? 0} | untracked ${result.untrackedCount ?? 0}`);
+                }
+                if (result.baseline?.summary) {
+                    console.log(`  Baseline: ${result.baseline.summary}`);
+                }
+                if (Array.isArray(result.recentSessions) && result.recentSessions.length > 0) {
+                    console.log('\n  Recent sessions:');
+                    for (const session of result.recentSessions.slice(0, 3)) {
+                        const agent = session.agent ? `[${session.agent}] ` : '';
+                        console.log(`    - ${agent}${short(String(session.summary ?? '-'), 120)}`);
+                    }
+                }
+                if (Array.isArray(result.latestCheckpoints) && result.latestCheckpoints.length > 0) {
+                    console.log('\n  Latest checkpoints:');
+                    for (const checkpoint of result.latestCheckpoints.slice(0, 3)) {
+                        const label = checkpoint.name || checkpoint.summary || 'checkpoint';
+                        console.log(`    - ${short(String(label), 120)}`);
+                    }
+                }
+                if (Array.isArray(result.insights) && result.insights.length > 0) {
+                    console.log('\n  Reviewed insights:');
+                    for (const insight of result.insights.slice(0, 4)) {
+                        console.log(`    - [${String(insight.type ?? 'insight')}] ${short(String(insight.content ?? '-'), 120)}`);
+                    }
+                }
+                console.log('');
+            });
+        }
+
         if (subcommand === 'compare') {
             const sourceBranch = parseOptionalStringFlag(flags.source ?? flags['source-branch'] ?? flags.sourceBranch);
             const targetBranch = parseOptionalStringFlag(flags.target ?? flags['target-branch'] ?? flags.targetBranch);
@@ -4900,6 +5013,11 @@ async function commandBranches(args: string[], flags: Record<string, string | bo
             aheadCount?: number | null;
             behindCount?: number | null;
             isCurrent?: boolean | null;
+            currentHeadSha?: string | null;
+            currentHeadRef?: string | null;
+            isDetachedHead?: boolean | null;
+            headDiffersFromCaptured?: boolean | null;
+            baseline?: { summary?: string | null } | null;
         }>;
         return printJsonOrValue(asJson, result, () => {
             console.log('\nWorkstreams\n');
@@ -4913,6 +5031,20 @@ async function commandBranches(args: string[], flags: Record<string, string | bo
                 console.log(`    Sessions: ${lane.sessionCount} | Checkpoints: ${lane.checkpointCount}`);
                 if (lane.lastAgent) console.log(`    Last agent: ${lane.lastAgent}`);
                 if (lane.lastCommitSha) console.log(`    Last commit: ${String(lane.lastCommitSha).slice(0, 12)}`);
+                if (lane.isDetachedHead && lane.currentHeadSha) {
+                    console.log(`    HEAD: detached @ ${String(lane.currentHeadSha).slice(0, 12)}`);
+                } else if (lane.currentHeadSha || lane.currentHeadRef) {
+                    const headParts = [
+                        lane.currentHeadSha ? String(lane.currentHeadSha).slice(0, 12) : null,
+                        lane.currentHeadRef ?? null
+                    ].filter(Boolean);
+                    if (headParts.length > 0) {
+                        console.log(`    HEAD: ${headParts.join(' | ')}`);
+                    }
+                }
+                if (lane.headDiffersFromCaptured && lane.lastCommitSha && lane.currentHeadSha) {
+                    console.log(`    Capture drift: ${String(lane.lastCommitSha).slice(0, 12)} -> ${String(lane.currentHeadSha).slice(0, 12)}`);
+                }
                 if (lane.baseline?.summary) {
                     console.log(`    Baseline: ${lane.baseline.summary}`);
                 }
@@ -4990,6 +5122,38 @@ async function commandSessions(flags: Record<string, string | boolean>): Promise
         });
     } catch (error) {
         console.error('Failed to inspect sessions:', error instanceof Error ? error.message : String(error));
+        return 1;
+    }
+}
+
+async function commandAgentContext(flags: Record<string, string | boolean>): Promise<number> {
+    const contextId = await requireCommandContextId(flags, '0ctx agent-context');
+    if (!contextId) return 1;
+    const asJson = Boolean(flags.json);
+    const scope = resolveCommandWorkstreamScope(flags);
+    const sessionLimit = parsePositiveIntegerFlag(flags['session-limit'] ?? flags.sessionLimit, 3);
+    const checkpointLimit = parsePositiveIntegerFlag(flags['checkpoint-limit'] ?? flags.checkpointLimit, 2);
+    const handoffLimit = parsePositiveIntegerFlag(flags['handoff-limit'] ?? flags.handoffLimit, 5);
+    try {
+        const result = await sendToDaemon('getAgentContextPack', {
+            contextId,
+            branch: scope.branch,
+            worktreePath: scope.worktreePath,
+            sessionLimit,
+            checkpointLimit,
+            handoffLimit
+        }) as {
+            promptText?: string | null;
+        };
+        return printJsonOrValue(asJson, result, () => {
+            if (typeof result.promptText === 'string' && result.promptText.trim().length > 0) {
+                process.stdout.write(result.promptText.endsWith('\n') ? result.promptText : `${result.promptText}\n`);
+                return;
+            }
+            console.log('\nAgent context is not available for the current workstream yet.\n');
+        });
+    } catch (error) {
+        console.error('Failed to get agent context:', error instanceof Error ? error.message : String(error));
         return 1;
     }
 }
@@ -5603,7 +5767,7 @@ async function main(): Promise<number> {
             // Returning users can still land in a broken state (e.g. daemon
             // not running, missing service registration after updates). Keep
             // `0ctx` as a one-command entrypoint by attempting automatic
-            // setup/repair before opening the interactive shell.
+            // setup/repair before showing the repo-first summary.
             const daemonPreflight = await isDaemonReachable();
             if (!daemonPreflight.ok) {
                 console.log(color.bold('\nRuntime needs repair.'));
@@ -5630,8 +5794,23 @@ async function main(): Promise<number> {
                 return 0;
             }
 
-            captureEvent('cli_command_executed', { command: 'shell', interactive: true });
-            return runCommandWithOpsSummary('cli.shell', () => commandShell(), { command: 'shell', interactive: true });
+            captureEvent('cli_command_executed', {
+                command: 'workstreams',
+                subcommand: 'current',
+                interactive: true,
+                reason: 'repo_entrypoint'
+            });
+            return runCommandWithOpsSummary(
+                'cli.workstreams.current',
+                () => commandBranches(['current'], { 'repo-root': detectedRepoRoot, limit: '1' }),
+                {
+                    command: 'workstreams',
+                    subcommand: 'current',
+                    interactive: true,
+                    reason: 'repo_entrypoint',
+                    limit: '1'
+                }
+            );
         }
         captureEvent('cli_command_executed', { command: 'help' });
         return runCommandWithOpsSummary('cli.help', () => {
@@ -5668,6 +5847,8 @@ async function main(): Promise<number> {
             case 'workstreams':
             case 'branches':
                 return commandBranches(parsed.positionalArgs, parsed.flags);
+            case 'agent-context':
+                return commandAgentContext(parsed.flags);
             case 'sessions':
                 return commandSessions(parsed.flags);
             case 'checkpoints':

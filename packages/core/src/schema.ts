@@ -163,6 +163,10 @@ export interface BranchLaneSummary {
     branch: string;
     worktreePath: string | null;
     repositoryRoot: string | null;
+    currentHeadSha: string | null;
+    currentHeadRef: string | null;
+    isDetachedHead: boolean | null;
+    headDiffersFromCaptured: boolean | null;
     lastAgent: string | null;
     lastCommitSha: string | null;
     lastActivityAt: number;
@@ -229,6 +233,10 @@ export interface WorkstreamBrief {
     branch: string | null;
     worktreePath: string | null;
     repositoryRoot: string | null;
+    currentHeadSha: string | null;
+    currentHeadRef: string | null;
+    isDetachedHead: boolean | null;
+    headDiffersFromCaptured: boolean | null;
     tracked: boolean;
     sessionCount: number;
     checkpointCount: number;

@@ -508,6 +508,7 @@ describe('daemon request handling', () => {
             spawnSync('powershell', ['-NoProfile', '-Command', `Set-Content -Path '${path.join(repoRoot, 'notes.txt')}' -Value 'feature'`], { encoding: 'utf8', windowsHide: true });
             spawnSync('git', ['-C', repoRoot, 'add', '.'], { encoding: 'utf8', windowsHide: true });
             spawnSync('git', ['-C', repoRoot, 'commit', '-m', 'feature'], { encoding: 'utf8', windowsHide: true });
+            const featureHead = String(spawnSync('git', ['-C', repoRoot, 'rev-parse', 'HEAD'], { encoding: 'utf8', windowsHide: true }).stdout ?? '').trim();
             spawnSync('powershell', ['-NoProfile', '-Command', `Set-Content -Path '${path.join(repoRoot, 'staged.txt')}' -Value 'staged change'`], { encoding: 'utf8', windowsHide: true });
             spawnSync('git', ['-C', repoRoot, 'add', 'staged.txt'], { encoding: 'utf8', windowsHide: true });
             spawnSync('powershell', ['-NoProfile', '-Command', `Add-Content -Path '${path.join(repoRoot, 'staged.txt')}' -Value 'unstaged change'`], { encoding: 'utf8', windowsHide: true });
@@ -534,6 +535,7 @@ describe('daemon request handling', () => {
                     rawPayload: {
                         sessionId: 'session-git-1',
                         branch: 'feature/runtime-shape',
+                        commitSha: featureHead,
                         agent: 'claude',
                         worktreePath: repoRoot,
                         repositoryRoot: repoRoot
@@ -557,6 +559,7 @@ describe('daemon request handling', () => {
                         messageId: 'msg-1',
                         role: 'assistant',
                         branch: 'feature/runtime-shape',
+                        commitSha: featureHead,
                         agent: 'claude',
                         worktreePath: repoRoot,
                         repositoryRoot: repoRoot,
@@ -582,6 +585,10 @@ describe('daemon request handling', () => {
             }, runtime()) as Array<{
                 branch: string;
                 repositoryRoot: string | null;
+                currentHeadSha: string | null;
+                currentHeadRef: string | null;
+                isDetachedHead: boolean | null;
+                headDiffersFromCaptured: boolean | null;
                 isCurrent: boolean | null;
                 upstream: string | null;
                 hasUncommittedChanges: boolean | null;
@@ -594,6 +601,10 @@ describe('daemon request handling', () => {
             expect(lanes).toHaveLength(1);
             expect(lanes[0].branch).toBe('feature/runtime-shape');
             expect(lanes[0].repositoryRoot).toBe(repoRoot);
+            expect(lanes[0].currentHeadSha).toBe(featureHead);
+            expect(lanes[0].currentHeadRef).toBe('refs/heads/feature/runtime-shape');
+            expect(lanes[0].isDetachedHead).toBe(false);
+            expect(lanes[0].headDiffersFromCaptured).toBe(false);
             expect(lanes[0].isCurrent).toBe(true);
             expect(lanes[0].upstream).toBeNull();
             expect(lanes[0].hasUncommittedChanges).toBe(true);
@@ -615,6 +626,10 @@ describe('daemon request handling', () => {
                 }
             }, runtime()) as {
                 repositoryRoot: string | null;
+                currentHeadSha: string | null;
+                currentHeadRef: string | null;
+                isDetachedHead: boolean | null;
+                headDiffersFromCaptured: boolean | null;
                 isCurrent: boolean | null;
                 hasUncommittedChanges: boolean | null;
                 stagedChangeCount: number | null;
@@ -626,6 +641,10 @@ describe('daemon request handling', () => {
             };
 
             expect(brief.repositoryRoot).toBe(repoRoot);
+            expect(brief.currentHeadSha).toBe(featureHead);
+            expect(brief.currentHeadRef).toBe('refs/heads/feature/runtime-shape');
+            expect(brief.isDetachedHead).toBe(false);
+            expect(brief.headDiffersFromCaptured).toBe(false);
             expect(brief.isCurrent).toBe(true);
             expect(brief.hasUncommittedChanges).toBe(true);
             expect(brief.stagedChangeCount).toBeGreaterThanOrEqual(1);
@@ -656,6 +675,10 @@ describe('daemon request handling', () => {
                 }
             }, runtime()) as {
                 workstream: {
+                    currentHeadSha: string | null;
+                    currentHeadRef: string | null;
+                    isDetachedHead: boolean | null;
+                    headDiffersFromCaptured: boolean | null;
                     hasUncommittedChanges: boolean | null;
                     stagedChangeCount: number | null;
                     unstagedChangeCount: number | null;
@@ -668,6 +691,10 @@ describe('daemon request handling', () => {
 
             expect(pack.baseline?.branch).toBe('main');
             expect(pack.baseline?.aheadCount).toBe(1);
+            expect(pack.workstream.currentHeadSha).toBe(featureHead);
+            expect(pack.workstream.currentHeadRef).toBe('refs/heads/feature/runtime-shape');
+            expect(pack.workstream.isDetachedHead).toBe(false);
+            expect(pack.workstream.headDiffersFromCaptured).toBe(false);
             expect(pack.workstream.hasUncommittedChanges).toBe(true);
             expect(pack.workstream.stagedChangeCount).toBeGreaterThanOrEqual(1);
             expect(pack.workstream.unstagedChangeCount).toBe(1);
@@ -725,6 +752,76 @@ describe('daemon request handling', () => {
             expect(inferredPack.branch).toBe('feature/runtime-shape');
             expect(inferredPack.workstream.branch).toBe('feature/runtime-shape');
             expect(inferredPack.baseline?.branch).toBe('main');
+        } finally {
+            db.close();
+        }
+    }, 15000);
+
+    it('represents detached HEAD honestly in workstream context', () => {
+        if (!gitAvailable()) return;
+        const { db, graph } = createGraph();
+        try {
+            const repoRoot = path.join(os.tmpdir(), `0ctx-detached-head-${Date.now()}`);
+            tempDirs.push(repoRoot);
+            spawnSync('git', ['init', '--initial-branch', 'main', repoRoot], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', repoRoot, 'config', 'user.email', 'test@example.com'], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', repoRoot, 'config', 'user.name', '0ctx test'], { encoding: 'utf8', windowsHide: true });
+            spawnSync('powershell', ['-NoProfile', '-Command', `Set-Content -Path '${path.join(repoRoot, 'notes.txt')}' -Value 'base'`], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', repoRoot, 'add', '.'], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', repoRoot, 'commit', '-m', 'base'], { encoding: 'utf8', windowsHide: true });
+            const detachedHead = String(spawnSync('git', ['-C', repoRoot, 'rev-parse', 'HEAD'], { encoding: 'utf8', windowsHide: true }).stdout ?? '').trim();
+            spawnSync('git', ['-C', repoRoot, 'checkout', '--detach'], { encoding: 'utf8', windowsHide: true });
+
+            const session = handleRequest(graph, 'conn-detached', { method: 'createSession' }, runtime()) as { sessionToken: string };
+            const context = handleRequest(graph, 'conn-detached', {
+                method: 'createContext',
+                sessionToken: session.sessionToken,
+                params: { name: 'detached-context', paths: [repoRoot] }
+            }, runtime()) as { id: string };
+
+            const brief = handleRequest(graph, 'conn-detached', {
+                method: 'getWorkstreamBrief',
+                sessionToken: session.sessionToken,
+                params: { contextId: context.id }
+            }, runtime()) as {
+                branch: string | null;
+                currentHeadSha: string | null;
+                currentHeadRef: string | null;
+                isDetachedHead: boolean | null;
+                tracked: boolean;
+                baseline: { branch: string | null; comparable: boolean; summary: string } | null;
+                contextText: string;
+            };
+
+            expect(brief.branch).toBeNull();
+            expect(brief.currentHeadSha).toBe(detachedHead);
+            expect(brief.currentHeadRef).toBeNull();
+            expect(brief.isDetachedHead).toBe(true);
+            expect(brief.tracked).toBe(false);
+            expect(brief.baseline?.branch).toBe('main');
+            expect(brief.baseline?.comparable).toBe(false);
+            expect(brief.contextText).toContain(`Current workstream: detached HEAD @ ${detachedHead.slice(0, 12)}`);
+            expect(brief.contextText).toContain(`Git state: detached HEAD at ${detachedHead.slice(0, 12)}.`);
+
+            const pack = handleRequest(graph, 'conn-detached', {
+                method: 'getAgentContextPack',
+                sessionToken: session.sessionToken,
+                params: { contextId: context.id }
+            }, runtime()) as {
+                branch: string | null;
+                workstream: {
+                    branch: string | null;
+                    currentHeadSha: string | null;
+                    isDetachedHead: boolean | null;
+                };
+                promptText: string;
+            };
+
+            expect(pack.branch).toBeNull();
+            expect(pack.workstream.branch).toBeNull();
+            expect(pack.workstream.currentHeadSha).toBe(detachedHead);
+            expect(pack.workstream.isDetachedHead).toBe(true);
+            expect(pack.promptText).toContain(`Current workstream: detached HEAD @ ${detachedHead.slice(0, 12)}`);
         } finally {
             db.close();
         }

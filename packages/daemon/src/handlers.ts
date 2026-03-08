@@ -223,6 +223,13 @@ interface WorkingTreeState {
     untrackedCount: number;
 }
 
+interface GitHeadState {
+    branch: string | null;
+    headRef: string | null;
+    headSha: string | null;
+    detached: boolean;
+}
+
 function formatRelativeAge(timestamp: number, now = Date.now()): string {
     const delta = Math.max(0, now - timestamp);
     const minute = 60_000;
@@ -247,8 +254,36 @@ function safeGit(repoRoot: string, args: string[]): string | null {
 }
 
 function safeGitCurrentBranch(repoRoot: string): string | null {
-    return safeGit(repoRoot, ['symbolic-ref', '--short', 'HEAD'])
-        ?? safeGit(repoRoot, ['rev-parse', '--abbrev-ref', 'HEAD']);
+    const branch = safeGit(repoRoot, ['symbolic-ref', '--short', '-q', 'HEAD']);
+    return branch && branch !== 'HEAD' ? branch : null;
+}
+
+function getGitHeadState(repositoryRoot: string | null): GitHeadState | null {
+    if (!repositoryRoot) return null;
+    const headSha = safeGit(repositoryRoot, ['rev-parse', 'HEAD']);
+    if (!headSha) return null;
+
+    const headRef = safeGit(repositoryRoot, ['symbolic-ref', '-q', 'HEAD']);
+    if (!headRef) {
+        return {
+            branch: null,
+            headRef: null,
+            headSha,
+            detached: true
+        };
+    }
+
+    const normalizedRef = headRef.trim();
+    const branch = normalizedRef.startsWith('refs/heads/')
+        ? normalizedRef.slice('refs/heads/'.length)
+        : safeGit(repositoryRoot, ['symbolic-ref', '--short', '-q', 'HEAD']);
+
+    return {
+        branch: branch && branch !== 'HEAD' ? branch : null,
+        headRef: normalizedRef,
+        headSha,
+        detached: false
+    };
 }
 
 function safeGitBranchExists(repoRoot: string, branch: string): boolean {
@@ -421,6 +456,10 @@ function enrichWorkstreamLane(
         return {
             ...lane,
             repositoryRoot: null,
+            currentHeadSha: null,
+            currentHeadRef: null,
+            isDetachedHead: null,
+            headDiffersFromCaptured: null,
             upstream: null,
             aheadCount: null,
             behindCount: null,
@@ -434,7 +473,8 @@ function enrichWorkstreamLane(
         };
     }
 
-    const currentBranch = safeGitCurrentBranch(repositoryRoot);
+    const gitHead = getGitHeadState(repositoryRoot);
+    const currentBranch = gitHead?.branch ?? null;
     const currentRoot = safeGit(repositoryRoot, ['rev-parse', '--show-toplevel']);
     const upstream = safeGit(repositoryRoot, ['rev-parse', '--abbrev-ref', `${lane.branch}@{upstream}`]);
     const countText = upstream
@@ -449,6 +489,12 @@ function enrichWorkstreamLane(
     return {
         ...lane,
         repositoryRoot,
+        currentHeadSha: gitHead?.headSha ?? null,
+        currentHeadRef: gitHead?.headRef ?? null,
+        isDetachedHead: gitHead?.detached ?? null,
+        headDiffersFromCaptured: gitHead?.headSha && lane.lastCommitSha
+            ? gitHead.headSha !== lane.lastCommitSha
+            : null,
         upstream,
         aheadCount: counts.length >= 2 ? counts[0] : null,
         behindCount: counts.length >= 2 ? counts[1] : null,
@@ -468,6 +514,9 @@ function resolveCurrentWorkstreamFromContextPaths(contextPaths: string[]): {
     branch: string | null;
     worktreePath: string | null;
     repositoryRoot: string | null;
+    currentHeadSha: string | null;
+    currentHeadRef: string | null;
+    isDetachedHead: boolean | null;
 } {
     for (const candidate of contextPaths) {
         if (typeof candidate !== 'string' || candidate.trim().length === 0) continue;
@@ -475,11 +524,14 @@ function resolveCurrentWorkstreamFromContextPaths(contextPaths: string[]): {
             const resolved = path.resolve(candidate);
             const repositoryRoot = safeGit(resolved, ['rev-parse', '--show-toplevel']);
             if (!repositoryRoot) continue;
-            const branch = safeGitCurrentBranch(repositoryRoot);
+            const gitHead = getGitHeadState(repositoryRoot);
             return {
-                branch: branch ?? null,
+                branch: gitHead?.branch ?? null,
                 worktreePath: repositoryRoot,
-                repositoryRoot
+                repositoryRoot,
+                currentHeadSha: gitHead?.headSha ?? null,
+                currentHeadRef: gitHead?.headRef ?? null,
+                isDetachedHead: gitHead?.detached ?? null
             };
         } catch {
             continue;
@@ -489,7 +541,10 @@ function resolveCurrentWorkstreamFromContextPaths(contextPaths: string[]): {
     return {
         branch: null,
         worktreePath: null,
-        repositoryRoot: null
+        repositoryRoot: null,
+        currentHeadSha: null,
+        currentHeadRef: null,
+        isDetachedHead: null
     };
 }
 
@@ -566,13 +621,27 @@ function buildWorkstreamBrief(
     }
 
     const repositoryRoot = lane?.repositoryRoot ?? inferredCurrent.repositoryRoot ?? contextPaths[0] ?? null;
+    const gitHead = getGitHeadState(repositoryRoot);
     const workingTreeState = getWorkingTreeState(repositoryRoot);
     const baseline = compareAgainstBaselineBranch(repositoryRoot, branch);
+    const currentHeadSha = lane?.currentHeadSha ?? gitHead?.headSha ?? inferredCurrent.currentHeadSha ?? null;
+    const currentHeadRef = lane?.currentHeadRef ?? gitHead?.headRef ?? inferredCurrent.currentHeadRef ?? null;
+    const isDetachedHead = lane?.isDetachedHead ?? gitHead?.detached ?? inferredCurrent.isDetachedHead ?? null;
+    const headDiffersFromCaptured = lane?.headDiffersFromCaptured ?? (
+        currentHeadSha && lane?.lastCommitSha
+            ? currentHeadSha !== lane.lastCommitSha
+            : null
+    );
+    const isCurrent = lane?.isCurrent ?? (
+        repositoryRoot
+            ? Boolean(branch && gitHead?.branch === branch && (!worktreePath || path.resolve(repositoryRoot) === path.resolve(worktreePath)))
+            : null
+    );
 
     const lines = [
         '0ctx project memory',
         `Workspace: ${context.name}`,
-        `Current workstream: ${branch ?? 'no git branch detected'}`
+        `Current workstream: ${branch ?? (isDetachedHead && currentHeadSha ? `detached HEAD @ ${currentHeadSha.slice(0, 12)}` : 'no git branch detected')}`
     ];
 
     if (lane) {
@@ -584,7 +653,9 @@ function buildWorkstreamBrief(
         if (laneFacts.length > 0) {
             lines.push(`Tracked activity: ${laneFacts.join(', ')}.`);
         }
-        if (lane.upstream && typeof lane.aheadCount === 'number' && typeof lane.behindCount === 'number') {
+        if (isDetachedHead && currentHeadSha) {
+            lines.push(`Git state: detached HEAD at ${currentHeadSha.slice(0, 12)}.`);
+        } else if (lane.upstream && typeof lane.aheadCount === 'number' && typeof lane.behindCount === 'number') {
             const gitState = lane.aheadCount === 0 && lane.behindCount === 0
                 ? `in sync with ${lane.upstream}`
                 : lane.aheadCount > 0 && lane.behindCount === 0
@@ -593,9 +664,21 @@ function buildWorkstreamBrief(
                         ? `${lane.behindCount} commit${lane.behindCount === 1 ? '' : 's'} behind ${lane.upstream}`
                         : `${lane.aheadCount} ahead / ${lane.behindCount} behind ${lane.upstream}`;
             lines.push(`Git state: ${gitState}.`);
-        } else if (lane.isCurrent === true) {
+        } else if (isCurrent === true) {
             lines.push('Git state: current local workstream.');
         }
+    }
+
+    if (!lane && isDetachedHead && currentHeadSha) {
+        lines.push(`Git state: detached HEAD at ${currentHeadSha.slice(0, 12)}.`);
+    }
+
+    if (currentHeadRef) {
+        lines.push(`Checked-out ref: ${currentHeadRef}.`);
+    }
+
+    if (headDiffersFromCaptured && lane?.lastCommitSha && currentHeadSha) {
+        lines.push(`Capture drift: last captured commit ${lane.lastCommitSha.slice(0, 12)} differs from checked-out HEAD ${currentHeadSha.slice(0, 12)}.`);
     }
 
     const hasUncommittedChanges = lane?.hasUncommittedChanges ?? workingTreeState?.hasUncommittedChanges ?? null;
@@ -656,6 +739,10 @@ function buildWorkstreamBrief(
         branch,
         worktreePath,
         repositoryRoot,
+        currentHeadSha,
+        currentHeadRef,
+        isDetachedHead,
+        headDiffersFromCaptured,
         tracked: Boolean(lane),
         sessionCount: lane?.sessionCount ?? recentSessions.length,
         checkpointCount: lane?.checkpointCount ?? latestCheckpoints.length,
@@ -666,7 +753,7 @@ function buildWorkstreamBrief(
         aheadCount: lane?.aheadCount ?? null,
         behindCount: lane?.behindCount ?? null,
         mergeBaseSha: lane?.mergeBaseSha ?? null,
-        isCurrent: lane?.isCurrent ?? null,
+        isCurrent,
         hasUncommittedChanges,
         stagedChangeCount,
         unstagedChangeCount,
