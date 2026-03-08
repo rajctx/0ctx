@@ -246,6 +246,19 @@ export interface WorkstreamComparison {
     comparisonText: string;
 }
 
+export interface AgentContextPack {
+    contextId: string;
+    workspaceName: string;
+    branch: string | null;
+    worktreePath: string | null;
+    repositoryRoot: string | null;
+    workstream: WorkstreamBrief;
+    recentSessions: AgentSessionSummary[];
+    latestCheckpoints: CheckpointSummary[];
+    handoffTimeline: HandoffTimelineEntry[];
+    promptText: string;
+}
+
 export interface SessionDetail {
     session: AgentSessionSummary | null;
     messages: SessionMessage[];

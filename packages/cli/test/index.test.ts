@@ -49,7 +49,9 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("0ctx repair [--clients=...] [--deep] [--json]");
         expect(source).toContain("0ctx reset [--confirm] [--full] [--include-auth] [--json]");
         expect(source).toContain("0ctx workstreams [--repo-root=<path>] [--limit=100] [--json]");
+        expect(source).toContain("0ctx workstreams compare [--repo-root=<path>] --source=<branch> --target=<branch>");
         expect(source).toContain("0ctx branches [--repo-root=<path>] [--limit=100] [--json]");
+        expect(source).toContain("0ctx branches compare [--repo-root=<path>] --source=<branch> --target=<branch>");
         expect(source).toContain("0ctx sessions [--repo-root=<path>] [--branch=<name>] [--session-id=<id>] [--worktree-path=<path>] [--limit=100] [--json]");
         expect(source).toContain("0ctx checkpoints [list] [--repo-root=<path>] [--branch=<name>] [--worktree-path=<path>] [--limit=100] [--json]");
         expect(source).toContain("0ctx extract session [--repo-root=<path>] --session-id=<id> [--preview] [--keys=key1,key2] [--max-nodes=12] [--json]");
@@ -77,6 +79,7 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("0ctx connector hook status [--json]");
         expect(source).toContain("0ctx connector hook prune [--days=30] [--json]");
         expect(source).toContain("0ctx connector hook session-start --agent=claude|factory|antigravity [--repo-root=<path>]");
+        expect(source).toContain("sendToDaemon('getAgentContextPack'");
         expect(source).toContain("0ctx connector hook ingest --agent=claude|windsurf|codex|cursor|factory|antigravity [--repo-root=<path>]");
         expect(source).toContain('0ctx hook install|status|prune|session-start|ingest  Alias for "0ctx connector hook ..."');
         expect(source).toContain("0ctx connector queue status [--json]");
@@ -102,6 +105,7 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("parsed.subcommand === 'queue'");
         expect(source).toContain("return commandStatus(parsed.flags);");
         expect(source).toContain("return commandRecall(parsed.flags, parsed.positionalArgs);");
+        expect(source).toContain("return commandBranches(parsed.positionalArgs, parsed.flags);");
         expect(source).toContain("if (normalized === 'log') return 'logs';");
         expect(source).toContain("console.log(`cli_path: ${payload.cliPath}`);");
         expect(source).toContain("function findGitRepoRoot(input: string | null): string | null {");

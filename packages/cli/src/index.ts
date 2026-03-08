@@ -2958,26 +2958,27 @@ async function commandConnectorHook(action: string | undefined, flags: Record<st
 
         const captureRoot = workspaceCheck.captureRoot;
         const branch = safeGitValue(captureRoot, ['rev-parse', '--abbrev-ref', 'HEAD']);
-        const summary = await sendToDaemon('getWorkstreamBrief', {
+        const pack = await sendToDaemon('getAgentContextPack', {
             contextId,
             branch,
             worktreePath: captureRoot,
             sessionLimit: 3,
-            checkpointLimit: 2
-        }) as { workspaceName?: string; contextText?: string };
+            checkpointLimit: 2,
+            handoffLimit: 5
+        }) as { workspaceName?: string; promptText?: string };
 
         if (asJson) {
             console.log(JSON.stringify({
                 ok: true,
                 injected: true,
                 contextId,
-                workspaceName: summary.workspaceName,
+                workspaceName: pack.workspaceName,
                 captureRoot,
                 branch,
-                context: summary.contextText
+                context: pack.promptText
             }, null, 2));
-        } else if (typeof summary.contextText === 'string' && summary.contextText.trim().length > 0) {
-            process.stdout.write(summary.contextText);
+        } else if (typeof pack.promptText === 'string' && pack.promptText.trim().length > 0) {
+            process.stdout.write(pack.promptText);
         }
         return 0;
     }
@@ -4252,7 +4253,13 @@ Support / legacy:
   0ctx repair [--clients=...] [--deep] [--json]
   0ctx reset [--confirm] [--full] [--include-auth] [--json]
   0ctx workstreams [--repo-root=<path>] [--limit=100] [--json]
+  0ctx workstreams compare [--repo-root=<path>] --source=<branch> --target=<branch>
+                        [--source-worktree-path=<path>] [--target-worktree-path=<path>]
+                        [--session-limit=3] [--checkpoint-limit=2] [--json]
   0ctx branches [--repo-root=<path>] [--limit=100] [--json]
+  0ctx branches compare [--repo-root=<path>] --source=<branch> --target=<branch>
+                     [--source-worktree-path=<path>] [--target-worktree-path=<path>]
+                     [--session-limit=3] [--checkpoint-limit=2] [--json]
   0ctx sessions [--repo-root=<path>] [--branch=<name>] [--session-id=<id>] [--worktree-path=<path>] [--limit=100] [--json]
   0ctx checkpoints [list] [--repo-root=<path>] [--branch=<name>] [--worktree-path=<path>] [--limit=100] [--json]
   0ctx checkpoints create [--repo-root=<path>] --session-id=<id> [--name="..."] [--summary="..."] [--json]
@@ -4484,12 +4491,93 @@ function short(value: string, max = 120): string {
     return value.length > max ? `${value.slice(0, max - 3)}...` : value;
 }
 
-async function commandBranches(flags: Record<string, string | boolean>): Promise<number> {
-    const contextId = await requireCommandContextId(flags, '0ctx branches');
+async function commandBranches(args: string[], flags: Record<string, string | boolean>): Promise<number> {
+    const subcommand = String(args[0] || '').trim().toLowerCase();
+    const commandLabel = subcommand === 'compare' ? '0ctx workstreams compare' : '0ctx branches';
+    const contextId = await requireCommandContextId(flags, commandLabel);
     if (!contextId) return 1;
     const asJson = Boolean(flags.json);
-    const limit = parsePositiveIntegerFlag(flags.limit, 100);
     try {
+        if (subcommand === 'compare') {
+            const sourceBranch = parseOptionalStringFlag(flags.source ?? flags['source-branch'] ?? flags.sourceBranch);
+            const targetBranch = parseOptionalStringFlag(flags.target ?? flags['target-branch'] ?? flags.targetBranch);
+            if (!sourceBranch || !targetBranch) {
+                console.error('Missing workstream comparison inputs. Pass --source=<branch> and --target=<branch>.');
+                return 1;
+            }
+            const sourceWorktreePath = parseOptionalStringFlag(flags['source-worktree-path'] ?? flags.sourceWorktreePath);
+            const targetWorktreePath = parseOptionalStringFlag(flags['target-worktree-path'] ?? flags.targetWorktreePath);
+            const sessionLimit = parsePositiveIntegerFlag(flags['session-limit'] ?? flags.sessionLimit, 3);
+            const checkpointLimit = parsePositiveIntegerFlag(flags['checkpoint-limit'] ?? flags.checkpointLimit, 2);
+            const result = await sendToDaemon('compareWorkstreams', {
+                contextId,
+                sourceBranch,
+                sourceWorktreePath,
+                targetBranch,
+                targetWorktreePath,
+                sessionLimit,
+                checkpointLimit
+            }) as {
+                workspaceName: string;
+                comparable: boolean;
+                sameRepository: boolean;
+                sourceAheadCount: number | null;
+                targetAheadCount: number | null;
+                mergeBaseSha: string | null;
+                newerSide: 'source' | 'target' | 'same' | 'unknown';
+                sharedAgents: string[];
+                sourceOnlyAgents: string[];
+                targetOnlyAgents: string[];
+                comparisonText: string;
+                source: {
+                    branch: string | null;
+                    worktreePath?: string | null;
+                    lastCommitSha?: string | null;
+                    sessionCount: number;
+                    checkpointCount: number;
+                    recentSessions?: Array<{ summary?: string | null; agent?: string | null }>;
+                };
+                target: {
+                    branch: string | null;
+                    worktreePath?: string | null;
+                    lastCommitSha?: string | null;
+                    sessionCount: number;
+                    checkpointCount: number;
+                    recentSessions?: Array<{ summary?: string | null; agent?: string | null }>;
+                };
+            };
+            return printJsonOrValue(asJson, result, () => {
+                const sourceLabel = `${result.source.branch || 'detached'}${result.source.worktreePath ? ` (${result.source.worktreePath})` : ''}`;
+                const targetLabel = `${result.target.branch || 'detached'}${result.target.worktreePath ? ` (${result.target.worktreePath})` : ''}`;
+                console.log('\nWorkstream comparison\n');
+                console.log(`  Workspace: ${result.workspaceName}`);
+                console.log(`  Source:    ${sourceLabel}`);
+                console.log(`  Target:    ${targetLabel}`);
+                console.log(`  Sessions:  ${result.source.sessionCount} vs ${result.target.sessionCount}`);
+                console.log(`  Checkpts:  ${result.source.checkpointCount} vs ${result.target.checkpointCount}`);
+                if (result.source.lastCommitSha || result.target.lastCommitSha) {
+                    console.log(`  Commits:   ${String(result.source.lastCommitSha || 'none').slice(0, 12)} vs ${String(result.target.lastCommitSha || 'none').slice(0, 12)}`);
+                }
+                if (result.comparable && result.sameRepository) {
+                    console.log(`  Git:       source ahead ${result.sourceAheadCount ?? '?'} | target ahead ${result.targetAheadCount ?? '?'} | newer ${result.newerSide}`);
+                    console.log(`  Merge base:${result.mergeBaseSha ? ` ${String(result.mergeBaseSha).slice(0, 12)}` : ' none'}`);
+                } else {
+                    console.log(`  Git:       ${result.sameRepository ? 'not comparable' : 'different repositories'}`);
+                }
+                if (result.sharedAgents.length > 0) {
+                    console.log(`  Shared agents: ${result.sharedAgents.join(', ')}`);
+                }
+                if (result.sourceOnlyAgents.length > 0) {
+                    console.log(`  Source only:   ${result.sourceOnlyAgents.join(', ')}`);
+                }
+                if (result.targetOnlyAgents.length > 0) {
+                    console.log(`  Target only:   ${result.targetOnlyAgents.join(', ')}`);
+                }
+                console.log(`\n  ${result.comparisonText}\n`);
+            });
+        }
+
+        const limit = parsePositiveIntegerFlag(flags.limit, 100);
         const result = await sendToDaemon('listBranchLanes', { contextId, limit }) as Array<{
             branch: string;
             worktreePath?: string | null;
@@ -5207,7 +5295,7 @@ async function main(): Promise<number> {
                 return commandVersion(parsed.flags);
             case 'workstreams':
             case 'branches':
-                return commandBranches(parsed.flags);
+                return commandBranches(parsed.positionalArgs, parsed.flags);
             case 'sessions':
                 return commandSessions(parsed.flags);
             case 'checkpoints':

@@ -198,6 +198,24 @@
                 <div id="branchDetailBody" class="detail-stack hidden">
                   <p id="branchLeadCopy" class="lead-copy"></p>
                   <div id="branchMeta" class="meta-grid compact-meta-grid"></div>
+                  <div class="subpanel compare-panel">
+                    <div class="section-row small">
+                      <div>
+                        <p class="section-label">Compare workstreams</p>
+                        <h4>Git divergence and agent overlap</h4>
+                      </div>
+                    </div>
+                    <label class="compare-select-wrap">
+                      <span class="sr-only">Choose another workstream to compare</span>
+                      <select id="branchCompareSelect" aria-label="Compare workstreams"></select>
+                    </label>
+                    <div id="branchCompareEmpty" class="empty-state">Choose another workstream to compare git divergence, recent activity, and shared agents.</div>
+                    <div id="branchCompareBody" class="detail-stack hidden">
+                      <p id="branchComparisonSummary" class="page-copy compact-copy"></p>
+                      <div id="branchComparisonMeta" class="meta-grid compact-meta-grid"></div>
+                      <div id="branchComparisonAgents" class="meta-grid compact-meta-grid"></div>
+                    </div>
+                  </div>
                 </div>
               </aside>
 

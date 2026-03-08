@@ -142,6 +142,18 @@ server.setRequestHandler(CallToolRequestSchema, async (req: any) => {
                 });
                 return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(brief, null, 2) }] } };
             }
+            case 'ctx_get_agent_context': {
+                const contextId = pickContextId(args);
+                const pack = await callDaemon('getAgentContextPack', {
+                    contextId,
+                    branch: args.branch,
+                    worktreePath: args.worktreePath,
+                    sessionLimit: args.sessionLimit,
+                    checkpointLimit: args.checkpointLimit,
+                    handoffLimit: args.handoffLimit
+                });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(pack, null, 2) }] } };
+            }
             case 'ctx_compare_workstreams': {
                 const contextId = pickContextId(args);
                 const comparison = await callDaemon('compareWorkstreams', {

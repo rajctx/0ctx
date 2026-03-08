@@ -114,6 +114,22 @@ export const tools = [
         },
     },
     {
+        name: 'ctx_get_agent_context',
+        description: 'Get a compact agent-ready context pack for the current workstream, including recent sessions, checkpoints, handoffs, and a ready-to-use prompt summary.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                branch: { type: 'string', description: 'Optional branch name for the workstream.' },
+                worktreePath: { type: 'string', description: 'Optional worktree path for a specific workstream.' },
+                sessionLimit: { type: 'number', description: 'Maximum number of recent sessions to include (default 3).' },
+                checkpointLimit: { type: 'number', description: 'Maximum number of checkpoints to include (default 2).' },
+                handoffLimit: { type: 'number', description: 'Maximum number of recent handoffs to include (default 5).' },
+                contextId: { type: 'string', description: 'Optional explicit context ID override for this operation.' },
+            },
+            required: [],
+        },
+    },
+    {
         name: 'ctx_compare_workstreams',
         description: 'Compare two workstreams in the same workspace. Returns git divergence, activity differences, shared agents, and a compact comparison summary.',
         inputSchema: {
@@ -630,6 +646,7 @@ const TOOL_SCOPE_BY_NAME: Record<string, ToolScope> = {
     ctx_search: 'core',
     ctx_list_workstreams: 'core',
     ctx_get_workstream_brief: 'core',
+    ctx_get_agent_context: 'core',
     ctx_compare_workstreams: 'core',
     ctx_list_workstream_sessions: 'core',
     ctx_get_session: 'core',

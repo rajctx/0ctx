@@ -8,7 +8,8 @@ import type {
     AgentSessionSummary,
     CheckpointSummary,
     WorkstreamBrief,
-    WorkstreamComparison
+    WorkstreamComparison,
+    AgentContextPack
 } from '@0ctx/core';
 import { spawnSync } from 'child_process';
 import fs from 'fs';
@@ -39,6 +40,7 @@ const CONTEXT_REQUIRED_METHODS = new Set([
     'listChatTurns',
     'listBranchLanes',
     'getWorkstreamBrief',
+    'getAgentContextPack',
     'compareWorkstreams',
     'listBranchSessions',
     'listSessionMessages',
@@ -424,6 +426,57 @@ function buildWorkstreamBrief(
         recentSessions,
         latestCheckpoints,
         contextText: lines.join('\n')
+    };
+}
+
+function buildAgentContextPack(
+    graph: Graph,
+    contextId: string,
+    options: {
+        branch?: string | null;
+        worktreePath?: string | null;
+        sessionLimit?: number;
+        checkpointLimit?: number;
+        handoffLimit?: number;
+    }
+): AgentContextPack {
+    const workstream = buildWorkstreamBrief(graph, contextId, options);
+    const handoffLimit = parsePositiveInt(options.handoffLimit, 5, 20);
+    const handoffTimeline = graph.getHandoffTimeline(
+        contextId,
+        workstream.branch ?? undefined,
+        workstream.worktreePath,
+        handoffLimit
+    );
+
+    const lines = [workstream.contextText];
+
+    if (handoffTimeline.length > 0) {
+        lines.push('', 'Recent handoffs:');
+        for (const handoff of handoffTimeline) {
+            const commitFact = handoff.commitSha ? ` · ${handoff.commitSha.slice(0, 12)}` : '';
+            lines.push(
+                `- ${handoff.agent ?? 'agent'} · ${formatRelativeAge(handoff.lastTurnAt)}${commitFact} · ${truncateBriefLine(handoff.summary)}`
+            );
+        }
+    }
+
+    lines.push(
+        '',
+        'Use this as project memory for the current workstream. Prefer the latest checkpoint when resuming implementation, and use recent sessions only for short-term continuity.'
+    );
+
+    return {
+        contextId,
+        workspaceName: workstream.workspaceName,
+        branch: workstream.branch,
+        worktreePath: workstream.worktreePath,
+        repositoryRoot: workstream.repositoryRoot,
+        workstream,
+        recentSessions: workstream.recentSessions,
+        latestCheckpoints: workstream.latestCheckpoints,
+        handoffTimeline,
+        promptText: lines.join('\n')
     };
 }
 
@@ -1035,8 +1088,8 @@ export function handleRequest(
                 'addNode', 'getNode', 'updateNode', 'getByKey', 'deleteNode',
                 'addEdge', 'getSubgraph', 'search', 'getGraphData',
                   'listChatSessions', 'listChatTurns', 'getNodePayload', 'getHookHealth',
-                  'listBranchLanes', 'getWorkstreamBrief', 'compareWorkstreams', 'listBranchSessions', 'listSessionMessages',
-                  'listBranchCheckpoints', 'getSessionDetail', 'getCheckpointDetail',
+                'listBranchLanes', 'getWorkstreamBrief', 'getAgentContextPack', 'compareWorkstreams', 'listBranchSessions', 'listSessionMessages',
+                'listBranchCheckpoints', 'getSessionDetail', 'getCheckpointDetail',
                   'getHandoffTimeline', 'previewSessionKnowledge', 'previewCheckpointKnowledge',
                   'extractSessionKnowledge', 'extractCheckpointKnowledge',
                   'saveCheckpoint', 'createSessionCheckpoint', 'rewind', 'rewindCheckpoint', 'listCheckpoints', 'resumeSession', 'explainCheckpoint',
@@ -1652,6 +1705,14 @@ export function handleRequest(
                 worktreePath: typeof params.worktreePath === 'string' ? params.worktreePath : null,
                 sessionLimit: params.sessionLimit as number | undefined,
                 checkpointLimit: params.checkpointLimit as number | undefined
+            });
+        case 'getAgentContextPack':
+            return buildAgentContextPack(graph, contextId!, {
+                branch: typeof params.branch === 'string' ? params.branch : null,
+                worktreePath: typeof params.worktreePath === 'string' ? params.worktreePath : null,
+                sessionLimit: params.sessionLimit as number | undefined,
+                checkpointLimit: params.checkpointLimit as number | undefined,
+                handoffLimit: params.handoffLimit as number | undefined
             });
         case 'compareWorkstreams': {
             const sourceBranch = typeof params.sourceBranch === 'string' ? params.sourceBranch.trim() : '';

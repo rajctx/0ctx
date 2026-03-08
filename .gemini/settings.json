@@ -21,6 +21,17 @@
           }
         ]
       }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "0ctx connector hook session-start --agent=antigravity"
+          }
+        ]
+      }
     ]
   }
 }

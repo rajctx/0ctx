@@ -633,6 +633,20 @@ select:focus {
   gap: 14px;
 }
 
+.compare-panel {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.compare-select-wrap {
+  display: block;
+}
+
+.compare-panel .empty-state {
+  min-height: 84px;
+}
+
 .page-block {
   display: grid;
   gap: 18px;

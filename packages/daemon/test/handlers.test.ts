@@ -361,6 +361,30 @@ describe('daemon request handling', () => {
             expect(brief.recentSessions[0]?.sessionId).toBe('session-branch-1');
             expect(brief.contextText).toContain('Current workstream: feature/branch-lane');
 
+            const agentContext = handleRequest(graph, 'conn-branch', {
+                method: 'getAgentContextPack',
+                sessionToken: session.sessionToken,
+                params: {
+                    contextId: context.id,
+                    branch: 'feature/branch-lane',
+                    worktreePath: 'C:/repo'
+                }
+            }, runtime()) as {
+                workspaceName: string;
+                branch: string | null;
+                recentSessions: Array<{ sessionId: string }>;
+                latestCheckpoints: Array<unknown>;
+                handoffTimeline: Array<{ sessionId: string }>;
+                promptText: string;
+            };
+            expect(agentContext.workspaceName).toBe('branch-context');
+            expect(agentContext.branch).toBe('feature/branch-lane');
+            expect(agentContext.recentSessions[0]?.sessionId).toBe('session-branch-1');
+            expect(agentContext.latestCheckpoints).toHaveLength(0);
+            expect(agentContext.handoffTimeline[0]?.sessionId).toBe('session-branch-1');
+            expect(agentContext.promptText).toContain('Current workstream: feature/branch-lane');
+            expect(agentContext.promptText).toContain('Recent handoffs:');
+
             const sessions = handleRequest(graph, 'conn-branch', {
                 method: 'listBranchSessions',
                 sessionToken: session.sessionToken,

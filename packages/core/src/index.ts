@@ -24,6 +24,7 @@ export type {
     AgentSessionSummary,
     WorkstreamBrief,
     WorkstreamComparison,
+    AgentContextPack,
     SessionMessage,
     CheckpointSummary,
     SessionDetail,

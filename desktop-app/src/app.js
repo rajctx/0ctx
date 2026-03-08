@@ -105,6 +105,8 @@ const state = {
   activeContextId: null,
   branches: [],
   activeBranchKey: null,
+  comparisonTargetKey: null,
+  branchComparison: null,
   allSessions: [],
   sessions: [],
   activeSessionId: null,
@@ -531,6 +533,10 @@ function activeBranch() {
   return state.branches.find((item) => branchKey(item.branch, item.worktreePath) === state.activeBranchKey) || null;
 }
 
+function comparisonTargetBranch() {
+  return state.branches.find((item) => branchKey(item.branch, item.worktreePath) === state.comparisonTargetKey) || null;
+}
+
 function activeSession() {
   return state.sessions.find((item) => item.sessionId === state.activeSessionId)
     || state.allSessions.find((item) => item.sessionId === state.activeSessionId)
@@ -671,6 +677,44 @@ function describeBranchLane(lane) {
   };
 }
 
+function syncComparisonTargetSelection() {
+  const source = activeBranch();
+  if (!source) {
+    state.comparisonTargetKey = null;
+    state.branchComparison = null;
+    return;
+  }
+  const sourceKey = branchKey(source.branch, source.worktreePath);
+  const candidates = state.branches.filter((lane) => branchKey(lane.branch, lane.worktreePath) !== sourceKey);
+  if (candidates.length === 0) {
+    state.comparisonTargetKey = null;
+    state.branchComparison = null;
+    return;
+  }
+  if (!state.comparisonTargetKey || !candidates.some((lane) => branchKey(lane.branch, lane.worktreePath) === state.comparisonTargetKey)) {
+    const preferred = candidates.find((lane) => lane.isCurrent === true) || candidates[0];
+    state.comparisonTargetKey = branchKey(preferred.branch, preferred.worktreePath);
+  }
+}
+
+async function loadBranchComparison() {
+  const source = activeBranch();
+  const target = comparisonTargetBranch();
+  if (!state.activeContextId || !source || !target || !state.auth.authenticated) {
+    state.branchComparison = null;
+    return;
+  }
+  state.branchComparison = await daemon('compareWorkstreams', {
+    contextId: state.activeContextId,
+    sourceBranch: source.branch,
+    sourceWorktreePath: source.worktreePath,
+    targetBranch: target.branch,
+    targetWorktreePath: target.worktreePath,
+    sessionLimit: 3,
+    checkpointLimit: 2
+  });
+}
+
 function describeCheckpoint(checkpoint) {
   return {
     title: short(checkpoint?.summary || checkpoint?.name || checkpoint?.checkpointId || 'Untitled checkpoint', 96),
@@ -690,6 +734,8 @@ function syncBranchSelectionFromSession(session) {
 }
 
 function resetBranchScopedState() {
+  state.comparisonTargetKey = null;
+  state.branchComparison = null;
   state.activeSessionId = null;
   state.sessionDetail = null;
   state.sessionKnowledgePreview = null;
@@ -1060,6 +1106,12 @@ function renderRuntimeBanner() {
       document.getElementById('branchMeta').innerHTML = '';
       document.getElementById('branchSessionList').innerHTML = '<div class="empty-state">Branch sessions will appear here after the local runtime is updated.</div>';
       document.getElementById('handoffList').innerHTML = '<div class="empty-state">Agent handoff history will appear here after the local runtime is updated.</div>';
+      if (compareSelect) compareSelect.innerHTML = '<option value="">Unavailable</option>';
+      if (compareEmpty) {
+        compareEmpty.textContent = 'Workstream comparison will appear here after the local runtime is updated.';
+        compareEmpty.classList.remove('hidden');
+      }
+      if (compareBody) compareBody.classList.add('hidden');
       document.getElementById('branchDetailEmpty').innerHTML = `
         <div class="empty-flow">
           <strong>Branch views need a newer runtime.</strong>
@@ -1076,14 +1128,24 @@ function renderRuntimeBanner() {
     }
 
     const lane = activeBranch();
+    const comparisonTarget = comparisonTargetBranch();
     const detailBody = document.getElementById('branchDetailBody');
     const empty = document.getElementById('branchDetailEmpty');
+    const compareSelect = document.getElementById('branchCompareSelect');
+    const compareEmpty = document.getElementById('branchCompareEmpty');
+    const compareBody = document.getElementById('branchCompareBody');
     if (!lane) {
       document.getElementById('branchDetailTitle').textContent = 'Choose a workstream';
       document.getElementById('branchLeadCopy').textContent = '';
       document.getElementById('branchMeta').innerHTML = '';
       document.getElementById('branchSessionList').innerHTML = '<div class="empty-state">Choose a workstream to see the captured sessions on it.</div>';
       document.getElementById('handoffList').innerHTML = '<div class="empty-state">No handoff history yet.</div>';
+      if (compareSelect) compareSelect.innerHTML = '<option value="">Choose a workstream first</option>';
+      if (compareEmpty) {
+        compareEmpty.textContent = 'Select a workstream first, then compare it against another workstream in this workspace.';
+        compareEmpty.classList.remove('hidden');
+      }
+      if (compareBody) compareBody.classList.add('hidden');
       empty.innerHTML = 'Select a workstream to inspect cross-agent activity and checkpoint coverage.';
       empty.classList.remove('hidden');
       detailBody.classList.add('hidden');
@@ -1109,6 +1171,61 @@ function renderRuntimeBanner() {
       { label: 'Worktree', value: lane.worktreePath || 'Primary workspace root' }
     ];
   document.getElementById('branchMeta').innerHTML = meta.map((item) => `<article><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong></article>`).join('');
+
+  if (compareSelect) {
+    const sourceKey = branchKey(lane.branch, lane.worktreePath);
+    const comparisonCandidates = state.branches.filter((item) => branchKey(item.branch, item.worktreePath) !== sourceKey);
+    compareSelect.innerHTML = comparisonCandidates.length > 0
+      ? comparisonCandidates.map((item) => {
+          const itemKey = branchKey(item.branch, item.worktreePath);
+          return `<option value="${esc(itemKey)}"${itemKey === state.comparisonTargetKey ? ' selected' : ''}>${esc(describeBranchLane(item).title)}</option>`;
+        }).join('')
+      : '<option value="">No other workstreams yet</option>';
+    compareSelect.disabled = comparisonCandidates.length === 0;
+  }
+
+  if (!comparisonTarget || !state.branchComparison) {
+    if (compareEmpty) {
+      compareEmpty.textContent = state.branches.length > 1
+        ? 'Choose another workstream to compare git divergence, recent activity, and shared agents.'
+        : 'A second workstream is needed before comparison is available.';
+      compareEmpty.classList.remove('hidden');
+    }
+    if (compareBody) compareBody.classList.add('hidden');
+  } else {
+    const comparison = state.branchComparison;
+    const comparisonSummary = document.getElementById('branchComparisonSummary');
+    const comparisonMeta = document.getElementById('branchComparisonMeta');
+    const comparisonAgents = document.getElementById('branchComparisonAgents');
+    if (comparisonSummary) {
+      comparisonSummary.textContent = comparison.comparisonText || 'No comparison summary is available for these workstreams.';
+    }
+    if (comparisonMeta) {
+      const gitSummary = comparison.comparable && comparison.sameRepository
+        ? [
+            `source ahead ${comparison.sourceAheadCount ?? '?'}`,
+            `target ahead ${comparison.targetAheadCount ?? '?'}`,
+            comparison.mergeBaseSha ? `merge base #${commitShort(comparison.mergeBaseSha)}` : 'merge base unavailable',
+            `newer ${comparison.newerSide}`
+          ].join(' · ')
+        : (comparison.sameRepository ? 'Git comparison unavailable' : 'Different repositories');
+      comparisonMeta.innerHTML = [
+        `<article><span>Source</span><strong>${esc(describeBranchLane(comparison.source).title)}</strong></article>`,
+        `<article><span>Target</span><strong>${esc(describeBranchLane(comparison.target).title)}</strong></article>`,
+        `<article><span>Git divergence</span><strong>${esc(gitSummary)}</strong></article>`,
+        `<article><span>Shared agents</span><strong>${esc(comparison.sharedAgents.length > 0 ? comparison.sharedAgents.join(', ') : 'none')}</strong></article>`
+      ].join('');
+    }
+    if (comparisonAgents) {
+      comparisonAgents.innerHTML = [
+        { label: 'Shared', value: comparison.sharedAgents },
+        { label: 'Only on source', value: comparison.sourceOnlyAgents },
+        { label: 'Only on target', value: comparison.targetOnlyAgents }
+      ].map((item) => `<article><span>${esc(item.label)}</span><strong>${esc(item.value.length > 0 ? item.value.join(', ') : 'none')}</strong></article>`).join('');
+    }
+    if (compareEmpty) compareEmpty.classList.add('hidden');
+    if (compareBody) compareBody.classList.remove('hidden');
+  }
 
   document.getElementById('handoffList').innerHTML = state.handoff.length > 0
     ? state.handoff.map((entry) => `
@@ -1653,6 +1770,7 @@ async function loadBranches() {
     const first = state.branches[0] || null;
     state.activeBranchKey = first ? branchKey(first.branch, first.worktreePath) : null;
   }
+  syncComparisonTargetSelection();
 }
 
 async function loadSessions() {
@@ -1811,6 +1929,11 @@ async function loadHandoff() {
   state.handoff = Array.isArray(handoff) ? handoff : [];
 }
 
+async function loadBranchComparisonSafe() {
+  syncComparisonTargetSelection();
+  await loadBranchComparison();
+}
+
 async function loadGraph() {
   if (!state.activeContextId) {
     state.graphNodes = [];
@@ -1924,6 +2047,9 @@ async function refreshAll(options = {}) {
     await safeLoad('handoff', loadHandoff, () => {
       state.handoff = [];
     });
+    await safeLoad('workstream comparison', loadBranchComparisonSafe, () => {
+      state.branchComparison = null;
+    });
     await safeLoad('graph', loadGraph, () => {
       state.graphNodes = [];
       state.graphEdges = [];
@@ -2002,6 +2128,7 @@ async function createCheckpointFromActiveSession() {
     await loadBranches();
     await loadCheckpoints();
     await loadCheckpointDetail();
+    await loadBranchComparisonSafe();
     renderAll();
     setView('checkpoints');
     const knowledge = result?.knowledge;
@@ -2362,6 +2489,7 @@ function wire() {
       await loadCheckpoints();
       await loadCheckpointDetail();
       await loadHandoff();
+      await loadBranchComparisonSafe();
       renderAll();
       return;
     }
@@ -2386,6 +2514,7 @@ function wire() {
       await loadCheckpoints();
       await loadCheckpointDetail();
       await loadHandoff();
+      await loadBranchComparisonSafe();
       if (sessionTarget.dataset.openView) {
         setView(sessionTarget.dataset.openView);
       }
@@ -2430,12 +2559,22 @@ function wire() {
       await loadCheckpoints();
       await loadCheckpointDetail();
       await loadHandoff();
+      await loadBranchComparisonSafe();
       await loadGraph();
       renderAll();
     }
   });
 
   document.body.addEventListener('change', (event) => {
+    const compareSelect = event.target.closest('#branchCompareSelect');
+    if (compareSelect) {
+      state.comparisonTargetKey = String(compareSelect.value || '').trim() || null;
+      void (async () => {
+        await loadBranchComparisonSafe();
+        renderAll();
+      })();
+      return;
+    }
     const toggle = event.target.closest('[data-preview-toggle]');
     if (!toggle) return;
     const scope = String(toggle.getAttribute('data-preview-scope') || 'session');
