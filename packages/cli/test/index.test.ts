@@ -45,7 +45,7 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("0ctx recall [--mode=auto|temporal|topic|graph]");
         expect(source).toContain("[--start] [--json]");
         expect(source).toContain("0ctx release publish --version vX.Y.Z [--tag latest|next] [--otp 123456] [--dry-run] [--json]");
-        expect(source).toContain("0ctx setup [--clients=ga|claude,factory,antigravity,codex,cursor,windsurf] [--no-open] [--json] [--validate]");
+        expect(source).toContain("0ctx setup [--clients=ga|<explicit-list>] [--no-open] [--json] [--validate]");
         expect(source).toContain("[--skip-service] [--skip-bootstrap]");
         expect(source).toContain("[--dashboard-query[=k=v&...]]");
         expect(source).toContain("0ctx status [--json] [--compact]");
@@ -65,11 +65,11 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("0ctx rewind [--repo-root=<path>] [--checkpoint-id=<id>] [--json]");
         expect(source).toContain("0ctx explain [--repo-root=<path>] [--checkpoint-id=<id>] [--json]");
         expect(source).toContain("0ctx logs [--no-open] [--snapshot] [--limit=50] [--since-hours=N] [--grep=text] [--errors-only]");
-        expect(source).toContain("0ctx bootstrap [--dry-run] [--clients=ga|claude,antigravity,codex,cursor,windsurf] [--entrypoint=/path/to/mcp-server.js]");
+        expect(source).toContain("0ctx bootstrap [--dry-run] [--clients=ga|<explicit-list>] [--entrypoint=/path/to/mcp-server.js]");
         expect(source).toContain("[--mcp-profile=all|core|recall|ops] [--json]");
         expect(source).toContain("0ctx mcp [bootstrap]");
         expect(source).toContain("0ctx mcp                     Interactive MCP bootstrap for GA clients");
-        expect(source).toContain("0ctx install [--clients=ga|claude,factory,antigravity,codex,cursor,windsurf] [--json] [--skip-bootstrap] [--mcp-profile=all|core|recall|ops]");
+        expect(source).toContain("0ctx install [--clients=ga|<explicit-list>] [--json] [--skip-bootstrap] [--mcp-profile=all|core|recall|ops]");
         expect(source).toContain("const DEFAULT_MCP_CLIENTS: SupportedClient[] = ['claude', 'antigravity'];");
         expect(source).toContain("const DEFAULT_ENABLE_MCP_CLIENTS: SupportedClient[] = DEFAULT_MCP_CLIENTS;");
         expect(source).toContain("0ctx connector service install|enable|disable|uninstall|status|start|stop|restart");
@@ -78,8 +78,9 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("0ctx connector register [--force] [--local-only] [--require-cloud] [--json]");
         expect(source).toContain("0ctx sync policy get [--repo-root=<path>] [--json]");
         expect(source).toContain("Support overrides:");
-        expect(source).toContain("0ctx connector hook install [--clients=ga|claude,factory,antigravity,codex,cursor,windsurf] [--repo-root=<path>] [--global]");
+        expect(source).toContain("0ctx connector hook install [--clients=ga|<explicit-list>] [--repo-root=<path>] [--global]");
         expect(source).toContain("Preview integrations must be named explicitly when you opt into them.");
+        expect(source).toContain("Example: --clients=codex");
         expect(source).toContain("0ctx connector hook prune [--days=14] [--json]");
         expect(source).toContain("const DEFAULT_HOOK_INSTALL_CLIENTS: HookInstallClient[] = ['claude', 'factory', 'antigravity'];");
         expect(source).toContain("0ctx connector hook status [--json]");

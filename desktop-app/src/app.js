@@ -604,7 +604,7 @@ function integrationType(agent) {
 
 function integrationLabel(agent) {
   const base = humanizeLabel(agent);
-  return agent === 'codex' ? `${base} notify (preview)` : `${base} hook`;
+  return agent === 'codex' ? `${base} notify` : `${base} hook`;
 }
 
 function formatIntegrationNote(note) {
@@ -1742,9 +1742,9 @@ function renderWorkspaces() {
     setupPageMeta.textContent = state.runtimeIssue
       ? state.runtimeIssue.detail
       : installedGa.length > 0
-        ? `${installedGa.length} GA integration${installedGa.length === 1 ? '' : 's'} ${installedGa.length === 1 ? 'is' : 'are'} installed on this machine.${installedPreview.length > 0 ? ` ${installedPreview.length} preview integration${installedPreview.length === 1 ? '' : 's'} ${installedPreview.length === 1 ? 'is' : 'are'} installed separately.` : ''} Use this screen only when you need to enable another repo, add another agent, run a smoke test, or repair the runtime.`
+        ? `${installedGa.length} GA integration${installedGa.length === 1 ? '' : 's'} ${installedGa.length === 1 ? 'is' : 'are'} installed on this machine. Use this screen only when you need to enable another repo, add another agent, run a smoke test, or repair the runtime.`
         : installedPreview.length > 0
-          ? `Only preview integrations are installed on this machine (${integrationListText(installedPreview)}). Install Claude, Factory, or Antigravity here when you want the GA path.`
+          ? 'Only preview integrations are installed on this machine. Install Claude, Factory, or Antigravity here when you want the GA path.'
         : 'Enable the repo, install the integrations you actually use, then leave this screen. Daily work should happen in workstreams, sessions, and checkpoints.';
   }
   document.getElementById('hookSummary').textContent = `${installedGa.length} GA installed / ${gaHooks.length}`;
@@ -1781,7 +1781,7 @@ function renderWorkspaces() {
       title: 'Installed integrations',
       detail: installedGa.length > 0 ? integrationListText(installedGa) : 'No GA integrations installed',
       hint: installedPreview.length > 0
-        ? `Preview installed separately: ${integrationListText(installedPreview)}`
+        ? 'Preview integrations are installed separately and kept out of the normal product path.'
         : 'Install only the agents you actually use on this machine.'
       }
     ];

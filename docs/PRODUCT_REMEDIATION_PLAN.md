@@ -2,28 +2,17 @@
 
 ## Purpose
 
-Reset 0ctx onto a product path that is coherent, low-maintenance, and distinct.
+Reset 0ctx onto a coherent product path:
 
-This is not a "fix bugs and polish UI" plan. It is a direction correction.
+- low maintenance for the user
+- strict project-scoped memory
+- daemon-owned state
+- MCP-first agent retrieval
+- desktop as a management surface, not a daily dependency
 
-## Product Thesis
+This is the live execution plan for the remaining work.
 
-0ctx should be:
-
-- a local-first project memory runtime
-- with deterministic capture from supported agents
-- with automatic retrieval into supported agents
-- with explicit checkpoints
-- with a light desktop management surface
-
-0ctx should not be:
-
-- a generic chat archive
-- a graph demo
-- a desktop dashboard that users need open all day
-- a support-heavy tool that requires repeated repair, refresh, or manual context selection
-
-## Core Product Contract
+## Product Contract
 
 - `Workspace` = one project or repo
 - `Workstream` = one branch or worktree inside a workspace
@@ -32,17 +21,15 @@ This is not a "fix bugs and polish UI" plan. It is a direction correction.
 - `Checkpoint` = one durable restore or explain point
 - `Insights` = reviewed semantic memory derived from sessions and checkpoints
 
-### Product language changes
+Externally, the product should talk in terms of:
 
-Use these names externally:
+- Workspaces
+- Workstreams
+- Sessions
+- Checkpoints
+- Insights
 
-- `Workspaces`
-- `Workstreams`
-- `Sessions`
-- `Checkpoints`
-- `Insights`
-
-Avoid exposing these as user-facing primitives in the main workflow:
+The product should not force users to think about:
 
 - daemon
 - connector
@@ -54,254 +41,221 @@ Avoid exposing these as user-facing primitives in the main workflow:
 
 ## Architecture Decision
 
-Use this stack:
+Keep this stack:
 
-- `daemon` = source of truth and state owner
-- `MCP` = primary retrieval and control plane for agents
-- `hooks / notify / SDK adapters` = ingestion plane only
+- `daemon` = source of truth and runtime owner
+- `MCP` = primary agent-facing retrieval and control plane
+- `hooks / notify / SDK adapters` = ingestion only
 - `desktop` = management and recovery surface
 
-### Why
+## Current Status
 
-- The daemon is the right place for persistence, routing, sync, checkpoints, and isolation.
-- MCP is the right standardized surface for agents to fetch and mutate state.
-- Hooks and notify integrations are deterministic triggers for capture, but they are not the right long-term retrieval protocol.
-- The desktop should not be required for normal use.
+### Done
 
-## Product Direction Decisions
+1. Product contract reset
+   - no normal-path active-context fallback
+   - repo-root-first daily flow
+   - preview integrations kept out of default install/bootstrap paths
+   - user-facing `workstream` language adopted broadly
 
-### 1. Golden path
+2. Repo-root golden path
+   - `0ctx enable`
+   - daemon/bootstrap/integration readiness from repo root
 
-Replace the current setup flow with a single repo-root command:
+3. MCP retrieval parity foundation
+   - workstream/session/checkpoint tools exist
+   - daemon-backed `getWorkstreamBrief`
+   - daemon-backed `getAgentContextPack`
+   - SessionStart injection wired for Claude, Factory, Antigravity
 
-- `0ctx enable`
+4. Leaner sync/storage baseline
+   - default sync policy is now `metadata_only`
+   - `nodePayloads` are no longer uploaded
+   - retention defaults tightened for debug artifacts
 
-`0ctx enable` should:
+5. Honest workstream baseline
+   - workstream compare exists
+   - merge base / ahead / behind are exposed
+   - detached HEAD and capture drift are represented honestly
 
-- create or bind the workspace from the current repo path
-- start or verify the local daemon
-- install supported integrations idempotently
-- register MCP where relevant
-- verify capture readiness
-- verify retrieval readiness
+### In Progress
 
-The user should not separately need to:
+1. Agent retrieval ergonomics
+2. Lean data policy finalization
+3. Desktop as management surface
+4. Honest memory and git-aware workstreams
 
-- create a workspace manually
-- install integrations manually
-- repair or restart for normal first-time use
-- pass `--context-id` in daily usage
+### Not Started Enough
 
-### 2. Strict routing
+1. Cross-workspace compare and promotion
+2. Better reviewed-insight quality
+3. Final GA vs preview cleanup across every remaining surface
 
-Capture must never silently fall back to the active workspace.
+## Remaining Work
 
-Allowed routing modes:
+## Milestone 1: Invisible Supported-Agent Retrieval
 
-- repo-path match
-- explicit override for support or scripting
+### Goal
 
-Disallowed routing mode:
+For GA integrations, users should not need to think about MCP or SessionStart mechanics.
 
-- fallback to active context when path resolution fails
+### Scope
 
-### 3. GA and preview scope
+1. Make `0ctx enable` the only normal instruction for supported agents
+2. Ensure supported agents always receive the current workstream pack automatically when the host supports it
+3. Keep MCP as the retrieval layer, but hide that fact in user-facing guidance
+4. Keep preview integrations out of the supported setup narrative
 
-#### GA
+### Deliverables
 
-- Claude Code
-- Factory / Droid
-- Antigravity
-- MCP retrieval
-- checkpoints
-- local-first runtime
+1. CLI help and onboarding reduced to:
+   - `cd repo`
+   - `0ctx enable`
+   - use the supported agent normally
+2. Desktop setup copy only references GA integrations by default
+3. MCP/bootstrap commands remain available but clearly secondary
 
-#### Preview
+### Acceptance
 
-- Codex
-- Cursor
-- Windsurf
-- automatic semantic insight extraction
-- deep branch divergence understanding
-- cross-project memory
+1. A new user can enable the repo without learning MCP
+2. Claude / Factory / Antigravity get current workstream context automatically
+3. No default command path suggests preview integrations
 
-### 4. Honest branch model
+## Milestone 2: Lean Data Policy Finalization
 
-Current branch handling is an organizational projection.
+### Goal
 
-That is acceptable, but product language must stay honest until git-native branch intelligence exists.
+Make local storage rich but bounded, and make cloud behavior lean by default.
 
-Ship as:
+### Scope
 
-- "workstreams grouped by branch or worktree"
+1. Confirm `metadata_only` as the production default
+2. Make payload inspection clearly utility-only everywhere
+3. Tighten retention/config UX into one story
+4. Remove or demote any remaining default path that suggests raw payloads are part of normal use
 
-Do not ship as:
+### Deliverables
 
-- "understands branch divergence"
-- "understands merge state"
+1. Clear sync policy copy in CLI and desktop
+2. One retention story for:
+   - raw dumps
+   - transcript history
+   - append-only event logs
+3. Utility-only access to debug payloads
 
-### 5. Honest insight model
+### Acceptance
 
-Current semantic extraction is useful as assisted curation, not authoritative memory.
+1. Default users do not upload rich session payloads by accident
+2. Local debug artifacts prune automatically
+3. Payload inspection is never part of the normal product narrative
 
-Ship it as:
+## Milestone 3: Desktop as Management Surface
 
-- `Insights`
-- `Reviewed insights`
+### Goal
 
-Do not ship it as:
+Make desktop optional for daily success and cleaner for management.
 
-- automatic project understanding
-- fully reliable knowledge extraction
+### Scope
 
-### 6. Lean storage and sync policy
+1. Remove remaining operator/support-first language from primary views
+2. Validate real flows with captured data, not just empty states
+3. Keep utilities secondary and non-blocking
 
-Keep local storage rich. Keep cloud sync lean.
+### Deliverables
 
-Default production policy:
+1. Normal views focus only on:
+   - Workspaces
+   - Workstreams
+   - Sessions
+   - Checkpoints
+   - Insights
+2. Utilities stay available but visually and conceptually secondary
+3. Desktop reacts to daemon events instead of acting like a polling dashboard
 
-- raw dumps = local only
-- transcript history = local only, short retention
-- append-only event logs = local only
-- normalized messages = local
-- checkpoint state = local
-- cloud sync = metadata and reviewed insights by default
+### Acceptance
 
-Do not default to syncing sanitized session payloads upstream.
+1. Capture and retrieval work without desktop open
+2. Desktop is useful for management, not required for success
+3. Real captured projects remain readable without debug knowledge
 
-## Experience Model
+## Milestone 4: Honest Git-Aware Workstreams
 
-### What the user should do
+### Goal
 
-1. `cd repo`
-2. `0ctx enable`
-3. use a supported agent normally
-4. resume work later with the right context already available
+Move from grouped branch metadata to stronger git-native workstream understanding.
 
-### What the user should not do
+### Scope
 
-- manually select contexts for ordinary work
-- reopen the desktop just to confirm capture
-- run repair commands in the normal path
-- understand daemon or sync internals
+1. Keep compare truthful and useful
+2. Add stronger workstream state:
+   - detached HEAD
+   - capture drift
+   - branch/worktree truth
+3. Improve how checkpoints and handoffs explain git context
 
-### Desktop role
+### Deliverables
 
-Desktop is for:
+1. Better workstream brief and compare output
+2. Better desktop/CLI workstream detail
+3. Clear distinction between:
+   - current checkout
+   - last captured commit
+   - upstream state
 
-- seeing workspaces and workstreams
-- reading sessions
-- managing checkpoints
-- reviewing insights
-- recovering from problems
+### Acceptance
 
-Desktop is not the primary interaction surface for successful daily use.
+1. Users can tell whether capture is behind the current checkout
+2. Detached HEAD is represented honestly
+3. Compare is not overclaimed as full branch intelligence
 
-## Agent Retrieval Model
+## Milestone 5: Insights Quality and Cross-Workspace Promotion
 
-### Primary path
+### Goal
 
-Agents should fetch through MCP.
+Keep insights honest, reviewed, and actually useful across projects.
 
-Needed product-level MCP tools:
+### Scope
 
-- list workstreams
-- list sessions for a workstream
-- get session detail
-- list checkpoints for a workstream
-- get checkpoint detail
-- get workstream summary
-- get recent reviewed insights for a workspace or workstream
+1. Improve reviewed-insight quality without overclaiming
+2. Add explicit compare/promote flows across workspaces
+3. Keep cross-workspace memory opt-in and explicit
 
-### Secondary path
+### Deliverables
 
-When the host supports session-start context injection, 0ctx should automatically provide a compact summary:
+1. Better insight preview and approval flow
+2. Explicit compare/promote operations across workspaces
+3. No silent cross-project blending
 
-- current workstream
-- latest checkpoint
-- recent sessions
-- reviewed insights
+### Acceptance
 
-## Cross-context model
-
-Default behavior:
-
-- strict isolation by workspace
-
-Explicit advanced behavior only:
-
-- compare workspaces
-- portfolio search
-- promote a checkpoint or insight into another workspace
-
-Do not support silent global blending of memory.
-
-## What to Cut or Demote
-
-### Cut from the primary product narrative
-
-- graph-first storytelling
-- sync-first storytelling
-- repair-first storytelling
-- "capture everything forever" storytelling
-
-### Demote in the UI
-
-- Graph
-- Setup
-- runtime internals
-- payload inspection
-- storage paths
+1. Insights remain reviewable and non-magical
+2. Cross-workspace reuse is explicit
+3. Product language stays honest
 
 ## Execution Order
 
-### Phase 1: Direction corrections
+1. Milestone 1: Invisible Supported-Agent Retrieval
+2. Milestone 2: Lean Data Policy Finalization
+3. Milestone 3: Desktop as Management Surface
+4. Milestone 4: Honest Git-Aware Workstreams
+5. Milestone 5: Insights Quality and Cross-Workspace Promotion
 
-1. Remove active-context fallback from capture
-2. Standardize GA integrations on repo-path routing
-3. Re-scope Codex, Cursor, and Windsurf as preview
-4. Hide `--context-id` from the normal product path
+## Non-Goals
 
-### Phase 2: Retrieval parity
+Do not spend roadmap time on:
 
-1. Add workstream/session/checkpoint MCP tools
-2. Make agent retrieval match the desktop's product model
-3. Add session-start compact context where supported
+- making preview integrations feel GA
+- graph-first storytelling
+- rich cloud sync as a default
+- keeping legacy operator flows alive for unreleased behavior
 
-### Phase 3: Golden path
+## Release Gate
 
-1. Add `0ctx enable`
-2. Make workspace binding automatic from repo root
-3. Make integration installation idempotent
-4. Make daemon startup implicit and reliable
+The remediation phase is complete when:
 
-### Phase 4: Data policy reset
-
-1. Change default sync to lean metadata plus reviewed insights
-2. Keep raw dumps local only
-3. Add short default retention for transcript history and event logs
-4. Keep payload inspection as support-only
-
-### Phase 5: Product UX cleanup
-
-1. Keep desktop focused on workspaces, workstreams, sessions, checkpoints, insights
-2. Reduce utilities and internals further
-3. Align naming across CLI, daemon, MCP, and desktop
-
-### Phase 6: Future intelligence
-
-1. Add git-native divergence understanding
-2. Improve semantic extraction quality
-3. Add explicit cross-workspace compare and promotion flows
-
-## Success Criteria
-
-The product is on the right path when:
-
-- a user can enable 0ctx in one command from a repo
-- capture lands in the correct workspace with no manual context selection
-- supported agents can retrieve the same workstream/session/checkpoint model the desktop shows
-- the desktop is optional for successful daily use
-- checkpoints are trustworthy and central
-- insights are clearly reviewed and not overclaimed
-- sync and storage policies feel lean and safe by default
+1. `0ctx enable` is the only normal first-run instruction
+2. supported agents retrieve the right workstream context automatically
+3. sync/storage defaults are lean and safe
+4. desktop is optional for daily use
+5. workstream/git state is honest
+6. insights are clearly reviewed, not overclaimed
