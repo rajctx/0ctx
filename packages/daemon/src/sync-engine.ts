@@ -614,7 +614,7 @@ export class SyncEngine {
                     || dump.context.syncPolicy === 'metadata_only'
                     || dump.context.syncPolicy === 'full_sync'
                     ? dump.context.syncPolicy
-                    : 'full_sync';
+                    : 'metadata_only';
 
             this.db.prepare(`
               INSERT INTO contexts (id, name, paths, syncPolicy, createdAt)

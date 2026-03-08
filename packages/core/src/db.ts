@@ -4,7 +4,7 @@ import path from 'path';
 import os from 'os';
 
 const DB_PATH = path.join(os.homedir(), '.0ctx', '0ctx.db');
-export const CURRENT_SCHEMA_VERSION = 8;
+export const CURRENT_SCHEMA_VERSION = 9;
 
 export interface OpenDbOptions {
     dbPath?: string;
@@ -72,6 +72,11 @@ function migrate(db: Database.Database) {
     if (version < 8) {
         migrateToV8(db);
         setSchemaVersion(db, 8);
+    }
+
+    if (version < 9) {
+        migrateToV9(db);
+        setSchemaVersion(db, 9);
     }
 }
 
@@ -166,7 +171,7 @@ function migrateToV3(db: Database.Database) {
     if (!hasColumn(db, 'contexts', 'syncPolicy')) {
         db.exec(`
         ALTER TABLE contexts
-        ADD COLUMN syncPolicy TEXT NOT NULL DEFAULT 'full_sync'
+        ADD COLUMN syncPolicy TEXT NOT NULL DEFAULT 'metadata_only'
       `);
     }
 }
@@ -302,6 +307,48 @@ function migrateToV8(db: Database.Database) {
       ELSE agentSet
     END;
   `);
+}
+
+function migrateToV9(db: Database.Database) {
+    const syncPolicyColumn = db.prepare(`PRAGMA table_info(contexts)`).all() as Array<{ name: string; dflt_value: string | null }>;
+    const defaultValue = syncPolicyColumn.find((column) => column.name === 'syncPolicy')?.dflt_value ?? null;
+    if (defaultValue === "'metadata_only'") {
+        db.exec(`
+        UPDATE contexts
+        SET syncPolicy = 'metadata_only'
+        WHERE syncPolicy IS NULL OR TRIM(syncPolicy) = ''
+      `);
+        return;
+    }
+
+    db.exec(`
+      PRAGMA foreign_keys = OFF;
+
+      CREATE TABLE contexts_v9 (
+        id         TEXT PRIMARY KEY,
+        name       TEXT NOT NULL,
+        paths      TEXT NOT NULL DEFAULT '[]',
+        createdAt  INTEGER NOT NULL,
+        syncPolicy TEXT NOT NULL DEFAULT 'metadata_only'
+      );
+
+      INSERT INTO contexts_v9 (id, name, paths, createdAt, syncPolicy)
+      SELECT
+        id,
+        name,
+        paths,
+        createdAt,
+        CASE
+          WHEN syncPolicy IN ('local_only', 'metadata_only', 'full_sync') THEN syncPolicy
+          ELSE 'metadata_only'
+        END
+      FROM contexts;
+
+      DROP TABLE contexts;
+      ALTER TABLE contexts_v9 RENAME TO contexts;
+
+      PRAGMA foreign_keys = ON;
+    `);
 }
 
 export function getSchemaVersion(db: Database.Database): number {

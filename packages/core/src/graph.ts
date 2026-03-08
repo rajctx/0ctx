@@ -406,7 +406,7 @@ export class Graph {
 
     // ── Context Management ─────────────────────────────────────────
 
-    createContext(name: string, paths: string[] = [], syncPolicy: SyncPolicy = 'full_sync'): Context {
+    createContext(name: string, paths: string[] = [], syncPolicy: SyncPolicy = 'metadata_only'): Context {
         const ctx: Context = { id: randomUUID(), name, paths, syncPolicy, createdAt: Date.now() };
         this.db.prepare(`
       INSERT INTO contexts (id, name, paths, syncPolicy, createdAt)
@@ -417,12 +417,12 @@ export class Graph {
 
     getContext(id: string): Context | null {
         const row = this.db.prepare('SELECT * FROM contexts WHERE id = ?').get(id) as any;
-        return row ? { ...row, paths: JSON.parse(row.paths), syncPolicy: row.syncPolicy ?? 'full_sync' } : null;
+        return row ? { ...row, paths: JSON.parse(row.paths), syncPolicy: row.syncPolicy ?? 'metadata_only' } : null;
     }
 
     listContexts(): Context[] {
         const rows = this.db.prepare('SELECT * FROM contexts ORDER BY createdAt DESC').all() as any[];
-        return rows.map(row => ({ ...row, paths: JSON.parse(row.paths), syncPolicy: row.syncPolicy ?? 'full_sync' }));
+        return rows.map(row => ({ ...row, paths: JSON.parse(row.paths), syncPolicy: row.syncPolicy ?? 'metadata_only' }));
     }
 
     getContextSyncPolicy(contextId: string): SyncPolicy | null {
@@ -431,7 +431,7 @@ export class Graph {
         if (row.syncPolicy === 'local_only' || row.syncPolicy === 'full_sync' || row.syncPolicy === 'metadata_only') {
             return row.syncPolicy;
         }
-        return 'full_sync';
+        return 'metadata_only';
     }
 
     setContextSyncPolicy(contextId: string, policy: SyncPolicy): Context | null {
@@ -1771,7 +1771,7 @@ export class Graph {
         const context = this.createContext(
             options?.name || dump.context.name,
             dump.context.paths,
-            (dump.context as Partial<Context>).syncPolicy ?? 'full_sync'
+            (dump.context as Partial<Context>).syncPolicy ?? 'metadata_only'
         );
         const nodeIdMap = new Map<string, string>();
         const checkpointIdMap = new Map<string, string>();
@@ -1923,7 +1923,7 @@ export class Graph {
                     || dump.context.syncPolicy === 'metadata_only'
                     || dump.context.syncPolicy === 'full_sync'
                     ? dump.context.syncPolicy
-                    : 'full_sync';
+                    : 'metadata_only';
 
             this.db.prepare(`
         INSERT INTO contexts (id, name, paths, syncPolicy, createdAt)

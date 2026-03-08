@@ -65,7 +65,18 @@ describe('openDb migrations', () => {
         }
     });
 
-    it('backfills legacy chat artifacts and creates branch/checkpoint tables in schema v8', () => {
+    it('uses metadata_only as the contexts syncPolicy default', () => {
+        const db = openDb({ dbPath: createTempDbPath() });
+        try {
+            const columns = db.prepare(`PRAGMA table_info(contexts)`).all() as Array<{ name: string; dflt_value: string | null }>;
+            const syncPolicy = columns.find((column) => column.name === 'syncPolicy');
+            expect(syncPolicy?.dflt_value).toBe("'metadata_only'");
+        } finally {
+            db.close();
+        }
+    });
+
+    it('backfills legacy chat artifacts and upgrades legacy databases to the current schema', () => {
         const dbPath = createTempDbPath();
         const db = openDb({ dbPath });
         try {
@@ -100,7 +111,7 @@ describe('openDb migrations', () => {
 
         const reopened = openDb({ dbPath });
         try {
-            expect(getSchemaVersion(reopened)).toBe(8);
+            expect(getSchemaVersion(reopened)).toBe(CURRENT_SCHEMA_VERSION);
             const row = reopened.prepare('SELECT hidden FROM nodes WHERE id = ?').get('node-1') as { hidden: number };
             const checkpointPayloadTable = reopened.prepare(`
         SELECT name FROM sqlite_master

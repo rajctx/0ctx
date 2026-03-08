@@ -1596,7 +1596,7 @@ export function handleRequest(
             if (!name) throw new Error("Missing required 'name' for createContext.");
 
             const paths = Array.isArray(params.paths) ? params.paths.filter((p): p is string => typeof p === 'string') : [];
-            const syncPolicy = parseSyncPolicy(params.syncPolicy) ?? 'full_sync';
+            const syncPolicy = parseSyncPolicy(params.syncPolicy) ?? 'metadata_only';
             const ctx = graph.createContext(name, paths, syncPolicy);
             syncActiveContext(connectionId, req.sessionToken, ctx.id);
 

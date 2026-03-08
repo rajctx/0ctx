@@ -180,6 +180,29 @@ describe('daemon request handling', () => {
         }
     });
 
+    it('defaults new contexts to metadata_only sync', () => {
+        const { db, graph } = createGraph();
+        try {
+            const session = handleRequest(graph, 'conn-sync-default', { method: 'createSession' }, runtime()) as { sessionToken: string };
+            const context = handleRequest(graph, 'conn-sync-default', {
+                method: 'createContext',
+                sessionToken: session.sessionToken,
+                params: { name: 'default-sync-policy-context' }
+            }, runtime()) as { id: string; syncPolicy: string };
+
+            const current = handleRequest(graph, 'conn-sync-default', {
+                method: 'getSyncPolicy',
+                sessionToken: session.sessionToken,
+                params: { contextId: context.id }
+            }, runtime()) as { syncPolicy: string };
+
+            expect(context.syncPolicy).toBe('metadata_only');
+            expect(current.syncPolicy).toBe('metadata_only');
+        } finally {
+            db.close();
+        }
+    });
+
     it('lists chat sessions/turns and keeps hidden nodes out of default graph data', () => {
         const { db, graph } = createGraph();
         try {
