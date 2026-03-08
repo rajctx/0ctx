@@ -1055,8 +1055,8 @@ async function commandMcp(subcommand: string | undefined, flags: Record<string, 
     const flowChoice = await p.select({
         message: 'Choose MCP action',
         options: [
-            { value: 'setup', label: 'Full setup (Recommended)', hint: 'Login + daemon/service + bootstrap + verify' },
-            { value: 'bootstrap', label: 'Bootstrap only', hint: 'Write MCP config to selected AI clients' },
+            { value: 'bootstrap', label: 'Bootstrap clients (Recommended)', hint: 'Write MCP config to selected AI clients' },
+            { value: 'setup', label: 'Advanced machine setup', hint: 'Login + daemon/service + bootstrap + verify' },
             { value: 'validate', label: 'Validate', hint: 'Run setup validation checks only' }
         ]
     });
@@ -4433,7 +4433,7 @@ function printHelp(): void {
     console.log(`0ctx CLI
 
 Usage:
-  0ctx                    Auto-enable inside a repo. Outside a repo, fall back to setup/support.
+  0ctx                    Auto-enable inside a repo. Outside a repo, show readiness/help.
   0ctx shell
   0ctx version [--verbose] [--json]
   0ctx --version | -v
@@ -4443,7 +4443,7 @@ Recommended daily flow:
               [--mcp-clients=none|ga|preview|all|claude,cursor,windsurf,codex,antigravity]
               [--skip-bootstrap] [--skip-hooks] [--mcp-profile=all|core|recall|ops] [--json]
 
-Support / legacy:
+Advanced / machine management:
   0ctx setup [--clients=ga|preview|all|claude,cursor,windsurf,codex,antigravity] [--no-open] [--json] [--validate]
              [--require-cloud] [--wait-cloud-ready]
              [--cloud-wait-timeout-ms=60000] [--cloud-wait-interval-ms=2000]
@@ -5388,12 +5388,9 @@ async function main(): Promise<number> {
                         { command: 'enable', interactive: true, reason: 'first_run_repo' }
                     );
                 }
-                console.log(color.dim("Looks like this is your first time. Let's get you set up.\n"));
-                return runCommandWithOpsSummary(
-                    'cli.setup',
-                    () => commandSetup({}),
-                    { command: 'setup', interactive: true, reason: 'first_run_no_repo' }
-                );
+                console.log(color.dim("0ctx works repo-first. Move into a project repo and run `0ctx enable`.\n"));
+                console.log(color.dim('Optional machine step: run `0ctx auth login` first if you need account-backed features before enabling a repo.\n'));
+                return 0;
             }
 
             // If the stored token is expired, attempt a silent refresh.
@@ -5409,6 +5406,11 @@ async function main(): Promise<number> {
                     }
                 }
                 if (!refreshed) {
+                    if (!detectedRepoRoot) {
+                        console.log(color.bold('\nYour session has expired.'));
+                        console.log(color.dim('Move into a repo and run `0ctx enable`, or run `0ctx auth login` if you need account-backed features first.\n'));
+                        return 0;
+                    }
                     console.log(color.bold('\nYour session has expired.'));
                     console.log(color.dim('Logging you back in...\n'));
                     const loginCode = await runCommandWithOpsSummary(
@@ -5432,13 +5434,9 @@ async function main(): Promise<number> {
                     );
                 }
                 console.log(color.bold('\nAlmost there!'));
-                console.log(color.dim("This machine isn't registered yet. Running setup to connect it...\n"));
-                captureEvent('cli_command_executed', { command: 'setup', interactive: true, reason: 'machine_unregistered_no_repo' });
-                return runCommandWithOpsSummary(
-                    'cli.setup',
-                    () => commandSetup({}),
-                    { command: 'setup', interactive: true, reason: 'machine_unregistered_no_repo' }
-                );
+                console.log(color.dim("This machine is signed in, but you are not inside an enabled repo.\n"));
+                console.log(color.dim('Next step: `cd <repo> && 0ctx enable`\n'));
+                return 0;
             }
 
             // Returning users can still land in a broken state (e.g. daemon
@@ -5458,15 +5456,17 @@ async function main(): Promise<number> {
                     );
                     if (enableCode !== 0) return enableCode;
                 } else {
-                    console.log(color.dim('Daemon is unreachable. Running setup automatically...\n'));
-                    captureEvent('cli_command_executed', { command: 'setup', interactive: true, reason: 'daemon_unreachable_no_repo' });
-                    const setupCode = await runCommandWithOpsSummary(
-                        'cli.setup.auto_repair',
-                        () => commandSetup({ 'no-open': true }),
-                        { command: 'setup', interactive: true, reason: 'daemon_unreachable_no_repo' }
-                    );
-                    if (setupCode !== 0) return setupCode;
+                    console.log(color.dim('Daemon is unreachable and this directory is not a bound repo.\n'));
+                    console.log(color.dim('Use `0ctx repair` if you are fixing this machine, or `cd <repo> && 0ctx enable` from a project.\n'));
+                    return 1;
                 }
+            }
+
+            if (!detectedRepoRoot) {
+                console.log(color.bold('\n0ctx is ready on this machine.'));
+                console.log(color.dim('Move into a repo and run `0ctx enable` for the normal product flow.\n'));
+                console.log(color.dim('Use `0ctx shell` only if you need the advanced interactive shell outside a repo.\n'));
+                return 0;
             }
 
             captureEvent('cli_command_executed', { command: 'shell', interactive: true });

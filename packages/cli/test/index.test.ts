@@ -31,11 +31,11 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("0ctx shell");
         expect(source).toContain("0ctx version [--verbose] [--json]");
         expect(source).toContain("0ctx --version | -v");
-        expect(source).toContain("0ctx                    Auto-enable inside a repo. Outside a repo, fall back to setup/support.");
+        expect(source).toContain("0ctx                    Auto-enable inside a repo. Outside a repo, show readiness/help.");
         expect(source).toContain("0ctx enable [--repo-root=<path>] [--name=<workspace>] [--clients=ga|preview|all|claude,cursor,windsurf,codex,factory,antigravity]");
         expect(source).toContain("[--mcp-clients=none|ga|preview|all|claude,cursor,windsurf,codex,antigravity]");
         expect(source).toContain("Recommended daily flow:");
-        expect(source).toContain("Support / legacy:");
+        expect(source).toContain("Advanced / machine management:");
         expect(source).toContain("Capture support:");
         expect(source).toContain("GA:      claude, factory, antigravity");
         expect(source).toContain("Preview: codex (notify + archive), cursor, windsurf");

@@ -9,7 +9,7 @@ const VIEW_META = {
   sessions: {
     eyebrow: 'Captured sessions',
     title: 'Sessions and messages',
-    summary: 'Choose a session, read the message stream, and open support data only when you need deeper capture detail.',
+    summary: 'Choose a session, read the message stream, and open advanced capture data only when you need deeper debugging detail.',
     primaryLabel: 'Create checkpoint',
     primaryAction: 'create-checkpoint'
   },
@@ -35,7 +35,7 @@ const VIEW_META = {
     primaryAction: 'toggle-hidden'
   },
   setup: {
-    eyebrow: 'Support utility',
+    eyebrow: 'Advanced utility',
     title: 'Enable and repair',
     summary: 'Enable this repo, install the integrations you actually use, or repair the local runtime when something is off.',
     primaryLabel: 'Copy enable command',
@@ -49,7 +49,7 @@ const SEARCH_HINTS = {
   checkpoints: 'Filter checkpoints, sessions, or commits',
   workspaces: 'Filter projects by name or repository path',
   knowledge: 'Filter reviewed insights and graph nodes',
-  setup: 'Filter agent integrations and support actions'
+  setup: 'Filter agent integrations and advanced actions'
 };
 
 const REQUIRED_RUNTIME_METHODS = [
@@ -1140,7 +1140,7 @@ function renderRuntimeBanner() {
           <p>${esc(state.runtimeIssue.detail)}</p>
         <div class="row-actions">
           <button class="btn primary" data-banner-action="refresh">Refresh</button>
-          <button class="btn tertiary" data-banner-action="setup">Open support</button>
+          <button class="btn tertiary" data-banner-action="setup">Open advanced tools</button>
         </div>
       </div>
     `;
@@ -1347,9 +1347,9 @@ function renderSessions() {
     empty.classList.remove('hidden');
     body.classList.add('hidden');
     toggle.disabled = true;
-    toggle.textContent = 'Support: show raw payload';
+    toggle.textContent = 'Advanced: show raw payload';
     document.getElementById('payloadPanel').classList.add('hidden');
-    document.getElementById('payloadText').textContent = 'Open support mode on a selected message to inspect the stored payload.';
+    document.getElementById('payloadText').textContent = 'Open advanced mode on a selected message to inspect the stored payload.';
     document.getElementById('payloadBadge').textContent = 'none';
     document.getElementById('turnPrimaryLabel').textContent = 'Message';
     document.getElementById('turnSecondaryLabel').textContent = 'Related context';
@@ -1385,7 +1385,7 @@ function renderSessions() {
   const meta = [
     { label: 'Captured', value: formatTime(turn.createdAt) },
     { label: 'Session checkpoints', value: String(state.sessionDetail?.checkpointCount || 0) },
-    { label: 'Support data', value: turn.hasPayload ? 'Available on demand' : 'No sidecar payload' },
+    { label: 'Advanced data', value: turn.hasPayload ? 'Available on demand' : 'No sidecar payload' },
     { label: 'Session summary', value: short(state.sessionDetail?.session?.summary || turn.sessionId || 'No session summary stored', 88) }
   ];
   document.getElementById('turnMeta').innerHTML = meta.map((item) => {
@@ -1407,7 +1407,7 @@ function renderSessions() {
   }).join('');
 
   toggle.disabled = !turn.hasPayload;
-  toggle.textContent = turn.hasPayload ? (state.payloadExpanded ? 'Hide support payload' : 'Support: show raw payload') : 'No support payload';
+  toggle.textContent = turn.hasPayload ? (state.payloadExpanded ? 'Hide advanced payload' : 'Advanced: show raw payload') : 'No advanced payload';
   const payloadPanel = document.getElementById('payloadPanel');
   payloadPanel.classList.toggle('hidden', !turn.hasPayload || !state.payloadExpanded);
   document.getElementById('payloadBadge').textContent = turn.payloadBytes != null ? `${turn.payloadBytes} bytes` : 'payload';
@@ -1415,7 +1415,7 @@ function renderSessions() {
     ? 'Captured sidecar payload'
     : 'No payload stored for this message';
   document.getElementById('payloadText').textContent = turn.hasPayload
-    ? (state.payload ? jsonText(state.payload) : 'Support payload not loaded yet.')
+    ? (state.payload ? jsonText(state.payload) : 'Advanced payload not loaded yet.')
     : 'This message has no raw payload sidecar.';
 
   const preview = activeSessionKnowledgePreview();
@@ -1758,9 +1758,9 @@ function renderWorkspaces() {
       <p>${esc(item.hint)}</p>
       </article>
     `).join('');
-    document.getElementById('setupSupportCopy').textContent = state.runtimeIssue
+  document.getElementById('setupSupportCopy').textContent = state.runtimeIssue
       ? state.runtimeIssue.detail
-      : 'Use support only when you need to enable a repo, install integrations, smoke-test capture, check updates, or repair the local runtime.';
+      : 'Use advanced tools only when you need to enable a repo, install integrations, smoke-test capture, check updates, or repair the local runtime.';
   }
 
 function renderAll() {
