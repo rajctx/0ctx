@@ -1,17 +1,18 @@
-import type {
-    Graph,
-    AuditAction,
-    AuditMetadata,
-    AuditEntry,
-    SearchResult,
-    BranchLaneSummary,
-    AgentSessionSummary,
-    CheckpointSummary,
-    WorkstreamBrief,
-    WorkstreamBaselineComparison,
-    WorkstreamComparison,
-    AgentContextPack,
-    InsightSummary
+import {
+    getConfigValue,
+    type Graph,
+    type AuditAction,
+    type AuditMetadata,
+    type AuditEntry,
+    type SearchResult,
+    type BranchLaneSummary,
+    type AgentSessionSummary,
+    type CheckpointSummary,
+    type WorkstreamBrief,
+    type WorkstreamBaselineComparison,
+    type WorkstreamComparison,
+    type AgentContextPack,
+    type InsightSummary
 } from '@0ctx/core';
 import { spawnSync } from 'child_process';
 import fs from 'fs';
@@ -395,6 +396,69 @@ function deriveHandoffReadiness(options: {
                 summary: 'Do not hand this workstream off yet. Resolve checkout state first so another agent does not start from the wrong place.'
             };
     }
+}
+
+function deriveWorkstreamComparisonState(options: {
+    sameRepository: boolean;
+    comparable: boolean;
+    sourceBranch: string | null;
+    targetBranch: string | null;
+    sourceAheadCount: number | null;
+    targetAheadCount: number | null;
+    mergeBaseSha: string | null;
+}): {
+    kind: 'aligned' | 'source_ahead' | 'target_ahead' | 'diverged' | 'different_repository' | 'not_comparable';
+    summary: string;
+    actionHint: string | null;
+} {
+    const sourceLabel = options.sourceBranch || 'source workstream';
+    const targetLabel = options.targetBranch || 'target workstream';
+
+    if (!options.sameRepository) {
+        return {
+            kind: 'different_repository',
+            summary: 'These workstreams resolve to different repositories.',
+            actionHint: 'Compare them only at the session and checkpoint level; git divergence is not meaningful across repositories.'
+        };
+    }
+
+    if (!options.comparable || typeof options.sourceAheadCount !== 'number' || typeof options.targetAheadCount !== 'number') {
+        return {
+            kind: 'not_comparable',
+            summary: 'Git divergence could not be computed for these workstreams.',
+            actionHint: 'Open both workstreams from named branches in the same repository before relying on git comparison.'
+        };
+    }
+
+    if (options.sourceAheadCount === 0 && options.targetAheadCount === 0) {
+        return {
+            kind: 'aligned',
+            summary: `${sourceLabel} and ${targetLabel} are aligned from the same merge base.`,
+            actionHint: null
+        };
+    }
+
+    if (options.sourceAheadCount > 0 && options.targetAheadCount === 0) {
+        return {
+            kind: 'source_ahead',
+            summary: `${sourceLabel} is ahead of ${targetLabel} by ${options.sourceAheadCount} commit${options.sourceAheadCount === 1 ? '' : 's'}.`,
+            actionHint: `Merge or checkpoint ${sourceLabel} before handing it off as the newer line of work.`
+        };
+    }
+
+    if (options.sourceAheadCount === 0 && options.targetAheadCount > 0) {
+        return {
+            kind: 'target_ahead',
+            summary: `${targetLabel} is ahead of ${sourceLabel} by ${options.targetAheadCount} commit${options.targetAheadCount === 1 ? '' : 's'}.`,
+            actionHint: `Update or compare ${sourceLabel} against ${targetLabel} before continuing work there.`
+        };
+    }
+
+    return {
+        kind: 'diverged',
+        summary: `${sourceLabel} and ${targetLabel} have diverged from merge base ${options.mergeBaseSha ? options.mergeBaseSha.slice(0, 8) : 'unknown'}.`,
+        actionHint: 'Review both branches before merging or handing work across agents.'
+    };
 }
 
 function formatRelativeAge(timestamp: number, now = Date.now()): string {
@@ -1272,6 +1336,16 @@ function compareWorkstreams(
         mergeBaseSha = source.mergeBaseSha ?? target.mergeBaseSha ?? null;
     }
 
+    const comparisonState = deriveWorkstreamComparisonState({
+        sameRepository,
+        comparable,
+        sourceBranch: source.branch,
+        targetBranch: target.branch,
+        sourceAheadCount,
+        targetAheadCount,
+        mergeBaseSha
+    });
+
     const newerSide = source.lastActivityAt && target.lastActivityAt
         ? source.lastActivityAt === target.lastActivityAt
             ? 'same'
@@ -1301,23 +1375,9 @@ function compareWorkstreams(
         `Target: ${target.branch ?? 'unknown branch'}`
     ];
 
-    if (!sameRepository) {
-        lines.push('These workstreams do not resolve to the same repository root, so git divergence cannot be compared directly.');
-    } else if (!source.branch || !target.branch) {
-        lines.push('One or both workstreams have no branch name, so git divergence cannot be compared directly.');
-    } else if (source.branch === target.branch) {
-        lines.push('Both selections point to the same branch name. Treat this as a same-workstream comparison.');
-    } else if (comparable && typeof sourceAheadCount === 'number' && typeof targetAheadCount === 'number') {
-        const gitSummary = sourceAheadCount === 0 && targetAheadCount === 0
-            ? `${source.branch} and ${target.branch} are in sync from the same merge base.`
-            : sourceAheadCount > 0 && targetAheadCount === 0
-                ? `${source.branch} is ${sourceAheadCount} commit${sourceAheadCount === 1 ? '' : 's'} ahead of ${target.branch}.`
-                : sourceAheadCount === 0 && targetAheadCount > 0
-                    ? `${target.branch} is ${targetAheadCount} commit${targetAheadCount === 1 ? '' : 's'} ahead of ${source.branch}.`
-                    : `${source.branch} is ${sourceAheadCount} ahead and ${target.branch} is ${targetAheadCount} ahead from merge base ${mergeBaseSha ? mergeBaseSha.slice(0, 8) : 'unknown'}.`;
-        lines.push(gitSummary);
-    } else {
-        lines.push('Git divergence could not be computed for these workstreams.');
+    lines.push(comparisonState.summary);
+    if (comparisonState.actionHint) {
+        lines.push(`Recommended next step: ${comparisonState.actionHint}`);
     }
 
     lines.push(
@@ -1350,6 +1410,9 @@ function compareWorkstreams(
         targetAheadCount,
         mergeBaseSha,
         newerSide,
+        comparisonKind: comparisonState.kind,
+        comparisonSummary: comparisonState.summary,
+        comparisonActionHint: comparisonState.actionHint,
         sharedAgents,
         sourceOnlyAgents,
         targetOnlyAgents,
@@ -1460,31 +1523,17 @@ function getHookStatePath(): string {
 }
 
 function getHookDumpRetentionDays(): number {
-    const raw = process.env.CTX_HOOK_DUMP_RETENTION_DAYS;
-    if (typeof raw !== 'string' || raw.trim().length === 0) {
-        return 14;
-    }
-    const parsed = Number.parseInt(raw.trim(), 10);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : 14;
+    const configured = getConfigValue('capture.retentionDays');
+    return Number.isFinite(configured) && configured > 0 ? configured : 14;
 }
 
 function getHookDebugRetentionDays(): number {
-    const raw = process.env.CTX_HOOK_DEBUG_RETENTION_DAYS;
-    if (typeof raw !== 'string' || raw.trim().length === 0) {
-        return 7;
-    }
-    const parsed = Number.parseInt(raw.trim(), 10);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : 7;
+    const configured = getConfigValue('capture.debugRetentionDays');
+    return Number.isFinite(configured) && configured > 0 ? configured : 7;
 }
 
 function isHookDebugArtifactsEnabled(): boolean {
-    const raw = process.env.CTX_HOOK_DEBUG_ARTIFACTS;
-    if (typeof raw !== 'string') return false;
-    const normalized = raw.trim().toLowerCase();
-    return normalized === '1'
-        || normalized === 'true'
-        || normalized === 'yes'
-        || normalized === 'on';
+    return getConfigValue('capture.debugArtifacts') === true;
 }
 
 function readHookHealth(): {

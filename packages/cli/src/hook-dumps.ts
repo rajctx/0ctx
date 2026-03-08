@@ -1,6 +1,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { getConfigValue } from '@0ctx/core';
 import type { HookSupportedAgent, NormalizedHookPayload } from './hooks';
 
 function sanitizeSegment(value: string): string {
@@ -18,31 +19,17 @@ export function getHookDumpDir(): string {
 }
 
 export function getHookDumpRetentionDays(): number {
-    const raw = process.env.CTX_HOOK_DUMP_RETENTION_DAYS;
-    if (typeof raw !== 'string' || raw.trim().length === 0) {
-        return 14;
-    }
-    const parsed = Number.parseInt(raw.trim(), 10);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : 14;
+    const configured = getConfigValue('capture.retentionDays');
+    return Number.isFinite(configured) && configured > 0 ? configured : 14;
 }
 
 export function getHookDebugRetentionDays(): number {
-    const raw = process.env.CTX_HOOK_DEBUG_RETENTION_DAYS;
-    if (typeof raw !== 'string' || raw.trim().length === 0) {
-        return 7;
-    }
-    const parsed = Number.parseInt(raw.trim(), 10);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : 7;
+    const configured = getConfigValue('capture.debugRetentionDays');
+    return Number.isFinite(configured) && configured > 0 ? configured : 7;
 }
 
 export function isHookDebugArtifactsEnabled(): boolean {
-    const raw = process.env.CTX_HOOK_DEBUG_ARTIFACTS;
-    if (typeof raw !== 'string') return false;
-    const normalized = raw.trim().toLowerCase();
-    return normalized === '1'
-        || normalized === 'true'
-        || normalized === 'yes'
-        || normalized === 'on';
+    return getConfigValue('capture.debugArtifacts') === true;
 }
 
 export interface HookCapturePolicySummary {

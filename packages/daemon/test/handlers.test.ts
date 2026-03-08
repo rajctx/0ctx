@@ -1155,6 +1155,9 @@ describe('daemon request handling', () => {
                 sourceAheadCount: number | null;
                 targetAheadCount: number | null;
                 mergeBaseSha: string | null;
+                comparisonKind: string;
+                comparisonSummary: string;
+                comparisonActionHint: string | null;
                 source: { sessionCount: number; branch: string | null };
                 target: { sessionCount: number; branch: string | null };
                 sourceOnlyAgents: string[];
@@ -1175,8 +1178,12 @@ describe('daemon request handling', () => {
             expect(comparison.sourceOnlyAgents).toEqual(['factory']);
             expect(comparison.targetOnlyAgents).toEqual(['claude']);
             expect(comparison.newerSide).toBe('target');
+            expect(comparison.comparisonKind).toBe('target_ahead');
+            expect(comparison.comparisonSummary).toContain('feature/runtime-compare is ahead of main');
+            expect(comparison.comparisonActionHint).toContain('Update or compare main');
             expect(comparison.comparisonText).toContain('Source: main');
             expect(comparison.comparisonText).toContain('Target: feature/runtime-compare');
+            expect(comparison.comparisonText).toContain('Recommended next step:');
         } finally {
             db.close();
         }

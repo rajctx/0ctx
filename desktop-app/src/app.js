@@ -1405,7 +1405,11 @@ function renderRuntimeBanner() {
     const comparisonMeta = document.getElementById('branchComparisonMeta');
     const comparisonAgents = document.getElementById('branchComparisonAgents');
     if (comparisonSummary) {
-      comparisonSummary.textContent = comparison.comparisonText || 'No comparison summary is available for these workstreams.';
+      const lines = [comparison.comparisonSummary || comparison.comparisonText || 'No comparison summary is available for these workstreams.'];
+      if (comparison.comparisonActionHint) {
+        lines.push(`Next: ${comparison.comparisonActionHint}`);
+      }
+      comparisonSummary.textContent = lines.join(' ');
     }
     if (comparisonMeta) {
       const gitSummary = comparison.comparable && comparison.sameRepository
@@ -1419,6 +1423,7 @@ function renderRuntimeBanner() {
       comparisonMeta.innerHTML = [
         `<article><span>Source</span><strong>${esc(describeBranchLane(comparison.source).title)}</strong></article>`,
         `<article><span>Target</span><strong>${esc(describeBranchLane(comparison.target).title)}</strong></article>`,
+        `<article><span>State</span><strong>${esc((comparison.comparisonKind || 'unknown').replace(/_/g, ' '))}</strong></article>`,
         `<article><span>Git divergence</span><strong>${esc(gitSummary)}</strong></article>`,
         `<article><span>Shared agents</span><strong>${esc(comparison.sharedAgents.length > 0 ? comparison.sharedAgents.join(', ') : 'none')}</strong></article>`
       ].join('');

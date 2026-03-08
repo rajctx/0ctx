@@ -1013,7 +1013,7 @@ async function commandStatus(flags: Record<string, string | boolean> = {}): Prom
             formatLabelValue('Capture', captureLine),
             formatLabelValue('Context', autoContextLine),
             formatLabelValue('History', historySummary),
-            formatLabelValue('Sync', String(repoReadiness.syncPolicy ?? 'metadata_only')),
+            formatLabelValue('Sync', formatSyncPolicyLabel(repoReadiness.syncPolicy)),
             formatLabelValue('Retention', formatRetentionLabel(repoReadiness))
         ].join('\n'),
         'Repo Readiness'
@@ -1216,7 +1216,11 @@ async function commandEnable(flags: Record<string, string | boolean>): Promise<n
         console.error(hookPreviewError);
         return 1;
     }
-    const mcpPreviewError = validateExplicitPreviewSelection(flags['mcp-clients'] ?? flags.mcpClients, 'claude,antigravity,codex');
+    const mcpPreviewError = validateExplicitPreviewSelection(
+        flags['mcp-clients'] ?? flags.mcpClients,
+        'codex',
+        'claude,antigravity'
+    );
     if (mcpPreviewError) {
         console.error(`MCP clients: ${mcpPreviewError}`);
         return 1;
@@ -1382,6 +1386,12 @@ async function commandEnable(flags: Record<string, string | boolean>): Promise<n
 
     if (s) s.stop(color.green('0ctx is enabled for this repository'));
 
+    const repoReadiness = await collectRepoReadiness({
+        repoRoot,
+        contextId,
+        hookDetails: hookHealthDetails
+    });
+
     if (asJson) {
         console.log(JSON.stringify({
             ok: true,
@@ -1394,16 +1404,19 @@ async function commandEnable(flags: Record<string, string | boolean>): Promise<n
             mcpProfile,
             steps,
             bootstrapResults,
-            hooks: hookSummary
+            hooks: hookSummary,
+            repoReadiness,
+            dataPolicy: repoReadiness
+                ? {
+                    syncPolicy: formatSyncPolicyLabel(repoReadiness.syncPolicy),
+                    captureRetentionDays: repoReadiness.captureRetentionDays,
+                    debugRetentionDays: repoReadiness.debugRetentionDays,
+                    debugArtifactsEnabled: repoReadiness.debugArtifactsEnabled
+                }
+                : null
         }, null, 2));
         return 0;
     }
-
-    const repoReadiness = await collectRepoReadiness({
-        repoRoot,
-        contextId,
-        hookDetails: hookHealthDetails
-    });
 
     const info = repoReadiness
         ? [
@@ -1428,7 +1441,7 @@ async function commandEnable(flags: Record<string, string | boolean>): Promise<n
                     ? 'No captured workstream history yet'
                     : `${repoReadiness.sessionCount} sessions, ${repoReadiness.checkpointCount ?? 0} checkpoints`
             ),
-            formatLabelValue('Sync', String(repoReadiness.syncPolicy ?? 'metadata_only')),
+            formatLabelValue('Sync', formatSyncPolicyLabel(repoReadiness.syncPolicy)),
             formatLabelValue('Retention', formatRetentionLabel(repoReadiness))
         ]
         : [
@@ -2375,6 +2388,14 @@ function parseOptionalStringFlag(value: string | boolean | undefined): string | 
     if (typeof value !== 'string') return null;
     const normalized = value.trim();
     return normalized.length > 0 ? normalized : null;
+}
+
+function parseOptionalBooleanLikeFlag(value: string | boolean | undefined): boolean | null {
+    if (typeof value !== 'string') return null;
+    const normalized = value.trim().toLowerCase();
+    if (['1', 'true', 'yes', 'on', 'enabled'].includes(normalized)) return true;
+    if (['0', 'false', 'no', 'off', 'disabled'].includes(normalized)) return false;
+    return null;
 }
 
 function sleepMs(ms: number): Promise<void> {
@@ -4476,8 +4497,6 @@ Daily use:
   0ctx workstreams compare [--repo-root=<path>] --source=<branch> --target=<branch>
                           [--source-worktree-path=<path>] [--target-worktree-path=<path>]
                           [--session-limit=3] [--checkpoint-limit=2] [--json]
-  0ctx agent-context [--repo-root=<path>] [--branch=<name>] [--worktree-path=<path>]
-                     [--session-limit=3] [--checkpoint-limit=2] [--handoff-limit=5] [--json]
   0ctx sessions [--repo-root=<path>] [--branch=<name>] [--session-id=<id>] [--worktree-path=<path>] [--limit=100] [--json]
   0ctx checkpoints [list] [--repo-root=<path>] [--branch=<name>] [--worktree-path=<path>] [--limit=100] [--json]
   0ctx checkpoints create [--repo-root=<path>] [--session-id=<id>] [--name="..."] [--summary="..."] [--json]
@@ -4542,8 +4561,6 @@ Advanced / machine management:
   0ctx workstreams compare [--repo-root=<path>] --source=<branch> --target=<branch>
                         [--source-worktree-path=<path>] [--target-worktree-path=<path>]
                         [--session-limit=3] [--checkpoint-limit=2] [--json]
-  0ctx agent-context [--repo-root=<path>] [--branch=<name>] [--worktree-path=<path>]
-                     [--session-limit=3] [--checkpoint-limit=2] [--handoff-limit=5] [--json]
   0ctx branches [--repo-root=<path>] [--limit=100] [--json]
   0ctx branches compare [--repo-root=<path>] --source=<branch> --target=<branch>
                      [--source-worktree-path=<path>] [--target-worktree-path=<path>]
@@ -4567,7 +4584,7 @@ Advanced / machine management:
 
 Capture support:
   GA:      claude, factory, antigravity
-  Preview: codex (notify + archive), cursor, windsurf
+  Preview: available only by explicit opt-in
 
 Client scope defaults:
   ga      Supported-by-default product path
@@ -4584,8 +4601,13 @@ Configuration:
   0ctx config list              Show all settings
   0ctx config get <key>         Get a specific setting
   0ctx config set <key> <value> Set a specific setting
+  0ctx data-policy [--repo-root=<path>] [--json]
+  0ctx data-policy set [--repo-root=<path>] [--sync-policy=<local_only|metadata_only|full_sync>]
+                       [--capture-retention-days=<days>] [--debug-retention-days=<days>]
+                       [--debug-artifacts=<on|off>] [--json]
 
   Config keys: auth.server, sync.enabled, sync.endpoint, ui.url,
+               capture.retentionDays, capture.debugRetentionDays, capture.debugArtifacts,
                integration.chatgpt.enabled, integration.chatgpt.requireApproval, integration.autoBootstrap
 
 Sync:
@@ -4604,8 +4626,8 @@ Connector:
   0ctx connector hook install [--clients=ga|<explicit-list>] [--repo-root=<path>] [--global]
   0ctx connector hook status [--json]
   0ctx connector hook prune [--days=14] [--json]
-0ctx connector hook session-start --agent=claude|factory|antigravity [--repo-root=<path>]
-                                    [--input-file=<path>|--payload='<json>'|stdin] [--json]
+  0ctx connector hook session-start --agent=claude|factory|antigravity [--repo-root=<path>]
+                                     [--input-file=<path>|--payload='<json>'|stdin] [--json]
   0ctx connector hook ingest --agent=claude|windsurf|codex|cursor|factory|antigravity [--repo-root=<path>]
                               [--input-file=<path>|--payload='<json>'|stdin]
   0ctx hook install|status|prune|session-start|ingest  Alias for "0ctx connector hook ..."
@@ -4632,6 +4654,10 @@ Legacy daemon service commands:
   0ctx daemon service restart    Stop then start the service
   0ctx daemon service status     Show current service state
   0ctx daemon service uninstall  Remove service registration
+
+Support / automation utilities:
+  0ctx agent-context [--repo-root=<path>] [--branch=<name>] [--worktree-path=<path>]
+                     [--session-limit=3] [--checkpoint-limit=2] [--handoff-limit=5] [--json]
 `);
 }
 
@@ -4675,20 +4701,136 @@ function commandConfigSet(key: string | undefined, value: string | undefined): n
 
     const booleanKeys = new Set<keyof AppConfig>([
         'sync.enabled',
+        'capture.debugArtifacts',
         'integration.chatgpt.enabled',
         'integration.chatgpt.requireApproval',
         'integration.autoBootstrap'
+    ]);
+    const numberKeys = new Set<keyof AppConfig>([
+        'capture.retentionDays',
+        'capture.debugRetentionDays'
     ]);
 
     // Parse booleans for boolean-backed config keys.
     let parsed: unknown = value;
     if (booleanKeys.has(key)) {
         parsed = value === 'true' || value === '1';
+    } else if (numberKeys.has(key)) {
+        const numeric = Number.parseInt(value, 10);
+        if (!Number.isFinite(numeric) || numeric <= 0) {
+            console.error(`Invalid value for ${key}: expected a positive integer.`);
+            return 1;
+        }
+        parsed = numeric;
     }
 
     setConfigValue(key, parsed as AppConfig[typeof key]);
     console.log(`Set ${key} = ${JSON.stringify(parsed)}`);
     return 0;
+}
+
+async function commandDataPolicyShow(flags: Record<string, string | boolean>): Promise<number> {
+    const asJson = Boolean(flags.json);
+    const contextId = await resolveCommandContextId(flags);
+    const capturePolicy = getHookCapturePolicySummary();
+    let syncPolicy: string | null = null;
+    if (contextId) {
+        try {
+            const syncPolicyResult = await sendToDaemon('getSyncPolicy', { contextId }) as
+                | string
+                | { syncPolicy?: string | null }
+                | null;
+            syncPolicy = typeof syncPolicyResult === 'string'
+                ? syncPolicyResult
+                : (typeof syncPolicyResult?.syncPolicy === 'string' ? syncPolicyResult.syncPolicy : null);
+        } catch {
+            syncPolicy = null;
+        }
+    }
+
+    const payload = {
+        workspaceResolved: Boolean(contextId),
+        syncPolicy: syncPolicy ?? null,
+        capturePolicy
+    };
+
+    return printJsonOrValue(asJson, payload, () => {
+        console.log('\nData Policy\n');
+        console.log(`  Workspace sync:          ${syncPolicy ? formatSyncPolicyLabel(syncPolicy) : 'workspace not resolved'}`);
+        console.log(`  Local capture retention: ${capturePolicy.captureRetentionDays}d`);
+        console.log(`  Debug retention:         ${capturePolicy.debugRetentionDays}d`);
+        console.log(`  Debug artifacts:         ${formatDebugArtifactsLabel(capturePolicy.debugArtifactsEnabled)}`);
+        console.log('');
+    });
+}
+
+async function commandDataPolicySet(flags: Record<string, string | boolean>): Promise<number> {
+    const asJson = Boolean(flags.json);
+    const syncPolicy = parseOptionalStringFlag(flags['sync-policy'] ?? flags.syncPolicy);
+    const captureRetentionDays = parseOptionalPositiveNumberFlag(flags['capture-retention-days'] ?? flags.captureRetentionDays);
+    const debugRetentionDays = parseOptionalPositiveNumberFlag(flags['debug-retention-days'] ?? flags.debugRetentionDays);
+    const debugArtifactsRaw = flags['debug-artifacts'] ?? flags.debugArtifacts;
+    const debugArtifactsSpecified = debugArtifactsRaw !== undefined;
+    const debugArtifactsEnabled = parseOptionalBooleanLikeFlag(debugArtifactsRaw);
+
+    if (debugArtifactsSpecified && debugArtifactsEnabled == null) {
+        console.error('Invalid value for --debug-artifacts. Use on|off, true|false, or 1|0.');
+        return 1;
+    }
+
+    const captureUpdates: Partial<AppConfig> = {};
+    if (captureRetentionDays != null) captureUpdates['capture.retentionDays'] = Math.floor(captureRetentionDays);
+    if (debugRetentionDays != null) captureUpdates['capture.debugRetentionDays'] = Math.floor(debugRetentionDays);
+    if (debugArtifactsEnabled != null) captureUpdates['capture.debugArtifacts'] = debugArtifactsEnabled;
+
+    if (!syncPolicy && Object.keys(captureUpdates).length === 0) {
+        console.error('Usage: 0ctx data-policy set [--repo-root=<path>] [--sync-policy=<local_only|metadata_only|full_sync>] [--capture-retention-days=<days>] [--debug-retention-days=<days>] [--debug-artifacts=<on|off>] [--json]');
+        return 1;
+    }
+
+    if (syncPolicy && !['local_only', 'metadata_only', 'full_sync'].includes(syncPolicy)) {
+        console.error('Invalid sync policy. Use local_only, metadata_only, or full_sync.');
+        return 1;
+    }
+
+    for (const [key, value] of Object.entries(captureUpdates) as Array<[keyof AppConfig, AppConfig[keyof AppConfig]]>) {
+        setConfigValue(key, value);
+    }
+
+    if (syncPolicy) {
+        const contextId = await requireCommandContextId(flags, '0ctx data-policy set');
+        if (!contextId) return 1;
+        await sendToDaemon('setSyncPolicy', { contextId, syncPolicy });
+    }
+
+    const capturePolicy = getHookCapturePolicySummary();
+    const payload = {
+        ok: true,
+        syncPolicy: syncPolicy ?? null,
+        capturePolicy
+    };
+    return printJsonOrValue(asJson, payload, () => {
+        console.log('\nData policy updated\n');
+        if (syncPolicy) {
+            console.log(`  Workspace sync:          ${formatSyncPolicyLabel(syncPolicy)}`);
+        }
+        console.log(`  Local capture retention: ${capturePolicy.captureRetentionDays}d`);
+        console.log(`  Debug retention:         ${capturePolicy.debugRetentionDays}d`);
+        console.log(`  Debug artifacts:         ${formatDebugArtifactsLabel(capturePolicy.debugArtifactsEnabled)}`);
+        console.log('');
+    });
+}
+
+async function commandDataPolicy(subcommand: string | null, flags: Record<string, string | boolean>): Promise<number> {
+    if (!subcommand || subcommand === 'show' || subcommand === 'get') {
+        return commandDataPolicyShow(flags);
+    }
+    if (subcommand === 'set') {
+        return commandDataPolicySet(flags);
+    }
+    console.error('Usage: 0ctx data-policy [--repo-root=<path>] [--json]');
+    console.error('   or: 0ctx data-policy set [--repo-root=<path>] [--sync-policy=<local_only|metadata_only|full_sync>] [--capture-retention-days=<days>] [--debug-retention-days=<days>] [--debug-artifacts=<on|off>] [--json]');
+    return 1;
 }
 
 // ─── Sync command ────────────────────────────────────────────────────────────
@@ -4783,6 +4925,10 @@ function formatSyncPolicyLabel(policy: string | null | undefined): string {
 function formatRetentionLabel(readiness: Pick<RepoReadinessSummary, 'captureRetentionDays' | 'debugRetentionDays' | 'debugArtifactsEnabled'>): string {
     const debugMode = readiness.debugArtifactsEnabled ? 'debug on' : 'debug off';
     return `${readiness.captureRetentionDays}d local capture, ${readiness.debugRetentionDays}d debug (${debugMode})`;
+}
+
+function formatDebugArtifactsLabel(enabled: boolean): string {
+    return enabled ? 'enabled' : 'disabled';
 }
 
 function resolveCommandWorkstreamScope(flags: Record<string, string | boolean>): {
@@ -5038,6 +5184,9 @@ async function commandBranches(args: string[], flags: Record<string, string | bo
                 targetAheadCount: number | null;
                 mergeBaseSha: string | null;
                 newerSide: 'source' | 'target' | 'same' | 'unknown';
+                comparisonKind: 'aligned' | 'source_ahead' | 'target_ahead' | 'diverged' | 'different_repository' | 'not_comparable';
+                comparisonSummary: string;
+                comparisonActionHint: string | null;
                 sharedAgents: string[];
                 sourceOnlyAgents: string[];
                 targetOnlyAgents: string[];
@@ -5068,6 +5217,8 @@ async function commandBranches(args: string[], flags: Record<string, string | bo
                 console.log(`  Target:    ${targetLabel}`);
                 console.log(`  Sessions:  ${result.source.sessionCount} vs ${result.target.sessionCount}`);
                 console.log(`  Checkpts:  ${result.source.checkpointCount} vs ${result.target.checkpointCount}`);
+                console.log(`  State:     ${result.comparisonKind}`);
+                console.log(`  Summary:   ${result.comparisonSummary}`);
                 if (result.source.lastCommitSha || result.target.lastCommitSha) {
                     console.log(`  Commits:   ${String(result.source.lastCommitSha || 'none').slice(0, 12)} vs ${String(result.target.lastCommitSha || 'none').slice(0, 12)}`);
                 }
@@ -5085,6 +5236,9 @@ async function commandBranches(args: string[], flags: Record<string, string | bo
                 }
                 if (result.targetOnlyAgents.length > 0) {
                     console.log(`  Target only:   ${result.targetOnlyAgents.join(', ')}`);
+                }
+                if (result.comparisonActionHint) {
+                    console.log(`  Next:      ${result.comparisonActionHint}`);
                 }
                 console.log(`\n  ${result.comparisonText}\n`);
             });
@@ -6079,6 +6233,8 @@ async function main(): Promise<number> {
                 printHelp(Boolean(parsed.flags.advanced));
                 return 1;
             }
+            case 'data-policy':
+                return commandDataPolicy(parsed.subcommand, parsed.flags);
             case 'sync': {
                 const sub = parsed.subcommand;
                 if (sub === 'status' || !sub) return commandSyncStatus();

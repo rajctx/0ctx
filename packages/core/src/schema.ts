@@ -287,6 +287,9 @@ export interface WorkstreamComparison {
     targetAheadCount: number | null;
     mergeBaseSha: string | null;
     newerSide: 'source' | 'target' | 'same' | 'unknown';
+    comparisonKind: 'aligned' | 'source_ahead' | 'target_ahead' | 'diverged' | 'different_repository' | 'not_comparable';
+    comparisonSummary: string;
+    comparisonActionHint: string | null;
     sharedAgents: string[];
     sourceOnlyAgents: string[];
     targetOnlyAgents: string[];

@@ -20,6 +20,9 @@ export interface AppConfig {
     'sync.enabled': boolean;
     'sync.endpoint': string;
     'ui.url': string;
+    'capture.retentionDays': number;
+    'capture.debugRetentionDays': number;
+    'capture.debugArtifacts': boolean;
     'integration.chatgpt.enabled': boolean;
     'integration.chatgpt.requireApproval': boolean;
     'integration.autoBootstrap': boolean;
@@ -34,6 +37,9 @@ const DEFAULTS: AppConfig = {
     'sync.enabled': true,
     'sync.endpoint': 'https://www.0ctx.com/api/v1/sync',
     'ui.url': 'https://www.0ctx.com/dashboard/workspace',
+    'capture.retentionDays': 14,
+    'capture.debugRetentionDays': 7,
+    'capture.debugArtifacts': false,
     'integration.chatgpt.enabled': false,
     'integration.chatgpt.requireApproval': true,
     'integration.autoBootstrap': true,
@@ -46,6 +52,9 @@ const ENV_OVERRIDES: Partial<Record<keyof AppConfig, string>> = {
     'auth.server': 'CTX_AUTH_SERVER',
     'sync.enabled': 'CTX_SYNC_ENABLED',
     'sync.endpoint': 'CTX_SYNC_ENDPOINT',
+    'capture.retentionDays': 'CTX_HOOK_DUMP_RETENTION_DAYS',
+    'capture.debugRetentionDays': 'CTX_HOOK_DEBUG_RETENTION_DAYS',
+    'capture.debugArtifacts': 'CTX_HOOK_DEBUG_ARTIFACTS',
     'integration.chatgpt.enabled': 'CTX_INTEGRATION_CHATGPT_ENABLED',
     'integration.chatgpt.requireApproval': 'CTX_INTEGRATION_CHATGPT_REQUIRE_APPROVAL',
     'integration.autoBootstrap': 'CTX_INTEGRATION_AUTO_BOOTSTRAP',
@@ -55,11 +64,22 @@ const ENV_OVERRIDES: Partial<Record<keyof AppConfig, string>> = {
 
 const BOOLEAN_KEYS = new Set<keyof AppConfig>([
     'sync.enabled',
+    'capture.debugArtifacts',
     'integration.chatgpt.enabled',
     'integration.chatgpt.requireApproval',
     'integration.autoBootstrap',
     'telemetry.enabled'
 ]);
+
+const NUMBER_KEYS = new Set<keyof AppConfig>([
+    'capture.retentionDays',
+    'capture.debugRetentionDays'
+]);
+
+function parseNumberValue(value: string, fallback: number): number {
+    const parsed = Number.parseInt(value.trim(), 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
 
 function parseBooleanValue(value: string): boolean {
     return value === '1' || value.toLowerCase() === 'true';
@@ -113,6 +133,9 @@ export function getConfigValue<K extends keyof AppConfig>(key: K): AppConfig[K] 
         if (envVal !== undefined && envVal !== '') {
             if (BOOLEAN_KEYS.has(key)) {
                 return parseBooleanValue(envVal) as AppConfig[K];
+            }
+            if (NUMBER_KEYS.has(key)) {
+                return parseNumberValue(envVal, DEFAULTS[key] as number) as AppConfig[K];
             }
             return envVal as AppConfig[K];
         }

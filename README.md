@@ -61,10 +61,6 @@ cd <repo>
 0ctx doctor --json
 0ctx repair
 
-# Preview integrations are opt-in only
-0ctx enable --clients=codex
-0ctx bootstrap --clients=codex
-
 # Check connector posture
 0ctx connector status --json
 0ctx connector status --json --require-bridge
@@ -112,11 +108,13 @@ GA integrations:
 - Factory / Droid
 - Antigravity
 
-Preview integrations:
+Preview integrations are opt-in only and are not part of the normal product path.
+If you need one explicitly, name it directly, for example:
 
-- Codex
-- Cursor
-- Windsurf
+```bash
+0ctx enable --clients=codex
+0ctx bootstrap --clients=codex
+```
 
 The normal product path is repo-first:
 

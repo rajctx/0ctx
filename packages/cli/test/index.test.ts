@@ -10,6 +10,7 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("case 'install'");
         expect(source).toContain("case 'enable'");
         expect(source).toContain("case 'agent-context'");
+        expect(source).toContain("case 'data-policy'");
         expect(source).toContain("case 'workstreams'");
         expect(source).toContain("case 'bootstrap'");
         expect(source).toContain("case 'doctor'");
@@ -42,7 +43,7 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("Advanced / machine management:");
         expect(source).toContain("Capture support:");
         expect(source).toContain("GA:      claude, factory, antigravity");
-        expect(source).toContain("Preview: codex (notify + archive), cursor, windsurf");
+        expect(source).toContain("Preview: available only by explicit opt-in");
         expect(source).toContain("0ctx recall [--mode=auto|temporal|topic|graph]");
         expect(source).toContain("[--start] [--json]");
         expect(source).toContain("0ctx release publish --version vX.Y.Z [--tag latest|next] [--otp 123456] [--dry-run] [--json]");
@@ -55,7 +56,6 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("0ctx workstreams [--repo-root=<path>] [--limit=100] [--json]");
         expect(source).toContain("0ctx workstreams current [--repo-root=<path>] [--branch=<name>] [--worktree-path=<path>]");
         expect(source).toContain("0ctx workstreams compare [--repo-root=<path>] --source=<branch> --target=<branch>");
-        expect(source).toContain("0ctx agent-context [--repo-root=<path>] [--branch=<name>] [--worktree-path=<path>]");
         expect(source).toContain("0ctx branches [--repo-root=<path>] [--limit=100] [--json]");
         expect(source).toContain("0ctx branches compare [--repo-root=<path>] --source=<branch> --target=<branch>");
         expect(source).toContain("0ctx sessions [--repo-root=<path>] [--branch=<name>] [--session-id=<id>] [--worktree-path=<path>] [--limit=100] [--json]");
@@ -79,7 +79,11 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("0ctx connector verify [--require-cloud] [--json]");
         expect(source).toContain("0ctx connector register [--force] [--local-only] [--require-cloud] [--json]");
         expect(source).toContain("0ctx sync policy get [--repo-root=<path>] [--json]");
+        expect(source).toContain("0ctx data-policy [--repo-root=<path>] [--json]");
+        expect(source).toContain("0ctx data-policy set [--repo-root=<path>] [--sync-policy=<local_only|metadata_only|full_sync>]");
+        expect(source).toContain("capture.retentionDays, capture.debugRetentionDays, capture.debugArtifacts,");
         expect(source).toContain("Support overrides:");
+        expect(source).toContain("Support / automation utilities:");
         expect(source).toContain("0ctx connector hook install [--clients=ga|<explicit-list>] [--repo-root=<path>] [--global]");
         expect(source).toContain("Preview integrations must be named explicitly when you opt into them.");
         expect(source).toContain("Example: --clients=codex or --clients=cursor,windsurf");
