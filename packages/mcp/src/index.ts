@@ -291,6 +291,23 @@ server.setRequestHandler(CallToolRequestSchema, async (req: any) => {
                 }
                 throw new Error("ctx_extract_insights requires either 'sessionId' or 'checkpointId'.");
             }
+            case 'ctx_promote_insight': {
+                const contextId = pickContextId(args);
+                if (typeof args.sourceContextId !== 'string' || args.sourceContextId.length === 0) {
+                    throw new Error("ctx_promote_insight requires 'sourceContextId'.");
+                }
+                if (typeof args.nodeId !== 'string' || args.nodeId.length === 0) {
+                    throw new Error("ctx_promote_insight requires 'nodeId'.");
+                }
+                const result = await callDaemon('promoteInsight', {
+                    contextId,
+                    sourceContextId: args.sourceContextId,
+                    nodeId: args.nodeId,
+                    branch: typeof args.branch === 'string' ? args.branch : undefined,
+                    worktreePath: typeof args.worktreePath === 'string' ? args.worktreePath : undefined
+                });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] } };
+            }
             case 'ctx_recall': {
                 const contextId = pickContextId(args);
                 const recall = await callDaemon('recall', {

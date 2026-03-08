@@ -634,6 +634,70 @@ describe('Graph checkpoints', () => {
             db.close();
         }
     });
+
+    it('promotes a reviewed insight into another workspace and reuses it on repeat', () => {
+        const { db, graph } = createGraph();
+        try {
+            const source = graph.createContext('source-workspace');
+            const target = graph.createContext('target-workspace');
+            const insight = graph.addNode({
+                contextId: source.id,
+                type: 'decision',
+                content: 'Ship checkpoints as the primary restore primitive.',
+                tags: ['knowledge', 'derived', 'branch:feat/restore-flow'],
+                source: 'extractor:session',
+                hidden: false
+            });
+
+            const first = graph.promoteInsightNode(source.id, insight.id, target.id);
+            expect(first.created).toBe(true);
+            expect(first.reused).toBe(false);
+            expect(first.branch).toBe('feat/restore-flow');
+
+            const targetNode = graph.getNode(first.targetNodeId);
+            expect(targetNode?.contextId).toBe(target.id);
+            expect(targetNode?.key).toBe(first.key);
+            expect(targetNode?.tags).toContain('promoted');
+            expect(targetNode?.tags).toContain(`origin_context:${source.id}`);
+            expect(targetNode?.tags).toContain(`origin_node:${insight.id}`);
+
+            const second = graph.promoteInsightNode(source.id, insight.id, target.id);
+            expect(second.created).toBe(false);
+            expect(second.reused).toBe(true);
+            expect(second.targetNodeId).toBe(first.targetNodeId);
+        } finally {
+            db.close();
+        }
+    });
+
+    it('rejects hidden or artifact nodes when promoting reviewed insights', () => {
+        const { db, graph } = createGraph();
+        try {
+            const source = graph.createContext('source-workspace');
+            const target = graph.createContext('target-workspace');
+            const hiddenNode = graph.addNode({
+                contextId: source.id,
+                type: 'decision',
+                content: 'Do not expose this yet.',
+                tags: ['knowledge'],
+                source: 'extractor:session',
+                hidden: true
+            });
+            const artifactNode = graph.addNode({
+                contextId: source.id,
+                type: 'artifact',
+                content: 'session transcript',
+                tags: ['artifact'],
+                source: 'hook:factory',
+                hidden: false
+            });
+
+            expect(() => graph.promoteInsightNode(source.id, hiddenNode.id, target.id)).toThrow(/hidden/i);
+            expect(() => graph.promoteInsightNode(source.id, artifactNode.id, target.id)).toThrow(/artifact/i);
+        } finally {
+            db.close();
+        }
+    });
 });
 
 describe('Graph audit events', () => {

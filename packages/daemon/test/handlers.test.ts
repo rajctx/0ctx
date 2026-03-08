@@ -1338,4 +1338,59 @@ describe('daemon request handling', () => {
             db.close();
         }
     });
+
+    it('promotes a reviewed insight into another workspace and audits it', () => {
+        const { db, graph } = createGraph();
+        try {
+            const session = handleRequest(graph, 'conn-promote', { method: 'createSession' }, runtime()) as { sessionToken: string };
+            const source = handleRequest(graph, 'conn-promote', {
+                method: 'createContext',
+                sessionToken: session.sessionToken,
+                params: { name: 'source-workspace' }
+            }, runtime()) as { id: string };
+            const target = handleRequest(graph, 'conn-promote', {
+                method: 'createContext',
+                sessionToken: session.sessionToken,
+                params: { name: 'target-workspace' }
+            }, runtime()) as { id: string };
+
+            const node = handleRequest(graph, 'conn-promote', {
+                method: 'addNode',
+                sessionToken: session.sessionToken,
+                params: {
+                    contextId: source.id,
+                    type: 'decision',
+                    content: 'Promote reviewed checkpoint guidance across workspaces.',
+                    tags: ['knowledge', 'branch:feat/promotion']
+                }
+            }, runtime()) as { id: string };
+
+            const promoted = handleRequest(graph, 'conn-promote', {
+                method: 'promoteInsight',
+                sessionToken: session.sessionToken,
+                params: {
+                    contextId: target.id,
+                    sourceContextId: source.id,
+                    nodeId: node.id
+                }
+            }, runtime()) as {
+                targetNodeId: string;
+                created: boolean;
+                reused: boolean;
+                branch: string | null;
+            };
+
+            expect(promoted.created).toBe(true);
+            expect(promoted.reused).toBe(false);
+            expect(promoted.branch).toBe('feat/promotion');
+
+            const targetNode = graph.getNode(promoted.targetNodeId);
+            expect(targetNode?.contextId).toBe(target.id);
+
+            const audits = graph.listAuditEvents(target.id, 20);
+            expect(audits.some((entry) => entry.action === 'promote_insight')).toBe(true);
+        } finally {
+            db.close();
+        }
+    });
 });

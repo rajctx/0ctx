@@ -18,6 +18,7 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("case 'mcp'");
         expect(source).toContain("case 'recall'");
         expect(source).toContain("case 'extract'");
+        expect(source).toContain("case 'insights'");
         expect(source).toContain("case 'repair'");
         expect(source).toContain("case 'reset'");
         expect(source).toContain("case 'shell'");
@@ -61,6 +62,7 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("0ctx checkpoints [list] [--repo-root=<path>] [--branch=<name>] [--worktree-path=<path>] [--limit=100] [--json]");
         expect(source).toContain("0ctx extract session [--repo-root=<path>] [--session-id=<id>] [--preview] [--keys=key1,key2] [--max-nodes=12] [--json]");
         expect(source).toContain("0ctx extract checkpoint [--repo-root=<path>] [--checkpoint-id=<id>] [--preview] [--keys=key1,key2] [--max-nodes=12] [--json]");
+        expect(source).toContain("0ctx insights promote --repo-root=<path> --node-id=<id> --target-context-id=<id>");
         expect(source).toContain("0ctx resume [--repo-root=<path>] [--session-id=<id>] [--json]");
         expect(source).toContain("0ctx rewind [--repo-root=<path>] [--checkpoint-id=<id>] [--json]");
         expect(source).toContain("0ctx explain [--repo-root=<path>] [--checkpoint-id=<id>] [--json]");

@@ -41,6 +41,7 @@ describe('MCP tool profile filtering', () => {
         expect(names.has('ctx_get_session')).toBe(true);
         expect(names.has('ctx_create_session_checkpoint')).toBe(true);
         expect(names.has('ctx_preview_insights')).toBe(true);
+        expect(names.has('ctx_promote_insight')).toBe(true);
         expect(names.has('ctx_recall')).toBe(false);
         expect(names.has('ctx_sync_now')).toBe(false);
     });

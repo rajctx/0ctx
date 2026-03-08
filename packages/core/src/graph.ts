@@ -27,6 +27,7 @@ import type {
     KnowledgeCandidate,
     KnowledgePreviewResult,
     KnowledgeExtractionResult,
+    InsightPromotionResult,
     ChatSessionSummary,
     ChatTurnSummary,
     SyncPolicy,
@@ -367,6 +368,39 @@ export class Graph {
         const scopeDigest = createHash('sha1').update(scope).digest('hex').slice(0, 12);
         const digest = createHash('sha1').update(`${type}\n${content.toLowerCase()}`).digest('hex').slice(0, 16);
         return `knowledge:${type}:${scopeDigest}:${digest}`;
+    }
+
+    private sanitizePromotedInsightTags(
+        tags: string[] | null | undefined,
+        sourceContextId: string,
+        sourceNodeId: string,
+        branch: string | null,
+        worktreePath: string | null
+    ): string[] {
+        const prefixesToStrip = [
+            'session:',
+            'checkpoint:',
+            'agent:',
+            'branch:',
+            'worktree:',
+            'source:',
+            'origin_context:',
+            'origin_node:'
+        ];
+        const kept = (tags ?? []).filter((tag): tag is string => {
+            if (typeof tag !== 'string' || tag.trim().length === 0) return false;
+            return !prefixesToStrip.some((prefix) => tag.startsWith(prefix));
+        });
+        const merged = [
+            ...kept,
+            'knowledge',
+            'promoted',
+            `origin_context:${sourceContextId}`,
+            `origin_node:${sourceNodeId}`,
+            branch ? `branch:${branch}` : null,
+            worktreePath ? `worktree:${worktreePath}` : null
+        ].filter((value): value is string => Boolean(value));
+        return Array.from(new Set(merged));
     }
 
     private tokenizeQuery(query: string): string[] {
@@ -1330,6 +1364,76 @@ export class Graph {
         }
 
         return results;
+    }
+
+    promoteInsightNode(
+        sourceContextId: string,
+        sourceNodeId: string,
+        targetContextId: string,
+        options: { branch?: string | null; worktreePath?: string | null } = {}
+    ): InsightPromotionResult {
+        const sourceNode = this.getNode(sourceNodeId);
+        if (!sourceNode || sourceNode.contextId !== sourceContextId) {
+            throw new Error(`Insight ${sourceNodeId} was not found in context ${sourceContextId}.`);
+        }
+        if (sourceNode.hidden) {
+            throw new Error(`Insight ${sourceNodeId} is hidden and cannot be promoted.`);
+        }
+        if (sourceNode.type === 'artifact') {
+            throw new Error(`Node ${sourceNodeId} is an artifact and cannot be promoted as an insight.`);
+        }
+
+        const branch = options.branch === undefined
+            ? this.extractTagValue(sourceNode.tags, 'branch:')
+            : (options.branch ?? null);
+        const worktreePath = options.worktreePath === undefined
+            ? this.extractTagValue(sourceNode.tags, 'worktree:')
+            : (options.worktreePath ?? null);
+        const type = sourceNode.type as Exclude<NodeType, 'artifact'>;
+        const key = this.buildKnowledgeKey(targetContextId, type, sourceNode.content, {
+            branch,
+            worktreePath
+        });
+        const existing = this.getByKey(targetContextId, key, { includeHidden: true });
+        if (existing) {
+            return {
+                sourceContextId,
+                targetContextId,
+                sourceNodeId,
+                targetNodeId: existing.id,
+                type,
+                content: sourceNode.content,
+                branch,
+                worktreePath,
+                key,
+                created: false,
+                reused: true
+            };
+        }
+
+        const promoted = this.addNode({
+            contextId: targetContextId,
+            type,
+            content: sourceNode.content,
+            key,
+            tags: this.sanitizePromotedInsightTags(sourceNode.tags, sourceContextId, sourceNodeId, branch, worktreePath),
+            source: 'promote:workspace',
+            hidden: false
+        });
+
+        return {
+            sourceContextId,
+            targetContextId,
+            sourceNodeId,
+            targetNodeId: promoted.id,
+            type,
+            content: sourceNode.content,
+            branch,
+            worktreePath,
+            key,
+            created: true,
+            reused: false
+        };
     }
 
     private collectSessionKnowledgeCandidates(

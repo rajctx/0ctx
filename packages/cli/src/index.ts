@@ -4448,9 +4448,13 @@ Daily use:
   0ctx checkpoints [list] [--repo-root=<path>] [--branch=<name>] [--worktree-path=<path>] [--limit=100] [--json]
   0ctx checkpoints create [--repo-root=<path>] [--session-id=<id>] [--name="..."] [--summary="..."] [--json]
   0ctx checkpoints show [--repo-root=<path>] [--checkpoint-id=<id>] [--json]
+  0ctx insights promote --repo-root=<path> --node-id=<id> --target-context-id=<id>
+                        [--branch=<name>] [--worktree-path=<path>] [--json]
   0ctx resume [--repo-root=<path>] [--session-id=<id>] [--json]
   0ctx rewind [--repo-root=<path>] [--checkpoint-id=<id>] [--json]
   0ctx explain [--repo-root=<path>] [--checkpoint-id=<id>] [--json]
+  0ctx insights promote --repo-root=<path> --node-id=<id> --target-context-id=<id>
+                        [--branch=<name>] [--worktree-path=<path>] [--json]
   0ctx status [--json] [--compact]
   0ctx shell
   0ctx version [--verbose] [--json]
@@ -5466,6 +5470,65 @@ async function commandExtract(positionalArgs: string[], flags: Record<string, st
     }
 }
 
+async function commandInsights(positionalArgs: string[], flags: Record<string, string | boolean>): Promise<number> {
+    const action = String(positionalArgs[0] || '').trim().toLowerCase();
+    const asJson = Boolean(flags.json);
+
+    if (action !== 'promote') {
+        console.error('Usage: 0ctx insights promote [--repo-root=<path>] --node-id=<id> --target-context-id=<id> [--branch=<name>] [--worktree-path=<path>] [--json]');
+        return 1;
+    }
+
+    const sourceContextId = await requireCommandContextId(flags, '0ctx insights promote');
+    if (!sourceContextId) return 1;
+
+    const nodeId = parseOptionalStringFlag(flags['node-id'] ?? flags.nodeId);
+    const targetContextId = parseOptionalStringFlag(flags['target-context-id'] ?? flags.targetContextId);
+    if (!nodeId) {
+        console.error("Missing required '--node-id=<id>' for 0ctx insights promote.");
+        return 1;
+    }
+    if (!targetContextId) {
+        console.error("Missing required '--target-context-id=<id>' for 0ctx insights promote.");
+        return 1;
+    }
+
+    const scope = resolveCommandWorkstreamScope(flags);
+
+    try {
+        const result = await sendToDaemon('promoteInsight', {
+            contextId: targetContextId,
+            sourceContextId,
+            nodeId,
+            branch: scope.branch,
+            worktreePath: scope.worktreePath
+        }) as {
+            targetNodeId: string;
+            type?: string;
+            key?: string;
+            branch?: string | null;
+            worktreePath?: string | null;
+            created: boolean;
+            reused: boolean;
+        };
+        return printJsonOrValue(asJson, result, () => {
+            console.log('\nPromote Insight\n');
+            console.log(`  Source workspace: ${sourceContextId}`);
+            console.log(`  Target workspace: ${targetContextId}`);
+            console.log(`  Source node:      ${nodeId}`);
+            console.log(`  Target node:      ${result.targetNodeId}`);
+            console.log(`  Type:             ${result.type ?? '-'}`);
+            console.log(`  Scope:            ${result.worktreePath ?? result.branch ?? 'workspace'}`);
+            console.log(`  Result:           ${result.created ? 'created' : 'reused'}`);
+            console.log(`  Key:              ${result.key ?? '-'}`);
+            console.log('');
+        });
+    } catch (error) {
+        console.error('Failed to promote insight:', error instanceof Error ? error.message : String(error));
+        return 1;
+    }
+}
+
 async function commandSyncPolicyGet(flags: Record<string, string | boolean>): Promise<number> {
     const contextId = await requireCommandContextId(flags, '0ctx sync policy get');
     if (!contextId) {
@@ -5847,6 +5910,8 @@ async function main(): Promise<number> {
                 return commandSessions(parsed.flags);
             case 'checkpoints':
                 return commandCheckpoints(parsed.subcommand, parsed.flags);
+            case 'insights':
+                return commandInsights(parsed.positionalArgs, parsed.flags);
             case 'extract':
                 return commandExtract(parsed.positionalArgs, parsed.flags);
             case 'resume':

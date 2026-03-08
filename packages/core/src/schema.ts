@@ -74,6 +74,7 @@ export type AuditAction =
     | 'resume_session'
     | 'explain_checkpoint'
     | 'extract_knowledge'
+    | 'promote_insight'
     | 'sync_upload'
     | 'sync_merge'
     | 'recall_feedback';
@@ -366,6 +367,20 @@ export interface KnowledgeExtractionResult {
     reusedCount: number;
     nodeCount: number;
     nodes: ContextNode[];
+}
+
+export interface InsightPromotionResult {
+    sourceContextId: string;
+    targetContextId: string;
+    sourceNodeId: string;
+    targetNodeId: string;
+    type: Exclude<NodeType, 'artifact'>;
+    content: string;
+    branch: string | null;
+    worktreePath: string | null;
+    key: string;
+    created: boolean;
+    reused: boolean;
 }
 
 export interface ChatSessionSummary {

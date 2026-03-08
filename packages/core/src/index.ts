@@ -35,6 +35,7 @@ export type {
     KnowledgeCandidate,
     KnowledgePreviewResult,
     KnowledgeExtractionResult,
+    InsightPromotionResult,
     ChatSessionSummary,
     ChatTurnSummary,
     SearchMatchReason,

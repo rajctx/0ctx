@@ -320,6 +320,21 @@ export const tools = [
         },
     },
     {
+        name: 'ctx_promote_insight',
+        description: 'Explicitly promote one reviewed insight node from a source workspace into the active workspace or another target workspace.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                sourceContextId: { type: 'string', description: 'Source workspace context ID that currently owns the reviewed insight.' },
+                nodeId: { type: 'string', description: 'Insight node ID to promote.' },
+                branch: { type: 'string', description: 'Optional target workstream branch for the promoted insight.' },
+                worktreePath: { type: 'string', description: 'Optional target worktree path for the promoted insight.' },
+                contextId: { type: 'string', description: 'Optional explicit target context ID override for this operation.' },
+            },
+            required: ['sourceContextId', 'nodeId'],
+        },
+    },
+    {
         name: 'ctx_recall',
         description: 'Unified recall before starting work. Combines temporal, topic, and graph context into one payload.',
         inputSchema: {
@@ -675,6 +690,7 @@ const TOOL_SCOPE_BY_NAME: Record<string, ToolScope> = {
     ctx_explain_checkpoint: 'core',
     ctx_preview_insights: 'core',
     ctx_extract_insights: 'core',
+    ctx_promote_insight: 'core',
     ctx_supersede: 'core',
     ctx_checkpoint: 'core',
     ctx_rewind: 'core',

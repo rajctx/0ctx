@@ -53,6 +53,7 @@ const CONTEXT_REQUIRED_METHODS = new Set([
     'getHandoffTimeline',
     'previewSessionKnowledge',
     'extractSessionKnowledge',
+    'promoteInsight',
     'saveCheckpoint',
     'createSessionCheckpoint',
     'listCheckpoints',
@@ -86,7 +87,8 @@ const MUTATING_ACTIONS: Record<string, AuditAction> = {
     rewind: 'rewind',
     rewindCheckpoint: 'rewind',
     createBackup: 'create_backup',
-    restoreBackup: 'restore_backup'
+    restoreBackup: 'restore_backup',
+    promoteInsight: 'promote_insight'
 };
 
 function getParams(req: DaemonRequest): RequestParams {
@@ -1430,7 +1432,7 @@ export function handleRequest(
                 'listBranchLanes', 'getWorkstreamBrief', 'getAgentContextPack', 'compareWorkstreams', 'listBranchSessions', 'listSessionMessages',
                 'listBranchCheckpoints', 'getSessionDetail', 'getCheckpointDetail',
                   'getHandoffTimeline', 'previewSessionKnowledge', 'previewCheckpointKnowledge',
-                  'extractSessionKnowledge', 'extractCheckpointKnowledge',
+                  'extractSessionKnowledge', 'extractCheckpointKnowledge', 'promoteInsight',
                   'saveCheckpoint', 'createSessionCheckpoint', 'rewind', 'rewindCheckpoint', 'listCheckpoints', 'resumeSession', 'explainCheckpoint',
                 'createSession', 'refreshSession', 'health', 'getCapabilities', 'metricsSnapshot',
                 'listAuditEvents', 'listRecallFeedback', 'createBackup', 'listBackups', 'restoreBackup',
@@ -2160,10 +2162,40 @@ export function handleRequest(
                 createdCount: result.createdCount,
                 reusedCount: result.reusedCount,
                 nodeCount: result.nodeCount
-              });
-              runtime.syncEngine?.enqueue(contextId!);
-              return result;
-          }
+            });
+            runtime.syncEngine?.enqueue(contextId!);
+            return result;
+        }
+        case 'promoteInsight': {
+            const sourceContextId = typeof params.sourceContextId === 'string' ? params.sourceContextId : null;
+            const nodeId = typeof params.nodeId === 'string' ? params.nodeId : null;
+            if (!sourceContextId || sourceContextId.trim().length === 0) {
+                throw new Error("Missing required 'sourceContextId' for promoteInsight.");
+            }
+            if (!nodeId || nodeId.trim().length === 0) {
+                throw new Error("Missing required 'nodeId' for promoteInsight.");
+            }
+            const result = graph.promoteInsightNode(sourceContextId, nodeId, contextId!, {
+                branch: typeof params.branch === 'string' ? params.branch : undefined,
+                worktreePath: typeof params.worktreePath === 'string' ? params.worktreePath : undefined
+            });
+            recordMutationAudit(graph, req, 'promote_insight', contextId, params, {
+                sourceContextId,
+                nodeId,
+                targetNodeId: result.targetNodeId,
+                created: result.created,
+                reused: result.reused
+            }, auditMetadata);
+            recordMutationEvent(runtime, connectionId, req, contextId, params, {
+                sourceContextId,
+                nodeId,
+                targetNodeId: result.targetNodeId,
+                created: result.created,
+                reused: result.reused
+            });
+            runtime.syncEngine?.enqueue(contextId!);
+            return result;
+        }
         case 'previewCheckpointKnowledge': {
             const checkpointId = typeof params.checkpointId === 'string' ? params.checkpointId : null;
             if (!checkpointId || checkpointId.trim().length === 0) {
