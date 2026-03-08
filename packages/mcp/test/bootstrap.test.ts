@@ -212,8 +212,8 @@ describe('bootstrapMcpRegistration', () => {
     it('defaults bootstrap client parsing to GA clients only', () => {
         expect(parseBootstrapClients(undefined)).toEqual(['claude', 'antigravity']);
         expect(parseBootstrapClients('ga')).toEqual(['claude', 'antigravity']);
-        expect(parseBootstrapClients('preview')).toEqual(['cursor', 'windsurf', 'codex']);
-        expect(parseBootstrapClients('all')).toEqual(['claude', 'cursor', 'windsurf', 'codex', 'antigravity']);
+        expect(parseBootstrapClients('preview')).toEqual(['claude', 'antigravity']);
+        expect(parseBootstrapClients('all')).toEqual(['claude', 'antigravity']);
         expect(parseBootstrapClients('cursor')).toEqual(['cursor']);
         expect(parseBootstrapClients('')).toEqual(['claude', 'antigravity']);
     });

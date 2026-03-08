@@ -7,6 +7,7 @@ import {
     getHookDebugRetentionDays,
     getHookDumpDir,
     getHookDumpRetentionDays,
+    isHookDebugArtifactsEnabled,
     persistHookDump,
     pruneHookDumps,
     persistHookTranscriptHistory,
@@ -17,6 +18,7 @@ const tempDirs: string[] = [];
 const originalHookDumpDir = process.env.CTX_HOOK_DUMP_DIR;
 const originalHookDumpRetentionDays = process.env.CTX_HOOK_DUMP_RETENTION_DAYS;
 const originalHookDebugRetentionDays = process.env.CTX_HOOK_DEBUG_RETENTION_DAYS;
+const originalHookDebugArtifacts = process.env.CTX_HOOK_DEBUG_ARTIFACTS;
 
 function createTempDir(): string {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), '0ctx-hook-dumps-'));
@@ -40,6 +42,11 @@ afterEach(() => {
     } else {
         process.env.CTX_HOOK_DEBUG_RETENTION_DAYS = originalHookDebugRetentionDays;
     }
+    if (originalHookDebugArtifacts === undefined) {
+        delete process.env.CTX_HOOK_DEBUG_ARTIFACTS;
+    } else {
+        process.env.CTX_HOOK_DEBUG_ARTIFACTS = originalHookDebugArtifacts;
+    }
     for (const dir of tempDirs.splice(0, tempDirs.length)) {
         fs.rmSync(dir, { recursive: true, force: true });
     }
@@ -49,6 +56,7 @@ describe('hook dump persistence', () => {
     it('writes a raw hook dump to the configured directory', () => {
         const dumpRoot = createTempDir();
         process.env.CTX_HOOK_DUMP_DIR = dumpRoot;
+        process.env.CTX_HOOK_DEBUG_ARTIFACTS = '1';
         const transcriptDir = createTempDir();
         const transcriptPath = path.join(transcriptDir, 'session.jsonl');
         fs.writeFileSync(transcriptPath, '{"type":"session_start"}\n', 'utf8');
@@ -112,6 +120,35 @@ describe('hook dump persistence', () => {
         expect(fs.readFileSync(String(transcriptSnapshotPath), 'utf8')).toBe('{"type":"session_start"}\n');
         expect(fs.readFileSync(String(transcriptHistoryPath), 'utf8')).toBe('{"type":"session_start"}\n');
         expect(fs.readFileSync(String(eventLogPath), 'utf8')).toBe('{"session_id":"demo-session"}\n');
+    });
+
+    it('keeps debug-heavy artifacts disabled by default', () => {
+        const dumpRoot = createTempDir();
+        process.env.CTX_HOOK_DUMP_DIR = dumpRoot;
+        delete process.env.CTX_HOOK_DEBUG_ARTIFACTS;
+
+        expect(isHookDebugArtifactsEnabled()).toBe(false);
+
+        const transcriptDir = createTempDir();
+        const transcriptPath = path.join(transcriptDir, 'session.jsonl');
+        fs.writeFileSync(transcriptPath, '{"type":"session_start"}\n', 'utf8');
+
+        const transcriptHistoryPath = persistHookTranscriptHistory({
+            agent: 'factory',
+            sessionId: 'demo-session',
+            transcriptPath,
+            now: 1700000000000
+        });
+        const eventLogPath = appendHookEventLog({
+            agent: 'factory',
+            sessionId: 'demo-session',
+            rawText: '{"session_id":"demo-session"}'
+        });
+
+        expect(transcriptHistoryPath).toBeNull();
+        expect(eventLogPath).toBeNull();
+        expect(fs.existsSync(path.join(dumpRoot, 'factory', 'events'))).toBe(false);
+        expect(fs.existsSync(path.join(dumpRoot, 'factory', 'transcript-history'))).toBe(false);
     });
 
     it('prunes old hook dump files using the configured retention window', () => {

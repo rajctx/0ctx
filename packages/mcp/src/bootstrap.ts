@@ -6,7 +6,6 @@ import { resolveMcpToolProfile } from './tools';
 type SupportedClient = 'claude' | 'cursor' | 'windsurf' | 'codex' | 'antigravity';
 const SUPPORTED_CLIENTS: SupportedClient[] = ['claude', 'cursor', 'windsurf', 'codex', 'antigravity'];
 const DEFAULT_CLIENTS: SupportedClient[] = ['claude', 'antigravity'];
-const PREVIEW_CLIENTS: SupportedClient[] = ['cursor', 'windsurf', 'codex'];
 
 interface Registration {
     command: string;
@@ -34,8 +33,6 @@ interface BootstrapResult {
 export function parseBootstrapClients(raw: string | undefined): SupportedClient[] {
     const source = (raw || 'ga').trim().toLowerCase();
     if (!source || source === 'ga') return DEFAULT_CLIENTS;
-    if (source === 'preview') return PREVIEW_CLIENTS;
-    if (source === 'all') return SUPPORTED_CLIENTS;
 
     const parsed = source
         .split(/[,\s]+/)

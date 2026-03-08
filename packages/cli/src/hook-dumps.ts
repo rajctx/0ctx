@@ -35,6 +35,16 @@ export function getHookDebugRetentionDays(): number {
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 7;
 }
 
+export function isHookDebugArtifactsEnabled(): boolean {
+    const raw = process.env.CTX_HOOK_DEBUG_ARTIFACTS;
+    if (typeof raw !== 'string') return false;
+    const normalized = raw.trim().toLowerCase();
+    return normalized === '1'
+        || normalized === 'true'
+        || normalized === 'yes'
+        || normalized === 'on';
+}
+
 export interface HookDumpPruneResult {
     rootDir: string;
     maxAgeDays: number;
@@ -180,6 +190,10 @@ export function persistHookTranscriptHistory(options: {
     transcriptPath: string | null;
     now?: number;
 }): string | null {
+    if (!isHookDebugArtifactsEnabled()) {
+        return null;
+    }
+
     if (!options.transcriptPath || options.transcriptPath.trim().length === 0) {
         return null;
     }
@@ -203,7 +217,11 @@ export function appendHookEventLog(options: {
     agent: HookSupportedAgent;
     sessionId: string;
     rawText: string;
-}): string {
+}): string | null {
+    if (!isHookDebugArtifactsEnabled()) {
+        return null;
+    }
+
     const dir = path.join(getHookDumpDir(), options.agent, 'events');
     const filePath = path.join(dir, `${sanitizeSegment(options.sessionId)}.ndjson`);
     const normalizedText = `${options.rawText.replace(/\s+$/, '')}\n`;
