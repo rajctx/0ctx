@@ -187,6 +187,8 @@ export interface BranchLaneSummary {
     unstagedChangeCount: number | null;
     untrackedCount: number | null;
     baseline?: WorkstreamBaselineComparison | null;
+    stateKind?: 'current' | 'ahead' | 'behind' | 'diverged' | 'detached' | 'drifted' | 'dirty' | 'elsewhere' | 'unknown';
+    stateSummary?: string | null;
 }
 
 export interface AgentSessionSummary extends ChatSessionSummary {
@@ -260,6 +262,8 @@ export interface WorkstreamBrief {
     unstagedChangeCount: number | null;
     untrackedCount: number | null;
     baseline: WorkstreamBaselineComparison | null;
+    stateKind?: 'current' | 'ahead' | 'behind' | 'diverged' | 'detached' | 'drifted' | 'dirty' | 'elsewhere' | 'unknown';
+    stateSummary?: string | null;
     recentSessions: AgentSessionSummary[];
     latestCheckpoints: CheckpointSummary[];
     insights: InsightSummary[];

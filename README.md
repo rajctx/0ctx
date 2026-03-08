@@ -62,8 +62,8 @@ cd <repo>
 0ctx repair
 
 # Preview integrations are opt-in only
-0ctx enable --clients=preview
-0ctx bootstrap --clients=preview
+0ctx enable --clients=codex
+0ctx bootstrap --clients=codex
 
 # Check connector posture
 0ctx connector status --json
@@ -75,8 +75,10 @@ cd <repo>
 0ctx connector verify --require-cloud --json
 
 # Get/set per-context sync policy
-0ctx sync policy get --context-id=<contextId>
-0ctx sync policy set full_sync --context-id=<contextId>
+0ctx sync policy get --repo-root=.
+0ctx sync policy set metadata_only --repo-root=.
+# Opt in to richer cloud sync explicitly
+0ctx sync policy set full_sync --repo-root=.
 
 # Run connector control loop in foreground (service target mode)
 0ctx connector run --interval-ms=5000

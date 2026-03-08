@@ -239,6 +239,109 @@ interface GitWorktreeEntry {
     detached: boolean;
 }
 
+function deriveWorkstreamState(
+    data: {
+        branch: string | null;
+        isDetachedHead: boolean | null;
+        headDiffersFromCaptured: boolean | null;
+        checkedOutHere?: boolean | null;
+        checkedOutElsewhere?: boolean | null;
+        hasUncommittedChanges: boolean | null;
+        aheadCount: number | null;
+        behindCount: number | null;
+        baseline?: WorkstreamBaselineComparison | null;
+        upstream?: string | null;
+        isCurrent?: boolean | null;
+    }
+): {
+    kind: 'current' | 'ahead' | 'behind' | 'diverged' | 'detached' | 'drifted' | 'dirty' | 'elsewhere' | 'unknown';
+    summary: string;
+} {
+    if (data.isDetachedHead) {
+        return {
+            kind: 'detached',
+            summary: 'Detached HEAD. This checkout is not on a named branch.'
+        };
+    }
+
+    if (data.checkedOutHere !== true && data.checkedOutElsewhere === true) {
+        return {
+            kind: 'elsewhere',
+            summary: 'Checked out in another worktree, not in the current checkout.'
+        };
+    }
+
+    if (data.headDiffersFromCaptured) {
+        return {
+            kind: 'drifted',
+            summary: 'Current HEAD differs from the last captured commit.'
+        };
+    }
+
+    if (data.hasUncommittedChanges) {
+        return {
+            kind: 'dirty',
+            summary: 'Working tree has local uncommitted changes.'
+        };
+    }
+
+    if (typeof data.aheadCount === 'number' && typeof data.behindCount === 'number' && data.upstream) {
+        if (data.aheadCount > 0 && data.behindCount > 0) {
+            return {
+                kind: 'diverged',
+                summary: `Diverged from upstream (${data.aheadCount} ahead / ${data.behindCount} behind).`
+            };
+        }
+        if (data.aheadCount > 0) {
+            return {
+                kind: 'ahead',
+                summary: `Ahead of upstream by ${data.aheadCount} commit${data.aheadCount === 1 ? '' : 's'}.`
+            };
+        }
+        if (data.behindCount > 0) {
+            return {
+                kind: 'behind',
+                summary: `Behind upstream by ${data.behindCount} commit${data.behindCount === 1 ? '' : 's'}.`
+            };
+        }
+    }
+
+    if (data.baseline?.comparable) {
+        if (typeof data.baseline.aheadCount === 'number' && typeof data.baseline.behindCount === 'number') {
+            if (data.baseline.aheadCount > 0 && data.baseline.behindCount > 0) {
+                return {
+                    kind: 'diverged',
+                    summary: `Diverged from ${data.baseline.branch || 'the default branch'} (${data.baseline.aheadCount} ahead / ${data.baseline.behindCount} behind).`
+                };
+            }
+            if (data.baseline.aheadCount > 0) {
+                return {
+                    kind: 'ahead',
+                    summary: `Ahead of ${data.baseline.branch || 'the default branch'} by ${data.baseline.aheadCount} commit${data.baseline.aheadCount === 1 ? '' : 's'}.`
+                };
+            }
+            if (data.baseline.behindCount > 0) {
+                return {
+                    kind: 'behind',
+                    summary: `Behind ${data.baseline.branch || 'the default branch'} by ${data.baseline.behindCount} commit${data.baseline.behindCount === 1 ? '' : 's'}.`
+                };
+            }
+        }
+    }
+
+    if (data.isCurrent === true || data.checkedOutHere === true || Boolean(data.branch)) {
+        return {
+            kind: 'current',
+            summary: 'Current local workstream is in sync with captured state.'
+        };
+    }
+
+    return {
+        kind: 'unknown',
+        summary: 'Workstream state could not be determined.'
+    };
+}
+
 function formatRelativeAge(timestamp: number, now = Date.now()): string {
     const delta = Math.max(0, now - timestamp);
     const minute = 60_000;
@@ -588,7 +691,9 @@ function enrichWorkstreamLane(
             stagedChangeCount: null,
             unstagedChangeCount: null,
             untrackedCount: null,
-            baseline: null
+            baseline: null,
+            stateKind: 'unknown',
+            stateSummary: 'Workstream state could not be determined.'
         };
     }
 
@@ -610,6 +715,24 @@ function enrichWorkstreamLane(
         normalizedWorktree,
         normalizedCurrentRoot
     );
+    const baseline = compareAgainstBaselineBranch(repositoryRoot, lane.branch);
+    const state = deriveWorkstreamState({
+        branch: lane.branch,
+        isDetachedHead: gitHead?.detached ?? null,
+        headDiffersFromCaptured: gitHead?.headSha && lane.lastCommitSha
+            ? gitHead.headSha !== lane.lastCommitSha
+            : null,
+        checkedOutHere: checkoutState.checkedOutHere,
+        checkedOutElsewhere: checkoutState.checkedOutElsewhere,
+        hasUncommittedChanges: workingTreeState?.hasUncommittedChanges ?? null,
+        aheadCount: counts.length >= 2 ? counts[0] : null,
+        behindCount: counts.length >= 2 ? counts[1] : null,
+        baseline,
+        upstream,
+        isCurrent: currentBranch
+            ? currentBranch === lane.branch && (!normalizedWorktree || normalizedCurrentRoot === normalizedWorktree)
+            : null
+    });
 
     return {
         ...lane,
@@ -634,7 +757,9 @@ function enrichWorkstreamLane(
         stagedChangeCount: workingTreeState?.stagedChangeCount ?? null,
         unstagedChangeCount: workingTreeState?.unstagedChangeCount ?? null,
         untrackedCount: workingTreeState?.untrackedCount ?? null,
-        baseline: compareAgainstBaselineBranch(repositoryRoot, lane.branch)
+        baseline,
+        stateKind: state.kind,
+        stateSummary: state.summary
     };
 }
 
@@ -777,12 +902,30 @@ function buildWorkstreamBrief(
             worktreePath,
             inferredCurrent.worktreePath ?? repositoryRoot
         );
+    const hasUncommittedChanges = lane?.hasUncommittedChanges ?? workingTreeState?.hasUncommittedChanges ?? null;
+    const stagedChangeCount = lane?.stagedChangeCount ?? workingTreeState?.stagedChangeCount ?? null;
+    const unstagedChangeCount = lane?.unstagedChangeCount ?? workingTreeState?.unstagedChangeCount ?? null;
+    const untrackedCount = lane?.untrackedCount ?? workingTreeState?.untrackedCount ?? null;
+    const state = deriveWorkstreamState({
+        branch,
+        isDetachedHead,
+        headDiffersFromCaptured,
+        checkedOutHere: checkoutState.checkedOutHere,
+        checkedOutElsewhere: checkoutState.checkedOutElsewhere,
+        hasUncommittedChanges,
+        aheadCount: lane?.aheadCount ?? null,
+        behindCount: lane?.behindCount ?? null,
+        baseline,
+        upstream: lane?.upstream ?? null,
+        isCurrent
+    });
 
     const lines = [
         '0ctx project memory',
         `Workspace: ${context.name}`,
         `Current workstream: ${branch ?? (isDetachedHead && currentHeadSha ? `detached HEAD @ ${currentHeadSha.slice(0, 12)}` : 'no git branch detected')}`
     ];
+    lines.push(`Status: ${state.summary}`);
 
     if (lane) {
         const laneFacts = [
@@ -835,11 +978,6 @@ function buildWorkstreamBrief(
     if (headDiffersFromCaptured && lane?.lastCommitSha && currentHeadSha) {
         lines.push(`Capture drift: last captured commit ${lane.lastCommitSha.slice(0, 12)} differs from checked-out HEAD ${currentHeadSha.slice(0, 12)}.`);
     }
-
-    const hasUncommittedChanges = lane?.hasUncommittedChanges ?? workingTreeState?.hasUncommittedChanges ?? null;
-    const stagedChangeCount = lane?.stagedChangeCount ?? workingTreeState?.stagedChangeCount ?? null;
-    const unstagedChangeCount = lane?.unstagedChangeCount ?? workingTreeState?.unstagedChangeCount ?? null;
-    const untrackedCount = lane?.untrackedCount ?? workingTreeState?.untrackedCount ?? null;
 
     if (hasUncommittedChanges) {
         const dirtyFacts = [
@@ -917,6 +1055,8 @@ function buildWorkstreamBrief(
         unstagedChangeCount,
         untrackedCount,
         baseline,
+        stateKind: state.kind,
+        stateSummary: state.summary,
         recentSessions,
         latestCheckpoints,
         insights,

@@ -4559,6 +4559,7 @@ Sync:
   0ctx sync status   Show sync engine health and queue
   0ctx sync policy get [--repo-root=<path>] [--json]
   0ctx sync policy set <local_only|metadata_only|full_sync> [--repo-root=<path>] [--json]
+                    metadata_only is the normal default; full_sync is explicit opt-in
 
 Connector:
   0ctx connector service install|enable|disable|uninstall|status|start|stop|restart
@@ -4738,6 +4739,14 @@ function resolveCommandRepoRoot(flags: Record<string, string | boolean>): string
     return resolveRepoRoot(parseOptionalStringFlag(flags['repo-root'] ?? flags.repoRoot));
 }
 
+function formatSyncPolicyLabel(policy: string | null | undefined): string {
+    const normalized = String(policy ?? 'metadata_only').trim().toLowerCase();
+    if (normalized === 'metadata_only') return 'metadata_only (default)';
+    if (normalized === 'full_sync') return 'full_sync (opt-in)';
+    if (normalized === 'local_only') return 'local_only';
+    return normalized;
+}
+
 function resolveCommandWorkstreamScope(flags: Record<string, string | boolean>): {
     repoRoot: string;
     branch: string | null;
@@ -4902,6 +4911,9 @@ async function commandBranches(args: string[], flags: Record<string, string | bo
                 if (result.lastCommitSha) {
                     console.log(`  Last commit: ${String(result.lastCommitSha).slice(0, 12)}`);
                 }
+                if (result.stateSummary) {
+                    console.log(`  Status: ${result.stateSummary}`);
+                }
                 if (result.isDetachedHead && result.currentHeadSha) {
                     console.log(`  HEAD: detached @ ${String(result.currentHeadSha).slice(0, 12)}`);
                 } else if (result.currentHeadSha) {
@@ -5056,6 +5068,8 @@ async function commandBranches(args: string[], flags: Record<string, string | bo
             checkedOutWorktreePaths?: string[];
             checkedOutHere?: boolean | null;
             checkedOutElsewhere?: boolean | null;
+            stateKind?: string | null;
+            stateSummary?: string | null;
             baseline?: { summary?: string | null } | null;
         }>;
         return printJsonOrValue(asJson, result, () => {
@@ -5070,6 +5084,9 @@ async function commandBranches(args: string[], flags: Record<string, string | bo
                 console.log(`    Sessions: ${lane.sessionCount} | Checkpoints: ${lane.checkpointCount}`);
                 if (lane.lastAgent) console.log(`    Last agent: ${lane.lastAgent}`);
                 if (lane.lastCommitSha) console.log(`    Last commit: ${String(lane.lastCommitSha).slice(0, 12)}`);
+                if (lane.stateSummary) {
+                    console.log(`    Status: ${lane.stateSummary}`);
+                }
                 if (lane.isDetachedHead && lane.currentHeadSha) {
                     console.log(`    HEAD: detached @ ${String(lane.currentHeadSha).slice(0, 12)}`);
                 } else if (lane.currentHeadSha || lane.currentHeadRef) {
@@ -5584,7 +5601,12 @@ async function commandSyncPolicyGet(flags: Record<string, string | boolean>): Pr
         const result = await sendToDaemon('getSyncPolicy', { contextId }) as { contextId: string; syncPolicy: string };
         console.log('\nSync Policy\n');
         console.log(`  Context: ${result.contextId}`);
-        console.log(`  Policy:  ${result.syncPolicy}`);
+        console.log(`  Policy:  ${formatSyncPolicyLabel(result.syncPolicy)}`);
+        if (result.syncPolicy === 'metadata_only') {
+            console.log('  Note:    Syncs lean metadata only. Raw payloads stay local by default.');
+        } else if (result.syncPolicy === 'full_sync') {
+            console.log('  Note:    Richer cloud sync is explicitly enabled for this workspace.');
+        }
         console.log('');
         return 0;
     } catch (error) {
@@ -5610,7 +5632,12 @@ async function commandSyncPolicySet(
 
     try {
         const result = await sendToDaemon('setSyncPolicy', { contextId, syncPolicy: policy }) as { contextId: string; syncPolicy: string };
-        console.log(`Sync policy updated: ${result.contextId} -> ${result.syncPolicy}`);
+        console.log(`Sync policy updated: ${result.contextId} -> ${formatSyncPolicyLabel(result.syncPolicy)}`);
+        if (result.syncPolicy === 'metadata_only') {
+            console.log('Lean default restored: raw payloads remain local unless you opt into richer sync.');
+        } else if (result.syncPolicy === 'full_sync') {
+            console.log('Full sync is now enabled explicitly for this workspace.');
+        }
         return 0;
     } catch (error) {
         console.error('Failed to set sync policy:', error instanceof Error ? error.message : String(error));

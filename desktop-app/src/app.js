@@ -380,6 +380,9 @@ function describeWorkstreamCheckout(lane) {
 
 function describeWorkstreamSync(lane) {
   if (!lane) return '';
+  if (lane.stateSummary) {
+    return String(lane.stateSummary);
+  }
   const localChanges = describeWorkingTreeState(lane);
   const checkout = describeWorkstreamCheckout(lane);
   let summary = '';
@@ -1656,8 +1659,14 @@ function renderWorkspaces() {
         },
         {
           title: 'Default sync policy',
-          detail: humanizeLabel(context.syncPolicy || 'metadata_only'),
-          hint: 'Local-first storage remains the source of truth.'
+          detail: context.syncPolicy === 'full_sync'
+            ? 'Full Sync (opt-in)'
+            : context.syncPolicy === 'local_only'
+              ? 'Local Only'
+              : 'Metadata Only (default)',
+          hint: context.syncPolicy === 'full_sync'
+            ? 'Richer cloud sync is enabled explicitly for this workspace.'
+            : 'Local-first storage remains the source of truth. Raw payloads stay local by default.'
         }
       ]
     : [
