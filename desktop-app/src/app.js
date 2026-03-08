@@ -1542,7 +1542,7 @@ function renderSessions() {
   const meta = [
     { label: 'Captured', value: formatTime(turn.createdAt) },
     { label: 'Session checkpoints', value: String(state.sessionDetail?.checkpointCount || 0) },
-    { label: 'Advanced data', value: turn.hasPayload ? 'Available on demand' : 'No sidecar payload' },
+    { label: 'Debug payload', value: turn.hasPayload ? 'Available on demand' : 'No sidecar payload' },
     { label: 'Session summary', value: short(state.sessionDetail?.session?.summary || turn.sessionId || 'No session summary stored', 88) }
   ];
   document.getElementById('turnMeta').innerHTML = meta.map((item) => {
@@ -1572,7 +1572,7 @@ function renderSessions() {
     ? 'Captured sidecar payload'
     : 'No payload stored for this message';
   document.getElementById('payloadText').textContent = turn.hasPayload
-    ? (state.payload ? jsonText(state.payload) : 'Advanced payload not loaded yet.')
+    ? (state.payload ? jsonText(state.payload) : 'Debug payload not loaded yet.')
     : 'This message has no raw payload sidecar.';
 
   const preview = activeSessionKnowledgePreview();
@@ -1953,9 +1953,9 @@ function renderWorkspaces() {
     setupPageMeta.textContent = state.runtimeIssue
       ? state.runtimeIssue.detail
       : installedGa.length > 0
-        ? `${installedGa.length} GA integration${installedGa.length === 1 ? '' : 's'} ${installedGa.length === 1 ? 'is' : 'are'} installed on this machine. Use this screen only when you need to enable another repo, add another agent, run a smoke test, or repair the runtime.`
+        ? `${installedGa.length} GA integration${installedGa.length === 1 ? '' : 's'} ${installedGa.length === 1 ? 'is' : 'are'} installed on this machine. Use this screen only to enable another repo, add another GA agent, run a smoke test, or repair the runtime.`
         : installedPreview.length > 0
-          ? 'Only preview integrations are installed on this machine. Install Claude, Factory, or Antigravity here when you want the GA path.'
+          ? 'Only preview integrations are installed on this machine. The normal product path uses Claude, Factory, or Antigravity.'
         : 'Enable the repo, install the integrations you actually use, then leave this screen. Daily work should happen in workstreams, sessions, and checkpoints.';
   }
   document.getElementById('hookSummary').textContent = `${installedGa.length} GA installed / ${gaHooks.length}`;
@@ -1989,11 +1989,11 @@ function renderWorkspaces() {
       hint: `provider: ${state.auth.provider || 'unknown'}`
     },
     {
-      title: 'Installed integrations',
+      title: 'GA integrations',
       detail: installedGa.length > 0 ? integrationListText(installedGa) : 'No GA integrations installed',
       hint: installedPreview.length > 0
         ? 'Preview integrations are installed separately and kept out of the normal product path.'
-        : 'Install only the agents you actually use on this machine.'
+        : 'Install only the GA agents you actually use on this machine.'
       }
     ];
     document.getElementById('setupSupportList').innerHTML = supportItems.map((item) => `
@@ -2005,7 +2005,7 @@ function renderWorkspaces() {
     `).join('');
   document.getElementById('setupSupportCopy').textContent = state.runtimeIssue
       ? state.runtimeIssue.detail
-      : 'Use utilities only when you need to enable a repo, install integrations, smoke-test capture, check updates, or repair the local runtime.';
+      : 'Use utilities only when you need to enable a repo, install GA integrations, smoke-test capture, check updates, or repair the local runtime.';
   }
 
 function renderAll() {

@@ -274,12 +274,13 @@ function parseEnableMcpClients(raw: string | boolean | undefined): SupportedClie
 
 function validateExplicitPreviewSelection(
     raw: string | boolean | undefined,
-    explicitExample: string
+    previewExample: string,
+    gaExample = 'ga'
 ): string | null {
     if (!raw || typeof raw !== 'string') return null;
     const normalized = raw.trim().toLowerCase();
     if (normalized === 'preview' || normalized === 'all') {
-        return `Preview integrations must be named explicitly. Use --clients=${explicitExample}.`;
+        return `Preview integrations must be named explicitly. Use --clients=${gaExample} for the normal path or --clients=${previewExample} to opt into preview integrations.`;
     }
     return null;
 }
@@ -998,7 +999,7 @@ async function commandStatus(flags: Record<string, string | boolean> = {}): Prom
 
 async function commandBootstrap(flags: Record<string, string | boolean>): Promise<number> {
     const p = await import('@clack/prompts');
-    const previewError = validateExplicitPreviewSelection(flags.clients, 'claude,antigravity,codex');
+    const previewError = validateExplicitPreviewSelection(flags.clients, 'codex,cursor,windsurf');
     if (previewError) {
         console.error(previewError);
         return 1;
@@ -1112,7 +1113,7 @@ async function commandInstall(flags: Record<string, string | boolean>): Promise<
     const quiet = Boolean(flags.quiet);
     const asJson = Boolean(flags.json);
     const skipBootstrap = Boolean(flags['skip-bootstrap']);
-    const previewError = validateExplicitPreviewSelection(flags.clients, 'claude,factory,antigravity,codex');
+    const previewError = validateExplicitPreviewSelection(flags.clients, 'codex,cursor,windsurf');
     if (previewError) {
         console.error(previewError);
         return 1;
@@ -1184,7 +1185,7 @@ async function commandEnable(flags: Record<string, string | boolean>): Promise<n
     const repoRoot = resolveRepoRoot(parseOptionalStringFlag(flags['repo-root'] ?? flags.repoRoot));
     const requestedName = parseOptionalStringFlag(flags.name ?? flags['workspace-name'] ?? flags.workspaceName);
     const workspaceName = requestedName ?? (path.basename(repoRoot) || 'Workspace');
-    const hookPreviewError = validateExplicitPreviewSelection(flags.clients, 'claude,factory,antigravity,codex');
+    const hookPreviewError = validateExplicitPreviewSelection(flags.clients, 'codex,cursor,windsurf');
     if (hookPreviewError) {
         console.error(hookPreviewError);
         return 1;
@@ -2967,7 +2968,7 @@ async function commandConnectorHook(action: string | undefined, flags: Record<st
         const repoRoot = resolveRepoRoot(parseOptionalStringFlag(flags['repo-root']));
         const requestedContextId = parseOptionalStringFlag(flags['context-id'] ?? flags.contextId);
         const contextId = await resolveContextIdForHookIngest(repoRoot, requestedContextId);
-        const previewError = validateExplicitPreviewSelection(flags.clients, 'claude,factory,antigravity,codex');
+        const previewError = validateExplicitPreviewSelection(flags.clients, 'codex,cursor,windsurf');
         if (previewError) {
             console.error(previewError);
             return 1;
@@ -4166,7 +4167,7 @@ async function commandSetup(flags: Record<string, string | boolean>): Promise<nu
     const createContextName = parseOptionalStringFlag(flags['create-context']);
     const dashboardQueryInput = flags['dashboard-query'];
     const steps: SetupStep[] = [];
-    const previewError = validateExplicitPreviewSelection(flags.clients, 'claude,factory,antigravity,codex');
+    const previewError = validateExplicitPreviewSelection(flags.clients, 'codex,cursor,windsurf');
     if (previewError) {
         console.error(previewError);
         return 1;
@@ -4453,8 +4454,6 @@ Daily use:
   0ctx resume [--repo-root=<path>] [--session-id=<id>] [--json]
   0ctx rewind [--repo-root=<path>] [--checkpoint-id=<id>] [--json]
   0ctx explain [--repo-root=<path>] [--checkpoint-id=<id>] [--json]
-  0ctx insights promote --repo-root=<path> --node-id=<id> --target-context-id=<id>
-                        [--branch=<name>] [--worktree-path=<path>] [--json]
   0ctx status [--json] [--compact]
   0ctx shell
   0ctx version [--verbose] [--json]
@@ -4462,7 +4461,6 @@ Daily use:
 
 Supported integrations:
   GA: Claude, Factory, Antigravity
-  Preview: Codex (notify + archive), Cursor, Windsurf
 
 Authentication:
   0ctx auth login
@@ -4541,7 +4539,7 @@ Capture support:
 Client scope defaults:
   ga      Supported-by-default product path
   Preview integrations must be named explicitly when you opt into them.
-  Example: --clients=codex
+  Example: --clients=codex or --clients=cursor,windsurf
 
 Authentication:
   0ctx auth login    Start device-code login flow

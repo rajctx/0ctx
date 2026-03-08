@@ -82,7 +82,7 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("Support overrides:");
         expect(source).toContain("0ctx connector hook install [--clients=ga|<explicit-list>] [--repo-root=<path>] [--global]");
         expect(source).toContain("Preview integrations must be named explicitly when you opt into them.");
-        expect(source).toContain("Example: --clients=codex");
+        expect(source).toContain("Example: --clients=codex or --clients=cursor,windsurf");
         expect(source).toContain("0ctx connector hook prune [--days=14] [--json]");
         expect(source).toContain("const DEFAULT_HOOK_INSTALL_CLIENTS: HookInstallClient[] = ['claude', 'factory', 'antigravity'];");
         expect(source).toContain("0ctx connector hook status [--json]");
