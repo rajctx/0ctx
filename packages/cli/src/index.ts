@@ -4467,7 +4467,7 @@ Authentication:
   0ctx auth logout
   0ctx auth status [--json]
 
-Need machine management, sync, connector controls, or preview install paths?
+Need machine management or deeper diagnostics?
   0ctx help --advanced
 `);
         return;
@@ -4889,6 +4889,9 @@ async function commandBranches(args: string[], flags: Record<string, string | bo
                 stagedChangeCount?: number | null;
                 unstagedChangeCount?: number | null;
                 untrackedCount?: number | null;
+                stateKind?: string | null;
+                stateSummary?: string | null;
+                stateActionHint?: string | null;
                 baseline?: { summary?: string | null } | null;
                 recentSessions?: Array<{ summary?: string | null; agent?: string | null }>;
                 latestCheckpoints?: Array<{ name?: string | null; summary?: string | null }>;
@@ -4913,6 +4916,9 @@ async function commandBranches(args: string[], flags: Record<string, string | bo
                 }
                 if (result.stateSummary) {
                     console.log(`  Status: ${result.stateSummary}`);
+                }
+                if (result.stateActionHint) {
+                    console.log(`  Next: ${result.stateActionHint}`);
                 }
                 if (result.isDetachedHead && result.currentHeadSha) {
                     console.log(`  HEAD: detached @ ${String(result.currentHeadSha).slice(0, 12)}`);
@@ -5070,6 +5076,7 @@ async function commandBranches(args: string[], flags: Record<string, string | bo
             checkedOutElsewhere?: boolean | null;
             stateKind?: string | null;
             stateSummary?: string | null;
+            stateActionHint?: string | null;
             baseline?: { summary?: string | null } | null;
         }>;
         return printJsonOrValue(asJson, result, () => {
@@ -5086,6 +5093,9 @@ async function commandBranches(args: string[], flags: Record<string, string | bo
                 if (lane.lastCommitSha) console.log(`    Last commit: ${String(lane.lastCommitSha).slice(0, 12)}`);
                 if (lane.stateSummary) {
                     console.log(`    Status: ${lane.stateSummary}`);
+                }
+                if (lane.stateActionHint) {
+                    console.log(`    Next: ${lane.stateActionHint}`);
                 }
                 if (lane.isDetachedHead && lane.currentHeadSha) {
                     console.log(`    HEAD: detached @ ${String(lane.currentHeadSha).slice(0, 12)}`);

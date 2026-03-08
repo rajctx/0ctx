@@ -256,8 +256,29 @@ export class Graph {
         if (/\b(bridge error|runtime issue|runtime unavailable|preview knowledge failed|extract knowledge failed|preview insights failed|save insights failed|save checkpoint insights failed|create checkpoint failed)\b/.test(normalized)) {
             return true;
         }
+        if (/^(next (best )?move|natural next steps?|what changed)\b/.test(normalized)) {
+            return true;
+        }
         if (
-            /\b(implemented|updated|patched|validated|verified|compiled|built|installed|restarted|refreshed|copied|selected)\b/.test(normalized)
+            /\b(test|tests|build|builds|validation|smoke|lint|typecheck|compile|compiled|installer|msi|nsis)\b/.test(normalized)
+            && /\b(passed|green|successful|succeeded|completed|done)\b/.test(normalized)
+        ) {
+            return true;
+        }
+        if (
+            /^(?:npm|pnpm|yarn|node|git|0ctx)\b/.test(normalized)
+            && !/\b(should|must|default|normal path|golden path|recommended|policy|workstream|workspace|checkpoint|session)\b/.test(normalized)
+        ) {
+            return true;
+        }
+        if (
+            /\b(linear|issue|ticket|backlog|roadmap)\b/.test(normalized)
+            && /\b(created|updated|closed|tracked|logged|moved)\b/.test(normalized)
+        ) {
+            return true;
+        }
+        if (
+            /^(implemented|updated|patched|validated|verified|compiled|built|installed|restarted|refreshed|copied|selected|created|closed|logged|tracked)\b/.test(normalized)
             && !/\b(decided|decision|must|need to|goal|constraint|assume|open question)\b/.test(normalized)
         ) {
             return true;
@@ -282,7 +303,12 @@ export class Graph {
         if (/(^|\s)(click|choose|select|open|refresh|restart|copy|paste)\b/.test(normalized)) return null;
         const lowerRole = (role ?? '').toLowerCase();
 
-        if (normalized.endsWith('?') || /^(why|what|how|when|where|which|who)\b/.test(normalized)) {
+        if (
+            (normalized.endsWith('?') || /^(why|what|how|when|where|which|who)\b/.test(normalized))
+            && !/^(can|could|would|will)\s+you\b/.test(normalized)
+            && !/^do you want\b/.test(normalized)
+            && !/^please\b/.test(normalized)
+        ) {
             return {
                 type: 'open_question',
                 confidence: 0.92,
@@ -291,6 +317,9 @@ export class Graph {
         }
 
         if (/\b(we need to|need to build|need to create|need to support|want to|goal is to|aim is to|objective is to|build a|build an|create a|create an|implement a|implement an|add support for)\b/.test(normalized)) {
+            if (/\b(test|tests|smoke|refresh|restart|rerun|validate|repair|debug|click|open|copy|paste|command|button)\b/.test(normalized)) {
+                return null;
+            }
             return {
                 type: 'goal',
                 confidence: lowerRole === 'user' ? 0.88 : 0.8,
@@ -306,7 +335,10 @@ export class Graph {
             };
         }
 
-        if (/\b(decided|decision|going with|adopt|adopted|chosen|choose to|switched to|default to|standardize|migrate to|now uses|first-class|promote)\b/.test(normalized)) {
+        if (/\b(decided|decision|going with|adopt|adopted|chosen|choose to|switched to|default to|standardize|migrate to)\b/.test(normalized)) {
+            if (/\b(test|tests|smoke|refresh|restart|rerun|validate|repair|debug|build|compiled|verified|installed)\b/.test(normalized)) {
+                return null;
+            }
             return {
                 type: 'decision',
                 confidence: lowerRole === 'assistant' ? 0.86 : 0.74,

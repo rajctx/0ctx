@@ -646,6 +646,7 @@ describe('daemon request handling', () => {
                 untrackedCount: number | null;
                 stateKind: string | null;
                 stateSummary: string | null;
+                stateActionHint: string | null;
                 baseline: { branch: string | null; aheadCount: number | null; behindCount: number | null; summary: string } | null;
                 insights: Array<{ type: string; content: string }>;
                 contextText: string;
@@ -666,6 +667,7 @@ describe('daemon request handling', () => {
             expect(brief.untrackedCount).toBe(1);
             expect(brief.stateKind).toBe('dirty');
             expect(brief.stateSummary).toContain('Working tree has local uncommitted changes');
+            expect(brief.stateActionHint).toContain('Commit or checkpoint local changes');
             expect(brief.baseline?.branch).toBe('main');
             expect(brief.baseline?.aheadCount).toBe(1);
             expect(brief.baseline?.behindCount).toBe(0);
@@ -674,6 +676,7 @@ describe('daemon request handling', () => {
             expect(brief.insights[0]?.type).toBe('decision');
             expect(brief.insights[0]?.content).toContain('current workstream');
             expect(brief.contextText).toContain('Status: Working tree has local uncommitted changes.');
+            expect(brief.contextText).toContain('Recommended next step: Commit or checkpoint local changes before handing this workstream to another agent.');
             expect(brief.contextText).toContain('Checkout: this workstream is checked out here.');
             expect(brief.contextText).toContain('Git state: current local workstream.');
             expect(brief.contextText).toContain('Baseline: feature/runtime-shape is 1 commit ahead of main.');
@@ -706,6 +709,7 @@ describe('daemon request handling', () => {
                     untrackedCount: number | null;
                     stateKind: string | null;
                     stateSummary: string | null;
+                    stateActionHint: string | null;
                 };
                 baseline: { branch: string | null; aheadCount: number | null; behindCount: number | null; summary: string } | null;
                 insights: Array<{ type: string; content: string }>;
@@ -727,9 +731,11 @@ describe('daemon request handling', () => {
             expect(pack.workstream.untrackedCount).toBe(1);
             expect(pack.workstream.stateKind).toBe('dirty');
             expect(pack.workstream.stateSummary).toContain('Working tree has local uncommitted changes');
+            expect(pack.workstream.stateActionHint).toContain('Commit or checkpoint local changes');
             expect(pack.insights).toHaveLength(1);
             expect(pack.insights[0]?.type).toBe('decision');
             expect(pack.promptText).toContain('Status: Working tree has local uncommitted changes.');
+            expect(pack.promptText).toContain('Recommended next step: Commit or checkpoint local changes before handing this workstream to another agent.');
             expect(pack.promptText).toContain('Baseline: feature/runtime-shape is 1 commit ahead of main.');
             expect(pack.promptText).toContain('Local changes:');
             expect(pack.promptText).toContain('staged');
@@ -869,6 +875,7 @@ describe('daemon request handling', () => {
                 checkedOutElsewhere: boolean | null;
                 stateKind: string | null;
                 stateSummary: string | null;
+                stateActionHint: string | null;
             }>;
 
             expect(lanes).toHaveLength(1);
@@ -878,6 +885,7 @@ describe('daemon request handling', () => {
             expect(lanes[0].checkedOutWorktreePaths.map(item => path.resolve(item))).toContain(path.resolve(extraWorktree));
             expect(lanes[0].stateKind).toBe('elsewhere');
             expect(lanes[0].stateSummary).toContain('Checked out in another worktree');
+            expect(lanes[0].stateActionHint).toContain('Open the checked-out worktree');
 
             const brief = handleRequest(graph, 'conn-worktree', {
                 method: 'getWorkstreamBrief',
@@ -892,6 +900,7 @@ describe('daemon request handling', () => {
                 checkedOutElsewhere: boolean | null;
                 stateKind: string | null;
                 stateSummary: string | null;
+                stateActionHint: string | null;
                 contextText: string;
             };
 
@@ -900,7 +909,9 @@ describe('daemon request handling', () => {
             expect(brief.checkedOutWorktreePaths.map(item => path.resolve(item))).toContain(path.resolve(extraWorktree));
             expect(brief.stateKind).toBe('elsewhere');
             expect(brief.stateSummary).toContain('Checked out in another worktree');
+            expect(brief.stateActionHint).toContain('Open the checked-out worktree');
             expect(brief.contextText).toContain('Status: Checked out in another worktree, not in the current checkout.');
+            expect(brief.contextText).toContain('Recommended next step: Open the checked-out worktree before continuing on this workstream.');
             expect(brief.contextText).toContain('Checkout: this workstream is checked out elsewhere');
             expect(brief.contextText).toContain(path.resolve(extraWorktree));
         } finally {
@@ -942,6 +953,7 @@ describe('daemon request handling', () => {
                 tracked: boolean;
                 stateKind: string | null;
                 stateSummary: string | null;
+                stateActionHint: string | null;
                 baseline: { branch: string | null; comparable: boolean; summary: string } | null;
                 contextText: string;
             };
@@ -953,9 +965,11 @@ describe('daemon request handling', () => {
             expect(brief.tracked).toBe(false);
             expect(brief.stateKind).toBe('detached');
             expect(brief.stateSummary).toContain('Detached HEAD');
+            expect(brief.stateActionHint).toContain('Create or switch to a named branch');
             expect(brief.baseline?.branch).toBe('main');
             expect(brief.baseline?.comparable).toBe(false);
             expect(brief.contextText).toContain('Status: Detached HEAD. This checkout is not on a named branch.');
+            expect(brief.contextText).toContain('Recommended next step: Create or switch to a named branch before relying on this workstream.');
             expect(brief.contextText).toContain(`Current workstream: detached HEAD @ ${detachedHead.slice(0, 12)}`);
             expect(brief.contextText).toContain(`Git state: detached HEAD at ${detachedHead.slice(0, 12)}.`);
 
@@ -971,6 +985,7 @@ describe('daemon request handling', () => {
                     isDetachedHead: boolean | null;
                     stateKind: string | null;
                     stateSummary: string | null;
+                    stateActionHint: string | null;
                 };
                 promptText: string;
             };
@@ -981,7 +996,9 @@ describe('daemon request handling', () => {
             expect(pack.workstream.isDetachedHead).toBe(true);
             expect(pack.workstream.stateKind).toBe('detached');
             expect(pack.workstream.stateSummary).toContain('Detached HEAD');
+            expect(pack.workstream.stateActionHint).toContain('Create or switch to a named branch');
             expect(pack.promptText).toContain('Status: Detached HEAD. This checkout is not on a named branch.');
+            expect(pack.promptText).toContain('Recommended next step: Create or switch to a named branch before relying on this workstream.');
             expect(pack.promptText).toContain(`Current workstream: detached HEAD @ ${detachedHead.slice(0, 12)}`);
         } finally {
             db.close();

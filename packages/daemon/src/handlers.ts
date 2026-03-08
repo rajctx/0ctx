@@ -256,32 +256,37 @@ function deriveWorkstreamState(
 ): {
     kind: 'current' | 'ahead' | 'behind' | 'diverged' | 'detached' | 'drifted' | 'dirty' | 'elsewhere' | 'unknown';
     summary: string;
+    actionHint: string | null;
 } {
     if (data.isDetachedHead) {
         return {
             kind: 'detached',
-            summary: 'Detached HEAD. This checkout is not on a named branch.'
+            summary: 'Detached HEAD. This checkout is not on a named branch.',
+            actionHint: 'Create or switch to a named branch before relying on this workstream.'
         };
     }
 
     if (data.checkedOutHere !== true && data.checkedOutElsewhere === true) {
         return {
             kind: 'elsewhere',
-            summary: 'Checked out in another worktree, not in the current checkout.'
+            summary: 'Checked out in another worktree, not in the current checkout.',
+            actionHint: 'Open the checked-out worktree before continuing on this workstream.'
         };
     }
 
     if (data.headDiffersFromCaptured) {
         return {
             kind: 'drifted',
-            summary: 'Current HEAD differs from the last captured commit.'
+            summary: 'Current HEAD differs from the last captured commit.',
+            actionHint: 'Capture a fresh session or checkpoint so memory matches the current HEAD.'
         };
     }
 
     if (data.hasUncommittedChanges) {
         return {
             kind: 'dirty',
-            summary: 'Working tree has local uncommitted changes.'
+            summary: 'Working tree has local uncommitted changes.',
+            actionHint: 'Commit or checkpoint local changes before handing this workstream to another agent.'
         };
     }
 
@@ -289,19 +294,22 @@ function deriveWorkstreamState(
         if (data.aheadCount > 0 && data.behindCount > 0) {
             return {
                 kind: 'diverged',
-                summary: `Diverged from upstream (${data.aheadCount} ahead / ${data.behindCount} behind).`
+                summary: `Diverged from upstream (${data.aheadCount} ahead / ${data.behindCount} behind).`,
+                actionHint: 'Compare and reconcile this workstream with upstream before continuing.'
             };
         }
         if (data.aheadCount > 0) {
             return {
                 kind: 'ahead',
-                summary: `Ahead of upstream by ${data.aheadCount} commit${data.aheadCount === 1 ? '' : 's'}.`
+                summary: `Ahead of upstream by ${data.aheadCount} commit${data.aheadCount === 1 ? '' : 's'}.`,
+                actionHint: 'Create a checkpoint or merge this workstream before handing it off.'
             };
         }
         if (data.behindCount > 0) {
             return {
                 kind: 'behind',
-                summary: `Behind upstream by ${data.behindCount} commit${data.behindCount === 1 ? '' : 's'}.`
+                summary: `Behind upstream by ${data.behindCount} commit${data.behindCount === 1 ? '' : 's'}.`,
+                actionHint: 'Update from upstream before relying on this workstream context.'
             };
         }
     }
@@ -311,19 +319,22 @@ function deriveWorkstreamState(
             if (data.baseline.aheadCount > 0 && data.baseline.behindCount > 0) {
                 return {
                     kind: 'diverged',
-                    summary: `Diverged from ${data.baseline.branch || 'the default branch'} (${data.baseline.aheadCount} ahead / ${data.baseline.behindCount} behind).`
+                    summary: `Diverged from ${data.baseline.branch || 'the default branch'} (${data.baseline.aheadCount} ahead / ${data.baseline.behindCount} behind).`,
+                    actionHint: `Compare and reconcile this workstream with ${data.baseline.branch || 'the default branch'} before continuing.`
                 };
             }
             if (data.baseline.aheadCount > 0) {
                 return {
                     kind: 'ahead',
-                    summary: `Ahead of ${data.baseline.branch || 'the default branch'} by ${data.baseline.aheadCount} commit${data.baseline.aheadCount === 1 ? '' : 's'}.`
+                    summary: `Ahead of ${data.baseline.branch || 'the default branch'} by ${data.baseline.aheadCount} commit${data.baseline.aheadCount === 1 ? '' : 's'}.`,
+                    actionHint: 'Create a checkpoint or merge this workstream before handing it off.'
                 };
             }
             if (data.baseline.behindCount > 0) {
                 return {
                     kind: 'behind',
-                    summary: `Behind ${data.baseline.branch || 'the default branch'} by ${data.baseline.behindCount} commit${data.baseline.behindCount === 1 ? '' : 's'}.`
+                    summary: `Behind ${data.baseline.branch || 'the default branch'} by ${data.baseline.behindCount} commit${data.baseline.behindCount === 1 ? '' : 's'}.`,
+                    actionHint: `Update from ${data.baseline.branch || 'the default branch'} before relying on this workstream context.`
                 };
             }
         }
@@ -332,13 +343,15 @@ function deriveWorkstreamState(
     if (data.isCurrent === true || data.checkedOutHere === true || Boolean(data.branch)) {
         return {
             kind: 'current',
-            summary: 'Current local workstream is in sync with captured state.'
+            summary: 'Current local workstream is in sync with captured state.',
+            actionHint: null
         };
     }
 
     return {
         kind: 'unknown',
-        summary: 'Workstream state could not be determined.'
+        summary: 'Workstream state could not be determined.',
+        actionHint: 'Open this repo and refresh 0ctx before relying on this workstream.'
     };
 }
 
@@ -693,7 +706,8 @@ function enrichWorkstreamLane(
             untrackedCount: null,
             baseline: null,
             stateKind: 'unknown',
-            stateSummary: 'Workstream state could not be determined.'
+            stateSummary: 'Workstream state could not be determined.',
+            stateActionHint: 'Open this repo and refresh 0ctx before relying on this workstream.'
         };
     }
 
@@ -759,7 +773,8 @@ function enrichWorkstreamLane(
         untrackedCount: workingTreeState?.untrackedCount ?? null,
         baseline,
         stateKind: state.kind,
-        stateSummary: state.summary
+        stateSummary: state.summary,
+        stateActionHint: state.actionHint
     };
 }
 
@@ -926,6 +941,9 @@ function buildWorkstreamBrief(
         `Current workstream: ${branch ?? (isDetachedHead && currentHeadSha ? `detached HEAD @ ${currentHeadSha.slice(0, 12)}` : 'no git branch detected')}`
     ];
     lines.push(`Status: ${state.summary}`);
+    if (state.actionHint) {
+        lines.push(`Recommended next step: ${state.actionHint}`);
+    }
 
     if (lane) {
         const laneFacts = [
@@ -1057,6 +1075,7 @@ function buildWorkstreamBrief(
         baseline,
         stateKind: state.kind,
         stateSummary: state.summary,
+        stateActionHint: state.actionHint,
         recentSessions,
         latestCheckpoints,
         insights,

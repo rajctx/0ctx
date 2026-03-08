@@ -347,6 +347,68 @@ describe('Graph context isolation', () => {
         }
     });
 
+    it('filters operational chatter out of reviewed insights', () => {
+        const { db, graph } = createGraph();
+        try {
+            const ctx = graph.createContext('knowledge-noise-filter');
+            graph.addNode({
+                contextId: ctx.id,
+                thread: 'session-noise-1',
+                type: 'artifact',
+                content: 'noise filtering session',
+                key: 'chat_session:factory:session-noise-1',
+                tags: ['chat_session', 'agent:factory'],
+                source: 'hook:factory',
+                hidden: true,
+                rawPayload: {
+                    sessionId: 'session-noise-1',
+                    branch: 'feature/noise-filter',
+                    commitSha: 'def456abc123',
+                    agent: 'factory'
+                }
+            });
+
+            for (const [key, role, content, createdAt] of [
+                ['assistant-1', 'assistant', 'Implemented the next slice and tests passed after npm run build.', 1700000100000],
+                ['assistant-2', 'assistant', 'Click refresh and restart the connector after reinstall.', 1700000101000],
+                ['user-1', 'user', 'Can you please rerun the smoke test after refresh?', 1700000102000],
+                ['assistant-3', 'assistant', 'We decided to keep 0ctx enable as the normal repo-first path.', 1700000103000]
+            ] as const) {
+                graph.addNode({
+                    contextId: ctx.id,
+                    thread: 'session-noise-1',
+                    type: 'artifact',
+                    content,
+                    key: `chat_turn:factory:session-noise-1:${key}`,
+                    tags: ['chat_turn', `role:${role}`],
+                    source: 'hook:factory',
+                    hidden: true,
+                    rawPayload: {
+                        sessionId: 'session-noise-1',
+                        messageId: key,
+                        role,
+                        branch: 'feature/noise-filter',
+                        commitSha: 'def456abc123',
+                        occurredAt: createdAt
+                    }
+                });
+            }
+
+            const preview = graph.previewKnowledgeFromSession(ctx.id, 'session-noise-1');
+            expect(preview.candidates.some(candidate => /tests passed/i.test(candidate.content))).toBe(false);
+            expect(preview.candidates.some(candidate => /click refresh/i.test(candidate.content))).toBe(false);
+            expect(preview.candidates.some(candidate => /rerun the smoke test/i.test(candidate.content))).toBe(false);
+            expect(preview.candidates.some(candidate => candidate.type === 'decision' && /0ctx enable/i.test(candidate.content))).toBe(true);
+
+            const extraction = graph.extractKnowledgeFromSession(ctx.id, 'session-noise-1');
+            expect(extraction.nodeCount).toBe(1);
+            expect(extraction.nodes[0]?.type).toBe('decision');
+            expect(extraction.nodes[0]?.content).toContain('0ctx enable');
+        } finally {
+            db.close();
+        }
+    });
+
     it('reuses extracted knowledge across sessions on the same branch lane', () => {
         const { db, graph } = createGraph();
         try {

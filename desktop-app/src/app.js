@@ -427,6 +427,11 @@ function describeWorkstreamSync(lane) {
   return localChanges;
 }
 
+function describeWorkstreamActionHint(lane) {
+  if (!lane) return '';
+  return String(lane.stateActionHint || '').trim();
+}
+
 function describeWorkingTreeState(lane) {
   if (!lane || lane.hasUncommittedChanges !== true) return '';
   const parts = [];
@@ -1334,6 +1339,7 @@ function renderRuntimeBanner() {
       `${describeBranchLane(lane).title} carries ${lane.sessionCount} captured session${lane.sessionCount === 1 ? '' : 's'} and ${lane.checkpointCount} checkpoint${lane.checkpointCount === 1 ? '' : 's'}.`,
       lane.lastAgent ? `The most recent handoff came from ${lane.lastAgent}` : 'No agent has touched this workstream yet.',
       describeWorkstreamSync(lane) ? `${describeWorkstreamSync(lane)}.` : '',
+      describeWorkstreamActionHint(lane) ? `Next: ${describeWorkstreamActionHint(lane)}.` : '',
       lane.lastActivityAt ? `${formatRelativeTime(lane.lastActivityAt)}.` : ''
     ].join(' ').trim();
     empty.classList.add('hidden');
@@ -1346,6 +1352,7 @@ function renderRuntimeBanner() {
       { label: 'Last agent', value: lane.lastAgent || 'unknown' },
       { label: 'Latest commit', value: lane.lastCommitSha || 'none' },
       { label: 'Git state', value: describeWorkstreamSync(lane) || 'unknown' },
+      { label: 'Recommended next step', value: describeWorkstreamActionHint(lane) || 'Continue normally' },
       { label: 'Capture drift', value: lane.headDiffersFromCaptured === true ? 'yes' : lane.headDiffersFromCaptured === false ? 'no' : 'unknown' },
       { label: 'Baseline', value: lane.baseline?.summary || 'No default-branch baseline available' },
       { label: 'Upstream', value: lane.upstream || 'not configured' },
