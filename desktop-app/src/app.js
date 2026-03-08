@@ -35,7 +35,7 @@ const VIEW_META = {
     primaryAction: 'toggle-hidden'
   },
   setup: {
-    eyebrow: 'Advanced utility',
+    eyebrow: 'Utilities',
     title: 'Enable and repair',
     summary: 'Enable this repo, install the integrations you actually use, or repair the local runtime when something is off.',
     primaryLabel: 'Copy enable command',
@@ -49,7 +49,7 @@ const SEARCH_HINTS = {
   checkpoints: 'Filter checkpoints, sessions, or commits',
   workspaces: 'Filter projects by name or repository path',
   knowledge: 'Filter reviewed insights and graph nodes',
-  setup: 'Filter agent integrations and advanced actions'
+  setup: 'Filter agent integrations and utility actions'
 };
 
 const REQUIRED_RUNTIME_METHODS = [
@@ -346,22 +346,46 @@ function renderMetaLine(parts, options = {}) {
 
 function describeWorkstreamSync(lane) {
   if (!lane) return '';
-  if (typeof lane.aheadCount === 'number' && typeof lane.behindCount === 'number' && lane.upstream) {
+  const localChanges = describeWorkingTreeState(lane);
+  let summary = '';
+  if (lane.baseline && typeof lane.baseline.summary === 'string' && lane.baseline.summary.trim()) {
+    summary = lane.baseline.summary;
+  } else if (typeof lane.aheadCount === 'number' && typeof lane.behindCount === 'number' && lane.upstream) {
     if (lane.aheadCount === 0 && lane.behindCount === 0) {
-      return `In sync with ${lane.upstream}`;
+      summary = `In sync with ${lane.upstream}`;
+    } else if (lane.aheadCount > 0 && lane.behindCount === 0) {
+      summary = `${lane.aheadCount} ahead of ${lane.upstream}`;
+    } else if (lane.aheadCount === 0 && lane.behindCount > 0) {
+      summary = `${lane.behindCount} behind ${lane.upstream}`;
+    } else {
+      summary = `${lane.aheadCount} ahead / ${lane.behindCount} behind ${lane.upstream}`;
     }
-    if (lane.aheadCount > 0 && lane.behindCount === 0) {
-      return `${lane.aheadCount} ahead of ${lane.upstream}`;
-    }
-    if (lane.aheadCount === 0 && lane.behindCount > 0) {
-      return `${lane.behindCount} behind ${lane.upstream}`;
-    }
-    return `${lane.aheadCount} ahead / ${lane.behindCount} behind ${lane.upstream}`;
+  } else if (lane.isCurrent === true) {
+    summary = 'Current local workstream';
   }
-  if (lane.isCurrent === true) {
-    return 'Current local workstream';
+
+  if (summary && localChanges) {
+    return `${summary} - ${localChanges}`;
   }
-  return '';
+  if (summary) {
+    return summary;
+  }
+  return localChanges;
+}
+
+function describeWorkingTreeState(lane) {
+  if (!lane || lane.hasUncommittedChanges !== true) return '';
+  const parts = [];
+  if (typeof lane.stagedChangeCount === 'number' && lane.stagedChangeCount > 0) {
+    parts.push(`${lane.stagedChangeCount} staged`);
+  }
+  if (typeof lane.unstagedChangeCount === 'number' && lane.unstagedChangeCount > 0) {
+    parts.push(`${lane.unstagedChangeCount} unstaged`);
+  }
+  if (typeof lane.untrackedCount === 'number' && lane.untrackedCount > 0) {
+    parts.push(`${lane.untrackedCount} untracked`);
+  }
+  return parts.join(', ');
 }
 
 function renderAgentChain(agentSet, lastAgent) {
@@ -643,9 +667,9 @@ function captureState() {
   }
   if (previewHooks.length > 0) {
     return {
-      label: 'Preview',
-      className: 'badge degraded',
-      detail: `Preview integrations installed for ${integrationListText(previewHooks)}`
+      label: 'Not ready',
+      className: 'badge offline',
+      detail: 'No GA integrations installed for automatic capture'
     };
   }
   return {
@@ -1140,7 +1164,7 @@ function renderRuntimeBanner() {
           <p>${esc(state.runtimeIssue.detail)}</p>
         <div class="row-actions">
           <button class="btn primary" data-banner-action="refresh">Refresh</button>
-          <button class="btn tertiary" data-banner-action="setup">Open advanced tools</button>
+          <button class="btn tertiary" data-banner-action="setup">Open utilities</button>
         </div>
       </div>
     `;
@@ -1188,6 +1212,7 @@ function renderRuntimeBanner() {
       { label: 'Last agent', value: lane.lastAgent || 'unknown' },
       { label: 'Latest commit', value: lane.lastCommitSha || 'none' },
       { label: 'Git state', value: describeWorkstreamSync(lane) || 'unknown' },
+      { label: 'Baseline', value: lane.baseline?.summary || 'No default-branch baseline available' },
       { label: 'Upstream', value: lane.upstream || 'not configured' },
       { label: 'Agents on workstream', value: lane.agentSet?.length ? lane.agentSet.join(', ') : 'none' },
       { label: 'Worktree', value: lane.worktreePath || 'Primary workspace root' }
@@ -1347,9 +1372,9 @@ function renderSessions() {
     empty.classList.remove('hidden');
     body.classList.add('hidden');
     toggle.disabled = true;
-    toggle.textContent = 'Advanced: show raw payload';
+    toggle.textContent = 'Show debug payload';
     document.getElementById('payloadPanel').classList.add('hidden');
-    document.getElementById('payloadText').textContent = 'Open advanced mode on a selected message to inspect the stored payload.';
+    document.getElementById('payloadText').textContent = 'Open debug mode on a selected message to inspect the stored payload.';
     document.getElementById('payloadBadge').textContent = 'none';
     document.getElementById('turnPrimaryLabel').textContent = 'Message';
     document.getElementById('turnSecondaryLabel').textContent = 'Related context';
@@ -1407,7 +1432,7 @@ function renderSessions() {
   }).join('');
 
   toggle.disabled = !turn.hasPayload;
-  toggle.textContent = turn.hasPayload ? (state.payloadExpanded ? 'Hide advanced payload' : 'Advanced: show raw payload') : 'No advanced payload';
+  toggle.textContent = turn.hasPayload ? (state.payloadExpanded ? 'Hide debug payload' : 'Show debug payload') : 'No debug payload';
   const payloadPanel = document.getElementById('payloadPanel');
   payloadPanel.classList.toggle('hidden', !turn.hasPayload || !state.payloadExpanded);
   document.getElementById('payloadBadge').textContent = turn.payloadBytes != null ? `${turn.payloadBytes} bytes` : 'payload';
@@ -1499,7 +1524,7 @@ function renderWorkspaces() {
         },
         {
           title: 'Default sync policy',
-          detail: humanizeLabel(context.syncPolicy || 'full_sync'),
+          detail: humanizeLabel(context.syncPolicy || 'metadata_only'),
           hint: 'Local-first storage remains the source of truth.'
         }
       ]
@@ -1760,7 +1785,7 @@ function renderWorkspaces() {
     `).join('');
   document.getElementById('setupSupportCopy').textContent = state.runtimeIssue
       ? state.runtimeIssue.detail
-      : 'Use advanced tools only when you need to enable a repo, install integrations, smoke-test capture, check updates, or repair the local runtime.';
+      : 'Use utilities only when you need to enable a repo, install integrations, smoke-test capture, check updates, or repair the local runtime.';
   }
 
 function renderAll() {

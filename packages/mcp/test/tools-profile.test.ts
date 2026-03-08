@@ -34,6 +34,7 @@ describe('MCP tool profile filtering', () => {
         expect(names.has('ctx_set')).toBe(true);
         expect(names.has('ctx_runtime_status')).toBe(true);
         expect(names.has('ctx_list_workstreams')).toBe(true);
+        expect(names.has('ctx_list_workstream_insights')).toBe(true);
         expect(names.has('ctx_get_workstream_brief')).toBe(true);
         expect(names.has('ctx_get_agent_context')).toBe(true);
         expect(names.has('ctx_compare_workstreams')).toBe(true);

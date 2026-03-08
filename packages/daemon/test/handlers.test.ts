@@ -508,6 +508,10 @@ describe('daemon request handling', () => {
             spawnSync('powershell', ['-NoProfile', '-Command', `Set-Content -Path '${path.join(repoRoot, 'notes.txt')}' -Value 'feature'`], { encoding: 'utf8', windowsHide: true });
             spawnSync('git', ['-C', repoRoot, 'add', '.'], { encoding: 'utf8', windowsHide: true });
             spawnSync('git', ['-C', repoRoot, 'commit', '-m', 'feature'], { encoding: 'utf8', windowsHide: true });
+            spawnSync('powershell', ['-NoProfile', '-Command', `Set-Content -Path '${path.join(repoRoot, 'staged.txt')}' -Value 'staged change'`], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', repoRoot, 'add', 'staged.txt'], { encoding: 'utf8', windowsHide: true });
+            spawnSync('powershell', ['-NoProfile', '-Command', `Add-Content -Path '${path.join(repoRoot, 'staged.txt')}' -Value 'unstaged change'`], { encoding: 'utf8', windowsHide: true });
+            spawnSync('powershell', ['-NoProfile', '-Command', `Set-Content -Path '${path.join(repoRoot, 'draft.txt')}' -Value 'untracked change'`], { encoding: 'utf8', windowsHide: true });
 
             const session = handleRequest(graph, 'conn-git', { method: 'createSession' }, runtime()) as { sessionToken: string };
             const context = handleRequest(graph, 'conn-git', {
@@ -561,6 +565,16 @@ describe('daemon request handling', () => {
                 }
             }, runtime());
 
+            graph.addNode({
+                contextId: context.id,
+                type: 'decision',
+                content: 'Keep reviewed insights scoped to the current workstream.',
+                key: 'knowledge:decision:feature-runtime-shape',
+                tags: ['knowledge', 'derived', 'branch:feature/runtime-shape', `worktree:${repoRoot}`],
+                source: 'extractor:session',
+                hidden: false
+            });
+
             const lanes = handleRequest(graph, 'conn-git', {
                 method: 'listBranchLanes',
                 sessionToken: session.sessionToken,
@@ -570,6 +584,11 @@ describe('daemon request handling', () => {
                 repositoryRoot: string | null;
                 isCurrent: boolean | null;
                 upstream: string | null;
+                hasUncommittedChanges: boolean | null;
+                stagedChangeCount: number | null;
+                unstagedChangeCount: number | null;
+                untrackedCount: number | null;
+                baseline: { branch: string | null; aheadCount: number | null; behindCount: number | null; summary: string } | null;
             }>;
 
             expect(lanes).toHaveLength(1);
@@ -577,6 +596,14 @@ describe('daemon request handling', () => {
             expect(lanes[0].repositoryRoot).toBe(repoRoot);
             expect(lanes[0].isCurrent).toBe(true);
             expect(lanes[0].upstream).toBeNull();
+            expect(lanes[0].hasUncommittedChanges).toBe(true);
+            expect(lanes[0].stagedChangeCount).toBeGreaterThanOrEqual(1);
+            expect(lanes[0].unstagedChangeCount).toBe(1);
+            expect(lanes[0].untrackedCount).toBe(1);
+            expect(lanes[0].baseline?.branch).toBe('main');
+            expect(lanes[0].baseline?.aheadCount).toBe(1);
+            expect(lanes[0].baseline?.behindCount).toBe(0);
+            expect(lanes[0].baseline?.summary).toContain('ahead of main');
 
             const brief = handleRequest(graph, 'conn-git', {
                 method: 'getWorkstreamBrief',
@@ -589,18 +616,35 @@ describe('daemon request handling', () => {
             }, runtime()) as {
                 repositoryRoot: string | null;
                 isCurrent: boolean | null;
+                hasUncommittedChanges: boolean | null;
+                stagedChangeCount: number | null;
+                unstagedChangeCount: number | null;
+                untrackedCount: number | null;
                 baseline: { branch: string | null; aheadCount: number | null; behindCount: number | null; summary: string } | null;
+                insights: Array<{ type: string; content: string }>;
                 contextText: string;
             };
 
             expect(brief.repositoryRoot).toBe(repoRoot);
             expect(brief.isCurrent).toBe(true);
+            expect(brief.hasUncommittedChanges).toBe(true);
+            expect(brief.stagedChangeCount).toBeGreaterThanOrEqual(1);
+            expect(brief.unstagedChangeCount).toBe(1);
+            expect(brief.untrackedCount).toBe(1);
             expect(brief.baseline?.branch).toBe('main');
             expect(brief.baseline?.aheadCount).toBe(1);
             expect(brief.baseline?.behindCount).toBe(0);
             expect(brief.baseline?.summary).toContain('ahead of main');
+            expect(brief.insights).toHaveLength(1);
+            expect(brief.insights[0]?.type).toBe('decision');
+            expect(brief.insights[0]?.content).toContain('current workstream');
             expect(brief.contextText).toContain('Git state: current local workstream.');
             expect(brief.contextText).toContain('Baseline: feature/runtime-shape is 1 commit ahead of main.');
+            expect(brief.contextText).toContain('Local changes:');
+            expect(brief.contextText).toContain('staged');
+            expect(brief.contextText).toContain('1 unstaged');
+            expect(brief.contextText).toContain('1 untracked');
+            expect(brief.contextText).toContain('Reviewed insights:');
 
             const pack = handleRequest(graph, 'conn-git', {
                 method: 'getAgentContextPack',
@@ -611,13 +655,44 @@ describe('daemon request handling', () => {
                     worktreePath: repoRoot
                 }
             }, runtime()) as {
+                workstream: {
+                    hasUncommittedChanges: boolean | null;
+                    stagedChangeCount: number | null;
+                    unstagedChangeCount: number | null;
+                    untrackedCount: number | null;
+                };
                 baseline: { branch: string | null; aheadCount: number | null; behindCount: number | null; summary: string } | null;
+                insights: Array<{ type: string; content: string }>;
                 promptText: string;
             };
 
             expect(pack.baseline?.branch).toBe('main');
             expect(pack.baseline?.aheadCount).toBe(1);
+            expect(pack.workstream.hasUncommittedChanges).toBe(true);
+            expect(pack.workstream.stagedChangeCount).toBeGreaterThanOrEqual(1);
+            expect(pack.workstream.unstagedChangeCount).toBe(1);
+            expect(pack.workstream.untrackedCount).toBe(1);
+            expect(pack.insights).toHaveLength(1);
+            expect(pack.insights[0]?.type).toBe('decision');
             expect(pack.promptText).toContain('Baseline: feature/runtime-shape is 1 commit ahead of main.');
+            expect(pack.promptText).toContain('Local changes:');
+            expect(pack.promptText).toContain('staged');
+            expect(pack.promptText).toContain('1 unstaged');
+            expect(pack.promptText).toContain('1 untracked');
+            expect(pack.promptText).toContain('Reviewed insights:');
+
+            const insights = handleRequest(graph, 'conn-git', {
+                method: 'listWorkstreamInsights',
+                sessionToken: session.sessionToken,
+                params: {
+                    contextId: context.id,
+                    branch: 'feature/runtime-shape',
+                    worktreePath: repoRoot
+                }
+            }, runtime()) as Array<{ type: string; content: string }>;
+
+            expect(insights).toHaveLength(1);
+            expect(insights[0]?.type).toBe('decision');
 
             const inferredBrief = handleRequest(graph, 'conn-git', {
                 method: 'getWorkstreamBrief',
@@ -653,7 +728,7 @@ describe('daemon request handling', () => {
         } finally {
             db.close();
         }
-    });
+    }, 15000);
 
     it('compares workstreams with real git divergence and activity context', () => {
         if (!gitAvailable()) return;

@@ -23,6 +23,7 @@ import type {
     SessionDetail,
     CheckpointDetail,
     HandoffTimelineEntry,
+    InsightSummary,
     KnowledgeCandidate,
     KnowledgePreviewResult,
     KnowledgeExtractionResult,
@@ -118,6 +119,11 @@ export class Graph {
     private extractAgentFromTags(tags: string[] | null | undefined): string | null {
         const tag = (tags ?? []).find(value => typeof value === 'string' && value.startsWith('agent:'));
         return tag ? tag.slice('agent:'.length) : null;
+    }
+
+    private extractTagValue(tags: string[] | null | undefined, prefix: string): string | null {
+        const tag = (tags ?? []).find(value => typeof value === 'string' && value.startsWith(prefix));
+        return tag ? tag.slice(prefix.length) : null;
     }
 
     private extractMessageIdFromKey(key: string | null | undefined): string | null {
@@ -1119,7 +1125,12 @@ export class Graph {
             aheadCount: null,
             behindCount: null,
             mergeBaseSha: null,
-            isCurrent: null
+            isCurrent: null,
+            hasUncommittedChanges: null,
+            stagedChangeCount: null,
+            unstagedChangeCount: null,
+            untrackedCount: null,
+            baseline: null
         }));
     }
 
@@ -1268,6 +1279,53 @@ export class Graph {
             lastTurnAt: session.lastTurnAt,
             commitSha: session.commitSha ?? null
         }));
+    }
+
+    listWorkstreamInsights(
+        contextId: string,
+        options: {
+            branch?: string | null;
+            worktreePath?: string | null;
+            limit?: number;
+        } = {}
+    ): InsightSummary[] {
+        const safeLimit = Math.max(1, Math.min(options.limit ?? 5, 50));
+        const targetBranch = this.normalizeBranch(options.branch);
+        const targetWorktree = this.normalizeWorktreePath(options.worktreePath);
+        const rows = this.db.prepare(`
+      SELECT *
+      FROM nodes
+      WHERE contextId = ? AND hidden = 0 AND type != 'artifact'
+      ORDER BY createdAt DESC
+      LIMIT ?
+    `).all(contextId, Math.max(safeLimit * 8, safeLimit)) as any[];
+
+        const results: InsightSummary[] = [];
+        for (const row of rows) {
+            const node = this.parseNodeRow(row);
+            const branch = this.extractTagValue(node.tags, 'branch:');
+            const worktreePath = this.extractTagValue(node.tags, 'worktree:');
+            if (targetWorktree) {
+                if (this.normalizeWorktreePath(worktreePath) !== targetWorktree) continue;
+            } else if (options.branch) {
+                if (this.normalizeBranch(branch) !== targetBranch) continue;
+            }
+
+            results.push({
+                contextId,
+                nodeId: node.id,
+                type: node.type as Exclude<NodeType, 'artifact'>,
+                content: node.content,
+                createdAt: node.createdAt,
+                branch: branch ?? null,
+                worktreePath: worktreePath ?? null,
+                source: node.source ?? null
+            });
+
+            if (results.length >= safeLimit) break;
+        }
+
+        return results;
     }
 
     private collectSessionKnowledgeCandidates(

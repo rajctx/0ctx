@@ -10,7 +10,8 @@ import type {
     WorkstreamBrief,
     WorkstreamBaselineComparison,
     WorkstreamComparison,
-    AgentContextPack
+    AgentContextPack,
+    InsightSummary
 } from '@0ctx/core';
 import { spawnSync } from 'child_process';
 import fs from 'fs';
@@ -40,6 +41,7 @@ const CONTEXT_REQUIRED_METHODS = new Set([
     'listChatSessions',
     'listChatTurns',
     'listBranchLanes',
+    'listWorkstreamInsights',
     'getWorkstreamBrief',
     'getAgentContextPack',
     'compareWorkstreams',
@@ -207,6 +209,20 @@ function truncateBriefLine(value: string, max = 88): string {
     return `${normalized.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
 }
 
+function humanizeLabel(value: string): string {
+    return String(value ?? '')
+        .trim()
+        .replace(/[_-]+/g, ' ')
+        .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+interface WorkingTreeState {
+    hasUncommittedChanges: boolean;
+    stagedChangeCount: number;
+    unstagedChangeCount: number;
+    untrackedCount: number;
+}
+
 function formatRelativeAge(timestamp: number, now = Date.now()): string {
     const delta = Math.max(0, now - timestamp);
     const minute = 60_000;
@@ -254,6 +270,47 @@ function safeGitDefaultBranch(repoRoot: string): string | null {
         }
     }
     return null;
+}
+
+function getWorkingTreeState(repositoryRoot: string | null): WorkingTreeState | null {
+    if (!repositoryRoot) return null;
+    const porcelain = safeGit(repositoryRoot, ['status', '--porcelain=v1', '--untracked-files=all']);
+    if (porcelain === null) {
+        return null;
+    }
+
+    let stagedChangeCount = 0;
+    let unstagedChangeCount = 0;
+    let untrackedCount = 0;
+    const lines = porcelain
+        .split(/\r?\n/)
+        .map((line) => line.trimEnd())
+        .filter(Boolean);
+
+    for (const line of lines) {
+        const x = line[0] ?? ' ';
+        const y = line[1] ?? ' ';
+        if (x === '?' && y === '?') {
+            untrackedCount += 1;
+            continue;
+        }
+        if (x === '!' && y === '!') {
+            continue;
+        }
+        if (x !== ' ') {
+            stagedChangeCount += 1;
+        }
+        if (y !== ' ') {
+            unstagedChangeCount += 1;
+        }
+    }
+
+    return {
+        hasUncommittedChanges: stagedChangeCount > 0 || unstagedChangeCount > 0 || untrackedCount > 0,
+        stagedChangeCount,
+        unstagedChangeCount,
+        untrackedCount
+    };
 }
 
 function compareAgainstBaselineBranch(
@@ -368,7 +425,12 @@ function enrichWorkstreamLane(
             aheadCount: null,
             behindCount: null,
             mergeBaseSha: null,
-            isCurrent: null
+            isCurrent: null,
+            hasUncommittedChanges: null,
+            stagedChangeCount: null,
+            unstagedChangeCount: null,
+            untrackedCount: null,
+            baseline: null
         };
     }
 
@@ -382,6 +444,7 @@ function enrichWorkstreamLane(
     const mergeBaseSha = upstream ? safeGit(repositoryRoot, ['merge-base', lane.branch, upstream]) : null;
     const normalizedWorktree = lane.worktreePath ? path.resolve(lane.worktreePath) : null;
     const normalizedCurrentRoot = currentRoot ? path.resolve(currentRoot) : null;
+    const workingTreeState = getWorkingTreeState(repositoryRoot);
 
     return {
         ...lane,
@@ -392,7 +455,12 @@ function enrichWorkstreamLane(
         mergeBaseSha,
         isCurrent: currentBranch
             ? currentBranch === lane.branch && (!normalizedWorktree || normalizedCurrentRoot === normalizedWorktree)
-            : null
+            : null,
+        hasUncommittedChanges: workingTreeState?.hasUncommittedChanges ?? null,
+        stagedChangeCount: workingTreeState?.stagedChangeCount ?? null,
+        unstagedChangeCount: workingTreeState?.unstagedChangeCount ?? null,
+        untrackedCount: workingTreeState?.untrackedCount ?? null,
+        baseline: compareAgainstBaselineBranch(repositoryRoot, lane.branch)
     };
 }
 
@@ -456,6 +524,7 @@ function buildWorkstreamBrief(
     let lane: BranchLaneSummary | null = null;
     let recentSessions: AgentSessionSummary[] = [];
     let latestCheckpoints: CheckpointSummary[] = [];
+    let insights: InsightSummary[] = [];
 
     if (branch) {
         const lanes = graph.listBranchLanes(contextId, 200).map((entry) => enrichWorkstreamLane(graph, contextId, contextPaths, entry));
@@ -482,9 +551,22 @@ function buildWorkstreamBrief(
                 limit: checkpointLimit
             });
         }
+
+        insights = graph.listWorkstreamInsights(contextId, {
+            branch,
+            worktreePath,
+            limit: 4
+        });
+        if (insights.length === 0 && worktreePath) {
+            insights = graph.listWorkstreamInsights(contextId, {
+                branch,
+                limit: 4
+            });
+        }
     }
 
     const repositoryRoot = lane?.repositoryRoot ?? inferredCurrent.repositoryRoot ?? contextPaths[0] ?? null;
+    const workingTreeState = getWorkingTreeState(repositoryRoot);
     const baseline = compareAgainstBaselineBranch(repositoryRoot, branch);
 
     const lines = [
@@ -516,6 +598,28 @@ function buildWorkstreamBrief(
         }
     }
 
+    const hasUncommittedChanges = lane?.hasUncommittedChanges ?? workingTreeState?.hasUncommittedChanges ?? null;
+    const stagedChangeCount = lane?.stagedChangeCount ?? workingTreeState?.stagedChangeCount ?? null;
+    const unstagedChangeCount = lane?.unstagedChangeCount ?? workingTreeState?.unstagedChangeCount ?? null;
+    const untrackedCount = lane?.untrackedCount ?? workingTreeState?.untrackedCount ?? null;
+
+    if (hasUncommittedChanges) {
+        const dirtyFacts = [
+            typeof stagedChangeCount === 'number' && stagedChangeCount > 0
+                ? `${stagedChangeCount} staged`
+                : null,
+            typeof unstagedChangeCount === 'number' && unstagedChangeCount > 0
+                ? `${unstagedChangeCount} unstaged`
+                : null,
+            typeof untrackedCount === 'number' && untrackedCount > 0
+                ? `${untrackedCount} untracked`
+                : null
+        ].filter((value): value is string => Boolean(value));
+        if (dirtyFacts.length > 0) {
+            lines.push(`Local changes: ${dirtyFacts.join(', ')}.`);
+        }
+    }
+
     if (baseline?.summary) {
         lines.push(`Baseline: ${baseline.summary}`);
     }
@@ -535,7 +639,14 @@ function buildWorkstreamBrief(
         }
     }
 
-    if (recentSessions.length === 0 && latestCheckpoints.length === 0) {
+    if (insights.length > 0) {
+        lines.push('', 'Reviewed insights:');
+        for (const insight of insights) {
+            lines.push(`- ${humanizeLabel(insight.type)} · ${truncateBriefLine(insight.content)}`);
+        }
+    }
+
+    if (recentSessions.length === 0 && latestCheckpoints.length === 0 && insights.length === 0) {
         lines.push('', 'No captured sessions or checkpoints for this workstream yet.');
     }
 
@@ -556,9 +667,14 @@ function buildWorkstreamBrief(
         behindCount: lane?.behindCount ?? null,
         mergeBaseSha: lane?.mergeBaseSha ?? null,
         isCurrent: lane?.isCurrent ?? null,
+        hasUncommittedChanges,
+        stagedChangeCount,
+        unstagedChangeCount,
+        untrackedCount,
         baseline,
         recentSessions,
         latestCheckpoints,
+        insights,
         contextText: lines.join('\n')
     };
 }
@@ -610,6 +726,7 @@ function buildAgentContextPack(
         baseline: workstream.baseline,
         recentSessions: workstream.recentSessions,
         latestCheckpoints: workstream.latestCheckpoints,
+        insights: workstream.insights,
         handoffTimeline,
         promptText: lines.join('\n')
     };
@@ -1834,6 +1951,12 @@ export function handleRequest(
                 return graph.listBranchLanes(contextId!, params.limit as number | undefined)
                     .map((lane) => enrichWorkstreamLane(graph, contextId!, contextPaths, lane));
             })();
+        case 'listWorkstreamInsights':
+            return graph.listWorkstreamInsights(contextId!, {
+                branch: typeof params.branch === 'string' ? params.branch : null,
+                worktreePath: typeof params.worktreePath === 'string' ? params.worktreePath : null,
+                limit: params.limit as number | undefined
+            });
         case 'getWorkstreamBrief':
             return buildWorkstreamBrief(graph, contextId!, {
                 branch: typeof params.branch === 'string' ? params.branch : null,

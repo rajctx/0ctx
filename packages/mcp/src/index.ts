@@ -131,6 +131,16 @@ server.setRequestHandler(CallToolRequestSchema, async (req: any) => {
                 const lanes = await callDaemon('listBranchLanes', { contextId, limit: args.limit ?? 100 });
                 return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(lanes, null, 2) }] } };
             }
+            case 'ctx_list_workstream_insights': {
+                const contextId = pickContextId(args);
+                const insights = await callDaemon('listWorkstreamInsights', {
+                    contextId,
+                    branch: args.branch,
+                    worktreePath: args.worktreePath,
+                    limit: args.limit ?? 5
+                });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(insights, null, 2) }] } };
+            }
             case 'ctx_get_workstream_brief': {
                 const contextId = pickContextId(args);
                 const brief = await callDaemon('getWorkstreamBrief', {

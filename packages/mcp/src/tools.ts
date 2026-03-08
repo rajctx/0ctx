@@ -99,6 +99,20 @@ export const tools = [
         },
     },
     {
+        name: 'ctx_list_workstream_insights',
+        description: 'List reviewed insight nodes attached to the current workstream.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                branch: { type: 'string', description: 'Optional branch name for the workstream.' },
+                worktreePath: { type: 'string', description: 'Optional worktree path for a specific workstream.' },
+                limit: { type: 'number', description: 'Maximum number of insights to return (default 5).' },
+                contextId: { type: 'string', description: 'Optional explicit context ID override for this operation.' },
+            },
+            required: [],
+        },
+    },
+    {
         name: 'ctx_get_workstream_brief',
         description: 'Get a compact workstream brief suitable for injecting into an agent session or summarizing the current workstream.',
         inputSchema: {
@@ -645,6 +659,7 @@ const TOOL_SCOPE_BY_NAME: Record<string, ToolScope> = {
     ctx_query: 'core',
     ctx_search: 'core',
     ctx_list_workstreams: 'core',
+    ctx_list_workstream_insights: 'core',
     ctx_get_workstream_brief: 'core',
     ctx_get_agent_context: 'core',
     ctx_compare_workstreams: 'core',

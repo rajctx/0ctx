@@ -54,14 +54,17 @@ function getBestSuggestion(line: string, completions: string[]): string {
 
 function getCompletionCandidates(): string[] {
     const commands = [
-        'setup',
-        'setup --validate',
-        'install',
-        'bootstrap',
+        'enable',
+        'workstreams',
+        'workstreams compare',
+        'sessions',
+        'checkpoints',
+        'checkpoints create',
+        'resume',
+        'rewind',
+        'explain',
         'mcp',
-        'mcp setup',
         'mcp bootstrap',
-        'mcp validate',
         'doctor',
         'status',
         'status --json',
@@ -83,28 +86,19 @@ function getCompletionCandidates(): string[] {
         'auth logout',
         'auth status',
         'auth rotate',
-        'config list',
-        'config get',
-        'config set',
         'sync status',
         'sync policy get',
         'sync policy set',
         'connector status',
         'connector verify',
-        'connector register',
         'connector hook status',
-        'connector hook install',
-        'connector hook ingest --agent=codex --payload=',
-        'connector queue status',
-        'connector queue drain',
-        'connector queue purge',
-        'connector queue logs',
         'hook',
         'hook status',
-        'hook install',
-        'hook ingest --agent=codex --payload=',
-        'daemon start',
-        'daemon service status',
+        'dashboard',
+        'repair',
+        'config list',
+        'config get',
+        'config set',
     ];
     const builtins = ['/help', '/clear', '/history', '/exit'];
     // Also expose slash-prefixed variants of every command so `/auth login` autocompletes
@@ -149,12 +143,11 @@ async function printShellHelp(): Promise<void> {
     console.log(`  ${color.magenta('/exit'.padEnd(20))} ${color.dim('Exit shell')}`);
 
     console.log(`\n${color.bold('Get started')}`);
-    console.log(`  ${color.green('>')} ${color.cyan('status'.padEnd(35))} ${color.dim('(check daemon and system health)')}`);
-    console.log(`  ${color.green('>')} ${color.cyan('mcp'.padEnd(35))} ${color.dim('(interactive MCP setup flow)')}`);
     console.log(`  ${color.green('>')} ${color.cyan('enable'.padEnd(35))} ${color.dim('(bind this repo and install GA integrations)')}`);
-    console.log(`  ${color.green('>')} ${color.cyan('connector status --cloud'.padEnd(35))} ${color.dim('(check cloud connection)')}`);
-    console.log(`  ${color.green('>')} ${color.cyan('hook status'.padEnd(35))} ${color.dim('(check hook installation state)')}`);
-    console.log(`  ${color.green('>')} ${color.cyan('auth login'.padEnd(35))} ${color.dim('(authenticate with 0ctx)')}`);
+    console.log(`  ${color.green('>')} ${color.cyan('workstreams'.padEnd(35))} ${color.dim('(see tracked workstreams in this repo)')}`);
+    console.log(`  ${color.green('>')} ${color.cyan('sessions'.padEnd(35))} ${color.dim('(see captured sessions for the current workstream)')}`);
+    console.log(`  ${color.green('>')} ${color.cyan('checkpoints'.padEnd(35))} ${color.dim('(see or create restore points)')}`);
+    console.log(`  ${color.green('>')} ${color.cyan('status'.padEnd(35))} ${color.dim('(check runtime and workspace readiness)')}`);
 
     console.log(`\n${color.dim('All existing 0ctx commands are supported without the "0ctx" prefix.')}\n`);
 }

@@ -2,7 +2,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { bootstrapMcpRegistration } from '../src/bootstrap';
+import { bootstrapMcpRegistration, parseBootstrapClients } from '../src/bootstrap';
 
 const tempDirs: string[] = [];
 
@@ -170,7 +170,7 @@ describe('bootstrapMcpRegistration', () => {
             mcpServers: Record<string, { command: string; args: string[] }>;
         };
         expect(config.mcpServers['0ctx']).toBeTruthy();
-        expect(config.mcpServers['0ctx'].args).toEqual([entrypoint]);
+        expect(config.mcpServers['0ctx'].args).toEqual([entrypoint, '--profile', 'core']);
     });
 
     it('writes Codex MCP server block into ~/.codex/config.toml and stays idempotent', () => {
@@ -207,5 +207,14 @@ describe('bootstrapMcpRegistration', () => {
         expect(configToml).toContain('[mcp_servers.0ctx]');
         expect(configToml).toContain(`command = ${JSON.stringify(process.execPath)}`);
         expect(configToml).toContain(`args = [${JSON.stringify(entrypoint)}, "--profile", "ops"]`);
+    });
+
+    it('defaults bootstrap client parsing to GA clients only', () => {
+        expect(parseBootstrapClients(undefined)).toEqual(['claude', 'antigravity']);
+        expect(parseBootstrapClients('ga')).toEqual(['claude', 'antigravity']);
+        expect(parseBootstrapClients('preview')).toEqual(['cursor', 'windsurf', 'codex']);
+        expect(parseBootstrapClients('all')).toEqual(['claude', 'cursor', 'windsurf', 'codex', 'antigravity']);
+        expect(parseBootstrapClients('cursor')).toEqual(['cursor']);
+        expect(parseBootstrapClients('')).toEqual(['claude', 'antigravity']);
     });
 });

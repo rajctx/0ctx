@@ -421,6 +421,51 @@ describe('Graph context isolation', () => {
             db.close();
         }
     });
+
+    it('lists reviewed insights scoped to the selected workstream', () => {
+        const { db, graph } = createGraph();
+        try {
+            const ctx = graph.createContext('knowledge-workstream-insights');
+            graph.addNode({
+                contextId: ctx.id,
+                type: 'decision',
+                content: 'Keep reviewed insights scoped to the current branch.',
+                key: 'knowledge:decision:branch-feature-a',
+                tags: ['knowledge', 'derived', 'branch:feature/a', 'worktree:C:/repo-a'],
+                source: 'extractor:session'
+            });
+            graph.addNode({
+                contextId: ctx.id,
+                type: 'constraint',
+                content: 'Sync stays metadata only for the main branch.',
+                key: 'knowledge:constraint:branch-main',
+                tags: ['knowledge', 'derived', 'branch:main', 'worktree:C:/repo-main'],
+                source: 'extractor:session'
+            });
+            graph.addNode({
+                contextId: ctx.id,
+                type: 'artifact',
+                content: 'hidden artifact should never appear here',
+                key: 'artifact:ignored',
+                tags: ['branch:feature/a'],
+                source: 'hook:factory'
+            });
+
+            const branchScoped = graph.listWorkstreamInsights(ctx.id, {
+                branch: 'feature/a',
+                worktreePath: 'C:/repo-a'
+            });
+            expect(branchScoped).toHaveLength(1);
+            expect(branchScoped[0]?.type).toBe('decision');
+            expect(branchScoped[0]?.content).toContain('current branch');
+
+            const mainScoped = graph.listWorkstreamInsights(ctx.id, { branch: 'main' });
+            expect(mainScoped).toHaveLength(1);
+            expect(mainScoped[0]?.type).toBe('constraint');
+        } finally {
+            db.close();
+        }
+    });
 });
 
 describe('Graph checkpoints', () => {

@@ -5,6 +5,8 @@ import { resolveMcpToolProfile } from './tools';
 
 type SupportedClient = 'claude' | 'cursor' | 'windsurf' | 'codex' | 'antigravity';
 const SUPPORTED_CLIENTS: SupportedClient[] = ['claude', 'cursor', 'windsurf', 'codex', 'antigravity'];
+const DEFAULT_CLIENTS: SupportedClient[] = ['claude', 'antigravity'];
+const PREVIEW_CLIENTS: SupportedClient[] = ['cursor', 'windsurf', 'codex'];
 
 interface Registration {
     command: string;
@@ -29,8 +31,10 @@ interface BootstrapResult {
     message?: string;
 }
 
-function parseClients(raw: string | undefined): SupportedClient[] {
-    const source = (raw || SUPPORTED_CLIENTS.join(',')).trim().toLowerCase();
+export function parseBootstrapClients(raw: string | undefined): SupportedClient[] {
+    const source = (raw || 'ga').trim().toLowerCase();
+    if (!source || source === 'ga') return DEFAULT_CLIENTS;
+    if (source === 'preview') return PREVIEW_CLIENTS;
     if (source === 'all') return SUPPORTED_CLIENTS;
 
     const parsed = source
@@ -38,7 +42,7 @@ function parseClients(raw: string | undefined): SupportedClient[] {
         .map(item => item.trim())
         .filter((item): item is SupportedClient => SUPPORTED_CLIENTS.includes(item as SupportedClient));
 
-    return parsed.length === 0 ? SUPPORTED_CLIENTS : parsed;
+    return parsed.length === 0 ? DEFAULT_CLIENTS : parsed;
 }
 
 function getPlatform(options?: Pick<BootstrapOptions, 'platform'>): NodeJS.Platform {
@@ -368,7 +372,7 @@ function printSummary(results: BootstrapResult[], dryRun: boolean): void {
 
 export function runBootstrapFromCli(): number {
     const dryRun = hasFlag('--dry-run');
-    const clients = parseClients(parseArgValue('--clients') || parseArgValue('--client'));
+    const clients = parseBootstrapClients(parseArgValue('--clients') || parseArgValue('--client'));
     const serverName = parseArgValue('--server-name') || '0ctx';
     const entrypoint = parseArgValue('--entrypoint');
     const profile = parseArgValue('--profile') || parseArgValue('--mcp-profile') || 'core';

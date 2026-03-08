@@ -190,6 +190,7 @@ function parseArgs(argv: string[]): ParsedArgs {
         || command === 'auth'
         || command === 'config'
         || command === 'sync'
+        || command === 'checkpoints'
         || command === 'connector'
         || command === 'mcp'
         || command === 'release';
@@ -275,6 +276,18 @@ function parseEnableMcpClients(raw: string | boolean | undefined): SupportedClie
     if (normalized === 'none') return [];
     if (normalized === 'ga') return DEFAULT_ENABLE_MCP_CLIENTS;
     return parseClients(raw);
+}
+
+function validateExplicitPreviewSelection(
+    raw: string | boolean | undefined,
+    explicitExample: string
+): string | null {
+    if (!raw || typeof raw !== 'string') return null;
+    const normalized = raw.trim().toLowerCase();
+    if (normalized === 'preview' || normalized === 'all') {
+        return `Preview integrations must be named explicitly. Use --clients=${explicitExample}.`;
+    }
+    return null;
 }
 
 async function isDaemonReachable(): Promise<{ ok: boolean; error?: string; health?: any }> {
@@ -711,16 +724,14 @@ async function buildDefaultDashboardQuery(): Promise<string | undefined> {
     if (state?.tenantId) params.set('tenantId', state.tenantId);
 
     try {
-        const active = await sendToDaemon('getActiveContext', {}) as { id?: string; name?: string } | null;
-        if (active?.id) {
-            params.set('contextId', active.id);
-            if (active.name) params.set('contextName', active.name);
-        } else {
-            const contexts = await sendToDaemon('listContexts', {}) as Array<{ id?: string; name?: string }>;
-            const first = Array.isArray(contexts) ? contexts[0] : null;
-            if (first?.id) {
-                params.set('contextId', first.id);
-                if (first.name) params.set('contextName', first.name);
+        const repoRoot = findGitRepoRoot(null);
+        if (repoRoot) {
+            const contexts = await sendToDaemon('listContexts', {}) as Array<{ id?: string; name?: string; paths?: string[] }>;
+            const contextId = selectHookContextId(contexts, repoRoot, null);
+            const context = contextId ? contexts.find(item => item.id === contextId) : null;
+            if (context?.id) {
+                params.set('contextId', context.id);
+                if (context.name) params.set('contextName', context.name);
             }
         }
     } catch {
@@ -993,6 +1004,11 @@ async function commandStatus(flags: Record<string, string | boolean> = {}): Prom
 
 async function commandBootstrap(flags: Record<string, string | boolean>): Promise<number> {
     const p = await import('@clack/prompts');
+    const previewError = validateExplicitPreviewSelection(flags.clients, 'claude,antigravity,codex');
+    if (previewError) {
+        console.error(previewError);
+        return 1;
+    }
     const clients = parseClients(flags.clients);
     const dryRun = Boolean(flags['dry-run']);
     const entrypoint = parseOptionalStringFlag(flags.entrypoint) ?? undefined;
@@ -1026,15 +1042,13 @@ async function commandMcp(subcommand: string | undefined, flags: Record<string, 
     if (action === 'bootstrap') {
         return commandBootstrap(flags);
     }
-    if (action === 'setup') {
-        return commandSetup({ ...flags, 'no-open': true });
-    }
-    if (action === 'validate') {
-        return commandSetup({ ...flags, validate: true, 'no-open': true });
+    if (action === 'setup' || action === 'validate') {
+        console.error(`0ctx mcp ${action} is deprecated. Use \`0ctx bootstrap\` for MCP registration or \`0ctx setup\` for advanced machine management.`);
+        return 1;
     }
     if (action && action !== 'wizard') {
         console.error(`Unknown mcp action: '${action}'`);
-        console.error('Usage: 0ctx mcp [setup|bootstrap|validate]');
+        console.error('Usage: 0ctx mcp [bootstrap]');
         return 1;
     }
 
@@ -1052,20 +1066,6 @@ async function commandMcp(subcommand: string | undefined, flags: Record<string, 
     const p = await import('@clack/prompts');
     p.intro(color.bgBlue(color.black(' 0ctx mcp ')));
 
-    const flowChoice = await p.select({
-        message: 'Choose MCP action',
-        options: [
-            { value: 'bootstrap', label: 'Bootstrap clients (Recommended)', hint: 'Write MCP config to selected AI clients' },
-            { value: 'setup', label: 'Advanced machine setup', hint: 'Login + daemon/service + bootstrap + verify' },
-            { value: 'validate', label: 'Validate', hint: 'Run setup validation checks only' }
-        ]
-    });
-    if (p.isCancel(flowChoice)) {
-        p.cancel('Cancelled.');
-        return 1;
-    }
-
-    const selectedAction = String(flowChoice);
     const nextFlags: Record<string, string | boolean> = { ...flags };
 
     const selectedClients = await p.multiselect({
@@ -1073,9 +1073,6 @@ async function commandMcp(subcommand: string | undefined, flags: Record<string, 
         required: true,
         options: [
             { value: 'claude', label: 'Claude Desktop' },
-            { value: 'cursor', label: 'Cursor (Preview)' },
-            { value: 'windsurf', label: 'Windsurf (Preview)' },
-            { value: 'codex', label: 'Codex CLI (Preview)' },
             { value: 'antigravity', label: 'Antigravity' }
         ]
     });
@@ -1105,33 +1102,14 @@ async function commandMcp(subcommand: string | undefined, flags: Record<string, 
         return 1;
     }
     nextFlags['mcp-profile'] = String(selectedProfile);
+    nextFlags['no-open'] = true;
 
-    if (selectedAction === 'setup') {
-        const openDashboard = await p.confirm({
-            message: 'Open dashboard at end of setup?',
-            initialValue: true
-        });
-        if (p.isCancel(openDashboard)) {
-            p.cancel('Cancelled.');
-            return 1;
-        }
-        if (!openDashboard) {
-            nextFlags['no-open'] = true;
-        }
-    } else {
-        nextFlags['no-open'] = true;
-    }
-
-    const resultCode = selectedAction === 'setup'
-        ? await commandSetup(nextFlags)
-        : selectedAction === 'validate'
-            ? await commandSetup({ ...nextFlags, validate: true })
-            : await commandBootstrap(nextFlags);
+    const resultCode = await commandBootstrap(nextFlags);
 
     if (resultCode === 0) {
-        p.outro(color.green('MCP command completed.'));
+        p.outro(color.green('MCP bootstrap completed.'));
     } else {
-        p.outro(color.yellow('MCP command finished with issues.'));
+        p.outro(color.yellow('MCP bootstrap finished with issues.'));
     }
     return resultCode;
 }
@@ -1141,6 +1119,11 @@ async function commandInstall(flags: Record<string, string | boolean>): Promise<
     const quiet = Boolean(flags.quiet);
     const asJson = Boolean(flags.json);
     const skipBootstrap = Boolean(flags['skip-bootstrap']);
+    const previewError = validateExplicitPreviewSelection(flags.clients, 'claude,factory,antigravity,codex');
+    if (previewError) {
+        console.error(previewError);
+        return 1;
+    }
 
     if (!quiet && !asJson) {
         p.intro(color.bgBlue(color.black(' 0ctx install ')));
@@ -1208,6 +1191,16 @@ async function commandEnable(flags: Record<string, string | boolean>): Promise<n
     const repoRoot = resolveRepoRoot(parseOptionalStringFlag(flags['repo-root'] ?? flags.repoRoot));
     const requestedName = parseOptionalStringFlag(flags.name ?? flags['workspace-name'] ?? flags.workspaceName);
     const workspaceName = requestedName ?? (path.basename(repoRoot) || 'Workspace');
+    const hookPreviewError = validateExplicitPreviewSelection(flags.clients, 'claude,factory,antigravity,codex');
+    if (hookPreviewError) {
+        console.error(hookPreviewError);
+        return 1;
+    }
+    const mcpPreviewError = validateExplicitPreviewSelection(flags['mcp-clients'] ?? flags.mcpClients, 'claude,antigravity,codex');
+    if (mcpPreviewError) {
+        console.error(`MCP clients: ${mcpPreviewError}`);
+        return 1;
+    }
     const hookClients = parseHookClients(flags.clients);
     const mcpClients = parseEnableMcpClients(flags['mcp-clients'] ?? flags.mcpClients);
     const mcpProfile = parseOptionalStringFlag(flags['mcp-profile'] ?? flags.profile) ?? 'core';
@@ -2981,6 +2974,11 @@ async function commandConnectorHook(action: string | undefined, flags: Record<st
         const repoRoot = resolveRepoRoot(parseOptionalStringFlag(flags['repo-root']));
         const requestedContextId = parseOptionalStringFlag(flags['context-id'] ?? flags.contextId);
         const contextId = await resolveContextIdForHookIngest(repoRoot, requestedContextId);
+        const previewError = validateExplicitPreviewSelection(flags.clients, 'claude,factory,antigravity,codex');
+        if (previewError) {
+            console.error(previewError);
+            return 1;
+        }
         const clients = parseHookClients(flags.clients).map(client => client.toLowerCase());
         const result = installHooks({
             projectRoot: repoRoot,
@@ -4149,7 +4147,7 @@ async function commandSetupValidate(flags: Record<string, string | boolean>): Pr
         }
         console.log('');
         if (!ok) {
-            console.log('Validation failed. Fix the failed checks, then run: 0ctx setup');
+            console.log('Validation failed. Fix the failed checks, then rerun `0ctx setup --validate` or use `0ctx enable` inside a repo.');
             console.log('');
         }
     }
@@ -4175,6 +4173,11 @@ async function commandSetup(flags: Record<string, string | boolean>): Promise<nu
     const createContextName = parseOptionalStringFlag(flags['create-context']);
     const dashboardQueryInput = flags['dashboard-query'];
     const steps: SetupStep[] = [];
+    const previewError = validateExplicitPreviewSelection(flags.clients, 'claude,factory,antigravity,codex');
+    if (previewError) {
+        console.error(previewError);
+        return 1;
+    }
 
     if (!quiet) {
         console.log('Running setup workflow...');
@@ -4429,7 +4432,48 @@ async function commandSetup(flags: Record<string, string | boolean>): Promise<nu
     return dashboardCode;
 }
 
-function printHelp(): void {
+function printHelp(showAdvanced = false): void {
+    if (!showAdvanced) {
+        console.log(`0ctx CLI
+
+Usage:
+  0ctx                    Auto-enable inside a repo. Outside a repo, show readiness/help.
+  0ctx enable [--repo-root=<path>] [--name=<workspace>] [--json]
+              [--clients=ga|claude,factory,antigravity] [--mcp-clients=none|ga|claude,antigravity]
+              [--skip-bootstrap] [--skip-hooks] [--mcp-profile=core|recall|ops]
+
+Daily use:
+  0ctx workstreams [--repo-root=<path>] [--limit=100] [--json]
+  0ctx workstreams compare [--repo-root=<path>] --source=<branch> --target=<branch>
+                          [--source-worktree-path=<path>] [--target-worktree-path=<path>]
+                          [--session-limit=3] [--checkpoint-limit=2] [--json]
+  0ctx sessions [--repo-root=<path>] [--branch=<name>] [--session-id=<id>] [--worktree-path=<path>] [--limit=100] [--json]
+  0ctx checkpoints [list] [--repo-root=<path>] [--branch=<name>] [--worktree-path=<path>] [--limit=100] [--json]
+  0ctx checkpoints create [--repo-root=<path>] [--session-id=<id>] [--name="..."] [--summary="..."] [--json]
+  0ctx checkpoints show [--repo-root=<path>] [--checkpoint-id=<id>] [--json]
+  0ctx resume [--repo-root=<path>] [--session-id=<id>] [--json]
+  0ctx rewind [--repo-root=<path>] [--checkpoint-id=<id>] [--json]
+  0ctx explain [--repo-root=<path>] [--checkpoint-id=<id>] [--json]
+  0ctx status [--json] [--compact]
+  0ctx shell
+  0ctx version [--verbose] [--json]
+  0ctx --version | -v
+
+Supported integrations:
+  GA: Claude, Factory, Antigravity
+  Preview: Codex (notify + archive), Cursor, Windsurf
+
+Authentication:
+  0ctx auth login
+  0ctx auth logout
+  0ctx auth status [--json]
+
+Need machine management, sync, connector controls, or preview install paths?
+  0ctx help --advanced
+`);
+        return;
+    }
+
     console.log(`0ctx CLI
 
 Usage:
@@ -4439,25 +4483,23 @@ Usage:
   0ctx --version | -v
 
 Recommended daily flow:
-  0ctx enable [--repo-root=<path>] [--name=<workspace>] [--clients=ga|preview|all|claude,cursor,windsurf,codex,factory,antigravity]
-              [--mcp-clients=none|ga|preview|all|claude,cursor,windsurf,codex,antigravity]
-              [--skip-bootstrap] [--skip-hooks] [--mcp-profile=all|core|recall|ops] [--json]
+  0ctx enable [--repo-root=<path>] [--name=<workspace>] [--json]
+              [--clients=ga|claude,factory,antigravity] [--mcp-clients=none|ga|claude,antigravity]
+              [--skip-bootstrap] [--skip-hooks] [--mcp-profile=core|recall|ops]
 
 Advanced / machine management:
-  0ctx setup [--clients=ga|preview|all|claude,cursor,windsurf,codex,antigravity] [--no-open] [--json] [--validate]
+  0ctx setup [--clients=ga|claude,factory,antigravity,codex,cursor,windsurf] [--no-open] [--json] [--validate]
              [--require-cloud] [--wait-cloud-ready]
              [--cloud-wait-timeout-ms=60000] [--cloud-wait-interval-ms=2000]
              [--create-context=<name>] [--dashboard-query[=k=v&...]]
              [--skip-service] [--skip-bootstrap] [--skip-hooks] [--hooks-dry-run]
              [--mcp-profile=all|core|recall|ops]
-  0ctx install [--clients=ga|preview|all|claude,cursor,windsurf,codex,antigravity] [--json] [--skip-bootstrap] [--mcp-profile=all|core|recall|ops]
-  0ctx bootstrap [--dry-run] [--clients=...] [--entrypoint=/path/to/mcp-server.js]
+  0ctx install [--clients=ga|claude,factory,antigravity,codex,cursor,windsurf] [--json] [--skip-bootstrap] [--mcp-profile=all|core|recall|ops]
+  0ctx bootstrap [--dry-run] [--clients=ga|claude,antigravity,codex,cursor,windsurf] [--entrypoint=/path/to/mcp-server.js]
                  [--mcp-profile=all|core|recall|ops] [--json]
-  0ctx mcp [setup|bootstrap|validate]
-  0ctx mcp                     Interactive MCP setup/selection flow
-  0ctx mcp setup [--clients=ga|preview|all|claude,cursor,windsurf,codex,antigravity] [--mcp-profile=all|core|recall|ops] [--no-open]
-  0ctx mcp bootstrap [--dry-run] [--clients=...] [--mcp-profile=all|core|recall|ops]
-  0ctx mcp validate [--clients=...] [--mcp-profile=...]
+  0ctx mcp [bootstrap]
+  0ctx mcp                     Interactive MCP bootstrap for GA clients
+  0ctx mcp bootstrap [--dry-run] [--clients=ga|claude,antigravity,codex,cursor,windsurf] [--mcp-profile=all|core|recall|ops]
   0ctx doctor [--json] [--clients=...]
   0ctx status [--json] [--compact]
   0ctx repair [--clients=...] [--deep] [--json]
@@ -4472,13 +4514,13 @@ Advanced / machine management:
                      [--session-limit=3] [--checkpoint-limit=2] [--json]
   0ctx sessions [--repo-root=<path>] [--branch=<name>] [--session-id=<id>] [--worktree-path=<path>] [--limit=100] [--json]
   0ctx checkpoints [list] [--repo-root=<path>] [--branch=<name>] [--worktree-path=<path>] [--limit=100] [--json]
-  0ctx checkpoints create [--repo-root=<path>] --session-id=<id> [--name="..."] [--summary="..."] [--json]
-  0ctx checkpoints show [--repo-root=<path>] --checkpoint-id=<id> [--json]
-  0ctx extract session [--repo-root=<path>] --session-id=<id> [--preview] [--keys=key1,key2] [--max-nodes=12] [--json]
-  0ctx extract checkpoint --checkpoint-id=<id> [--preview] [--keys=key1,key2] [--max-nodes=12] [--json]
-  0ctx resume [--repo-root=<path>] --session-id=<id> [--json]
-  0ctx rewind [--repo-root=<path>] --checkpoint-id=<id> [--json]
-  0ctx explain [--repo-root=<path>] --checkpoint-id=<id> [--json]
+  0ctx checkpoints create [--repo-root=<path>] [--session-id=<id>] [--name="..."] [--summary="..."] [--json]
+  0ctx checkpoints show [--repo-root=<path>] [--checkpoint-id=<id>] [--json]
+  0ctx extract session [--repo-root=<path>] [--session-id=<id>] [--preview] [--keys=key1,key2] [--max-nodes=12] [--json]
+  0ctx extract checkpoint [--repo-root=<path>] [--checkpoint-id=<id>] [--preview] [--keys=key1,key2] [--max-nodes=12] [--json]
+  0ctx resume [--repo-root=<path>] [--session-id=<id>] [--json]
+  0ctx rewind [--repo-root=<path>] [--checkpoint-id=<id>] [--json]
+  0ctx explain [--repo-root=<path>] [--checkpoint-id=<id>] [--json]
   0ctx logs [--no-open] [--snapshot] [--limit=50] [--since-hours=N] [--grep=text] [--errors-only]
   0ctx recall [--mode=auto|temporal|topic|graph] [--query="..."] [--since-hours=24] [--limit=10] [--depth=2] [--max-nodes=30] [--start] [--json]
   0ctx recall feedback --node-id=<id> (--helpful|--not-helpful) [--reason="..."] [--context-id=<id>] [--json]
@@ -4493,8 +4535,7 @@ Capture support:
 
 Client scope defaults:
   ga      Supported-by-default product path
-  preview Preview-only integrations
-  all     Include preview integrations too
+  Preview integrations must be named explicitly when you opt into them.
 
 Authentication:
   0ctx auth login    Start device-code login flow
@@ -4522,7 +4563,7 @@ Connector:
   0ctx connector verify [--require-cloud] [--json]
   0ctx connector register [--force] [--local-only] [--require-cloud] [--json]
   0ctx connector run [--once] [--interval-ms=5000] [--no-daemon-autostart]
-  0ctx connector hook install [--clients=ga|preview|all|claude,cursor,windsurf,codex,factory,antigravity] [--repo-root=<path>] [--global]
+  0ctx connector hook install [--clients=ga|claude,factory,antigravity,codex,cursor,windsurf] [--repo-root=<path>] [--global]
   0ctx connector hook status [--json]
   0ctx connector hook prune [--days=14] [--json]
 0ctx connector hook session-start --agent=claude|factory|antigravity [--repo-root=<path>]
@@ -4689,6 +4730,62 @@ async function requireCommandContextId(
     return contextId;
 }
 
+function resolveCommandRepoRoot(flags: Record<string, string | boolean>): string {
+    return resolveRepoRoot(parseOptionalStringFlag(flags['repo-root'] ?? flags.repoRoot));
+}
+
+function resolveCommandWorkstreamScope(flags: Record<string, string | boolean>): {
+    repoRoot: string;
+    branch: string | null;
+    worktreePath: string | null;
+} {
+    const repoRoot = resolveCommandRepoRoot(flags);
+    return {
+        repoRoot,
+        branch: parseOptionalStringFlag(flags.branch) ?? getCurrentWorkstream(repoRoot),
+        worktreePath: parseOptionalStringFlag(flags['worktree-path'] ?? flags.worktreePath)
+    };
+}
+
+async function resolveLatestSessionForCommand(
+    contextId: string,
+    flags: Record<string, string | boolean>
+): Promise<Record<string, unknown> | null> {
+    const scope = resolveCommandWorkstreamScope(flags);
+    const result = scope.branch
+        ? await sendToDaemon('listBranchSessions', {
+            contextId,
+            branch: scope.branch,
+            worktreePath: scope.worktreePath,
+            limit: 1
+        })
+        : await sendToDaemon('listChatSessions', { contextId, limit: 1 });
+    const sessions = Array.isArray(result) ? result : [];
+    return (sessions[0] as Record<string, unknown> | undefined) ?? null;
+}
+
+async function resolveLatestCheckpointForCommand(
+    contextId: string,
+    flags: Record<string, string | boolean>
+): Promise<Record<string, unknown> | null> {
+    const scope = resolveCommandWorkstreamScope(flags);
+    const result = scope.branch
+        ? await sendToDaemon('listBranchCheckpoints', {
+            contextId,
+            branch: scope.branch,
+            worktreePath: scope.worktreePath,
+            limit: 1
+        })
+        : await sendToDaemon('listCheckpoints', { contextId });
+    const checkpoints = Array.isArray(result) ? result : [];
+    return (checkpoints[0] as Record<string, unknown> | undefined) ?? null;
+}
+
+function printInferredSelection(asJson: boolean, label: string, value: string): void {
+    if (asJson) return;
+    console.log(`${label}: ${value}`);
+}
+
 function printJsonOrValue(asJson: boolean, value: unknown, human: () => void): number {
     if (asJson) {
         console.log(JSON.stringify(value, null, 2));
@@ -4704,7 +4801,7 @@ function short(value: string, max = 120): string {
 
 async function commandBranches(args: string[], flags: Record<string, string | boolean>): Promise<number> {
     const subcommand = String(args[0] || '').trim().toLowerCase();
-    const commandLabel = subcommand === 'compare' ? '0ctx workstreams compare' : '0ctx branches';
+    const commandLabel = subcommand === 'compare' ? '0ctx workstreams compare' : '0ctx workstreams';
     const contextId = await requireCommandContextId(flags, commandLabel);
     if (!contextId) return 1;
     const asJson = Boolean(flags.json);
@@ -4816,6 +4913,9 @@ async function commandBranches(args: string[], flags: Record<string, string | bo
                 console.log(`    Sessions: ${lane.sessionCount} | Checkpoints: ${lane.checkpointCount}`);
                 if (lane.lastAgent) console.log(`    Last agent: ${lane.lastAgent}`);
                 if (lane.lastCommitSha) console.log(`    Last commit: ${String(lane.lastCommitSha).slice(0, 12)}`);
+                if (lane.baseline?.summary) {
+                    console.log(`    Baseline: ${lane.baseline.summary}`);
+                }
                 if (lane.upstream) {
                     const ahead = typeof lane.aheadCount === 'number' ? lane.aheadCount : '?';
                     const behind = typeof lane.behindCount === 'number' ? lane.behindCount : '?';
@@ -4912,11 +5012,19 @@ async function commandCheckpoints(
 
     try {
         if (action === 'create') {
-            if (!sessionId) {
-                console.error("Missing required '--session-id' for `0ctx checkpoints create`.");
-                return 1;
+            let effectiveSessionId = sessionId;
+            if (!effectiveSessionId) {
+                const inferredSession = await resolveLatestSessionForCommand(contextId, flags);
+                effectiveSessionId = typeof inferredSession?.sessionId === 'string'
+                    ? inferredSession.sessionId
+                    : null;
+                if (!effectiveSessionId) {
+                    console.error('No captured session found for the current workstream. Capture one session first or pass --session-id=<id>.');
+                    return 1;
+                }
+                printInferredSelection(asJson, 'Using latest session', effectiveSessionId);
             }
-            const result = await sendToDaemon('createSessionCheckpoint', { contextId, sessionId, name, summary });
+            const result = await sendToDaemon('createSessionCheckpoint', { contextId, sessionId: effectiveSessionId, name, summary });
             return printJsonOrValue(asJson, result, () => {
                 const checkpoint = result as { id?: string; branch?: string | null; commitSha?: string | null; summary?: string | null };
                 console.log('\nCheckpoint Created\n');
@@ -4929,15 +5037,25 @@ async function commandCheckpoints(
         }
 
         if (action === 'show' || action === 'detail') {
-            if (!checkpointId) {
-                console.error("Missing required '--checkpoint-id' for `0ctx checkpoints show`.");
-                return 1;
+            let effectiveCheckpointId = checkpointId;
+            if (!effectiveCheckpointId) {
+                const inferredCheckpoint = await resolveLatestCheckpointForCommand(contextId, flags);
+                effectiveCheckpointId = typeof inferredCheckpoint?.checkpointId === 'string'
+                    ? inferredCheckpoint.checkpointId
+                    : typeof inferredCheckpoint?.id === 'string'
+                        ? inferredCheckpoint.id
+                        : null;
+                if (!effectiveCheckpointId) {
+                    console.error('No checkpoint found for the current workstream. Create one first or pass --checkpoint-id=<id>.');
+                    return 1;
+                }
+                printInferredSelection(asJson, 'Using latest checkpoint', effectiveCheckpointId);
             }
-            const result = await sendToDaemon('getCheckpointDetail', { contextId, checkpointId });
+            const result = await sendToDaemon('getCheckpointDetail', { contextId, checkpointId: effectiveCheckpointId });
             return printJsonOrValue(asJson, result, () => {
                 const detail = result as { checkpoint?: Record<string, unknown>; snapshotNodeCount?: number; payloadAvailable?: boolean };
                 console.log('\nCheckpoint Detail\n');
-                console.log(`  Id: ${checkpointId}`);
+                console.log(`  Id: ${effectiveCheckpointId}`);
                 console.log(`  Name: ${String(detail.checkpoint?.name ?? '-')}`);
                 console.log(`  Kind: ${String(detail.checkpoint?.kind ?? '-')}`);
                 console.log(`  Workstream: ${String(detail.checkpoint?.branch ?? '-')}`);
@@ -4977,11 +5095,18 @@ async function commandCheckpoints(
 async function commandResume(flags: Record<string, string | boolean>): Promise<number> {
     const contextId = await requireCommandContextId(flags, '0ctx resume');
     if (!contextId) return 1;
-    const sessionId = parseOptionalStringFlag(flags['session-id'] ?? flags.sessionId);
+    let sessionId = parseOptionalStringFlag(flags['session-id'] ?? flags.sessionId);
     const asJson = Boolean(flags.json);
     if (!sessionId) {
-        console.error("Missing required '--session-id' for `0ctx resume`.");
-        return 1;
+        const inferredSession = await resolveLatestSessionForCommand(contextId, flags);
+        sessionId = typeof inferredSession?.sessionId === 'string'
+            ? inferredSession.sessionId
+            : null;
+        if (!sessionId) {
+            console.error('No captured session found for the current workstream. Capture one session first or pass --session-id=<id>.');
+            return 1;
+        }
+        printInferredSelection(asJson, 'Using latest session', sessionId);
     }
     try {
         const result = await sendToDaemon('resumeSession', { contextId, sessionId });
@@ -5004,11 +5129,20 @@ async function commandResume(flags: Record<string, string | boolean>): Promise<n
 async function commandRewind(flags: Record<string, string | boolean>): Promise<number> {
     const contextId = await requireCommandContextId(flags, '0ctx rewind');
     if (!contextId) return 1;
-    const checkpointId = parseOptionalStringFlag(flags['checkpoint-id'] ?? flags.checkpointId);
+    let checkpointId = parseOptionalStringFlag(flags['checkpoint-id'] ?? flags.checkpointId);
     const asJson = Boolean(flags.json);
     if (!checkpointId) {
-        console.error("Missing required '--checkpoint-id' for `0ctx rewind`.");
-        return 1;
+        const inferredCheckpoint = await resolveLatestCheckpointForCommand(contextId, flags);
+        checkpointId = typeof inferredCheckpoint?.checkpointId === 'string'
+            ? inferredCheckpoint.checkpointId
+            : typeof inferredCheckpoint?.id === 'string'
+                ? inferredCheckpoint.id
+                : null;
+        if (!checkpointId) {
+            console.error('No checkpoint found for the current workstream. Create one first or pass --checkpoint-id=<id>.');
+            return 1;
+        }
+        printInferredSelection(asJson, 'Using latest checkpoint', checkpointId);
     }
     try {
         const result = await sendToDaemon('rewindCheckpoint', { contextId, checkpointId });
@@ -5029,11 +5163,20 @@ async function commandRewind(flags: Record<string, string | boolean>): Promise<n
 async function commandExplain(flags: Record<string, string | boolean>): Promise<number> {
     const contextId = await requireCommandContextId(flags, '0ctx explain');
     if (!contextId) return 1;
-    const checkpointId = parseOptionalStringFlag(flags['checkpoint-id'] ?? flags.checkpointId);
+    let checkpointId = parseOptionalStringFlag(flags['checkpoint-id'] ?? flags.checkpointId);
     const asJson = Boolean(flags.json);
     if (!checkpointId) {
-        console.error("Missing required '--checkpoint-id' for `0ctx explain`.");
-        return 1;
+        const inferredCheckpoint = await resolveLatestCheckpointForCommand(contextId, flags);
+        checkpointId = typeof inferredCheckpoint?.checkpointId === 'string'
+            ? inferredCheckpoint.checkpointId
+            : typeof inferredCheckpoint?.id === 'string'
+                ? inferredCheckpoint.id
+                : null;
+        if (!checkpointId) {
+            console.error('No checkpoint found for the current workstream. Create one first or pass --checkpoint-id=<id>.');
+            return 1;
+        }
+        printInferredSelection(asJson, 'Using latest checkpoint', checkpointId);
     }
     try {
         const result = await sendToDaemon('explainCheckpoint', { contextId, checkpointId });
@@ -5069,10 +5212,17 @@ async function commandExtract(positionalArgs: string[], flags: Record<string, st
         if (action === 'session') {
             const contextId = await requireCommandContextId(flags, '0ctx extract session');
             if (!contextId) return 1;
-            const sessionId = parseOptionalStringFlag(flags['session-id'] ?? flags.sessionId);
+            let sessionId = parseOptionalStringFlag(flags['session-id'] ?? flags.sessionId);
             if (!sessionId) {
-                console.error("Missing required '--session-id' for `0ctx extract session`.");
-                return 1;
+                const inferredSession = await resolveLatestSessionForCommand(contextId, flags);
+                sessionId = typeof inferredSession?.sessionId === 'string'
+                    ? inferredSession.sessionId
+                    : null;
+                if (!sessionId) {
+                    console.error('No captured session found for the current workstream. Capture one session first or pass --session-id=<id>.');
+                    return 1;
+                }
+                printInferredSelection(asJson, 'Using latest session', sessionId);
             }
             const method = preview ? 'previewSessionKnowledge' : 'extractSessionKnowledge';
             const result = await sendToDaemon(method, { contextId, sessionId, maxNodes, candidateKeys });
@@ -5104,10 +5254,21 @@ async function commandExtract(positionalArgs: string[], flags: Record<string, st
         }
 
         if (action === 'checkpoint') {
-            const checkpointId = parseOptionalStringFlag(flags['checkpoint-id'] ?? flags.checkpointId);
+            let checkpointId = parseOptionalStringFlag(flags['checkpoint-id'] ?? flags.checkpointId);
             if (!checkpointId) {
-                console.error("Missing required '--checkpoint-id' for `0ctx extract checkpoint`.");
-                return 1;
+                const contextId = await requireCommandContextId(flags, '0ctx extract checkpoint');
+                if (!contextId) return 1;
+                const inferredCheckpoint = await resolveLatestCheckpointForCommand(contextId, flags);
+                checkpointId = typeof inferredCheckpoint?.checkpointId === 'string'
+                    ? inferredCheckpoint.checkpointId
+                    : typeof inferredCheckpoint?.id === 'string'
+                        ? inferredCheckpoint.id
+                        : null;
+                if (!checkpointId) {
+                    console.error('No checkpoint found for the current workstream. Create one first or pass --checkpoint-id=<id>.');
+                    return 1;
+                }
+                printInferredSelection(asJson, 'Using latest checkpoint', checkpointId);
             }
             const method = preview ? 'previewCheckpointKnowledge' : 'extractCheckpointKnowledge';
             const result = await sendToDaemon(method, { checkpointId, maxNodes, candidateKeys });
@@ -5138,8 +5299,8 @@ async function commandExtract(positionalArgs: string[], flags: Record<string, st
             });
         }
 
-        console.error('Usage: 0ctx extract session [--repo-root=<path>] --session-id=<id> [--preview] [--keys=key1,key2] [--max-nodes=12] [--json]');
-        console.error('   or: 0ctx extract checkpoint --checkpoint-id=<id> [--preview] [--keys=key1,key2] [--max-nodes=12] [--json]');
+        console.error('Usage: 0ctx extract session [--repo-root=<path>] [--session-id=<id>] [--preview] [--keys=key1,key2] [--max-nodes=12] [--json]');
+        console.error('   or: 0ctx extract checkpoint [--repo-root=<path>] [--checkpoint-id=<id>] [--preview] [--keys=key1,key2] [--max-nodes=12] [--json]');
         return 1;
     } catch (error) {
         console.error('Failed to save insights:', error instanceof Error ? error.message : String(error));
@@ -5366,7 +5527,7 @@ async function main(): Promise<number> {
         if (process.env.CTX_SHELL_MODE === '1') {
             captureEvent('cli_command_executed', { command: 'help' });
             return runCommandWithOpsSummary('cli.help', () => {
-                printHelp();
+                printHelp(false);
                 return 0;
             }, { command: 'help', interactive: true });
         }
@@ -5474,7 +5635,7 @@ async function main(): Promise<number> {
         }
         captureEvent('cli_command_executed', { command: 'help' });
         return runCommandWithOpsSummary('cli.help', () => {
-            printHelp();
+            printHelp(false);
             return 0;
         }, { command: 'help', interactive: false });
     }
@@ -5548,14 +5709,14 @@ async function main(): Promise<number> {
                 if (parsed.subcommand === 'service') {
                     return commandDaemonService(parsed.serviceAction);
                 }
-                printHelp();
+                printHelp(Boolean(parsed.flags.advanced));
                 return 1;
             case 'config': {
                 const sub = parsed.subcommand;
                 if (sub === 'list' || !sub) return commandConfigList();
                 if (sub === 'get') return commandConfigGet(parsed.positionalArgs[0]);
                 if (sub === 'set') return commandConfigSet(parsed.positionalArgs[0], parsed.positionalArgs[1]);
-                printHelp();
+                printHelp(Boolean(parsed.flags.advanced));
                 return 1;
             }
             case 'sync': {
@@ -5569,7 +5730,7 @@ async function main(): Promise<number> {
                     console.error('   or: 0ctx sync policy set <local_only|metadata_only|full_sync> [--repo-root=<path>] [--json]');
                     return 1;
                 }
-                printHelp();
+                printHelp(Boolean(parsed.flags.advanced));
                 return 1;
             }
             case 'connector':
@@ -5595,17 +5756,17 @@ async function main(): Promise<number> {
                 if (parsed.subcommand === 'publish') {
                     return commandReleasePublish(parsed.flags);
                 }
-                printHelp();
+                printHelp(Boolean(parsed.flags.advanced));
                 return 1;
             case 'ui':
                 console.error('`0ctx ui` has been removed from the end-user flow.');
                 console.error('Use `0ctx enable` inside a repo for the normal product flow. Use `0ctx dashboard` only for hosted support surfaces.');
                 return 1;
             case 'help':
-                printHelp();
+                printHelp(Boolean(parsed.flags.advanced));
                 return 0;
             default:
-                printHelp();
+                printHelp(Boolean(parsed.flags.advanced));
                 return 1;
         }
     }, {

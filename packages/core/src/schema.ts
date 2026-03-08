@@ -174,6 +174,11 @@ export interface BranchLaneSummary {
     behindCount: number | null;
     mergeBaseSha: string | null;
     isCurrent: boolean | null;
+    hasUncommittedChanges: boolean | null;
+    stagedChangeCount: number | null;
+    unstagedChangeCount: number | null;
+    untrackedCount: number | null;
+    baseline?: WorkstreamBaselineComparison | null;
 }
 
 export interface AgentSessionSummary extends ChatSessionSummary {
@@ -235,9 +240,14 @@ export interface WorkstreamBrief {
     behindCount: number | null;
     mergeBaseSha: string | null;
     isCurrent: boolean | null;
+    hasUncommittedChanges: boolean | null;
+    stagedChangeCount: number | null;
+    unstagedChangeCount: number | null;
+    untrackedCount: number | null;
     baseline: WorkstreamBaselineComparison | null;
     recentSessions: AgentSessionSummary[];
     latestCheckpoints: CheckpointSummary[];
+    insights: InsightSummary[];
     contextText: string;
 }
 
@@ -268,8 +278,20 @@ export interface AgentContextPack {
     baseline: WorkstreamBaselineComparison | null;
     recentSessions: AgentSessionSummary[];
     latestCheckpoints: CheckpointSummary[];
+    insights: InsightSummary[];
     handoffTimeline: HandoffTimelineEntry[];
     promptText: string;
+}
+
+export interface InsightSummary {
+    contextId: string;
+    nodeId: string;
+    type: Exclude<NodeType, 'artifact'>;
+    content: string;
+    createdAt: number;
+    branch: string | null;
+    worktreePath: string | null;
+    source: string | null;
 }
 
 export interface SessionDetail {
