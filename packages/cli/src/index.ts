@@ -59,6 +59,7 @@ import { startLogsServer } from './logs-server';
 import { initTelemetry, captureEvent, shutdownTelemetry } from './telemetry';
 import {
     appendHookEventLog,
+    getHookCapturePolicySummary,
     getHookDebugRetentionDays,
     getHookDumpDir,
     getHookDumpRetentionDays,
@@ -141,8 +142,12 @@ interface RepoReadinessSummary {
     checkpointCount: number | null;
     syncPolicy: string | null;
     captureReadyAgents: HookSupportedAgent[];
+    autoContextAgents: HookSupportedAgent[];
     captureMissingAgents: HookInstallClient[];
     captureManagedForRepo: boolean;
+    captureRetentionDays: number;
+    debugRetentionDays: number;
+    debugArtifactsEnabled: boolean;
 }
 
 interface ParsedArgs {
@@ -164,6 +169,11 @@ const SUPPORTED_HOOK_INSTALL_CLIENTS: HookInstallClient[] = ['claude', 'cursor',
 const DEFAULT_MCP_CLIENTS: SupportedClient[] = ['claude', 'antigravity'];
 const DEFAULT_HOOK_INSTALL_CLIENTS: HookInstallClient[] = ['claude', 'factory', 'antigravity'];
 const DEFAULT_ENABLE_MCP_CLIENTS: SupportedClient[] = DEFAULT_MCP_CLIENTS;
+const SESSION_START_AGENTS: HookSupportedAgent[] = ['claude', 'factory', 'antigravity'];
+
+function isGaHookAgent(agent: HookSupportedAgent): agent is Extract<HookSupportedAgent, 'claude' | 'factory' | 'antigravity'> {
+    return agent === 'claude' || agent === 'factory' || agent === 'antigravity';
+}
 const CLI_VERSION = (() => {
     try {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -550,6 +560,7 @@ async function collectRepoReadiness(options: {
     hookDetails?: HookHealthDetails | null;
 } = {}): Promise<RepoReadinessSummary | null> {
     const repoRoot = resolveRepoRoot(options.repoRoot ?? null);
+    const capturePolicy = getHookCapturePolicySummary();
     const contexts = await sendToDaemon('listContexts', {}) as Array<{ id?: string; name?: string; paths?: string[] }> | null;
     if (!Array.isArray(contexts)) {
         return null;
@@ -571,8 +582,12 @@ async function collectRepoReadiness(options: {
             checkpointCount: null,
             syncPolicy: null,
             captureReadyAgents: [],
+            autoContextAgents: [],
             captureMissingAgents: [...DEFAULT_HOOK_INSTALL_CLIENTS],
-            captureManagedForRepo: false
+            captureManagedForRepo: false,
+            captureRetentionDays: capturePolicy.captureRetentionDays,
+            debugRetentionDays: capturePolicy.debugRetentionDays,
+            debugArtifactsEnabled: capturePolicy.debugArtifactsEnabled
         };
     }
 
@@ -599,12 +614,14 @@ async function collectRepoReadiness(options: {
     const hookDetails = options.hookDetails ?? (await collectHookHealth()).details;
     const hookProjectRoot = hookDetails.projectRoot ? path.resolve(hookDetails.projectRoot) : null;
     const captureManagedForRepo = hookProjectRoot === repoRoot;
-    const captureReadyAgents = captureManagedForRepo
+    const configuredAgents = captureManagedForRepo
         ? hookDetails.agents
             .filter(agent => agent.configExists && agent.commandPresent)
             .map(agent => agent.agent)
             .filter((agent): agent is HookSupportedAgent => Boolean(agent))
         : [];
+    const captureReadyAgents = configuredAgents.filter(isGaHookAgent);
+    const autoContextAgents = captureReadyAgents.filter(agent => SESSION_START_AGENTS.includes(agent));
     const captureMissingAgents = DEFAULT_HOOK_INSTALL_CLIENTS.filter(
         agent => !captureReadyAgents.includes(agent as HookSupportedAgent)
     );
@@ -622,8 +639,12 @@ async function collectRepoReadiness(options: {
         checkpointCount: typeof pack?.workstream?.checkpointCount === 'number' ? pack.workstream.checkpointCount : null,
         syncPolicy,
         captureReadyAgents,
+        autoContextAgents,
         captureMissingAgents,
-        captureManagedForRepo
+        captureManagedForRepo,
+        captureRetentionDays: capturePolicy.captureRetentionDays,
+        debugRetentionDays: capturePolicy.debugRetentionDays,
+        debugArtifactsEnabled: capturePolicy.debugArtifactsEnabled
     };
 }
 
@@ -980,6 +1001,9 @@ async function commandStatus(flags: Record<string, string | boolean> = {}): Prom
     const historySummary = repoReadiness.sessionCount === null
         ? 'No workstream history yet'
         : `${repoReadiness.sessionCount} sessions, ${repoReadiness.checkpointCount ?? 0} checkpoints`;
+    const autoContextLine = repoReadiness.autoContextAgents.length > 0
+        ? `${formatAgentList(repoReadiness.autoContextAgents)} inject current workstream context automatically`
+        : 'Run 0ctx enable to install automatic context injection for supported agents';
 
     p.note(
         [
@@ -987,8 +1011,10 @@ async function commandStatus(flags: Record<string, string | boolean> = {}): Prom
             formatLabelValue('Workspace', repoReadiness.workspaceName),
             formatLabelValue('Workstream', repoReadiness.workstream ?? '-'),
             formatLabelValue('Capture', captureLine),
+            formatLabelValue('Context', autoContextLine),
             formatLabelValue('History', historySummary),
-            formatLabelValue('Sync', String(repoReadiness.syncPolicy ?? 'metadata_only'))
+            formatLabelValue('Sync', String(repoReadiness.syncPolicy ?? 'metadata_only')),
+            formatLabelValue('Retention', formatRetentionLabel(repoReadiness))
         ].join('\n'),
         'Repo Readiness'
     );
@@ -1391,12 +1417,19 @@ async function commandEnable(flags: Record<string, string | boolean>): Promise<n
                     : `${formatAgentList(repoReadiness.captureReadyAgents)} ready${repoReadiness.captureReadyAgents.length > 0 ? '; ' : ''}${formatAgentList(repoReadiness.captureMissingAgents)} not installed`
             ),
             formatLabelValue(
+                'Context',
+                repoReadiness.autoContextAgents.length > 0
+                    ? `${formatAgentList(repoReadiness.autoContextAgents)} inject current workstream context automatically`
+                    : 'No supported context injection integrations installed yet'
+            ),
+            formatLabelValue(
                 'History',
                 repoReadiness.sessionCount === null
                     ? 'No captured workstream history yet'
                     : `${repoReadiness.sessionCount} sessions, ${repoReadiness.checkpointCount ?? 0} checkpoints`
             ),
-            formatLabelValue('Sync', String(repoReadiness.syncPolicy ?? 'metadata_only'))
+            formatLabelValue('Sync', String(repoReadiness.syncPolicy ?? 'metadata_only')),
+            formatLabelValue('Retention', formatRetentionLabel(repoReadiness))
         ]
         : [
             formatLabelValue('Repo', repoRoot),
@@ -4745,6 +4778,11 @@ function formatSyncPolicyLabel(policy: string | null | undefined): string {
     if (normalized === 'full_sync') return 'full_sync (opt-in)';
     if (normalized === 'local_only') return 'local_only';
     return normalized;
+}
+
+function formatRetentionLabel(readiness: Pick<RepoReadinessSummary, 'captureRetentionDays' | 'debugRetentionDays' | 'debugArtifactsEnabled'>): string {
+    const debugMode = readiness.debugArtifactsEnabled ? 'debug on' : 'debug off';
+    return `${readiness.captureRetentionDays}d local capture, ${readiness.debugRetentionDays}d debug (${debugMode})`;
 }
 
 function resolveCommandWorkstreamScope(flags: Record<string, string | boolean>): {

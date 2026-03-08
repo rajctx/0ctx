@@ -45,6 +45,22 @@ export function isHookDebugArtifactsEnabled(): boolean {
         || normalized === 'on';
 }
 
+export interface HookCapturePolicySummary {
+    rootDir: string;
+    captureRetentionDays: number;
+    debugRetentionDays: number;
+    debugArtifactsEnabled: boolean;
+}
+
+export function getHookCapturePolicySummary(): HookCapturePolicySummary {
+    return {
+        rootDir: getHookDumpDir(),
+        captureRetentionDays: getHookDumpRetentionDays(),
+        debugRetentionDays: getHookDebugRetentionDays(),
+        debugArtifactsEnabled: isHookDebugArtifactsEnabled()
+    };
+}
+
 export interface HookDumpPruneResult {
     rootDir: string;
     maxAgeDays: number;

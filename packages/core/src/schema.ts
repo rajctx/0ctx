@@ -190,6 +190,8 @@ export interface BranchLaneSummary {
     stateKind?: 'current' | 'ahead' | 'behind' | 'diverged' | 'detached' | 'drifted' | 'dirty' | 'elsewhere' | 'unknown';
     stateSummary?: string | null;
     stateActionHint?: string | null;
+    handoffReadiness?: 'ready' | 'review' | 'blocked';
+    handoffSummary?: string | null;
 }
 
 export interface AgentSessionSummary extends ChatSessionSummary {
@@ -266,6 +268,8 @@ export interface WorkstreamBrief {
     stateKind?: 'current' | 'ahead' | 'behind' | 'diverged' | 'detached' | 'drifted' | 'dirty' | 'elsewhere' | 'unknown';
     stateSummary?: string | null;
     stateActionHint?: string | null;
+    handoffReadiness?: 'ready' | 'review' | 'blocked';
+    handoffSummary?: string | null;
     recentSessions: AgentSessionSummary[];
     latestCheckpoints: CheckpointSummary[];
     insights: InsightSummary[];

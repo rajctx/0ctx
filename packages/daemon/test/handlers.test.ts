@@ -124,9 +124,19 @@ describe('daemon request handling', () => {
             const hookHealth = handleRequest(graph, 'conn-hook-health', {
                 method: 'getHookHealth',
                 params: {}
-            }, runtime()) as { agents: Array<{ agent: string; notes: string | null }> };
+            }, runtime()) as {
+                capturePolicy: {
+                    captureRetentionDays: number;
+                    debugRetentionDays: number;
+                    debugArtifactsEnabled: boolean;
+                };
+                agents: Array<{ agent: string; notes: string | null }>;
+            };
 
             const byAgent = new Map(hookHealth.agents.map((agent) => [agent.agent, agent.notes]));
+            expect(hookHealth.capturePolicy.captureRetentionDays).toBe(14);
+            expect(hookHealth.capturePolicy.debugRetentionDays).toBe(7);
+            expect(hookHealth.capturePolicy.debugArtifactsEnabled).toBe(false);
             expect(byAgent.get('claude')).toBe('supported');
             expect(byAgent.get('factory')).toBe('supported');
             expect(byAgent.get('antigravity')).toBe('supported');
@@ -357,11 +367,19 @@ describe('daemon request handling', () => {
                 method: 'listBranchLanes',
                 sessionToken: session.sessionToken,
                 params: { contextId: context.id }
-            }, runtime()) as Array<{ branch: string; lastAgent: string | null; sessionCount: number }>;
+            }, runtime()) as Array<{
+                branch: string;
+                lastAgent: string | null;
+                sessionCount: number;
+                handoffReadiness?: 'ready' | 'review' | 'blocked';
+                handoffSummary?: string | null;
+            }>;
             expect(lanes).toHaveLength(1);
             expect(lanes[0].branch).toBe('feature/branch-lane');
             expect(lanes[0].lastAgent).toBe('factory');
             expect(lanes[0].sessionCount).toBe(1);
+            expect(lanes[0].handoffReadiness).toBe('ready');
+            expect(lanes[0].handoffSummary).toContain('create a checkpoint');
 
             const brief = handleRequest(graph, 'conn-branch', {
                 method: 'getWorkstreamBrief',
@@ -375,14 +393,19 @@ describe('daemon request handling', () => {
                 workspaceName: string;
                 branch: string | null;
                 tracked: boolean;
+                handoffReadiness?: 'ready' | 'review' | 'blocked';
+                handoffSummary?: string | null;
                 recentSessions: Array<{ sessionId: string }>;
                 contextText: string;
             };
             expect(brief.workspaceName).toBe('branch-context');
             expect(brief.branch).toBe('feature/branch-lane');
             expect(brief.tracked).toBe(true);
+            expect(brief.handoffReadiness).toBe('ready');
+            expect(brief.handoffSummary).toContain('create a checkpoint');
             expect(brief.recentSessions[0]?.sessionId).toBe('session-branch-1');
             expect(brief.contextText).toContain('Current workstream: feature/branch-lane');
+            expect(brief.contextText).toContain('Handoff: Ready to continue');
 
             const agentContext = handleRequest(graph, 'conn-branch', {
                 method: 'getAgentContextPack',
@@ -395,6 +418,10 @@ describe('daemon request handling', () => {
             }, runtime()) as {
                 workspaceName: string;
                 branch: string | null;
+                workstream: {
+                    handoffReadiness?: 'ready' | 'review' | 'blocked';
+                    handoffSummary?: string | null;
+                };
                 recentSessions: Array<{ sessionId: string }>;
                 latestCheckpoints: Array<unknown>;
                 handoffTimeline: Array<{ sessionId: string }>;
@@ -402,11 +429,14 @@ describe('daemon request handling', () => {
             };
             expect(agentContext.workspaceName).toBe('branch-context');
             expect(agentContext.branch).toBe('feature/branch-lane');
+            expect(agentContext.workstream.handoffReadiness).toBe('ready');
+            expect(agentContext.workstream.handoffSummary).toContain('create a checkpoint');
             expect(agentContext.recentSessions[0]?.sessionId).toBe('session-branch-1');
             expect(agentContext.latestCheckpoints).toHaveLength(0);
             expect(agentContext.handoffTimeline[0]?.sessionId).toBe('session-branch-1');
             expect(agentContext.promptText).toContain('Current workstream: feature/branch-lane');
             expect(agentContext.promptText).toContain('Recent handoffs:');
+            expect(agentContext.promptText).toContain('Handoff: Ready to continue');
 
             const sessions = handleRequest(graph, 'conn-branch', {
                 method: 'listBranchSessions',
@@ -648,6 +678,8 @@ describe('daemon request handling', () => {
                 stateSummary: string | null;
                 stateActionHint: string | null;
                 baseline: { branch: string | null; aheadCount: number | null; behindCount: number | null; summary: string } | null;
+                handoffReadiness?: 'ready' | 'review' | 'blocked';
+                handoffSummary?: string | null;
                 insights: Array<{ type: string; content: string }>;
                 contextText: string;
             };
@@ -668,6 +700,8 @@ describe('daemon request handling', () => {
             expect(brief.stateKind).toBe('dirty');
             expect(brief.stateSummary).toContain('Working tree has local uncommitted changes');
             expect(brief.stateActionHint).toContain('Commit or checkpoint local changes');
+            expect(brief.handoffReadiness).toBe('review');
+            expect(brief.handoffSummary).toContain('Review git state before handoff');
             expect(brief.baseline?.branch).toBe('main');
             expect(brief.baseline?.aheadCount).toBe(1);
             expect(brief.baseline?.behindCount).toBe(0);
@@ -677,6 +711,7 @@ describe('daemon request handling', () => {
             expect(brief.insights[0]?.content).toContain('current workstream');
             expect(brief.contextText).toContain('Status: Working tree has local uncommitted changes.');
             expect(brief.contextText).toContain('Recommended next step: Commit or checkpoint local changes before handing this workstream to another agent.');
+            expect(brief.contextText).toContain('Handoff: Review git state before handoff.');
             expect(brief.contextText).toContain('Checkout: this workstream is checked out here.');
             expect(brief.contextText).toContain('Git state: current local workstream.');
             expect(brief.contextText).toContain('Baseline: feature/runtime-shape is 1 commit ahead of main.');
@@ -710,6 +745,8 @@ describe('daemon request handling', () => {
                     stateKind: string | null;
                     stateSummary: string | null;
                     stateActionHint: string | null;
+                    handoffReadiness?: 'ready' | 'review' | 'blocked';
+                    handoffSummary?: string | null;
                 };
                 baseline: { branch: string | null; aheadCount: number | null; behindCount: number | null; summary: string } | null;
                 insights: Array<{ type: string; content: string }>;
@@ -732,10 +769,13 @@ describe('daemon request handling', () => {
             expect(pack.workstream.stateKind).toBe('dirty');
             expect(pack.workstream.stateSummary).toContain('Working tree has local uncommitted changes');
             expect(pack.workstream.stateActionHint).toContain('Commit or checkpoint local changes');
+            expect(pack.workstream.handoffReadiness).toBe('review');
+            expect(pack.workstream.handoffSummary).toContain('Review git state before handoff');
             expect(pack.insights).toHaveLength(1);
             expect(pack.insights[0]?.type).toBe('decision');
             expect(pack.promptText).toContain('Status: Working tree has local uncommitted changes.');
             expect(pack.promptText).toContain('Recommended next step: Commit or checkpoint local changes before handing this workstream to another agent.');
+            expect(pack.promptText).toContain('Handoff: Review git state before handoff.');
             expect(pack.promptText).toContain('Baseline: feature/runtime-shape is 1 commit ahead of main.');
             expect(pack.promptText).toContain('Local changes:');
             expect(pack.promptText).toContain('staged');
@@ -876,6 +916,8 @@ describe('daemon request handling', () => {
                 stateKind: string | null;
                 stateSummary: string | null;
                 stateActionHint: string | null;
+                handoffReadiness?: 'ready' | 'review' | 'blocked';
+                handoffSummary?: string | null;
             }>;
 
             expect(lanes).toHaveLength(1);
@@ -886,6 +928,8 @@ describe('daemon request handling', () => {
             expect(lanes[0].stateKind).toBe('elsewhere');
             expect(lanes[0].stateSummary).toContain('Checked out in another worktree');
             expect(lanes[0].stateActionHint).toContain('Open the checked-out worktree');
+            expect(lanes[0].handoffReadiness).toBe('blocked');
+            expect(lanes[0].handoffSummary).toContain('Do not hand this workstream off yet');
 
             const brief = handleRequest(graph, 'conn-worktree', {
                 method: 'getWorkstreamBrief',
@@ -901,6 +945,8 @@ describe('daemon request handling', () => {
                 stateKind: string | null;
                 stateSummary: string | null;
                 stateActionHint: string | null;
+                handoffReadiness?: 'ready' | 'review' | 'blocked';
+                handoffSummary?: string | null;
                 contextText: string;
             };
 
@@ -910,8 +956,11 @@ describe('daemon request handling', () => {
             expect(brief.stateKind).toBe('elsewhere');
             expect(brief.stateSummary).toContain('Checked out in another worktree');
             expect(brief.stateActionHint).toContain('Open the checked-out worktree');
+            expect(brief.handoffReadiness).toBe('blocked');
+            expect(brief.handoffSummary).toContain('Do not hand this workstream off yet');
             expect(brief.contextText).toContain('Status: Checked out in another worktree, not in the current checkout.');
             expect(brief.contextText).toContain('Recommended next step: Open the checked-out worktree before continuing on this workstream.');
+            expect(brief.contextText).toContain('Handoff: Do not hand this workstream off yet.');
             expect(brief.contextText).toContain('Checkout: this workstream is checked out elsewhere');
             expect(brief.contextText).toContain(path.resolve(extraWorktree));
         } finally {
@@ -954,6 +1003,8 @@ describe('daemon request handling', () => {
                 stateKind: string | null;
                 stateSummary: string | null;
                 stateActionHint: string | null;
+                handoffReadiness?: 'ready' | 'review' | 'blocked';
+                handoffSummary?: string | null;
                 baseline: { branch: string | null; comparable: boolean; summary: string } | null;
                 contextText: string;
             };
@@ -966,10 +1017,13 @@ describe('daemon request handling', () => {
             expect(brief.stateKind).toBe('detached');
             expect(brief.stateSummary).toContain('Detached HEAD');
             expect(brief.stateActionHint).toContain('Create or switch to a named branch');
+            expect(brief.handoffReadiness).toBe('blocked');
+            expect(brief.handoffSummary).toContain('Do not hand this workstream off yet');
             expect(brief.baseline?.branch).toBe('main');
             expect(brief.baseline?.comparable).toBe(false);
             expect(brief.contextText).toContain('Status: Detached HEAD. This checkout is not on a named branch.');
             expect(brief.contextText).toContain('Recommended next step: Create or switch to a named branch before relying on this workstream.');
+            expect(brief.contextText).toContain('Handoff: Do not hand this workstream off yet.');
             expect(brief.contextText).toContain(`Current workstream: detached HEAD @ ${detachedHead.slice(0, 12)}`);
             expect(brief.contextText).toContain(`Git state: detached HEAD at ${detachedHead.slice(0, 12)}.`);
 
@@ -986,6 +1040,8 @@ describe('daemon request handling', () => {
                     stateKind: string | null;
                     stateSummary: string | null;
                     stateActionHint: string | null;
+                    handoffReadiness?: 'ready' | 'review' | 'blocked';
+                    handoffSummary?: string | null;
                 };
                 promptText: string;
             };
@@ -997,8 +1053,11 @@ describe('daemon request handling', () => {
             expect(pack.workstream.stateKind).toBe('detached');
             expect(pack.workstream.stateSummary).toContain('Detached HEAD');
             expect(pack.workstream.stateActionHint).toContain('Create or switch to a named branch');
+            expect(pack.workstream.handoffReadiness).toBe('blocked');
+            expect(pack.workstream.handoffSummary).toContain('Do not hand this workstream off yet');
             expect(pack.promptText).toContain('Status: Detached HEAD. This checkout is not on a named branch.');
             expect(pack.promptText).toContain('Recommended next step: Create or switch to a named branch before relying on this workstream.');
+            expect(pack.promptText).toContain('Handoff: Do not hand this workstream off yet.');
             expect(pack.promptText).toContain(`Current workstream: detached HEAD @ ${detachedHead.slice(0, 12)}`);
         } finally {
             db.close();

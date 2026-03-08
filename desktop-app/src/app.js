@@ -800,7 +800,7 @@ function captureState() {
     return {
       label: 'Not ready',
       className: 'badge offline',
-      detail: 'No GA integrations installed for automatic capture'
+      detail: 'Install Claude, Factory, or Antigravity for automatic capture'
     };
   }
   return {
@@ -808,6 +808,22 @@ function captureState() {
     className: 'badge offline',
     detail: 'No installed integrations found'
   };
+}
+
+function automaticContextState() {
+  const gaHooks = installedGaAgents();
+  if (gaHooks.length > 0) {
+    return `${integrationListText(gaHooks)} inject current workstream context automatically`;
+  }
+  return 'No GA integrations installed for automatic context';
+}
+
+function capturePolicySummary() {
+  const policy = state.hook?.capturePolicy || {};
+  const captureDays = Number.isFinite(policy.captureRetentionDays) ? policy.captureRetentionDays : 14;
+  const debugDays = Number.isFinite(policy.debugRetentionDays) ? policy.debugRetentionDays : 7;
+  const debugMode = policy.debugArtifactsEnabled === true ? 'debug on' : 'debug off';
+  return `${captureDays}d local capture, ${debugDays}d debug (${debugMode})`;
 }
 
 function currentRepoRoot() {
@@ -1338,6 +1354,7 @@ function renderRuntimeBanner() {
     document.getElementById('branchLeadCopy').textContent = [
       `${describeBranchLane(lane).title} carries ${lane.sessionCount} captured session${lane.sessionCount === 1 ? '' : 's'} and ${lane.checkpointCount} checkpoint${lane.checkpointCount === 1 ? '' : 's'}.`,
       lane.lastAgent ? `The most recent handoff came from ${lane.lastAgent}` : 'No agent has touched this workstream yet.',
+      lane.handoffSummary ? `${lane.handoffSummary}.` : '',
       describeWorkstreamSync(lane) ? `${describeWorkstreamSync(lane)}.` : '',
       describeWorkstreamActionHint(lane) ? `Next: ${describeWorkstreamActionHint(lane)}.` : '',
       lane.lastActivityAt ? `${formatRelativeTime(lane.lastActivityAt)}.` : ''
@@ -1351,6 +1368,7 @@ function renderRuntimeBanner() {
       { label: 'Checkout', value: describeWorkstreamCheckout(lane) || 'unknown' },
       { label: 'Last agent', value: lane.lastAgent || 'unknown' },
       { label: 'Latest commit', value: lane.lastCommitSha || 'none' },
+      { label: 'Handoff readiness', value: lane.handoffSummary || 'unknown' },
       { label: 'Git state', value: describeWorkstreamSync(lane) || 'unknown' },
       { label: 'Recommended next step', value: describeWorkstreamActionHint(lane) || 'Continue normally' },
       { label: 'Capture drift', value: lane.headDiffersFromCaptured === true ? 'yes' : lane.headDiffersFromCaptured === false ? 'no' : 'unknown' },
@@ -1652,7 +1670,12 @@ function renderWorkspaces() {
         {
           title: 'Capture readiness',
           detail: `${capture.label} | ${capture.detail}`,
-          hint: 'Capture state reflects the local runtime plus installed integrations.'
+          hint: 'This only reflects the GA product path. Preview integrations stay outside normal readiness.'
+        },
+        {
+          title: 'Automatic context',
+          detail: automaticContextState(),
+          hint: 'Supported agents get the current workstream pack automatically at session start.'
         },
         {
           title: 'Workstreams',
@@ -1665,15 +1688,15 @@ function renderWorkspaces() {
           hint: 'All captured runs currently linked to this project.'
         },
         {
-          title: 'Default sync policy',
-          detail: context.syncPolicy === 'full_sync'
+          title: 'Data policy',
+          detail: `${context.syncPolicy === 'full_sync'
             ? 'Full Sync (opt-in)'
             : context.syncPolicy === 'local_only'
               ? 'Local Only'
-              : 'Metadata Only (default)',
+              : 'Metadata Only (default)'} | ${capturePolicySummary()}`,
           hint: context.syncPolicy === 'full_sync'
-            ? 'Richer cloud sync is enabled explicitly for this workspace.'
-            : 'Local-first storage remains the source of truth. Raw payloads stay local by default.'
+            ? 'Richer cloud sync is enabled explicitly for this workspace. Raw payload sidecars still stay local.'
+            : 'Local-first storage remains the source of truth. Raw payloads stay local and debug artifacts are short-retention.'
         }
       ]
     : [
@@ -1971,7 +1994,7 @@ function renderWorkspaces() {
       : installedGa.length > 0
         ? `${installedGa.length} GA integration${installedGa.length === 1 ? '' : 's'} ${installedGa.length === 1 ? 'is' : 'are'} installed on this machine. Use this screen only to enable another repo, add another GA agent, run a smoke test, or repair the runtime.`
         : installedPreview.length > 0
-          ? 'Only preview integrations are installed on this machine. The normal product path uses Claude, Factory, or Antigravity.'
+          ? 'No GA integrations are installed on this machine. Install Claude, Factory, or Antigravity for the normal product path.'
         : 'Enable the repo, install the integrations you actually use, then leave this screen. Daily work should happen in workstreams, sessions, and checkpoints.';
   }
   document.getElementById('hookSummary').textContent = `${installedGa.length} GA installed / ${gaHooks.length}`;
@@ -2007,9 +2030,17 @@ function renderWorkspaces() {
     {
       title: 'GA integrations',
       detail: installedGa.length > 0 ? integrationListText(installedGa) : 'No GA integrations installed',
-      hint: installedPreview.length > 0
-        ? 'Preview integrations are installed separately and kept out of the normal product path.'
-        : 'Install only the GA agents you actually use on this machine.'
+      hint: 'Install only the GA agents you actually use on this machine.'
+      },
+      {
+      title: 'Automatic context',
+      detail: automaticContextState(),
+      hint: 'Supported agents get the current workstream automatically at session start.'
+      },
+      {
+      title: 'Data policy',
+      detail: capturePolicySummary(),
+      hint: 'Raw payload sidecars stay local. Debug artifacts are short-retention and off unless explicitly enabled.'
       }
     ];
     document.getElementById('setupSupportList').innerHTML = supportItems.map((item) => `

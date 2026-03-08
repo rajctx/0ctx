@@ -355,6 +355,48 @@ function deriveWorkstreamState(
     };
 }
 
+function deriveHandoffReadiness(options: {
+    stateKind?: 'current' | 'ahead' | 'behind' | 'diverged' | 'detached' | 'drifted' | 'dirty' | 'elsewhere' | 'unknown';
+    checkpointCount?: number | null;
+}): {
+    readiness: 'ready' | 'review' | 'blocked';
+    summary: string;
+} {
+    const checkpointCount = typeof options.checkpointCount === 'number' ? options.checkpointCount : 0;
+    switch (options.stateKind) {
+        case 'current':
+            return {
+                readiness: 'ready',
+                summary: checkpointCount > 0
+                    ? 'Ready to continue. The checkout matches captured state and a recent checkpoint exists.'
+                    : 'Ready to continue. The checkout matches captured state; create a checkpoint before handoff if you need a durable restore point.'
+            };
+        case 'ahead':
+            return {
+                readiness: 'ready',
+                summary: checkpointCount > 0
+                    ? 'Ready to continue locally. This workstream is ahead and already has checkpoint coverage.'
+                    : 'Ready to continue locally, but create a checkpoint before handing this workstream to another agent.'
+            };
+        case 'dirty':
+        case 'drifted':
+        case 'behind':
+        case 'diverged':
+            return {
+                readiness: 'review',
+                summary: 'Review git state before handoff. The current checkout and recorded memory are no longer cleanly aligned.'
+            };
+        case 'detached':
+        case 'elsewhere':
+        case 'unknown':
+        default:
+            return {
+                readiness: 'blocked',
+                summary: 'Do not hand this workstream off yet. Resolve checkout state first so another agent does not start from the wrong place.'
+            };
+    }
+}
+
 function formatRelativeAge(timestamp: number, now = Date.now()): string {
     const delta = Math.max(0, now - timestamp);
     const minute = 60_000;
@@ -685,6 +727,7 @@ function enrichWorkstreamLane(
 ): BranchLaneSummary {
     const repositoryRoot = resolveWorkstreamRepositoryRoot(graph, contextId, lane, contextPaths);
     if (!repositoryRoot) {
+        const fallbackReadiness = deriveHandoffReadiness({ stateKind: 'unknown', checkpointCount: lane.checkpointCount });
         return {
             ...lane,
             repositoryRoot: null,
@@ -707,7 +750,9 @@ function enrichWorkstreamLane(
             baseline: null,
             stateKind: 'unknown',
             stateSummary: 'Workstream state could not be determined.',
-            stateActionHint: 'Open this repo and refresh 0ctx before relying on this workstream.'
+            stateActionHint: 'Open this repo and refresh 0ctx before relying on this workstream.',
+            handoffReadiness: fallbackReadiness.readiness,
+            handoffSummary: fallbackReadiness.summary
         };
     }
 
@@ -747,6 +792,10 @@ function enrichWorkstreamLane(
             ? currentBranch === lane.branch && (!normalizedWorktree || normalizedCurrentRoot === normalizedWorktree)
             : null
     });
+    const handoff = deriveHandoffReadiness({
+        stateKind: state.kind,
+        checkpointCount: lane.checkpointCount
+    });
 
     return {
         ...lane,
@@ -774,7 +823,9 @@ function enrichWorkstreamLane(
         baseline,
         stateKind: state.kind,
         stateSummary: state.summary,
-        stateActionHint: state.actionHint
+        stateActionHint: state.actionHint,
+        handoffReadiness: handoff.readiness,
+        handoffSummary: handoff.summary
     };
 }
 
@@ -934,6 +985,12 @@ function buildWorkstreamBrief(
         upstream: lane?.upstream ?? null,
         isCurrent
     });
+    const handoff = deriveHandoffReadiness({
+        stateKind: state.kind,
+        checkpointCount: latestCheckpoints.length > 0
+            ? latestCheckpoints.length
+            : (lane?.checkpointCount ?? 0)
+    });
 
     const lines = [
         '0ctx project memory',
@@ -941,6 +998,7 @@ function buildWorkstreamBrief(
         `Current workstream: ${branch ?? (isDetachedHead && currentHeadSha ? `detached HEAD @ ${currentHeadSha.slice(0, 12)}` : 'no git branch detected')}`
     ];
     lines.push(`Status: ${state.summary}`);
+    lines.push(`Handoff: ${handoff.summary}`);
     if (state.actionHint) {
         lines.push(`Recommended next step: ${state.actionHint}`);
     }
@@ -1076,6 +1134,8 @@ function buildWorkstreamBrief(
         stateKind: state.kind,
         stateSummary: state.summary,
         stateActionHint: state.actionHint,
+        handoffReadiness: handoff.readiness,
+        handoffSummary: handoff.summary,
         recentSessions,
         latestCheckpoints,
         insights,
@@ -1399,12 +1459,45 @@ function getHookStatePath(): string {
     return process.env.CTX_HOOK_STATE_PATH || path.join(os.homedir(), '.0ctx', 'hooks-state.json');
 }
 
+function getHookDumpRetentionDays(): number {
+    const raw = process.env.CTX_HOOK_DUMP_RETENTION_DAYS;
+    if (typeof raw !== 'string' || raw.trim().length === 0) {
+        return 14;
+    }
+    const parsed = Number.parseInt(raw.trim(), 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 14;
+}
+
+function getHookDebugRetentionDays(): number {
+    const raw = process.env.CTX_HOOK_DEBUG_RETENTION_DAYS;
+    if (typeof raw !== 'string' || raw.trim().length === 0) {
+        return 7;
+    }
+    const parsed = Number.parseInt(raw.trim(), 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 7;
+}
+
+function isHookDebugArtifactsEnabled(): boolean {
+    const raw = process.env.CTX_HOOK_DEBUG_ARTIFACTS;
+    if (typeof raw !== 'string') return false;
+    const normalized = raw.trim().toLowerCase();
+    return normalized === '1'
+        || normalized === 'true'
+        || normalized === 'yes'
+        || normalized === 'on';
+}
+
 function readHookHealth(): {
     statePath: string;
     projectRoot: string | null;
     contextId: string | null;
     projectConfigPath: string | null;
     updatedAt: number | null;
+    capturePolicy: {
+        captureRetentionDays: number;
+        debugRetentionDays: number;
+        debugArtifactsEnabled: boolean;
+    };
     agents: HookHealthAgent[];
 } {
     const defaults: HookHealthAgent[] = [
@@ -1424,6 +1517,11 @@ function readHookHealth(): {
             contextId: null,
             projectConfigPath: null,
             updatedAt: null,
+            capturePolicy: {
+                captureRetentionDays: getHookDumpRetentionDays(),
+                debugRetentionDays: getHookDebugRetentionDays(),
+                debugArtifactsEnabled: isHookDebugArtifactsEnabled()
+            },
             agents: defaults
         };
     }
@@ -1448,6 +1546,11 @@ function readHookHealth(): {
             contextId: typeof parsed.contextId === 'string' ? parsed.contextId : null,
             projectConfigPath: typeof parsed.projectConfigPath === 'string' ? parsed.projectConfigPath : null,
             updatedAt: typeof parsed.updatedAt === 'number' ? parsed.updatedAt : null,
+            capturePolicy: {
+                captureRetentionDays: getHookDumpRetentionDays(),
+                debugRetentionDays: getHookDebugRetentionDays(),
+                debugArtifactsEnabled: isHookDebugArtifactsEnabled()
+            },
             agents
         };
     } catch {
@@ -1457,6 +1560,11 @@ function readHookHealth(): {
             contextId: null,
             projectConfigPath: null,
             updatedAt: null,
+            capturePolicy: {
+                captureRetentionDays: getHookDumpRetentionDays(),
+                debugRetentionDays: getHookDebugRetentionDays(),
+                debugArtifactsEnabled: isHookDebugArtifactsEnabled()
+            },
             agents: defaults
         };
     }
