@@ -4805,6 +4805,39 @@ function short(value: string, max = 120): string {
     return value.length > max ? `${value.slice(0, max - 3)}...` : value;
 }
 
+function summarizeCheckoutPaths(paths: string[]): string {
+    const unique = [...new Set(paths.map((value) => String(value || '').trim()).filter(Boolean))];
+    if (unique.length === 0) return '';
+    const labels = unique.slice(0, 2).map((value) => path.basename(value) || value);
+    return unique.length > 2 ? `${labels.join(', ')}...` : labels.join(', ');
+}
+
+function describeCheckoutStateHuman(data: {
+    checkedOutWorktreePaths?: string[];
+    checkedOutHere?: boolean | null;
+    checkedOutElsewhere?: boolean | null;
+} | null | undefined): string | null {
+    if (!data) return null;
+    const paths = Array.isArray(data.checkedOutWorktreePaths) ? data.checkedOutWorktreePaths : [];
+    if (data.checkedOutHere === true && data.checkedOutElsewhere === true) {
+        const elsewhereCount = Math.max(0, paths.length - 1);
+        return elsewhereCount > 0
+            ? `checked out here + ${elsewhereCount} other worktree${elsewhereCount === 1 ? '' : 's'}`
+            : 'checked out here';
+    }
+    if (data.checkedOutHere === true) {
+        return 'checked out here';
+    }
+    if (data.checkedOutElsewhere === true) {
+        const labels = summarizeCheckoutPaths(paths);
+        return labels ? `checked out elsewhere (${labels})` : 'checked out elsewhere';
+    }
+    if (paths.length === 0) {
+        return 'not checked out in a known worktree';
+    }
+    return null;
+}
+
 async function commandBranches(args: string[], flags: Record<string, string | boolean>): Promise<number> {
     const subcommand = String(args[0] || '').trim().toLowerCase();
     const commandLabel = subcommand === 'compare'
@@ -4842,6 +4875,9 @@ async function commandBranches(args: string[], flags: Record<string, string | bo
                 behindCount?: number | null;
                 mergeBaseSha?: string | null;
                 isCurrent?: boolean | null;
+                checkedOutWorktreePaths?: string[];
+                checkedOutHere?: boolean | null;
+                checkedOutElsewhere?: boolean | null;
                 hasUncommittedChanges?: boolean | null;
                 stagedChangeCount?: number | null;
                 unstagedChangeCount?: number | null;
@@ -4873,6 +4909,10 @@ async function commandBranches(args: string[], flags: Record<string, string | bo
                 } else if (result.currentHeadSha) {
                     const refLabel = result.currentHeadRef ? ` | ${result.currentHeadRef}` : '';
                     console.log(`  HEAD: ${String(result.currentHeadSha).slice(0, 12)}${refLabel}`);
+                }
+                const checkoutState = describeCheckoutStateHuman(result);
+                if (checkoutState) {
+                    console.log(`  Checkout: ${checkoutState}`);
                 }
                 if (result.upstream) {
                     const ahead = typeof result.aheadCount === 'number' ? result.aheadCount : '?';
@@ -5015,6 +5055,9 @@ async function commandBranches(args: string[], flags: Record<string, string | bo
             currentHeadRef?: string | null;
             isDetachedHead?: boolean | null;
             headDiffersFromCaptured?: boolean | null;
+            checkedOutWorktreePaths?: string[];
+            checkedOutHere?: boolean | null;
+            checkedOutElsewhere?: boolean | null;
             baseline?: { summary?: string | null } | null;
         }>;
         return printJsonOrValue(asJson, result, () => {
@@ -5039,6 +5082,10 @@ async function commandBranches(args: string[], flags: Record<string, string | bo
                     if (headParts.length > 0) {
                         console.log(`    HEAD: ${headParts.join(' | ')}`);
                     }
+                }
+                const checkoutState = describeCheckoutStateHuman(lane);
+                if (checkoutState) {
+                    console.log(`    Checkout: ${checkoutState}`);
                 }
                 if (lane.headDiffersFromCaptured && lane.lastCommitSha && lane.currentHeadSha) {
                     console.log(`    Capture drift: ${String(lane.lastCommitSha).slice(0, 12)} -> ${String(lane.currentHeadSha).slice(0, 12)}`);

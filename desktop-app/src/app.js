@@ -347,9 +347,41 @@ function renderMetaLine(parts, options = {}) {
   return `<p class="${classes.join(' ')}">${esc(values.join(' · '))}</p>`;
 }
 
+function summarizeCheckoutPaths(paths) {
+  const values = Array.isArray(paths)
+    ? [...new Set(paths.map((value) => String(value || '').trim()).filter(Boolean))]
+    : [];
+  if (values.length === 0) return '';
+  const labels = values.slice(0, 2).map((value) => basenameFromPath(value) || value);
+  return values.length > 2 ? `${labels.join(', ')}...` : labels.join(', ');
+}
+
+function describeWorkstreamCheckout(lane) {
+  if (!lane) return '';
+  const paths = Array.isArray(lane.checkedOutWorktreePaths) ? lane.checkedOutWorktreePaths : [];
+  if (lane.checkedOutHere === true && lane.checkedOutElsewhere === true) {
+    const elsewhereCount = Math.max(0, paths.length - 1);
+    return elsewhereCount > 0
+      ? `Checked out here + ${elsewhereCount} other worktree${elsewhereCount === 1 ? '' : 's'}`
+      : 'Checked out here';
+  }
+  if (lane.checkedOutHere === true) {
+    return 'Checked out here';
+  }
+  if (lane.checkedOutElsewhere === true) {
+    const labels = summarizeCheckoutPaths(paths);
+    return labels ? `Checked out elsewhere (${labels})` : 'Checked out elsewhere';
+  }
+  if (paths.length === 0) {
+    return 'Not checked out in a known worktree';
+  }
+  return '';
+}
+
 function describeWorkstreamSync(lane) {
   if (!lane) return '';
   const localChanges = describeWorkingTreeState(lane);
+  const checkout = describeWorkstreamCheckout(lane);
   let summary = '';
   if (lane.isDetachedHead === true && lane.currentHeadSha) {
     summary = `Detached HEAD at ${commitShort(lane.currentHeadSha)}`;
@@ -371,6 +403,18 @@ function describeWorkstreamSync(lane) {
     summary = 'Current local workstream';
   }
 
+  if (checkout && summary && localChanges) {
+    return `${checkout} - ${summary} - ${localChanges}`;
+  }
+  if (checkout && summary) {
+    return `${checkout} - ${summary}`;
+  }
+  if (checkout && localChanges) {
+    return `${checkout} - ${localChanges}`;
+  }
+  if (checkout) {
+    return checkout;
+  }
   if (summary && localChanges) {
     return `${summary} - ${localChanges}`;
   }
@@ -1295,6 +1339,7 @@ function renderRuntimeBanner() {
       { label: 'Workstream', value: normalizeBranch(lane.branch) },
       { label: 'Checked-out HEAD', value: lane.currentHeadSha ? commitShort(lane.currentHeadSha) : 'unknown' },
       { label: 'HEAD ref', value: lane.currentHeadRef || (lane.isDetachedHead ? 'detached' : 'unknown') },
+      { label: 'Checkout', value: describeWorkstreamCheckout(lane) || 'unknown' },
       { label: 'Last agent', value: lane.lastAgent || 'unknown' },
       { label: 'Latest commit', value: lane.lastCommitSha || 'none' },
       { label: 'Git state', value: describeWorkstreamSync(lane) || 'unknown' },

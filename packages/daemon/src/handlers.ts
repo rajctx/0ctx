@@ -232,6 +232,13 @@ interface GitHeadState {
     detached: boolean;
 }
 
+interface GitWorktreeEntry {
+    path: string;
+    branch: string | null;
+    headSha: string | null;
+    detached: boolean;
+}
+
 function formatRelativeAge(timestamp: number, now = Date.now()): string {
     const delta = Math.max(0, now - timestamp);
     const minute = 60_000;
@@ -347,6 +354,113 @@ function getWorkingTreeState(repositoryRoot: string | null): WorkingTreeState | 
         stagedChangeCount,
         unstagedChangeCount,
         untrackedCount
+    };
+}
+
+function listGitWorktrees(repositoryRoot: string | null): GitWorktreeEntry[] | null {
+    if (!repositoryRoot) return null;
+    const result = spawnSync('git', ['-C', repositoryRoot, 'worktree', 'list', '--porcelain'], {
+        encoding: 'utf8',
+        windowsHide: true
+    });
+    if (result.status !== 0) {
+        return null;
+    }
+
+    const lines = String(result.stdout ?? '')
+        .split(/\r?\n/)
+        .map((line) => line.trim());
+    const worktrees: GitWorktreeEntry[] = [];
+    let current: GitWorktreeEntry | null = null;
+
+    const flush = () => {
+        if (current?.path) {
+            worktrees.push(current);
+        }
+        current = null;
+    };
+
+    for (const line of lines) {
+        if (!line) {
+            flush();
+            continue;
+        }
+        if (line.startsWith('worktree ')) {
+            flush();
+            const rawPath = line.slice('worktree '.length).trim();
+            current = {
+                path: path.resolve(rawPath),
+                branch: null,
+                headSha: null,
+                detached: false
+            };
+            continue;
+        }
+        if (!current) continue;
+        if (line.startsWith('HEAD ')) {
+            current.headSha = line.slice('HEAD '.length).trim() || null;
+            continue;
+        }
+        if (line.startsWith('branch ')) {
+            const ref = line.slice('branch '.length).trim();
+            current.branch = ref.startsWith('refs/heads/')
+                ? ref.slice('refs/heads/'.length)
+                : (ref || null);
+            continue;
+        }
+        if (line === 'detached') {
+            current.detached = true;
+            current.branch = null;
+        }
+    }
+    flush();
+
+    return worktrees;
+}
+
+function resolveWorkstreamCheckoutState(
+    repositoryRoot: string | null,
+    branch: string | null,
+    referenceWorktreePath: string | null,
+    fallbackCurrentRoot: string | null
+): {
+    checkedOutWorktreePaths: string[];
+    checkedOutHere: boolean | null;
+    checkedOutElsewhere: boolean | null;
+} {
+    if (!repositoryRoot || !branch) {
+        return {
+            checkedOutWorktreePaths: [],
+            checkedOutHere: null,
+            checkedOutElsewhere: null
+        };
+    }
+
+    const worktrees = listGitWorktrees(repositoryRoot) ?? [];
+    const checkedOutWorktreePaths = [...new Set(
+        worktrees
+            .filter((entry) => entry.branch === branch)
+            .map((entry) => entry.path)
+    )];
+
+    const referencePaths = new Set<string>();
+    if (referenceWorktreePath) {
+        referencePaths.add(path.resolve(referenceWorktreePath));
+    } else if (fallbackCurrentRoot) {
+        referencePaths.add(path.resolve(fallbackCurrentRoot));
+    }
+
+    const checkedOutHere = referencePaths.size > 0
+        ? checkedOutWorktreePaths.some((entry) => referencePaths.has(path.resolve(entry)))
+        : null;
+    const checkedOutElsewhere = checkedOutWorktreePaths.length > 0
+        ? checkedOutWorktreePaths.some((entry) => !referencePaths.has(path.resolve(entry)))
+        : false;
+
+    return {
+        checkedOutWorktreePaths,
+        checkedOutHere,
+        checkedOutElsewhere
     };
 }
 
@@ -467,6 +581,9 @@ function enrichWorkstreamLane(
             behindCount: null,
             mergeBaseSha: null,
             isCurrent: null,
+            checkedOutWorktreePaths: [],
+            checkedOutHere: null,
+            checkedOutElsewhere: null,
             hasUncommittedChanges: null,
             stagedChangeCount: null,
             unstagedChangeCount: null,
@@ -487,6 +604,12 @@ function enrichWorkstreamLane(
     const normalizedWorktree = lane.worktreePath ? path.resolve(lane.worktreePath) : null;
     const normalizedCurrentRoot = currentRoot ? path.resolve(currentRoot) : null;
     const workingTreeState = getWorkingTreeState(repositoryRoot);
+    const checkoutState = resolveWorkstreamCheckoutState(
+        repositoryRoot,
+        lane.branch,
+        normalizedWorktree,
+        normalizedCurrentRoot
+    );
 
     return {
         ...lane,
@@ -504,6 +627,9 @@ function enrichWorkstreamLane(
         isCurrent: currentBranch
             ? currentBranch === lane.branch && (!normalizedWorktree || normalizedCurrentRoot === normalizedWorktree)
             : null,
+        checkedOutWorktreePaths: checkoutState.checkedOutWorktreePaths,
+        checkedOutHere: checkoutState.checkedOutHere,
+        checkedOutElsewhere: checkoutState.checkedOutElsewhere,
         hasUncommittedChanges: workingTreeState?.hasUncommittedChanges ?? null,
         stagedChangeCount: workingTreeState?.stagedChangeCount ?? null,
         unstagedChangeCount: workingTreeState?.unstagedChangeCount ?? null,
@@ -639,6 +765,18 @@ function buildWorkstreamBrief(
             ? Boolean(branch && gitHead?.branch === branch && (!worktreePath || path.resolve(repositoryRoot) === path.resolve(worktreePath)))
             : null
     );
+    const checkoutState = lane
+        ? {
+            checkedOutWorktreePaths: lane.checkedOutWorktreePaths ?? [],
+            checkedOutHere: lane.checkedOutHere ?? null,
+            checkedOutElsewhere: lane.checkedOutElsewhere ?? null
+        }
+        : resolveWorkstreamCheckoutState(
+            repositoryRoot,
+            branch,
+            worktreePath,
+            inferredCurrent.worktreePath ?? repositoryRoot
+        );
 
     const lines = [
         '0ctx project memory',
@@ -668,6 +806,21 @@ function buildWorkstreamBrief(
             lines.push(`Git state: ${gitState}.`);
         } else if (isCurrent === true) {
             lines.push('Git state: current local workstream.');
+        }
+    }
+
+    if (branch) {
+        if (checkoutState.checkedOutHere === true && checkoutState.checkedOutElsewhere === true) {
+            const elsewhereCount = Math.max(0, checkoutState.checkedOutWorktreePaths.length - 1);
+            lines.push(`Checkout: this workstream is checked out here and in ${elsewhereCount} other worktree${elsewhereCount === 1 ? '' : 's'}.`);
+        } else if (checkoutState.checkedOutHere === true) {
+            lines.push('Checkout: this workstream is checked out here.');
+        } else if (checkoutState.checkedOutElsewhere === true) {
+            const labels = checkoutState.checkedOutWorktreePaths.slice(0, 2).join(', ');
+            const suffix = checkoutState.checkedOutWorktreePaths.length > 2 ? '...' : '';
+            lines.push(`Checkout: this workstream is checked out elsewhere (${labels}${suffix}).`);
+        } else if (checkoutState.checkedOutWorktreePaths.length === 0) {
+            lines.push('Checkout: this workstream is not currently checked out in a known worktree.');
         }
     }
 
@@ -756,6 +909,9 @@ function buildWorkstreamBrief(
         behindCount: lane?.behindCount ?? null,
         mergeBaseSha: lane?.mergeBaseSha ?? null,
         isCurrent,
+        checkedOutWorktreePaths: checkoutState.checkedOutWorktreePaths,
+        checkedOutHere: checkoutState.checkedOutHere,
+        checkedOutElsewhere: checkoutState.checkedOutElsewhere,
         hasUncommittedChanges,
         stagedChangeCount,
         unstagedChangeCount,

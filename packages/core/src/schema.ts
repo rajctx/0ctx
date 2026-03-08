@@ -179,6 +179,9 @@ export interface BranchLaneSummary {
     behindCount: number | null;
     mergeBaseSha: string | null;
     isCurrent: boolean | null;
+    checkedOutWorktreePaths?: string[];
+    checkedOutHere?: boolean | null;
+    checkedOutElsewhere?: boolean | null;
     hasUncommittedChanges: boolean | null;
     stagedChangeCount: number | null;
     unstagedChangeCount: number | null;
@@ -249,6 +252,9 @@ export interface WorkstreamBrief {
     behindCount: number | null;
     mergeBaseSha: string | null;
     isCurrent: boolean | null;
+    checkedOutWorktreePaths?: string[];
+    checkedOutHere?: boolean | null;
+    checkedOutElsewhere?: boolean | null;
     hasUncommittedChanges: boolean | null;
     stagedChangeCount: number | null;
     unstagedChangeCount: number | null;

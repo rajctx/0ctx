@@ -590,6 +590,9 @@ describe('daemon request handling', () => {
                 isDetachedHead: boolean | null;
                 headDiffersFromCaptured: boolean | null;
                 isCurrent: boolean | null;
+                checkedOutWorktreePaths: string[];
+                checkedOutHere: boolean | null;
+                checkedOutElsewhere: boolean | null;
                 upstream: string | null;
                 hasUncommittedChanges: boolean | null;
                 stagedChangeCount: number | null;
@@ -606,6 +609,9 @@ describe('daemon request handling', () => {
             expect(lanes[0].isDetachedHead).toBe(false);
             expect(lanes[0].headDiffersFromCaptured).toBe(false);
             expect(lanes[0].isCurrent).toBe(true);
+            expect(lanes[0].checkedOutHere).toBe(true);
+            expect(lanes[0].checkedOutElsewhere).toBe(false);
+            expect(lanes[0].checkedOutWorktreePaths.map(item => path.resolve(item))).toContain(path.resolve(repoRoot));
             expect(lanes[0].upstream).toBeNull();
             expect(lanes[0].hasUncommittedChanges).toBe(true);
             expect(lanes[0].stagedChangeCount).toBeGreaterThanOrEqual(1);
@@ -631,6 +637,9 @@ describe('daemon request handling', () => {
                 isDetachedHead: boolean | null;
                 headDiffersFromCaptured: boolean | null;
                 isCurrent: boolean | null;
+                checkedOutWorktreePaths: string[];
+                checkedOutHere: boolean | null;
+                checkedOutElsewhere: boolean | null;
                 hasUncommittedChanges: boolean | null;
                 stagedChangeCount: number | null;
                 unstagedChangeCount: number | null;
@@ -646,6 +655,9 @@ describe('daemon request handling', () => {
             expect(brief.isDetachedHead).toBe(false);
             expect(brief.headDiffersFromCaptured).toBe(false);
             expect(brief.isCurrent).toBe(true);
+            expect(brief.checkedOutHere).toBe(true);
+            expect(brief.checkedOutElsewhere).toBe(false);
+            expect(brief.checkedOutWorktreePaths.map(item => path.resolve(item))).toContain(path.resolve(repoRoot));
             expect(brief.hasUncommittedChanges).toBe(true);
             expect(brief.stagedChangeCount).toBeGreaterThanOrEqual(1);
             expect(brief.unstagedChangeCount).toBe(1);
@@ -657,6 +669,7 @@ describe('daemon request handling', () => {
             expect(brief.insights).toHaveLength(1);
             expect(brief.insights[0]?.type).toBe('decision');
             expect(brief.insights[0]?.content).toContain('current workstream');
+            expect(brief.contextText).toContain('Checkout: this workstream is checked out here.');
             expect(brief.contextText).toContain('Git state: current local workstream.');
             expect(brief.contextText).toContain('Baseline: feature/runtime-shape is 1 commit ahead of main.');
             expect(brief.contextText).toContain('Local changes:');
@@ -679,6 +692,9 @@ describe('daemon request handling', () => {
                     currentHeadRef: string | null;
                     isDetachedHead: boolean | null;
                     headDiffersFromCaptured: boolean | null;
+                    checkedOutWorktreePaths: string[];
+                    checkedOutHere: boolean | null;
+                    checkedOutElsewhere: boolean | null;
                     hasUncommittedChanges: boolean | null;
                     stagedChangeCount: number | null;
                     unstagedChangeCount: number | null;
@@ -695,6 +711,9 @@ describe('daemon request handling', () => {
             expect(pack.workstream.currentHeadRef).toBe('refs/heads/feature/runtime-shape');
             expect(pack.workstream.isDetachedHead).toBe(false);
             expect(pack.workstream.headDiffersFromCaptured).toBe(false);
+            expect(pack.workstream.checkedOutHere).toBe(true);
+            expect(pack.workstream.checkedOutElsewhere).toBe(false);
+            expect(pack.workstream.checkedOutWorktreePaths.map(item => path.resolve(item))).toContain(path.resolve(repoRoot));
             expect(pack.workstream.hasUncommittedChanges).toBe(true);
             expect(pack.workstream.stagedChangeCount).toBeGreaterThanOrEqual(1);
             expect(pack.workstream.unstagedChangeCount).toBe(1);
@@ -752,6 +771,119 @@ describe('daemon request handling', () => {
             expect(inferredPack.branch).toBe('feature/runtime-shape');
             expect(inferredPack.workstream.branch).toBe('feature/runtime-shape');
             expect(inferredPack.baseline?.branch).toBe('main');
+        } finally {
+            db.close();
+        }
+    }, 15000);
+
+    it('shows when a workstream is checked out only in another worktree', () => {
+        if (!gitAvailable()) return;
+        const { db, graph } = createGraph();
+        try {
+            const repoRoot = path.join(os.tmpdir(), `0ctx-worktree-occupancy-${Date.now()}`);
+            const extraWorktree = path.join(os.tmpdir(), `0ctx-worktree-occupancy-extra-${Date.now()}`);
+            tempDirs.push(repoRoot, extraWorktree);
+
+            spawnSync('git', ['init', '--initial-branch', 'main', repoRoot], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', repoRoot, 'config', 'user.email', 'test@example.com'], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', repoRoot, 'config', 'user.name', '0ctx test'], { encoding: 'utf8', windowsHide: true });
+            spawnSync('powershell', ['-NoProfile', '-Command', `Set-Content -Path '${path.join(repoRoot, 'notes.txt')}' -Value 'base'`], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', repoRoot, 'add', '.'], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', repoRoot, 'commit', '-m', 'base'], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', repoRoot, 'worktree', 'add', extraWorktree, '-b', 'feature/other-worktree'], { encoding: 'utf8', windowsHide: true });
+            spawnSync('powershell', ['-NoProfile', '-Command', `Set-Content -Path '${path.join(extraWorktree, 'notes.txt')}' -Value 'worktree branch'`], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', extraWorktree, 'add', '.'], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', extraWorktree, 'commit', '-m', 'worktree branch'], { encoding: 'utf8', windowsHide: true });
+            const worktreeHead = String(spawnSync('git', ['-C', extraWorktree, 'rev-parse', 'HEAD'], { encoding: 'utf8', windowsHide: true }).stdout ?? '').trim();
+
+            const session = handleRequest(graph, 'conn-worktree', { method: 'createSession' }, runtime()) as { sessionToken: string };
+            const context = handleRequest(graph, 'conn-worktree', {
+                method: 'createContext',
+                sessionToken: session.sessionToken,
+                params: { name: 'other-worktree-context', paths: [repoRoot] }
+            }, runtime()) as { id: string };
+
+            handleRequest(graph, 'conn-worktree', {
+                method: 'addNode',
+                sessionToken: session.sessionToken,
+                params: {
+                    contextId: context.id,
+                    type: 'artifact',
+                    hidden: true,
+                    thread: 'session-worktree-1',
+                    key: 'chat_session:claude:session-worktree-1',
+                    content: 'session from another worktree',
+                    tags: ['chat_session', 'agent:claude'],
+                    rawPayload: {
+                        sessionId: 'session-worktree-1',
+                        branch: 'feature/other-worktree',
+                        commitSha: worktreeHead,
+                        agent: 'claude',
+                        repositoryRoot: repoRoot
+                    }
+                }
+            }, runtime());
+
+            handleRequest(graph, 'conn-worktree', {
+                method: 'addNode',
+                sessionToken: session.sessionToken,
+                params: {
+                    contextId: context.id,
+                    type: 'artifact',
+                    hidden: true,
+                    thread: 'session-worktree-1',
+                    key: 'chat_turn:claude:session-worktree-1:msg-1',
+                    content: 'turn from another worktree',
+                    tags: ['chat_turn', 'role:assistant'],
+                    rawPayload: {
+                        sessionId: 'session-worktree-1',
+                        messageId: 'msg-1',
+                        role: 'assistant',
+                        branch: 'feature/other-worktree',
+                        commitSha: worktreeHead,
+                        agent: 'claude',
+                        repositoryRoot: repoRoot,
+                        occurredAt: Date.now()
+                    }
+                }
+            }, runtime());
+
+            const lanes = handleRequest(graph, 'conn-worktree', {
+                method: 'listBranchLanes',
+                sessionToken: session.sessionToken,
+                params: { contextId: context.id }
+            }, runtime()) as Array<{
+                branch: string;
+                checkedOutWorktreePaths: string[];
+                checkedOutHere: boolean | null;
+                checkedOutElsewhere: boolean | null;
+            }>;
+
+            expect(lanes).toHaveLength(1);
+            expect(lanes[0].branch).toBe('feature/other-worktree');
+            expect(lanes[0].checkedOutHere).toBe(false);
+            expect(lanes[0].checkedOutElsewhere).toBe(true);
+            expect(lanes[0].checkedOutWorktreePaths.map(item => path.resolve(item))).toContain(path.resolve(extraWorktree));
+
+            const brief = handleRequest(graph, 'conn-worktree', {
+                method: 'getWorkstreamBrief',
+                sessionToken: session.sessionToken,
+                params: {
+                    contextId: context.id,
+                    branch: 'feature/other-worktree'
+                }
+            }, runtime()) as {
+                checkedOutWorktreePaths: string[];
+                checkedOutHere: boolean | null;
+                checkedOutElsewhere: boolean | null;
+                contextText: string;
+            };
+
+            expect(brief.checkedOutHere).toBe(false);
+            expect(brief.checkedOutElsewhere).toBe(true);
+            expect(brief.checkedOutWorktreePaths.map(item => path.resolve(item))).toContain(path.resolve(extraWorktree));
+            expect(brief.contextText).toContain('Checkout: this workstream is checked out elsewhere');
+            expect(brief.contextText).toContain(path.resolve(extraWorktree));
         } finally {
             db.close();
         }
