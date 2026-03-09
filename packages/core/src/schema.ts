@@ -187,7 +187,7 @@ export interface BranchLaneSummary {
     unstagedChangeCount: number | null;
     untrackedCount: number | null;
     baseline?: WorkstreamBaselineComparison | null;
-    stateKind?: 'current' | 'ahead' | 'behind' | 'diverged' | 'detached' | 'drifted' | 'dirty' | 'elsewhere' | 'unknown';
+    stateKind?: 'current' | 'ahead' | 'behind' | 'diverged' | 'detached' | 'drifted' | 'dirty' | 'elsewhere' | 'isolated' | 'unknown';
     stateSummary?: string | null;
     stateActionHint?: string | null;
     handoffReadiness?: 'ready' | 'review' | 'blocked';
@@ -265,7 +265,7 @@ export interface WorkstreamBrief {
     unstagedChangeCount: number | null;
     untrackedCount: number | null;
     baseline: WorkstreamBaselineComparison | null;
-    stateKind?: 'current' | 'ahead' | 'behind' | 'diverged' | 'detached' | 'drifted' | 'dirty' | 'elsewhere' | 'unknown';
+    stateKind?: 'current' | 'ahead' | 'behind' | 'diverged' | 'detached' | 'drifted' | 'dirty' | 'elsewhere' | 'isolated' | 'unknown';
     stateSummary?: string | null;
     stateActionHint?: string | null;
     handoffReadiness?: 'ready' | 'review' | 'blocked';
@@ -309,6 +309,15 @@ export interface AgentContextPack {
     insights: InsightSummary[];
     handoffTimeline: HandoffTimelineEntry[];
     promptText: string;
+}
+
+export interface DataPolicySummary {
+    contextId: string | null;
+    workspaceResolved: boolean;
+    syncPolicy: SyncPolicy;
+    captureRetentionDays: number;
+    debugRetentionDays: number;
+    debugArtifactsEnabled: boolean;
 }
 
 export interface InsightSummary {

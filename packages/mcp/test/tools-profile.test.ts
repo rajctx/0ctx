@@ -51,6 +51,7 @@ describe('MCP tool profile filtering', () => {
         const names = new Set(tools.map(tool => tool.name));
         expect(names.has('ctx_set')).toBe(true);
         expect(names.has('ctx_sync_now')).toBe(true);
+        expect(names.has('ctx_get_data_policy')).toBe(true);
         expect(names.has('ctx_recall')).toBe(false);
     });
 

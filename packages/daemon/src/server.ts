@@ -234,6 +234,19 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Sta
     const metrics = new RequestMetrics();
     const syncEngine = new SyncEngine(graph, db);
     const eventRuntime = new EventRuntime();
+    let closeDaemonRef: (() => Promise<void>) | null = null;
+
+    const requestShutdown = () => {
+        if (!closeDaemonRef) return;
+        setTimeout(() => {
+            void closeDaemonRef?.().catch(error => {
+                log('error', 'daemon_shutdown_error', {
+                    socketPath,
+                    error: error instanceof Error ? error.message : String(error)
+                });
+            });
+        }, 0);
+    };
 
     const server = net.createServer(socket => {
         // Unique ID for this client connection to track active context
@@ -259,7 +272,8 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Sta
                         startedAt,
                         getMetricsSnapshot: () => metrics.snapshot(),
                         syncEngine,
-                        eventRuntime
+                        eventRuntime,
+                        requestShutdown
                     });
                     const durationMs = Date.now() - requestStart;
                     metrics.record(req.method, true, durationMs);
@@ -307,6 +321,7 @@ export async function startDaemon(options: StartDaemonOptions = {}): Promise<Sta
     });
 
     const closeDaemon = createDaemonCloser(server, db, socketPath, syncEngine);
+    closeDaemonRef = closeDaemon;
 
     try {
         const status = await bindDaemonServer(server, socketPath, probeTimeoutMs);

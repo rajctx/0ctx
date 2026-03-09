@@ -26,6 +26,7 @@ export type {
     WorkstreamBaselineComparison,
     WorkstreamComparison,
     AgentContextPack,
+    DataPolicySummary,
     InsightSummary,
     SessionMessage,
     CheckpointSummary,

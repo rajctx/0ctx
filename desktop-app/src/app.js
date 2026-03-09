@@ -53,6 +53,7 @@ const SEARCH_HINTS = {
 };
 
 const REQUIRED_RUNTIME_METHODS = [
+  'getDataPolicy',
   'listBranchLanes',
   'listBranchSessions',
   'listSessionMessages',
@@ -127,6 +128,7 @@ const state = {
   caps: [],
   auth: { authenticated: true, provider: 'local' },
   hook: null,
+  dataPolicy: null,
   runtimeIssue: null,
   sessionKnowledgePreview: null,
   sessionKnowledgeSelectedKeys: [],
@@ -779,6 +781,13 @@ function postureClass(value) {
   return 'badge offline';
 }
 
+function formatSyncPolicyLabel(policy) {
+  const value = String(policy || '').trim().toLowerCase();
+  if (value === 'full_sync') return 'Full Sync (opt-in)';
+  if (value === 'local_only') return 'Local Only';
+  return 'Metadata Only (default)';
+}
+
 function captureState() {
   const gaHooks = installedGaAgents();
   const previewHooks = installedPreviewAgents();
@@ -800,7 +809,7 @@ function captureState() {
     return {
       label: 'Not ready',
       className: 'badge offline',
-      detail: 'Install Claude, Factory, or Antigravity for automatic capture'
+      detail: 'Preview-only integrations are installed. Add Claude, Factory, or Antigravity for the supported capture path.'
     };
   }
   return {
@@ -813,17 +822,19 @@ function captureState() {
 function automaticContextState() {
   const gaHooks = installedGaAgents();
   if (gaHooks.length > 0) {
-    return `${integrationListText(gaHooks)} inject current workstream context automatically`;
+    return `${integrationListText(gaHooks)} inject the current workstream automatically at session start`;
   }
-  return 'No GA integrations installed for automatic context';
+  return 'No supported integration is installed for automatic workstream context';
 }
 
 function capturePolicySummary() {
-  const policy = state.hook?.capturePolicy || {};
+  const policy = state.dataPolicy || state.hook?.capturePolicy || {};
   const captureDays = Number.isFinite(policy.captureRetentionDays) ? policy.captureRetentionDays : 14;
   const debugDays = Number.isFinite(policy.debugRetentionDays) ? policy.debugRetentionDays : 7;
-  const debugMode = policy.debugArtifactsEnabled === true ? 'debug on' : 'debug off';
-  return `${captureDays}d local capture, ${debugDays}d debug (${debugMode})`;
+  if (policy.debugArtifactsEnabled === true) {
+    return `${captureDays}d local capture kept; ${debugDays}d debug trails enabled`;
+  }
+  return `${captureDays}d local capture kept; debug trails off by default (${debugDays}d if enabled)`;
 }
 
 function currentRepoRoot() {
@@ -1694,14 +1705,10 @@ function renderWorkspaces() {
         },
         {
           title: 'Data policy',
-          detail: `${context.syncPolicy === 'full_sync'
-            ? 'Full Sync (opt-in)'
-            : context.syncPolicy === 'local_only'
-              ? 'Local Only'
-              : 'Metadata Only (default)'} | ${capturePolicySummary()}`,
-          hint: context.syncPolicy === 'full_sync'
+          detail: `${formatSyncPolicyLabel(state.dataPolicy?.syncPolicy || context.syncPolicy)} | ${capturePolicySummary()}`,
+          hint: (state.dataPolicy?.syncPolicy || context.syncPolicy) === 'full_sync'
             ? 'Richer cloud sync is enabled explicitly for this workspace. Raw payload sidecars still stay local.'
-            : 'Local-first storage remains the source of truth. Raw payloads stay local and debug artifacts are short-retention.'
+            : 'Metadata-only sync is the normal default. Local capture stays on this machine and debug trails remain off unless you enable them.'
         }
       ]
     : [
@@ -2042,12 +2049,12 @@ function renderWorkspaces() {
       detail: automaticContextState(),
       hint: 'Supported agents get the current workstream automatically at session start.'
       },
-      {
-      title: 'Data policy',
-      detail: capturePolicySummary(),
-      hint: 'Raw payload sidecars stay local. Debug artifacts are short-retention and off unless explicitly enabled.'
-      }
-    ];
+        {
+        title: 'Data policy',
+        detail: `${formatSyncPolicyLabel(state.dataPolicy?.syncPolicy || activeContext()?.syncPolicy)} | ${capturePolicySummary()}`,
+        hint: 'Metadata-only sync is the normal default. Local capture stays on this machine and debug trails remain off unless you enable them.'
+        }
+      ];
     document.getElementById('setupSupportList').innerHTML = supportItems.map((item) => `
       <article>
         <strong>${esc(item.title)}</strong>
@@ -2282,6 +2289,14 @@ async function loadHook() {
   }
 }
 
+async function loadDataPolicy() {
+  try {
+    state.dataPolicy = await daemon('getDataPolicy', state.activeContextId ? { contextId: state.activeContextId } : {});
+  } catch {
+    state.dataPolicy = null;
+  }
+}
+
 async function refreshAll(options = {}) {
   const quiet = options.quiet === true;
   if (state.loading) return;
@@ -2313,6 +2328,7 @@ async function refreshAll(options = {}) {
       state.checkpoints = [];
       state.graphNodes = [];
       state.graphEdges = [];
+      state.dataPolicy = null;
       setRuntimeIssue(
         'Runtime update required',
         `This desktop build requires a newer local runtime. Reinstall or restart 0ctx, then reopen the app. Missing methods: ${missingMethods.join(', ')}.`
@@ -2337,6 +2353,9 @@ async function refreshAll(options = {}) {
 
     await safeLoad('integrations', loadHook, () => {
       state.hook = null;
+    });
+    await safeLoad('data policy', loadDataPolicy, () => {
+      state.dataPolicy = null;
     });
     await safeLoad('branches', loadBranches, () => {
       state.branches = [];
@@ -2386,6 +2405,7 @@ async function refreshAll(options = {}) {
       setStatus('Refreshed local desktop data.');
     }
   } catch (error) {
+    state.dataPolicy = null;
     if (!state.runtimeIssue) {
       setRuntimeIssue(
         'Runtime unavailable',

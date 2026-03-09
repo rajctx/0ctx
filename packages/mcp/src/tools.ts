@@ -449,6 +449,17 @@ export const tools = [
         },
     },
     {
+        name: 'ctx_get_data_policy',
+        description: 'Get the current workspace data policy, including sync mode, capture retention, and debug-artifact settings.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                contextId: { type: 'string', description: 'Optional explicit context ID override for this operation.' }
+            },
+            required: [],
+        },
+    },
+    {
         name: 'ctx_sync_policy_get',
         description: 'Get the active context sync policy (`local_only`, `metadata_only`, `full_sync`).',
         inputSchema: {
@@ -705,6 +716,7 @@ const TOOL_SCOPE_BY_NAME: Record<string, ToolScope> = {
     // Ops / governance / runtime control
     ctx_health: 'ops',
     ctx_metrics: 'ops',
+    ctx_get_data_policy: 'ops',
     ctx_sync_policy_get: 'ops',
     ctx_sync_policy_set: 'ops',
     ctx_audit_recent: 'ops',

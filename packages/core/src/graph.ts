@@ -278,6 +278,18 @@ export class Graph {
             return true;
         }
         if (
+            /\b(roadmap|execution order|next move|next correct move|remaining roadmap|current product state|where we are|not done yet|still remains|still remaining|best next move|highest[- ]value (work|move|slice)|remaining work|remaining roadmap)\b/.test(normalized)
+            && !/\b(decided|decision|must|need to|goal|constraint|assume|open question|default|policy)\b/.test(normalized)
+        ) {
+            return true;
+        }
+        if (
+            /\b(done enough|current status|product status|what remains|what is still open|what is still remaining)\b/.test(normalized)
+            && !/\b(default|policy|must|should|constraint|decision)\b/.test(normalized)
+        ) {
+            return true;
+        }
+        if (
             /^(implemented|updated|patched|validated|verified|compiled|built|installed|restarted|refreshed|copied|selected|created|closed|logged|tracked)\b/.test(normalized)
             && !/\b(decided|decision|must|need to|goal|constraint|assume|open question)\b/.test(normalized)
         ) {
@@ -362,6 +374,9 @@ export class Graph {
                 || /\b(goal|objective)\s+is\s+to\b/.test(normalized)
             )
         ) {
+            if (/\b(roadmap|remaining|next step|next move|execution order|status)\b/.test(normalized)) {
+                return null;
+            }
             return {
                 type: 'goal',
                 confidence: 0.78,

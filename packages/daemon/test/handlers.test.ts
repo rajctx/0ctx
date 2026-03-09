@@ -114,6 +114,26 @@ describe('daemon request handling', () => {
         }
     });
 
+    it('allows the runtime to request a graceful daemon shutdown', () => {
+        const { db, graph } = createGraph();
+        let shutdownRequested = false;
+        try {
+            const result = handleRequest(graph, 'conn-shutdown', {
+                method: 'shutdown'
+            }, {
+                ...runtime(),
+                requestShutdown: () => {
+                    shutdownRequested = true;
+                }
+            }) as { status: string };
+
+            expect(result.status).toBe('shutting_down');
+            expect(shutdownRequested).toBe(true);
+        } finally {
+            db.close();
+        }
+    });
+
     it('reports GA and preview integration defaults honestly when no hook state exists yet', () => {
         const { db, graph } = createGraph();
         const hookStatePath = path.join(path.dirname(db.name), 'missing-hooks-state.json');
@@ -185,6 +205,61 @@ describe('daemon request handling', () => {
             expect(before.syncPolicy).toBe('metadata_only');
             expect(after.syncPolicy).toBe('full_sync');
             expect(events.some(event => event.action === 'set_sync_policy')).toBe(true);
+        } finally {
+            db.close();
+        }
+    });
+
+    it('returns a unified data policy for default and resolved workspace state', () => {
+        const { db, graph } = createGraph();
+        try {
+            const session = handleRequest(graph, 'conn-data-policy', { method: 'createSession' }, runtime()) as { sessionToken: string };
+
+            const defaultPolicy = handleRequest(graph, 'conn-data-policy', {
+                method: 'getDataPolicy',
+                sessionToken: session.sessionToken,
+                params: {}
+            }, runtime()) as {
+                workspaceResolved: boolean;
+                contextId: string | null;
+                syncPolicy: string;
+                captureRetentionDays: number;
+                debugRetentionDays: number;
+                debugArtifactsEnabled: boolean;
+            };
+
+            const context = handleRequest(graph, 'conn-data-policy', {
+                method: 'createContext',
+                sessionToken: session.sessionToken,
+                params: { name: 'data-policy-context', syncPolicy: 'full_sync' }
+            }, runtime()) as { id: string };
+
+            const resolvedPolicy = handleRequest(graph, 'conn-data-policy', {
+                method: 'getDataPolicy',
+                sessionToken: session.sessionToken,
+                params: { contextId: context.id }
+            }, runtime()) as {
+                workspaceResolved: boolean;
+                contextId: string | null;
+                syncPolicy: string;
+                captureRetentionDays: number;
+                debugRetentionDays: number;
+                debugArtifactsEnabled: boolean;
+            };
+
+            expect(defaultPolicy.workspaceResolved).toBe(false);
+            expect(defaultPolicy.contextId).toBeNull();
+            expect(defaultPolicy.syncPolicy).toBe('metadata_only');
+            expect(defaultPolicy.captureRetentionDays).toBe(14);
+            expect(defaultPolicy.debugRetentionDays).toBe(7);
+            expect(defaultPolicy.debugArtifactsEnabled).toBe(false);
+
+            expect(resolvedPolicy.workspaceResolved).toBe(true);
+            expect(resolvedPolicy.contextId).toBe(context.id);
+            expect(resolvedPolicy.syncPolicy).toBe('full_sync');
+            expect(resolvedPolicy.captureRetentionDays).toBe(14);
+            expect(resolvedPolicy.debugRetentionDays).toBe(7);
+            expect(resolvedPolicy.debugArtifactsEnabled).toBe(false);
         } finally {
             db.close();
         }
@@ -378,8 +453,8 @@ describe('daemon request handling', () => {
             expect(lanes[0].branch).toBe('feature/branch-lane');
             expect(lanes[0].lastAgent).toBe('factory');
             expect(lanes[0].sessionCount).toBe(1);
-            expect(lanes[0].handoffReadiness).toBe('ready');
-            expect(lanes[0].handoffSummary).toContain('create a checkpoint');
+            expect(lanes[0].handoffReadiness).toBe('review');
+            expect(lanes[0].handoffSummary).toContain('local-only workstream has no baseline and no checkpoint coverage');
 
             const brief = handleRequest(graph, 'conn-branch', {
                 method: 'getWorkstreamBrief',
@@ -401,11 +476,11 @@ describe('daemon request handling', () => {
             expect(brief.workspaceName).toBe('branch-context');
             expect(brief.branch).toBe('feature/branch-lane');
             expect(brief.tracked).toBe(true);
-            expect(brief.handoffReadiness).toBe('ready');
-            expect(brief.handoffSummary).toContain('create a checkpoint');
+            expect(brief.handoffReadiness).toBe('review');
+            expect(brief.handoffSummary).toContain('local-only workstream has no baseline and no checkpoint coverage');
             expect(brief.recentSessions[0]?.sessionId).toBe('session-branch-1');
             expect(brief.contextText).toContain('Current workstream: feature/branch-lane');
-            expect(brief.contextText).toContain('Handoff: Ready to continue');
+            expect(brief.contextText).toContain('Handoff: Review before handoff.');
 
             const agentContext = handleRequest(graph, 'conn-branch', {
                 method: 'getAgentContextPack',
@@ -429,14 +504,17 @@ describe('daemon request handling', () => {
             };
             expect(agentContext.workspaceName).toBe('branch-context');
             expect(agentContext.branch).toBe('feature/branch-lane');
-            expect(agentContext.workstream.handoffReadiness).toBe('ready');
-            expect(agentContext.workstream.handoffSummary).toContain('create a checkpoint');
+            expect(agentContext.workstream.handoffReadiness).toBe('review');
+            expect(agentContext.workstream.handoffSummary).toContain('local-only workstream has no baseline and no checkpoint coverage');
             expect(agentContext.recentSessions[0]?.sessionId).toBe('session-branch-1');
             expect(agentContext.latestCheckpoints).toHaveLength(0);
             expect(agentContext.handoffTimeline[0]?.sessionId).toBe('session-branch-1');
-            expect(agentContext.promptText).toContain('Current workstream: feature/branch-lane');
+            expect(agentContext.promptText).toContain('0ctx workstream context');
+            expect(agentContext.promptText).toContain('Workspace: branch-context');
+            expect(agentContext.promptText).toContain('Workstream: feature/branch-lane');
+            expect(agentContext.promptText).toContain('Recent sessions:');
             expect(agentContext.promptText).toContain('Recent handoffs:');
-            expect(agentContext.promptText).toContain('Handoff: Ready to continue');
+            expect(agentContext.promptText).toContain('Handoff: Review before handoff.');
 
             const sessions = handleRequest(graph, 'conn-branch', {
                 method: 'listBranchSessions',
@@ -713,7 +791,6 @@ describe('daemon request handling', () => {
             expect(brief.contextText).toContain('Recommended next step: Commit or checkpoint local changes before handing this workstream to another agent.');
             expect(brief.contextText).toContain('Handoff: Review git state before handoff.');
             expect(brief.contextText).toContain('Checkout: this workstream is checked out here.');
-            expect(brief.contextText).toContain('Git state: current local workstream.');
             expect(brief.contextText).toContain('Baseline: feature/runtime-shape is 1 commit ahead of main.');
             expect(brief.contextText).toContain('Local changes:');
             expect(brief.contextText).toContain('staged');
@@ -773,14 +850,13 @@ describe('daemon request handling', () => {
             expect(pack.workstream.handoffSummary).toContain('Review git state before handoff');
             expect(pack.insights).toHaveLength(1);
             expect(pack.insights[0]?.type).toBe('decision');
-            expect(pack.promptText).toContain('Status: Working tree has local uncommitted changes.');
-            expect(pack.promptText).toContain('Recommended next step: Commit or checkpoint local changes before handing this workstream to another agent.');
+            expect(pack.promptText).toContain('0ctx workstream context');
+            expect(pack.promptText).toContain('Workspace: git-aware-context');
+            expect(pack.promptText).toContain('Workstream: feature/runtime-shape');
+            expect(pack.promptText).toContain('State: Working tree has local uncommitted changes.');
+            expect(pack.promptText).toContain('Next: Commit or checkpoint local changes before handing this workstream to another agent.');
             expect(pack.promptText).toContain('Handoff: Review git state before handoff.');
-            expect(pack.promptText).toContain('Baseline: feature/runtime-shape is 1 commit ahead of main.');
-            expect(pack.promptText).toContain('Local changes:');
-            expect(pack.promptText).toContain('staged');
-            expect(pack.promptText).toContain('1 unstaged');
-            expect(pack.promptText).toContain('1 untracked');
+            expect(pack.promptText).toContain('Recent sessions:');
             expect(pack.promptText).toContain('Reviewed insights:');
 
             const insights = handleRequest(graph, 'conn-git', {
@@ -1055,10 +1131,129 @@ describe('daemon request handling', () => {
             expect(pack.workstream.stateActionHint).toContain('Create or switch to a named branch');
             expect(pack.workstream.handoffReadiness).toBe('blocked');
             expect(pack.workstream.handoffSummary).toContain('Do not hand this workstream off yet');
-            expect(pack.promptText).toContain('Status: Detached HEAD. This checkout is not on a named branch.');
-            expect(pack.promptText).toContain('Recommended next step: Create or switch to a named branch before relying on this workstream.');
+            expect(pack.promptText).toContain('0ctx workstream context');
+            expect(pack.promptText).toContain(`Workstream: detached HEAD @ ${detachedHead.slice(0, 12)}`);
+            expect(pack.promptText).toContain('State: Detached HEAD. This checkout is not on a named branch.');
+            expect(pack.promptText).toContain('Next: Create or switch to a named branch before relying on this workstream.');
             expect(pack.promptText).toContain('Handoff: Do not hand this workstream off yet.');
-            expect(pack.promptText).toContain(`Current workstream: detached HEAD @ ${detachedHead.slice(0, 12)}`);
+        } finally {
+            db.close();
+        }
+    }, 15000);
+
+    it('represents a local-only workstream honestly when no upstream or baseline comparison exists', () => {
+        if (!gitAvailable()) return;
+        const { db, graph } = createGraph();
+        try {
+            const repoRoot = path.join(os.tmpdir(), `0ctx-isolated-workstream-${Date.now()}`);
+            tempDirs.push(repoRoot);
+            spawnSync('git', ['init', '--initial-branch', 'feature/local-only', repoRoot], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', repoRoot, 'config', 'user.email', 'test@example.com'], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', repoRoot, 'config', 'user.name', '0ctx test'], { encoding: 'utf8', windowsHide: true });
+            spawnSync('powershell', ['-NoProfile', '-Command', `Set-Content -Path '${path.join(repoRoot, 'notes.txt')}' -Value 'local only branch'`], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', repoRoot, 'add', '.'], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', repoRoot, 'commit', '-m', 'local only'], { encoding: 'utf8', windowsHide: true });
+            const branchHead = String(spawnSync('git', ['-C', repoRoot, 'rev-parse', 'HEAD'], { encoding: 'utf8', windowsHide: true }).stdout ?? '').trim();
+
+            const session = handleRequest(graph, 'conn-isolated', { method: 'createSession' }, runtime()) as { sessionToken: string };
+            const context = handleRequest(graph, 'conn-isolated', {
+                method: 'createContext',
+                sessionToken: session.sessionToken,
+                params: { name: 'isolated-workstream-context', paths: [repoRoot] }
+            }, runtime()) as { id: string };
+
+            handleRequest(graph, 'conn-isolated', {
+                method: 'addNode',
+                sessionToken: session.sessionToken,
+                params: {
+                    contextId: context.id,
+                    thread: 'session-isolated-1',
+                    type: 'artifact',
+                    content: 'local only workstream session',
+                    key: 'chat_session:claude:session-isolated-1',
+                    tags: ['chat_session', 'agent:claude'],
+                    source: 'hook:claude',
+                    hidden: true,
+                    rawPayload: {
+                        sessionId: 'session-isolated-1',
+                        branch: 'feature/local-only',
+                        commitSha: branchHead,
+                        agent: 'claude',
+                        repositoryRoot: repoRoot
+                    }
+                }
+            }, runtime());
+
+            handleRequest(graph, 'conn-isolated', {
+                method: 'addNode',
+                sessionToken: session.sessionToken,
+                params: {
+                    contextId: context.id,
+                    thread: 'session-isolated-1',
+                    type: 'artifact',
+                    content: 'local only workstream turn',
+                    key: 'chat_turn:claude:session-isolated-1:msg-1',
+                    tags: ['chat_turn', 'role:assistant'],
+                    source: 'hook:claude',
+                    hidden: true,
+                    rawPayload: {
+                        sessionId: 'session-isolated-1',
+                        messageId: 'msg-1',
+                        role: 'assistant',
+                        branch: 'feature/local-only',
+                        commitSha: branchHead,
+                        agent: 'claude',
+                        repositoryRoot: repoRoot,
+                        occurredAt: Date.now()
+                    }
+                }
+            }, runtime());
+
+            const brief = handleRequest(graph, 'conn-isolated', {
+                method: 'getWorkstreamBrief',
+                sessionToken: session.sessionToken,
+                params: { contextId: context.id }
+            }, runtime()) as {
+                branch: string | null;
+                upstream: string | null;
+                baseline: { comparable: boolean; branch: string | null; summary: string } | null;
+                stateKind: string | null;
+                stateSummary: string | null;
+                stateActionHint: string | null;
+                handoffReadiness?: 'ready' | 'review' | 'blocked';
+                handoffSummary?: string | null;
+                contextText: string;
+            };
+
+            expect(brief.branch).toBe('feature/local-only');
+            expect(brief.upstream).toBeNull();
+            expect(brief.baseline?.comparable).toBe(false);
+            expect(brief.stateKind).toBe('isolated');
+            expect(brief.stateSummary).toContain('Local-only workstream with no upstream or baseline comparison');
+            expect(brief.stateActionHint).toContain('Create a checkpoint before handing this workstream off');
+            expect(brief.handoffReadiness).toBe('review');
+            expect(brief.handoffSummary).toContain('Review before handoff');
+            expect(brief.contextText).toContain('Status: Local-only workstream with no upstream or baseline comparison.');
+            expect(brief.contextText).toContain('Recommended next step: Create a checkpoint before handing this workstream off or comparing it elsewhere.');
+            expect(brief.contextText).toContain('Git state: local-only workstream without upstream or baseline comparison.');
+            expect(brief.contextText).not.toContain('Git state: current local workstream.');
+
+            const lanes = handleRequest(graph, 'conn-isolated', {
+                method: 'listBranchLanes',
+                sessionToken: session.sessionToken,
+                params: { contextId: context.id }
+            }, runtime()) as Array<{
+                stateKind: string | null;
+                stateSummary: string | null;
+                stateActionHint: string | null;
+                handoffReadiness?: 'ready' | 'review' | 'blocked';
+            }>;
+
+            expect(lanes).toHaveLength(1);
+            expect(lanes[0].stateKind).toBe('isolated');
+            expect(lanes[0].stateSummary).toContain('Local-only workstream');
+            expect(lanes[0].stateActionHint).toContain('Create a checkpoint');
+            expect(lanes[0].handoffReadiness).toBe('review');
         } finally {
             db.close();
         }

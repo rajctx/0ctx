@@ -409,6 +409,68 @@ describe('Graph context isolation', () => {
         }
     });
 
+    it('filters roadmap and progress chatter out of reviewed insights', () => {
+        const { db, graph } = createGraph();
+        try {
+            const ctx = graph.createContext('knowledge-roadmap-filter');
+            graph.addNode({
+                contextId: ctx.id,
+                thread: 'session-roadmap-1',
+                type: 'artifact',
+                content: 'roadmap filtering session',
+                key: 'chat_session:factory:session-roadmap-1',
+                tags: ['chat_session', 'agent:factory'],
+                source: 'hook:factory',
+                hidden: true,
+                rawPayload: {
+                    sessionId: 'session-roadmap-1',
+                    branch: 'feature/roadmap-filter',
+                    commitSha: 'fedcba654321',
+                    agent: 'factory'
+                }
+            });
+
+            for (const [key, role, content, createdAt] of [
+                ['assistant-1', 'assistant', 'Where we are: not done yet, but this was not circular work.', 1700000200000],
+                ['assistant-2', 'assistant', 'Best next move is supported-agent retrieval ergonomics, then lean data policy finalization.', 1700000201000],
+                ['assistant-3', 'assistant', 'The default sync policy should remain metadata_only unless users explicitly opt into full_sync.', 1700000202000],
+                ['user-1', 'user', 'We need to keep metadata_only as the default sync policy for the normal path.', 1700000203000]
+            ] as const) {
+                graph.addNode({
+                    contextId: ctx.id,
+                    thread: 'session-roadmap-1',
+                    type: 'artifact',
+                    content,
+                    key: `chat_turn:factory:session-roadmap-1:${key}`,
+                    tags: ['chat_turn', `role:${role}`],
+                    source: 'hook:factory',
+                    hidden: true,
+                    rawPayload: {
+                        sessionId: 'session-roadmap-1',
+                        messageId: key,
+                        role,
+                        branch: 'feature/roadmap-filter',
+                        commitSha: 'fedcba654321',
+                        occurredAt: createdAt
+                    }
+                });
+            }
+
+            const preview = graph.previewKnowledgeFromSession(ctx.id, 'session-roadmap-1');
+            expect(preview.candidates.some(candidate => /where we are/i.test(candidate.content))).toBe(false);
+            expect(preview.candidates.some(candidate => /best next move/i.test(candidate.content))).toBe(false);
+            expect(preview.candidates.some(candidate => /metadata only/i.test(candidate.content))).toBe(true);
+
+            const extraction = graph.extractKnowledgeFromSession(ctx.id, 'session-roadmap-1');
+            expect(extraction.nodeCount).toBeGreaterThanOrEqual(1);
+            expect(extraction.nodes.some(node => /metadata only/i.test(node.content))).toBe(true);
+            expect(extraction.nodes.some(node => /where we are/i.test(node.content))).toBe(false);
+            expect(extraction.nodes.some(node => /best next move/i.test(node.content))).toBe(false);
+        } finally {
+            db.close();
+        }
+    });
+
     it('reuses extracted knowledge across sessions on the same branch lane', () => {
         const { db, graph } = createGraph();
         try {
