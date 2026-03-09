@@ -70,4 +70,5 @@ export interface ProductCommandDeps {
     formatLabelValue: (label: string, value: string) => string;
     formatRetentionLabel: (summary: RepoReadinessSummary) => string;
     formatSyncPolicyLabel: (policy: string | null | undefined) => string;
+    printJsonOrValue: (asJson: boolean, value: unknown, human: () => void) => number;
 }

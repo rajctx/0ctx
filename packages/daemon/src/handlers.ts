@@ -1,5 +1,4 @@
 import {
-    getConfigValue,
     type Graph,
     type AuditAction,
     type AuditMetadata,
@@ -39,6 +38,14 @@ import {
     compareWorkstreams,
     enrichWorkstreamLane
 } from './workstream';
+import { compareWorkspaces } from './workspace/compare';
+import {
+    applyDataPolicyUpdate,
+    buildDataPolicySummary,
+    getHookDebugRetentionDays,
+    getHookDumpRetentionDays,
+    isHookDebugArtifactsEnabled
+} from './data-policy';
 
 const CONTEXT_REQUIRED_METHODS = new Set([
     'addNode',
@@ -96,7 +103,8 @@ const MUTATING_ACTIONS: Record<string, AuditAction> = {
     rewindCheckpoint: 'rewind',
     createBackup: 'create_backup',
     restoreBackup: 'restore_backup',
-    promoteInsight: 'promote_insight'
+    promoteInsight: 'promote_insight',
+    setDataPolicy: 'set_data_policy'
 };
 
 function getParams(req: DaemonRequest): RequestParams {
@@ -315,20 +323,6 @@ function getHookStatePath(): string {
     return process.env.CTX_HOOK_STATE_PATH || path.join(os.homedir(), '.0ctx', 'hooks-state.json');
 }
 
-function getHookDumpRetentionDays(): number {
-    const configured = getConfigValue('capture.retentionDays');
-    return Number.isFinite(configured) && configured > 0 ? configured : 14;
-}
-
-function getHookDebugRetentionDays(): number {
-    const configured = getConfigValue('capture.debugRetentionDays');
-    return Number.isFinite(configured) && configured > 0 ? configured : 7;
-}
-
-function isHookDebugArtifactsEnabled(): boolean {
-    return getConfigValue('capture.debugArtifacts') === true;
-}
-
 function readHookHealth(): {
     statePath: string;
     projectRoot: string | null;
@@ -482,20 +476,6 @@ function buildTemporalRecall(
         sinceHours,
         totalEvents: windowed.length,
         sessions: grouped
-    };
-}
-
-function buildDataPolicySummary(graph: Graph, contextId: string | null): DataPolicySummary {
-    const syncPolicy = contextId
-        ? graph.getContextSyncPolicy(contextId) ?? 'metadata_only'
-        : 'metadata_only';
-    return {
-        contextId,
-        workspaceResolved: Boolean(contextId),
-        syncPolicy,
-        captureRetentionDays: getHookDumpRetentionDays(),
-        debugRetentionDays: getHookDebugRetentionDays(),
-        debugArtifactsEnabled: isHookDebugArtifactsEnabled()
     };
 }
 
@@ -708,14 +688,14 @@ export function handleRequest(
                 'addNode', 'getNode', 'updateNode', 'getByKey', 'deleteNode',
                 'addEdge', 'getSubgraph', 'search', 'getGraphData',
                   'listChatSessions', 'listChatTurns', 'getNodePayload', 'getHookHealth',
-                'listBranchLanes', 'getWorkstreamBrief', 'getAgentContextPack', 'compareWorkstreams', 'listBranchSessions', 'listSessionMessages',
+                'listBranchLanes', 'getWorkstreamBrief', 'getAgentContextPack', 'compareWorkstreams', 'compareWorkspaces', 'listBranchSessions', 'listSessionMessages',
                 'listBranchCheckpoints', 'getSessionDetail', 'getCheckpointDetail',
                   'getHandoffTimeline', 'previewSessionKnowledge', 'previewCheckpointKnowledge',
                   'extractSessionKnowledge', 'extractCheckpointKnowledge', 'promoteInsight',
                   'saveCheckpoint', 'createSessionCheckpoint', 'rewind', 'rewindCheckpoint', 'listCheckpoints', 'resumeSession', 'explainCheckpoint',
                 'createSession', 'refreshSession', 'health', 'getCapabilities', 'metricsSnapshot',
                 'listAuditEvents', 'listRecallFeedback', 'createBackup', 'listBackups', 'restoreBackup',
-                'auth/status', 'syncStatus', 'syncNow', 'getSyncPolicy', 'setSyncPolicy', 'getDataPolicy', 'shutdown',
+                'auth/status', 'syncStatus', 'syncNow', 'getSyncPolicy', 'setSyncPolicy', 'getDataPolicy', 'setDataPolicy', 'shutdown',
                 'subscribeEvents', 'unsubscribeEvents', 'listSubscriptions', 'pollEvents', 'ackEvent',
                 'getBlackboardState', 'evaluateCompletion', 'claimTask', 'releaseTask', 'resolveGate',
                 'recallTemporal', 'recallTopic', 'recallGraph', 'recall', 'recallFeedback'
@@ -1358,6 +1338,24 @@ export function handleRequest(
                 checkpointLimit: params.checkpointLimit as number | undefined
             });
         }
+        case 'compareWorkspaces': {
+            const sourceContextId = typeof params.sourceContextId === 'string' && params.sourceContextId.trim().length > 0
+                ? params.sourceContextId.trim()
+                : contextId;
+            const targetContextId = typeof params.targetContextId === 'string' && params.targetContextId.trim().length > 0
+                ? params.targetContextId.trim()
+                : null;
+            if (!sourceContextId) {
+                throw new Error("Missing required 'sourceContextId' or active context for compareWorkspaces.");
+            }
+            if (!targetContextId) {
+                throw new Error("Missing required 'targetContextId' for compareWorkspaces.");
+            }
+            return compareWorkspaces(graph, {
+                sourceContextId,
+                targetContextId
+            });
+        }
         case 'listBranchSessions': {
             const branch = typeof params.branch === 'string' ? params.branch : null;
             if (!branch || branch.trim().length === 0) {
@@ -1660,6 +1658,27 @@ export function handleRequest(
                 throw new Error(`Context ${explicitContextId} not found`);
             }
             return buildDataPolicySummary(graph, targetContextId);
+        }
+        case 'setDataPolicy': {
+            const explicitContextId = getContextIdFromParams(params);
+            const targetContextId = explicitContextId ?? resolveContextId(connectionId, params, sessionContextId) ?? null;
+            if (explicitContextId && !graph.getContextSyncPolicy(explicitContextId)) {
+                throw new Error(`Context ${explicitContextId} not found`);
+            }
+            const policy = parseSyncPolicy(params.syncPolicy);
+            if (params.syncPolicy !== undefined && !policy) {
+                throw new Error("Invalid syncPolicy. Expected one of: local_only, metadata_only, full_sync.");
+            }
+            const result = applyDataPolicyUpdate(graph, {
+                contextId: targetContextId,
+                syncPolicy: policy,
+                captureRetentionDays: typeof params.captureRetentionDays === 'number' ? params.captureRetentionDays : null,
+                debugRetentionDays: typeof params.debugRetentionDays === 'number' ? params.debugRetentionDays : null,
+                debugArtifactsEnabled: typeof params.debugArtifactsEnabled === 'boolean' ? params.debugArtifactsEnabled : null
+            });
+            recordMutationAudit(graph, req, 'set_data_policy', result.contextId, params, result as unknown as Record<string, unknown>, auditMetadata);
+            recordMutationEvent(runtime, connectionId, req, result.contextId, params, result as unknown as Record<string, unknown>);
+            return result;
         }
         case 'shutdown': {
             runtime.requestShutdown?.();

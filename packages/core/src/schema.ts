@@ -71,6 +71,7 @@ export type AuditAction =
     | 'create_backup'
     | 'restore_backup'
     | 'set_sync_policy'
+    | 'set_data_policy'
     | 'resume_session'
     | 'explain_checkpoint'
     | 'extract_knowledge'
@@ -288,11 +289,47 @@ export interface WorkstreamComparison {
     mergeBaseSha: string | null;
     newerSide: 'source' | 'target' | 'same' | 'unknown';
     comparisonKind: 'aligned' | 'source_ahead' | 'target_ahead' | 'diverged' | 'different_repository' | 'not_comparable';
+    comparisonReadiness: 'ready' | 'review' | 'blocked';
     comparisonSummary: string;
     comparisonActionHint: string | null;
     sharedAgents: string[];
     sourceOnlyAgents: string[];
     targetOnlyAgents: string[];
+    comparisonText: string;
+}
+
+export interface WorkspaceComparisonSide {
+    contextId: string;
+    workspaceName: string;
+    paths: string[];
+    syncPolicy: SyncPolicy;
+    workstreamCount: number;
+    sessionCount: number;
+    checkpointCount: number;
+    insightCount: number;
+    latestActivityAt: number | null;
+    agents: string[];
+    workstreams: Array<{
+        branch: string;
+        worktreePath: string | null;
+        stateKind: BranchLaneSummary['stateKind'];
+        lastActivityAt: number;
+    }>;
+    recentInsights: InsightSummary[];
+}
+
+export interface WorkspaceComparison {
+    source: WorkspaceComparisonSide;
+    target: WorkspaceComparisonSide;
+    sharedRepositoryPaths: string[];
+    sharedAgents: string[];
+    sourceOnlyAgents: string[];
+    targetOnlyAgents: string[];
+    sharedWorkstreams: string[];
+    sharedInsights: string[];
+    comparisonKind: 'same_repository' | 'shared_insights' | 'shared_workstreams' | 'shared_agents' | 'isolated';
+    comparisonSummary: string;
+    comparisonActionHint: string | null;
     comparisonText: string;
 }
 

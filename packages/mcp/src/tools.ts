@@ -161,6 +161,18 @@ export const tools = [
         },
     },
     {
+        name: 'ctx_compare_workspaces',
+        description: 'Compare two workspaces explicitly. Returns shared repository paths, overlapping workstreams, reviewed insights, shared agents, and a compact action summary.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                sourceContextId: { type: 'string', description: 'Optional source workspace context ID. Defaults to the active workspace when omitted.' },
+                targetContextId: { type: 'string', description: 'Target workspace context ID.' }
+            },
+            required: ['targetContextId'],
+        },
+    },
+    {
         name: 'ctx_list_workstream_sessions',
         description: 'List sessions captured on a specific workstream.',
         inputSchema: {
@@ -689,6 +701,7 @@ const TOOL_SCOPE_BY_NAME: Record<string, ToolScope> = {
     ctx_get_workstream_brief: 'core',
     ctx_get_agent_context: 'core',
     ctx_compare_workstreams: 'core',
+    ctx_compare_workspaces: 'core',
     ctx_list_workstream_sessions: 'core',
     ctx_get_session: 'core',
     ctx_list_session_messages: 'core',

@@ -72,7 +72,15 @@ export function compareWorkstreams(
         targetBranch: target.branch,
         sourceAheadCount,
         targetAheadCount,
-        mergeBaseSha
+        mergeBaseSha,
+        sourceStateSummary: source.stateSummary,
+        targetStateSummary: target.stateSummary,
+        sourceStateActionHint: source.stateActionHint,
+        targetStateActionHint: target.stateActionHint,
+        sourceHandoffReadiness: source.handoffReadiness,
+        targetHandoffReadiness: target.handoffReadiness,
+        sourceHandoffSummary: source.handoffSummary,
+        targetHandoffSummary: target.handoffSummary
     });
 
     const newerSide = source.lastActivityAt && target.lastActivityAt
@@ -94,9 +102,14 @@ export function compareWorkstreams(
         `Workstream comparison for ${source.workspaceName}`,
         `Source: ${source.branch ?? 'unknown branch'}`,
         `Target: ${target.branch ?? 'unknown branch'}`,
-        comparisonState.summary
+        comparisonState.summary,
+        `Readiness: ${comparisonState.readiness}`
     ];
     if (comparisonState.actionHint) lines.push(`Recommended next step: ${comparisonState.actionHint}`);
+    if (source.stateSummary) lines.push(`Source status: ${source.stateSummary}`);
+    if (source.handoffSummary) lines.push(`Source handoff: ${source.handoffSummary}`);
+    if (target.stateSummary) lines.push(`Target status: ${target.stateSummary}`);
+    if (target.handoffSummary) lines.push(`Target handoff: ${target.handoffSummary}`);
     lines.push(`Activity: ${source.branch ?? 'source'} has ${source.sessionCount} sessions / ${source.checkpointCount} checkpoints; ${target.branch ?? 'target'} has ${target.sessionCount} sessions / ${target.checkpointCount} checkpoints.`);
     if (sharedAgents.length > 0) lines.push(`Shared agents: ${sharedAgents.join(', ')}.`);
     if (sourceOnlyAgents.length > 0) lines.push(`Only on ${source.branch ?? 'source'}: ${sourceOnlyAgents.join(', ')}.`);
@@ -116,6 +129,7 @@ export function compareWorkstreams(
         mergeBaseSha,
         newerSide,
         comparisonKind: comparisonState.kind,
+        comparisonReadiness: comparisonState.readiness,
         comparisonSummary: comparisonState.summary,
         comparisonActionHint: comparisonState.actionHint,
         sharedAgents,

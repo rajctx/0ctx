@@ -177,6 +177,23 @@ server.setRequestHandler(CallToolRequestSchema, async (req: any) => {
                 });
                 return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(comparison, null, 2) }] } };
             }
+            case 'ctx_compare_workspaces': {
+                const sourceContextId =
+                    (typeof args.sourceContextId === 'string' && args.sourceContextId.length > 0)
+                        ? args.sourceContextId
+                        : pickContextId(args);
+                if (!sourceContextId) {
+                    throw new Error("ctx_compare_workspaces requires 'sourceContextId' or an active workspace.");
+                }
+                if (typeof args.targetContextId !== 'string' || args.targetContextId.length === 0) {
+                    throw new Error("ctx_compare_workspaces requires 'targetContextId'.");
+                }
+                const comparison = await callDaemon('compareWorkspaces', {
+                    sourceContextId,
+                    targetContextId: args.targetContextId
+                });
+                return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(comparison, null, 2) }] } };
+            }
             case 'ctx_list_workstream_sessions': {
                 const contextId = pickContextId(args);
                 const sessions = await callDaemon('listBranchSessions', {

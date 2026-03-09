@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'fs';
+import { mkdtempSync, readFileSync, rmSync } from 'fs';
 import os from 'os';
 import path from 'path';
 import { spawnSync } from 'child_process';
@@ -10,6 +10,7 @@ import { resetResolverStateForTests } from '../src/resolver';
 import type { HandlerRuntimeContext } from '../src/handlers';
 
 const tempDirs: string[] = [];
+let previousConfigPath: string | undefined;
 
 function createGraph() {
     const tempDir = mkdtempSync(path.join(os.tmpdir(), '0ctx-daemon-handlers-'));
@@ -36,9 +37,18 @@ function gitAvailable(): boolean {
 
 beforeEach(() => {
     resetResolverStateForTests();
+    previousConfigPath = process.env.CTX_CONFIG_PATH;
+    const configDir = mkdtempSync(path.join(os.tmpdir(), '0ctx-daemon-config-'));
+    tempDirs.push(configDir);
+    process.env.CTX_CONFIG_PATH = path.join(configDir, 'config.json');
 });
 
 afterEach(() => {
+    if (previousConfigPath === undefined) {
+        delete process.env.CTX_CONFIG_PATH;
+    } else {
+        process.env.CTX_CONFIG_PATH = previousConfigPath;
+    }
     for (const dir of tempDirs.splice(0, tempDirs.length)) {
         rmSync(dir, { recursive: true, force: true });
     }
@@ -261,6 +271,59 @@ describe('daemon request handling', () => {
             expect(resolvedPolicy.debugRetentionDays).toBe(7);
             expect(resolvedPolicy.debugArtifactsEnabled).toBe(false);
         } finally {
+            db.close();
+        }
+    });
+
+    it('updates data policy through the daemon and persists capture config safely', () => {
+        const { db, graph } = createGraph();
+        const previousConfigPath = process.env.CTX_CONFIG_PATH;
+        const configPath = path.join(path.dirname(db.name), 'config.json');
+        try {
+            process.env.CTX_CONFIG_PATH = configPath;
+            const session = handleRequest(graph, 'conn-set-data-policy', { method: 'createSession' }, runtime()) as { sessionToken: string };
+            const context = handleRequest(graph, 'conn-set-data-policy', {
+                method: 'createContext',
+                sessionToken: session.sessionToken,
+                params: { name: 'set-data-policy-context' }
+            }, runtime()) as { id: string };
+
+            const result = handleRequest(graph, 'conn-set-data-policy', {
+                method: 'setDataPolicy',
+                sessionToken: session.sessionToken,
+                params: {
+                    contextId: context.id,
+                    syncPolicy: 'full_sync',
+                    captureRetentionDays: 21,
+                    debugRetentionDays: 5,
+                    debugArtifactsEnabled: true
+                }
+            }, runtime()) as {
+                contextId: string | null;
+                syncPolicy: string;
+                captureRetentionDays: number;
+                debugRetentionDays: number;
+                debugArtifactsEnabled: boolean;
+            };
+
+            const storedConfig = JSON.parse(readFileSync(configPath, 'utf8')) as Record<string, unknown>;
+            const audits = graph.listAuditEvents(context.id, 20);
+
+            expect(result.contextId).toBe(context.id);
+            expect(result.syncPolicy).toBe('full_sync');
+            expect(result.captureRetentionDays).toBe(21);
+            expect(result.debugRetentionDays).toBe(5);
+            expect(result.debugArtifactsEnabled).toBe(true);
+            expect(storedConfig['capture.retentionDays']).toBe(21);
+            expect(storedConfig['capture.debugRetentionDays']).toBe(5);
+            expect(storedConfig['capture.debugArtifacts']).toBe(true);
+            expect(audits.some((entry) => entry.action === 'set_data_policy')).toBe(true);
+        } finally {
+            if (previousConfigPath === undefined) {
+                delete process.env.CTX_CONFIG_PATH;
+            } else {
+                process.env.CTX_CONFIG_PATH = previousConfigPath;
+            }
             db.close();
         }
     });
@@ -1351,6 +1414,7 @@ describe('daemon request handling', () => {
                 targetAheadCount: number | null;
                 mergeBaseSha: string | null;
                 comparisonKind: string;
+                comparisonReadiness?: string;
                 comparisonSummary: string;
                 comparisonActionHint: string | null;
                 source: { sessionCount: number; branch: string | null };
@@ -1374,11 +1438,73 @@ describe('daemon request handling', () => {
             expect(comparison.targetOnlyAgents).toEqual(['claude']);
             expect(comparison.newerSide).toBe('target');
             expect(comparison.comparisonKind).toBe('target_ahead');
+            expect(comparison.comparisonReadiness).toBe('review');
             expect(comparison.comparisonSummary).toContain('feature/runtime-compare is ahead of main');
             expect(comparison.comparisonActionHint).toContain('Update or compare main');
             expect(comparison.comparisonText).toContain('Source: main');
             expect(comparison.comparisonText).toContain('Target: feature/runtime-compare');
+            expect(comparison.comparisonText).toContain('Readiness: review');
             expect(comparison.comparisonText).toContain('Recommended next step:');
+        } finally {
+            db.close();
+        }
+    });
+
+    it('compares workspaces explicitly by repository overlap and reviewed insights', () => {
+        const { db, graph } = createGraph();
+        try {
+            const session = handleRequest(graph, 'conn-workspace-compare', { method: 'createSession' }, runtime()) as { sessionToken: string };
+            const source = handleRequest(graph, 'conn-workspace-compare', {
+                method: 'createContext',
+                sessionToken: session.sessionToken,
+                params: { name: 'source-workspace', paths: ['C:\\repo\\shared'] }
+            }, runtime()) as { id: string };
+            const target = handleRequest(graph, 'conn-workspace-compare', {
+                method: 'createContext',
+                sessionToken: session.sessionToken,
+                params: { name: 'target-workspace', paths: ['C:\\repo\\shared'] }
+            }, runtime()) as { id: string };
+
+            handleRequest(graph, 'conn-workspace-compare', {
+                method: 'addNode',
+                sessionToken: session.sessionToken,
+                params: {
+                    contextId: source.id,
+                    type: 'decision',
+                    content: 'Keep reviewed insights explicit when promoting across workspaces.',
+                    tags: ['branch:main']
+                }
+            }, runtime());
+
+            handleRequest(graph, 'conn-workspace-compare', {
+                method: 'addNode',
+                sessionToken: session.sessionToken,
+                params: {
+                    contextId: target.id,
+                    type: 'decision',
+                    content: 'Keep reviewed insights explicit when promoting across workspaces.',
+                    tags: ['branch:main']
+                }
+            }, runtime());
+
+            const comparison = handleRequest(graph, 'conn-workspace-compare', {
+                method: 'compareWorkspaces',
+                sessionToken: session.sessionToken,
+                params: {
+                    sourceContextId: source.id,
+                    targetContextId: target.id
+                }
+            }, runtime()) as {
+                comparisonKind: string;
+                sharedRepositoryPaths: string[];
+                sharedInsights: string[];
+                comparisonSummary: string;
+            };
+
+            expect(comparison.comparisonKind).toBe('same_repository');
+            expect(comparison.sharedRepositoryPaths.length).toBeGreaterThan(0);
+            expect(comparison.sharedInsights.length).toBeGreaterThan(0);
+            expect(comparison.comparisonSummary).toContain('same repository path');
         } finally {
             db.close();
         }

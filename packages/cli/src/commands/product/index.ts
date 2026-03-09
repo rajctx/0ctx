@@ -3,6 +3,7 @@ import { createStatusCommands } from './status';
 import { createBootstrapCommands } from './bootstrap';
 import { createEnableCommands } from './enable';
 import { createUtilityCommands } from './utilities';
+import { createWorkspaceCommands } from './workspaces';
 
 export type { ProductCommandDeps, FlagMap } from './types';
 
@@ -12,6 +13,7 @@ export function createProductCommands(deps: ProductCommandDeps) {
         ...createStatusCommands(deps),
         ...bootstrap,
         ...createEnableCommands({ ...deps, commandBootstrap: bootstrap.commandBootstrap }),
-        ...createUtilityCommands(deps)
+        ...createUtilityCommands(deps),
+        ...createWorkspaceCommands(deps)
     };
 }

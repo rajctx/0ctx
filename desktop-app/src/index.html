@@ -170,6 +170,25 @@
                   <div id="workspaceFocus" class="workspace-focus-grid info-list"></div>
                 </section>
 
+                <section class="panel subpanel compare-panel">
+                  <div class="section-row small">
+                    <div>
+                      <p class="section-label">Workspace comparison</p>
+                      <h4 id="workspaceCompareTitle">Choose another workspace</h4>
+                    </div>
+                  </div>
+                  <label class="compare-select-wrap">
+                    <span class="sr-only">Choose another workspace to compare</span>
+                    <select id="workspaceCompareSelect" aria-label="Compare workspaces"></select>
+                  </label>
+                  <div id="workspaceCompareEmpty" class="empty-state">Select another workspace to compare overlap, reviewed insights, and repository bindings.</div>
+                  <div id="workspaceCompareBody" class="detail-stack hidden">
+                    <p id="workspaceComparisonSummary" class="page-copy compact-copy"></p>
+                    <div id="workspaceComparisonMeta" class="meta-grid compact-meta-grid"></div>
+                    <div id="workspaceComparisonOverlap" class="meta-grid compact-meta-grid"></div>
+                  </div>
+                </section>
+
                 <div id="workspaceList" class="workspace-grid list"></div>
               </section>
             </div>
@@ -594,6 +613,44 @@
                   <div id="hookList" class="list stack-list"></div>
                 </section>
 
+                <section class="panel subpanel">
+                  <div class="section-row small">
+                    <div>
+                      <p class="section-label">Data policy</p>
+                      <h4>Sync and retention</h4>
+                    </div>
+                    <span id="policySummaryBadge" class="chip">Default</span>
+                  </div>
+                  <form id="dataPolicyForm" class="workspace-form compact-form">
+                    <label>
+                      <span>Workspace sync</span>
+                      <select id="policySync">
+                        <option value="local_only">local_only</option>
+                        <option value="metadata_only">metadata_only</option>
+                        <option value="full_sync">full_sync</option>
+                      </select>
+                    </label>
+                    <div class="policy-grid">
+                      <label>
+                        <span>Capture retention (days)</span>
+                        <input id="policyCaptureRetention" type="number" min="1" step="1" />
+                      </label>
+                      <label>
+                        <span>Debug retention (days)</span>
+                        <input id="policyDebugRetention" type="number" min="1" step="1" />
+                      </label>
+                    </div>
+                    <label class="toggle policy-toggle">
+                      <input id="policyDebugArtifacts" type="checkbox" />
+                      <span>Enable debug artifacts</span>
+                    </label>
+                    <div class="row-actions wrap-row">
+                      <button id="saveDataPolicyBtn" class="btn tertiary" type="button">Save policy</button>
+                    </div>
+                    <p id="policyHint" class="page-copy compact-copy">Metadata-only sync is the normal default. Raw payloads stay local and debug artifacts stay off unless you explicitly enable them.</p>
+                  </form>
+                </section>
+
                 <section class="panel subpanel compact-support-block">
                   <div class="section-row small">
                     <div>
@@ -622,6 +679,20 @@
     </footer>
   </main>
 </div>
-<script src="./app.js" defer></script>
+<script src="./app/config.js" defer></script>
+<script src="./app/helpers.js" defer></script>
+<script src="./app/selectors.js" defer></script>
+<script src="./app/render/shell.js" defer></script>
+<script src="./app/render/branches.js" defer></script>
+<script src="./app/render/sessions.js" defer></script>
+<script src="./app/render/workspaces.js" defer></script>
+<script src="./app/render/checkpoints.js" defer></script>
+<script src="./app/render/knowledge.js" defer></script>
+<script src="./app/render/setup.js" defer></script>
+<script src="./app/render/index.js" defer></script>
+<script src="./app/runtime.js" defer></script>
+<script src="./app/loaders.js" defer></script>
+<script src="./app/actions.js" defer></script>
+<script src="./app/wire.js" defer></script>
 </body>
 </html>

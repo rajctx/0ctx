@@ -25,6 +25,8 @@ export type {
     WorkstreamBrief,
     WorkstreamBaselineComparison,
     WorkstreamComparison,
+    WorkspaceComparison,
+    WorkspaceComparisonSide,
     AgentContextPack,
     DataPolicySummary,
     InsightSummary,

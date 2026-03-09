@@ -1,7 +1,9 @@
 import type { HookSupportedAgent } from '../hooks';
 import type { HookInstallClient, SupportedClient } from './types';
 
-export const SUPPORTED_CLIENTS_DEFAULT: SupportedClient[] = ['claude', 'cursor', 'windsurf', 'codex', 'antigravity'];
+export const GA_SUPPORTED_CLIENTS: SupportedClient[] = ['claude', 'antigravity'];
+export const PREVIEW_SUPPORTED_CLIENTS: SupportedClient[] = ['codex', 'cursor', 'windsurf'];
+export const ALL_SUPPORTED_CLIENTS: SupportedClient[] = [...GA_SUPPORTED_CLIENTS, ...PREVIEW_SUPPORTED_CLIENTS];
 export const DEFAULT_MCP_CLIENTS: SupportedClient[] = ['claude', 'antigravity'];
 export const DEFAULT_HOOK_INSTALL_CLIENTS: HookInstallClient[] = ['claude', 'factory', 'antigravity'];
 export const SESSION_START_AGENTS: Array<Extract<HookSupportedAgent, 'claude' | 'factory' | 'antigravity'>> = ['claude', 'factory', 'antigravity'];
@@ -12,7 +14,7 @@ export function isGaHookAgent(agent: HookSupportedAgent): agent is Extract<HookS
 
 export function parseClients(
     raw: string | boolean | undefined,
-    supportedClients: SupportedClient[] = SUPPORTED_CLIENTS_DEFAULT,
+    supportedClients: SupportedClient[] = ALL_SUPPORTED_CLIENTS,
     defaultClients: SupportedClient[] = DEFAULT_MCP_CLIENTS
 ): SupportedClient[] {
     if (!raw || typeof raw !== 'string') return defaultClients;
@@ -29,7 +31,7 @@ export function parseClients(
 
 export function parseHookClients(
     raw: string | boolean | undefined,
-    supportedClients: SupportedClient[] = SUPPORTED_CLIENTS_DEFAULT,
+    supportedClients: SupportedClient[] = ALL_SUPPORTED_CLIENTS,
     defaultClients: HookInstallClient[] = DEFAULT_HOOK_INSTALL_CLIENTS
 ): HookInstallClient[] {
     if (!raw || typeof raw !== 'string') return defaultClients;

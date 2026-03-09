@@ -89,6 +89,7 @@ import {
 import { createCommandContextResolver, getContextIdFlag, resolveCommandRepoRoot } from './cli-core/command-context';
 import { createOpsSummaryRunner } from './cli-core/ops';
 import {
+    ALL_SUPPORTED_CLIENTS,
     DEFAULT_HOOK_INSTALL_CLIENTS,
     DEFAULT_MCP_CLIENTS,
     SESSION_START_AGENTS,
@@ -96,7 +97,6 @@ import {
     parseClients,
     parseEnableMcpClients,
     parseHookClients,
-    SUPPORTED_CLIENTS_DEFAULT,
     validateExplicitPreviewSelection
 } from './cli-core/clients';
 import { normalizeVersionCommandArgs, printJsonOrValue, resolveCommandOperation } from './cli-core/output';
@@ -127,7 +127,7 @@ const SOCKET_PATH = os.platform() === 'win32'
     ? '\\\\.\\pipe\\0ctx.sock'
     : path.join(os.homedir(), '.0ctx', '0ctx.sock');
 
-const SUPPORTED_CLIENTS: SupportedClient[] = SUPPORTED_CLIENTS_DEFAULT;
+const SUPPORTED_CLIENTS: SupportedClient[] = ALL_SUPPORTED_CLIENTS;
 const SUPPORTED_HOOK_INSTALL_CLIENTS: HookInstallClient[] = ['claude', 'cursor', 'windsurf', 'codex', 'factory', 'antigravity'];
 const DEFAULT_ENABLE_MCP_CLIENTS: SupportedClient[] = DEFAULT_MCP_CLIENTS;
 const CLI_VERSION = (() => {
@@ -260,7 +260,8 @@ const {
     commandInstall,
     commandEnable,
     commandDashboard,
-    commandLogs
+    commandLogs,
+    commandWorkspaces
 } = createProductCommands({
     DB_PATH,
     KEY_PATH,
@@ -303,7 +304,8 @@ const {
     formatDataPolicyNarrative,
     formatLabelValue,
     formatRetentionLabel,
-    formatSyncPolicyLabel
+    formatSyncPolicyLabel,
+    printJsonOrValue
 });
 
 const { commandConnector } = createConnectorCommands({
@@ -589,6 +591,8 @@ async function main(): Promise<number> {
             case 'workstreams':
             case 'branches':
                 return commandBranches(parsed.positionalArgs, parsed.flags);
+            case 'workspaces':
+                return commandWorkspaces(parsed.positionalArgs, parsed.flags);
             case 'agent-context':
                 return commandAgentContext(parsed.flags);
             case 'sessions':

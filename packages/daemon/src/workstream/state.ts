@@ -181,57 +181,133 @@ export function deriveWorkstreamComparisonState(options: {
     sourceAheadCount: number | null;
     targetAheadCount: number | null;
     mergeBaseSha: string | null;
+    sourceStateSummary?: string | null;
+    targetStateSummary?: string | null;
+    sourceStateActionHint?: string | null;
+    targetStateActionHint?: string | null;
+    sourceHandoffReadiness?: 'ready' | 'review' | 'blocked';
+    targetHandoffReadiness?: 'ready' | 'review' | 'blocked';
+    sourceHandoffSummary?: string | null;
+    targetHandoffSummary?: string | null;
 }): {
     kind: 'aligned' | 'source_ahead' | 'target_ahead' | 'diverged' | 'different_repository' | 'not_comparable';
+    readiness: 'ready' | 'review' | 'blocked';
     summary: string;
     actionHint: string | null;
 } {
     const sourceLabel = options.sourceBranch || 'source workstream';
     const targetLabel = options.targetBranch || 'target workstream';
+    const sourceBlocked = options.sourceHandoffReadiness === 'blocked';
+    const targetBlocked = options.targetHandoffReadiness === 'blocked';
+    const sourceReview = options.sourceHandoffReadiness === 'review';
+    const targetReview = options.targetHandoffReadiness === 'review';
+
+    const blockedHint = () => {
+        if (sourceBlocked && options.sourceStateActionHint) return options.sourceStateActionHint;
+        if (targetBlocked && options.targetStateActionHint) return options.targetStateActionHint;
+        if (sourceBlocked) return `Resolve ${sourceLabel} checkout state before relying on this comparison.`;
+        if (targetBlocked) return `Resolve ${targetLabel} checkout state before relying on this comparison.`;
+        return null;
+    };
+
+    const reviewHint = () => {
+        if (sourceReview && options.sourceStateActionHint) return options.sourceStateActionHint;
+        if (targetReview && options.targetStateActionHint) return options.targetStateActionHint;
+        if (sourceReview) return `Review ${sourceLabel} before handing work across this comparison.`;
+        if (targetReview) return `Review ${targetLabel} before handing work across this comparison.`;
+        return null;
+    };
+
+    const withReadiness = (
+        base: {
+            kind: 'aligned' | 'source_ahead' | 'target_ahead' | 'diverged' | 'different_repository' | 'not_comparable';
+            summary: string;
+            actionHint: string | null;
+        }
+    ): {
+        kind: 'aligned' | 'source_ahead' | 'target_ahead' | 'diverged' | 'different_repository' | 'not_comparable';
+        readiness: 'ready' | 'review' | 'blocked';
+        summary: string;
+        actionHint: string | null;
+    } => {
+        if (sourceBlocked || targetBlocked) {
+            const blockedLabel = sourceBlocked && targetBlocked
+                ? 'Both workstreams are currently blocked for handoff.'
+                : sourceBlocked
+                    ? `${sourceLabel} is currently blocked for handoff.`
+                    : `${targetLabel} is currently blocked for handoff.`;
+            return {
+                kind: base.kind,
+                readiness: 'blocked',
+                summary: `${base.summary} ${blockedLabel}`,
+                actionHint: blockedHint() ?? base.actionHint
+            };
+        }
+
+        if (sourceReview || targetReview) {
+            const reviewLabel = sourceReview && targetReview
+                ? 'Both workstreams still need review before handoff.'
+                : sourceReview
+                    ? `${sourceLabel} still needs review before handoff.`
+                    : `${targetLabel} still needs review before handoff.`;
+            return {
+                kind: base.kind,
+                readiness: 'review',
+                summary: `${base.summary} ${reviewLabel}`,
+                actionHint: reviewHint() ?? base.actionHint
+            };
+        }
+
+        if (base.kind === 'aligned') {
+            return { ...base, readiness: 'ready' };
+        }
+
+        return { ...base, readiness: 'review' };
+    };
 
     if (!options.sameRepository) {
-        return {
+        return withReadiness({
             kind: 'different_repository',
             summary: 'These workstreams resolve to different repositories.',
             actionHint: 'Compare them only at the session and checkpoint level; git divergence is not meaningful across repositories.'
-        };
+        });
     }
 
     if (!options.comparable || typeof options.sourceAheadCount !== 'number' || typeof options.targetAheadCount !== 'number') {
-        return {
+        return withReadiness({
             kind: 'not_comparable',
             summary: 'Git divergence could not be computed for these workstreams.',
             actionHint: 'Open both workstreams from named branches in the same repository before relying on git comparison.'
-        };
+        });
     }
 
     if (options.sourceAheadCount === 0 && options.targetAheadCount === 0) {
-        return {
+        return withReadiness({
             kind: 'aligned',
             summary: `${sourceLabel} and ${targetLabel} are aligned from the same merge base.`,
             actionHint: null
-        };
+        });
     }
 
     if (options.sourceAheadCount > 0 && options.targetAheadCount === 0) {
-        return {
+        return withReadiness({
             kind: 'source_ahead',
             summary: `${sourceLabel} is ahead of ${targetLabel} by ${options.sourceAheadCount} commit${options.sourceAheadCount === 1 ? '' : 's'}.`,
             actionHint: `Merge or checkpoint ${sourceLabel} before handing it off as the newer line of work.`
-        };
+        });
     }
 
     if (options.sourceAheadCount === 0 && options.targetAheadCount > 0) {
-        return {
+        return withReadiness({
             kind: 'target_ahead',
             summary: `${targetLabel} is ahead of ${sourceLabel} by ${options.targetAheadCount} commit${options.targetAheadCount === 1 ? '' : 's'}.`,
             actionHint: `Update or compare ${sourceLabel} against ${targetLabel} before continuing work there.`
-        };
+        });
     }
 
-    return {
+    return withReadiness({
         kind: 'diverged',
         summary: `${sourceLabel} and ${targetLabel} have diverged from merge base ${options.mergeBaseSha ? options.mergeBaseSha.slice(0, 8) : 'unknown'}.`,
         actionHint: 'Review both branches before merging or handing work across agents.'
-    };
+    });
 }

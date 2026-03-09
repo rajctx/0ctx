@@ -1,6 +1,4 @@
 import { sendToDaemon } from '@0ctx/mcp/dist/client';
-import { setConfigValue } from '@0ctx/core';
-import type { AppConfig } from '@0ctx/core';
 import type { FlagMap, PolicyCommandDeps } from './types';
 
 interface DataPolicyPayload {
@@ -41,7 +39,7 @@ export function createDataPolicyCommands(deps: PolicyCommandDeps) {
 
     async function commandDataPolicySet(flags: FlagMap): Promise<number> {
         const asJson = Boolean(flags.json);
-        const check = await deps.ensureDaemonCapabilities(['getDataPolicy', 'setSyncPolicy']);
+        const check = await deps.ensureDaemonCapabilities(['getDataPolicy', 'setDataPolicy']);
         if (!check.ok) {
             deps.printCapabilityMismatch('data_policy', check);
             return 1;
@@ -58,12 +56,7 @@ export function createDataPolicyCommands(deps: PolicyCommandDeps) {
             return 1;
         }
 
-        const captureUpdates: Partial<AppConfig> = {};
-        if (captureRetentionDays != null) captureUpdates['capture.retentionDays'] = Math.floor(captureRetentionDays);
-        if (debugRetentionDays != null) captureUpdates['capture.debugRetentionDays'] = Math.floor(debugRetentionDays);
-        if (debugArtifactsEnabled != null) captureUpdates['capture.debugArtifacts'] = debugArtifactsEnabled;
-
-        if (!syncPolicy && Object.keys(captureUpdates).length === 0) {
+        if (!syncPolicy && captureRetentionDays == null && debugRetentionDays == null && debugArtifactsEnabled == null) {
             console.error('Usage: 0ctx data-policy set [--repo-root=<path>] [--sync-policy=<local_only|metadata_only|full_sync>] [--capture-retention-days=<days>] [--debug-retention-days=<days>] [--debug-artifacts=<on|off>] [--json]');
             return 1;
         }
@@ -73,18 +66,17 @@ export function createDataPolicyCommands(deps: PolicyCommandDeps) {
             return 1;
         }
 
-        for (const [key, value] of Object.entries(captureUpdates) as Array<[keyof AppConfig, AppConfig[keyof AppConfig]]>) {
-            setConfigValue(key, value);
-        }
-
         const contextId = syncPolicy
             ? await deps.requireCommandContextId(flags, '0ctx data-policy set')
             : await deps.resolveCommandContextId(flags);
         if (syncPolicy && !contextId) return 1;
-        if (syncPolicy) {
-            await sendToDaemon('setSyncPolicy', { contextId, syncPolicy });
-        }
-        const payload = await sendToDaemon('getDataPolicy', contextId ? { contextId } : {}) as DataPolicyPayload;
+        const payload = await sendToDaemon('setDataPolicy', {
+            ...(contextId ? { contextId } : {}),
+            ...(syncPolicy ? { syncPolicy } : {}),
+            ...(captureRetentionDays != null ? { captureRetentionDays: Math.floor(captureRetentionDays) } : {}),
+            ...(debugRetentionDays != null ? { debugRetentionDays: Math.floor(debugRetentionDays) } : {}),
+            ...(debugArtifactsEnabled != null ? { debugArtifactsEnabled } : {})
+        }) as DataPolicyPayload;
         return deps.printJsonOrValue(asJson, payload, () => {
             console.log('\nData policy updated\n');
             printPolicySummary(payload, deps.formatSyncPolicyLabel, deps.formatDebugArtifactsLabel);

@@ -15,10 +15,13 @@ export function createHookInstallCommand(deps: HookCommandDeps) {
             return 1;
         }
 
+        const selectedClients = deps.parseHookClients(flags.clients).map(client => client.toLowerCase());
+        const selectedClientSet = new Set(selectedClients);
+
         const result = deps.installHooks({
             projectRoot: repoRoot,
             contextId,
-            clients: deps.parseHookClients(flags.clients).map(client => client.toLowerCase()),
+            clients: selectedClients,
             dryRun,
             cliCommand: '0ctx',
             installClaudeGlobal
@@ -55,6 +58,7 @@ export function createHookInstallCommand(deps: HookCommandDeps) {
                 codexNotifyConfigured: result.codexNotifyConfigured,
                 codexNotifyReason: result.codexNotifyReason,
                 warnings: result.warnings,
+                selectedClients,
                 agents: result.state.agents
             }, null, 2));
             return 0;
@@ -66,23 +70,37 @@ export function createHookInstallCommand(deps: HookCommandDeps) {
             console.log(`context_id: ${result.contextId ?? 'n/a (repo path will resolve at capture time)'}`);
             console.log(`project_config: ${result.projectConfigPath}`);
             console.log(`state_path: ${result.statePath}`);
-            console.log(`claude_config: ${result.claudeConfigPath}`);
-            console.log(`claude_hook: ${result.claudeHookConfigured ? 'configured' : `not-configured (${result.claudeHookReason ?? 'unknown'})`}`);
-            if (installClaudeGlobal || result.claudeGlobalHookConfigured) {
+            if (selectedClientSet.has('claude')) {
+                console.log(`claude_config: ${result.claudeConfigPath}`);
+                console.log(`claude_hook: ${result.claudeHookConfigured ? 'configured' : `not-configured (${result.claudeHookReason ?? 'unknown'})`}`);
+            }
+            if (selectedClientSet.has('claude') && (installClaudeGlobal || result.claudeGlobalHookConfigured)) {
                 console.log(`claude_global_config: ${result.claudeGlobalConfigPath}`);
                 console.log(`claude_global_hook: ${result.claudeGlobalHookConfigured ? 'configured' : `not-configured (${result.claudeGlobalHookReason ?? 'unknown'})`}`);
             }
-            console.log(`windsurf_config: ${result.windsurfConfigPath}`);
-            console.log(`windsurf_hook: ${result.windsurfHookConfigured ? 'configured' : `not-configured (${result.windsurfHookReason ?? 'unknown'})`}`);
-            console.log(`cursor_config: ${result.cursorConfigPath}`);
-            console.log(`cursor_hook: ${result.cursorHookConfigured ? 'configured' : `not-configured (${result.cursorHookReason ?? 'unknown'})`}`);
-            console.log(`factory_config: ${result.factoryConfigPath}`);
-            console.log(`factory_hook: ${result.factoryHookConfigured ? 'configured' : `not-configured (${result.factoryHookReason ?? 'unknown'})`}`);
-            console.log(`antigravity_config: ${result.antigravityConfigPath}`);
-            console.log(`antigravity_hook: ${result.antigravityHookConfigured ? 'configured' : `not-configured (${result.antigravityHookReason ?? 'unknown'})`}`);
-            console.log(`codex_config: ${result.codexConfigPath}`);
-            console.log(`codex_notify: ${result.codexNotifyConfigured ? 'configured' : `not-configured (${result.codexNotifyReason ?? 'unknown'})`}`);
-            for (const agent of result.state.agents) console.log(`agent_${agent.agent}: ${agent.status}${agent.installed ? ' (installed)' : ''}`);
+            if (selectedClientSet.has('factory')) {
+                console.log(`factory_config: ${result.factoryConfigPath}`);
+                console.log(`factory_hook: ${result.factoryHookConfigured ? 'configured' : `not-configured (${result.factoryHookReason ?? 'unknown'})`}`);
+            }
+            if (selectedClientSet.has('antigravity')) {
+                console.log(`antigravity_config: ${result.antigravityConfigPath}`);
+                console.log(`antigravity_hook: ${result.antigravityHookConfigured ? 'configured' : `not-configured (${result.antigravityHookReason ?? 'unknown'})`}`);
+            }
+            if (selectedClientSet.has('codex')) {
+                console.log(`codex_config: ${result.codexConfigPath}`);
+                console.log(`codex_notify: ${result.codexNotifyConfigured ? 'configured' : `not-configured (${result.codexNotifyReason ?? 'unknown'})`}`);
+            }
+            if (selectedClientSet.has('cursor')) {
+                console.log(`cursor_config: ${result.cursorConfigPath}`);
+                console.log(`cursor_hook: ${result.cursorHookConfigured ? 'configured' : `not-configured (${result.cursorHookReason ?? 'unknown'})`}`);
+            }
+            if (selectedClientSet.has('windsurf')) {
+                console.log(`windsurf_config: ${result.windsurfConfigPath}`);
+                console.log(`windsurf_hook: ${result.windsurfHookConfigured ? 'configured' : `not-configured (${result.windsurfHookReason ?? 'unknown'})`}`);
+            }
+            for (const agent of result.state.agents.filter(agent => selectedClientSet.has(agent.agent))) {
+                console.log(`agent_${agent.agent}: ${agent.status}${agent.installed ? ' (installed)' : ''}`);
+            }
             for (const warning of result.warnings) console.log(`warning: ${warning}`);
         }
         return 0;

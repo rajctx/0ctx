@@ -26,6 +26,7 @@ describe('@0ctx/cli build artifact source', () => {
 
         expect(source).toContain("case 'install'");
         expect(source).toContain("case 'enable'");
+        expect(source).toContain("case 'workspaces'");
         expect(source).toContain("case 'agent-context'");
         expect(source).toContain("case 'data-policy'");
         expect(source).toContain("case 'workstreams'");
@@ -73,6 +74,7 @@ describe('@0ctx/cli build artifact source', () => {
         expect(cliSurface).toContain("0ctx workstreams [--repo-root=<path>] [--limit=100] [--json]");
         expect(cliSurface).toContain("0ctx workstreams current [--repo-root=<path>] [--branch=<name>] [--worktree-path=<path>]");
         expect(cliSurface).toContain("0ctx workstreams compare [--repo-root=<path>] --source=<branch> --target=<branch>");
+        expect(cliSurface).toContain("0ctx workspaces compare [--repo-root=<path>|--source-context-id=<id>]");
         expect(cliSurface).toContain("0ctx branches [--repo-root=<path>] [--limit=100] [--json]");
         expect(cliSurface).toContain("0ctx branches compare [--repo-root=<path>] --source=<branch> --target=<branch>");
         expect(cliSurface).toContain("0ctx sessions [--repo-root=<path>] [--branch=<name>] [--session-id=<id>] [--worktree-path=<path>] [--limit=100] [--json]");
@@ -134,6 +136,7 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("return commandMcp(parsed.subcommand, parsed.flags);");
         expect(productSurface).toContain("const mcpProfile = deps.parseOptionalStringFlag(flags['mcp-profile'] ?? flags.profile) ?? 'core';");
         expect(productSurface).toContain("if (!nextFlags.clients) nextFlags.clients = 'ga';");
+        expect(policySource).toContain("sendToDaemon('setDataPolicy'");
         expect(source).not.toContain("{ value: 'cursor', label: 'Cursor (Preview)' }");
         expect(source).not.toContain("{ value: 'windsurf', label: 'Windsurf (Preview)' }");
         expect(productSurface).toContain("is deprecated. Use \\`0ctx bootstrap\\` for MCP registration or \\`0ctx setup\\` for advanced machine management.");

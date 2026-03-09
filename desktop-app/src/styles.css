@@ -1083,6 +1083,20 @@ tbody td {
   gap: 12px;
 }
 
+.compact-form {
+  gap: 14px;
+}
+
+.policy-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.policy-toggle {
+  justify-content: flex-start;
+}
+
 .command-card {
   padding: 14px;
   display: grid;
@@ -1143,6 +1157,7 @@ tbody td {
   .workspace-layout,
   .utility-layout,
   .page-card-grid.two-up,
+  .policy-grid,
   .fact-grid,
   .meta-grid,
   .compact-meta-grid,

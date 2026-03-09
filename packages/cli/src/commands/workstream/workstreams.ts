@@ -118,6 +118,7 @@ export function createBranchCommands(ctx: WorkstreamCommandContext) {
                     console.log(`  Sessions:  ${result.source.sessionCount} vs ${result.target.sessionCount}`);
                     console.log(`  Checkpts:  ${result.source.checkpointCount} vs ${result.target.checkpointCount}`);
                     console.log(`  State:     ${result.comparisonKind}`);
+                    if (result.comparisonReadiness) console.log(`  Ready:     ${result.comparisonReadiness}`);
                     console.log(`  Summary:   ${result.comparisonSummary}`);
                     if (result.source.lastCommitSha || result.target.lastCommitSha) {
                         console.log(`  Commits:   ${String(result.source.lastCommitSha || 'none').slice(0, 12)} vs ${String(result.target.lastCommitSha || 'none').slice(0, 12)}`);
@@ -131,6 +132,10 @@ export function createBranchCommands(ctx: WorkstreamCommandContext) {
                     if (result.sharedAgents.length > 0) console.log(`  Shared agents: ${result.sharedAgents.join(', ')}`);
                     if (result.sourceOnlyAgents.length > 0) console.log(`  Source only:   ${result.sourceOnlyAgents.join(', ')}`);
                     if (result.targetOnlyAgents.length > 0) console.log(`  Target only:   ${result.targetOnlyAgents.join(', ')}`);
+                    if (result.source.stateSummary) console.log(`  Source status: ${result.source.stateSummary}`);
+                    if (result.source.handoffSummary) console.log(`  Source handoff: ${result.source.handoffSummary}`);
+                    if (result.target.stateSummary) console.log(`  Target status: ${result.target.stateSummary}`);
+                    if (result.target.handoffSummary) console.log(`  Target handoff: ${result.target.handoffSummary}`);
                     if (result.comparisonActionHint) console.log(`  Next:      ${result.comparisonActionHint}`);
                     console.log(`\n  ${result.comparisonText}\n`);
                 });

@@ -11,7 +11,13 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-const CONFIG_PATH = path.join(os.homedir(), '.0ctx', 'config.json');
+function resolveConfigPath(): string {
+    const override = String(process.env.CTX_CONFIG_PATH || '').trim();
+    if (override) {
+        return override;
+    }
+    return path.join(os.homedir(), '.0ctx', 'config.json');
+}
 
 // ─── Schema ──────────────────────────────────────────────────────────────────
 
@@ -91,9 +97,10 @@ function parseBooleanValue(value: string): boolean {
  * Load raw config from disk. Returns empty object if file missing/corrupt.
  */
 function loadRawConfig(): Partial<AppConfig> {
+    const configPath = resolveConfigPath();
     try {
-        if (!fs.existsSync(CONFIG_PATH)) return {};
-        return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')) as Partial<AppConfig>;
+        if (!fs.existsSync(configPath)) return {};
+        return JSON.parse(fs.readFileSync(configPath, 'utf8')) as Partial<AppConfig>;
     } catch {
         return {};
     }
@@ -111,11 +118,12 @@ export function loadConfig(): AppConfig {
  * Save partial config (merges with existing).
  */
 export function saveConfig(partial: Partial<AppConfig>): void {
+    const configPath = resolveConfigPath();
     const existing = loadRawConfig();
     const merged = { ...existing, ...partial };
 
-    fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
-    fs.writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2), 'utf8');
+    fs.mkdirSync(path.dirname(configPath), { recursive: true });
+    fs.writeFileSync(configPath, JSON.stringify(merged, null, 2), 'utf8');
 }
 
 // ─── Get / Set ───────────────────────────────────────────────────────────────
@@ -202,5 +210,5 @@ export function isValidConfigKey(key: string): key is keyof AppConfig {
  * Get the config file path (for display/debug).
  */
 export function getConfigPath(): string {
-    return CONFIG_PATH;
+    return resolveConfigPath();
 }

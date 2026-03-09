@@ -109,12 +109,7 @@ GA integrations:
 - Antigravity
 
 Preview integrations are opt-in only and are not part of the normal product path.
-If you need one explicitly, name it directly, for example:
-
-```bash
-0ctx enable --clients=codex
-0ctx bootstrap --clients=codex
-```
+If you need one explicitly, name it directly in an advanced workflow.
 
 The normal product path is repo-first:
 
