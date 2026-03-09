@@ -295,6 +295,14 @@ export interface WorkstreamComparison {
     sharedAgents: string[];
     sourceOnlyAgents: string[];
     targetOnlyAgents: string[];
+    sourceChangedFileCount: number | null;
+    targetChangedFileCount: number | null;
+    sharedChangedFileCount: number | null;
+    sharedChangedFiles: string[];
+    sourceOnlyChangedFiles: string[];
+    targetOnlyChangedFiles: string[];
+    changeOverlapKind: 'none' | 'partial' | 'high' | 'unknown';
+    changeOverlapSummary: string;
     comparisonText: string;
 }
 

@@ -1417,6 +1417,12 @@ describe('daemon request handling', () => {
                 comparisonReadiness?: string;
                 comparisonSummary: string;
                 comparisonActionHint: string | null;
+                sourceChangedFileCount: number | null;
+                targetChangedFileCount: number | null;
+                sharedChangedFileCount: number | null;
+                changeOverlapKind: string;
+                changeOverlapSummary: string;
+                sharedChangedFiles: string[];
                 source: { sessionCount: number; branch: string | null };
                 target: { sessionCount: number; branch: string | null };
                 sourceOnlyAgents: string[];
@@ -1441,14 +1447,133 @@ describe('daemon request handling', () => {
             expect(comparison.comparisonReadiness).toBe('review');
             expect(comparison.comparisonSummary).toContain('feature/runtime-compare is ahead of main');
             expect(comparison.comparisonActionHint).toContain('Update or compare main');
+            expect(comparison.sourceChangedFileCount).toBe(0);
+            expect(comparison.targetChangedFileCount).toBe(1);
+            expect(comparison.sharedChangedFileCount).toBe(0);
+            expect(comparison.changeOverlapKind).toBe('none');
+            expect(comparison.changeOverlapSummary).toContain('different files');
+            expect(comparison.sharedChangedFiles).toEqual([]);
             expect(comparison.comparisonText).toContain('Source: main');
             expect(comparison.comparisonText).toContain('Target: feature/runtime-compare');
             expect(comparison.comparisonText).toContain('Readiness: review');
             expect(comparison.comparisonText).toContain('Recommended next step:');
+            expect(comparison.comparisonText).toContain('Changed files:');
         } finally {
             db.close();
         }
     });
+
+    it('surfaces shared changed-file overlap for diverged workstreams', () => {
+        if (!gitAvailable()) return;
+        const { db, graph } = createGraph();
+        const repoRoot = mkdtempSync(path.join(os.tmpdir(), '0ctx-workstream-overlap-'));
+        tempDirs.push(repoRoot);
+        try {
+            spawnSync('git', ['init', '-b', 'main', repoRoot], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', repoRoot, 'config', 'user.email', 'test@example.com'], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', repoRoot, 'config', 'user.name', 'Test User'], { encoding: 'utf8', windowsHide: true });
+            spawnSync('powershell', ['-NoProfile', '-Command', `Set-Content -Path '${path.join(repoRoot, 'shared.txt')}' -Value 'base'`], { encoding: 'utf8', windowsHide: true });
+            spawnSync('powershell', ['-NoProfile', '-Command', `Set-Content -Path '${path.join(repoRoot, 'base.txt')}' -Value 'base'`], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', repoRoot, 'add', '.'], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', repoRoot, 'commit', '-m', 'base'], { encoding: 'utf8', windowsHide: true });
+
+            spawnSync('git', ['-C', repoRoot, 'checkout', '-b', 'feature/shared-overlap'], { encoding: 'utf8', windowsHide: true });
+            spawnSync('powershell', ['-NoProfile', '-Command', `Set-Content -Path '${path.join(repoRoot, 'shared.txt')}' -Value 'feature change'`], { encoding: 'utf8', windowsHide: true });
+            spawnSync('powershell', ['-NoProfile', '-Command', `Set-Content -Path '${path.join(repoRoot, 'feature-only.txt')}' -Value 'feature only'`], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', repoRoot, 'add', '.'], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', repoRoot, 'commit', '-m', 'feature overlap'], { encoding: 'utf8', windowsHide: true });
+
+            spawnSync('git', ['-C', repoRoot, 'checkout', 'main'], { encoding: 'utf8', windowsHide: true });
+            spawnSync('powershell', ['-NoProfile', '-Command', `Set-Content -Path '${path.join(repoRoot, 'shared.txt')}' -Value 'main change'`], { encoding: 'utf8', windowsHide: true });
+            spawnSync('powershell', ['-NoProfile', '-Command', `Set-Content -Path '${path.join(repoRoot, 'main-only.txt')}' -Value 'main only'`], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', repoRoot, 'add', '.'], { encoding: 'utf8', windowsHide: true });
+            spawnSync('git', ['-C', repoRoot, 'commit', '-m', 'main overlap'], { encoding: 'utf8', windowsHide: true });
+
+            const session = handleRequest(graph, 'conn-overlap', { method: 'createSession' }, runtime()) as { sessionToken: string };
+            const context = handleRequest(graph, 'conn-overlap', {
+                method: 'createContext',
+                sessionToken: session.sessionToken,
+                params: { name: 'overlap-context', paths: [repoRoot] }
+            }, runtime()) as { id: string };
+
+            const addCapturedMessage = (thread: string, branch: string, agent: string, occurredAt: number) => {
+                handleRequest(graph, 'conn-overlap', {
+                    method: 'addNode',
+                    sessionToken: session.sessionToken,
+                    params: {
+                        contextId: context.id,
+                        type: 'artifact',
+                        hidden: true,
+                        thread,
+                        key: `chat_session:${agent}:${thread}`,
+                        content: `${branch} summary`,
+                        tags: ['chat_session', `agent:${agent}`],
+                        rawPayload: { sessionId: thread, branch, agent, worktreePath: repoRoot, repositoryRoot: repoRoot }
+                    }
+                }, runtime());
+
+                handleRequest(graph, 'conn-overlap', {
+                    method: 'addNode',
+                    sessionToken: session.sessionToken,
+                    params: {
+                        contextId: context.id,
+                        type: 'artifact',
+                        hidden: true,
+                        thread,
+                        key: `chat_turn:${agent}:${thread}:msg-1`,
+                        content: `${branch} captured turn`,
+                        tags: ['chat_turn', 'role:assistant'],
+                        rawPayload: {
+                            sessionId: thread,
+                            messageId: 'msg-1',
+                            role: 'assistant',
+                            branch,
+                            agent,
+                            worktreePath: repoRoot,
+                            repositoryRoot: repoRoot,
+                            occurredAt
+                        }
+                    }
+                }, runtime());
+            };
+
+            const now = Date.now();
+            addCapturedMessage('session-main-overlap', 'main', 'factory', now - 60_000);
+            addCapturedMessage('session-feature-overlap', 'feature/shared-overlap', 'claude', now);
+
+            const comparison = handleRequest(graph, 'conn-overlap', {
+                method: 'compareWorkstreams',
+                sessionToken: session.sessionToken,
+                params: {
+                    contextId: context.id,
+                    sourceBranch: 'main',
+                    targetBranch: 'feature/shared-overlap'
+                }
+            }, runtime()) as {
+                sourceAheadCount: number | null;
+                targetAheadCount: number | null;
+                sharedChangedFileCount: number | null;
+                sharedChangedFiles: string[];
+                sourceOnlyChangedFiles: string[];
+                targetOnlyChangedFiles: string[];
+                changeOverlapKind: string;
+                changeOverlapSummary: string;
+                comparisonText: string;
+            };
+
+            expect(comparison.sourceAheadCount).toBe(1);
+            expect(comparison.targetAheadCount).toBe(1);
+            expect(comparison.sharedChangedFileCount).toBe(1);
+            expect(comparison.sharedChangedFiles).toContain('shared.txt');
+            expect(comparison.sourceOnlyChangedFiles).toContain('main-only.txt');
+            expect(comparison.targetOnlyChangedFiles).toContain('feature-only.txt');
+            expect(comparison.changeOverlapKind).toBe('partial');
+            expect(comparison.changeOverlapSummary).toContain('shared.txt');
+            expect(comparison.comparisonText).toContain('Shared files: shared.txt');
+        } finally {
+            db.close();
+        }
+    }, 20_000);
 
     it('compares workspaces explicitly by repository overlap and reviewed insights', () => {
         const { db, graph } = createGraph();

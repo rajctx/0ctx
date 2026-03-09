@@ -181,12 +181,16 @@
               `newer ${comparison.newerSide}`
             ].join(' · ')
           : (comparison.sameRepository ? 'Git comparison unavailable' : 'Different repositories');
+        const overlapSummary = typeof comparison.sharedChangedFileCount === 'number'
+          ? `source ${comparison.sourceChangedFileCount ?? '?'} · target ${comparison.targetChangedFileCount ?? '?'} · shared ${comparison.sharedChangedFileCount}`
+          : 'Changed-file overlap unavailable';
         comparisonMeta.innerHTML = [
           `<article><span>Source</span><strong>${esc(describeBranchLane(comparison.source).title)}</strong></article>`,
           `<article><span>Target</span><strong>${esc(describeBranchLane(comparison.target).title)}</strong></article>`,
           `<article><span>State</span><strong>${esc((comparison.comparisonKind || 'unknown').replace(/_/g, ' '))}</strong></article>`,
           `<article><span>Ready</span><strong>${esc(String(comparison.comparisonReadiness || 'unknown'))}</strong></article>`,
           `<article><span>Git divergence</span><strong>${esc(gitSummary)}</strong></article>`,
+          `<article><span>Changed-file overlap</span><strong>${esc(overlapSummary)}</strong></article>`,
           `<article><span>Shared agents</span><strong>${esc(comparison.sharedAgents.length > 0 ? comparison.sharedAgents.join(', ') : 'none')}</strong></article>`
         ].join('');
       }
@@ -195,6 +199,9 @@
           { label: 'Shared', value: comparison.sharedAgents },
           { label: 'Only on source', value: comparison.sourceOnlyAgents },
           { label: 'Only on target', value: comparison.targetOnlyAgents },
+          { label: 'Shared files', value: comparison.sharedChangedFiles || [] },
+          { label: 'Only on source files', value: comparison.sourceOnlyChangedFiles || [] },
+          { label: 'Only on target files', value: comparison.targetOnlyChangedFiles || [] },
           { label: 'Source status', value: [comparison.source?.stateSummary || 'unknown'] },
           { label: 'Target status', value: [comparison.target?.stateSummary || 'unknown'] },
           { label: 'Source handoff', value: [comparison.source?.handoffSummary || 'unknown'] },

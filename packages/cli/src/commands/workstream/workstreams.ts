@@ -132,6 +132,13 @@ export function createBranchCommands(ctx: WorkstreamCommandContext) {
                     if (result.sharedAgents.length > 0) console.log(`  Shared agents: ${result.sharedAgents.join(', ')}`);
                     if (result.sourceOnlyAgents.length > 0) console.log(`  Source only:   ${result.sourceOnlyAgents.join(', ')}`);
                     if (result.targetOnlyAgents.length > 0) console.log(`  Target only:   ${result.targetOnlyAgents.join(', ')}`);
+                    if (result.changeOverlapSummary) console.log(`  Overlap:   ${result.changeOverlapSummary}`);
+                    if (typeof result.sourceChangedFileCount === 'number' || typeof result.targetChangedFileCount === 'number') {
+                        console.log(`  Files:     source ${result.sourceChangedFileCount ?? '?'} | target ${result.targetChangedFileCount ?? '?'} | shared ${result.sharedChangedFileCount ?? '?'}`);
+                    }
+                    if (Array.isArray(result.sharedChangedFiles) && result.sharedChangedFiles.length > 0) {
+                        console.log(`  Shared files: ${result.sharedChangedFiles.slice(0, 5).join(', ')}${result.sharedChangedFiles.length > 5 ? ` (+${result.sharedChangedFiles.length - 5} more)` : ''}`);
+                    }
                     if (result.source.stateSummary) console.log(`  Source status: ${result.source.stateSummary}`);
                     if (result.source.handoffSummary) console.log(`  Source handoff: ${result.source.handoffSummary}`);
                     if (result.target.stateSummary) console.log(`  Target status: ${result.target.stateSummary}`);
