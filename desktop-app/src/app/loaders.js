@@ -1,7 +1,7 @@
 (() => {
   window.OctxDesktop = window.OctxDesktop || {};
   const app = window.OctxDesktop;
-  const { state, activeBranch, activeContext, activeSession, branchKey, comparisonTargetBranch, resetBranchScopedState, resetPayloadState, syncComparisonTargetSelection, syncWorkspaceComparisonTargetSelection, setRuntimeIssue, setStatus, missingRequiredMethods, ensureEventSubscription, clearEventSubscription, renderAll, requestDaemonStatus, daemon, methodSupported } = app;
+  const { state, activeBranch, activeContext, activeSession, branchKey, comparisonTargetBranch, resetBranchScopedState, syncComparisonTargetSelection, syncWorkspaceComparisonTargetSelection, setRuntimeIssue, setStatus, missingRequiredMethods, ensureEventSubscription, clearEventSubscription, renderAll, requestDaemonStatus, daemon, methodSupported } = app;
 
   async function loadBranchComparison() {
     const source = activeBranch();
@@ -113,22 +113,6 @@
     if (!state.activeTurnId || !state.turns.some((turn) => turn.nodeId === state.activeTurnId)) {
       state.activeTurnId = state.turns[0]?.nodeId || null;
     }
-  }
-
-  async function loadPayload(nodeId) {
-    const target = nodeId || state.activeTurnId;
-    state.payloadNodeId = target || null;
-    if (!target) {
-      state.payload = null;
-      return;
-    }
-    const turn = state.turns.find((entry) => entry.nodeId === target);
-    if (!turn || turn.hasPayload !== true) {
-      state.payload = null;
-      return;
-    }
-    const payload = await daemon('getNodePayload', { nodeId: target });
-    state.payload = payload?.payload ?? payload ?? null;
   }
 
   async function loadCheckpoints() {
@@ -336,7 +320,6 @@
         state.turns = [];
         state.activeTurnId = null;
       });
-      resetPayloadState();
       await safeLoad('checkpoints', loadCheckpoints, () => {
         state.checkpoints = [];
         state.activeCheckpointId = null;
@@ -382,5 +365,5 @@
     }
   }
 
-  Object.assign(app, { loadBranchComparison, selectContext, loadBranches, loadSessions, loadSessionDetail, getSessionDetailWithFallback, loadTurns, loadPayload, loadCheckpoints, loadCheckpointDetail, loadHandoff, loadBranchComparisonSafe, loadWorkspaceComparison, loadGraph, loadHook, loadDataPolicy, refreshAll });
+  Object.assign(app, { loadBranchComparison, selectContext, loadBranches, loadSessions, loadSessionDetail, getSessionDetailWithFallback, loadTurns, loadCheckpoints, loadCheckpointDetail, loadHandoff, loadBranchComparisonSafe, loadWorkspaceComparison, loadGraph, loadHook, loadDataPolicy, refreshAll });
 })();

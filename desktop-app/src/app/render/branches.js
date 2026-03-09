@@ -167,10 +167,13 @@
       const comparisonSummary = document.getElementById('branchComparisonSummary');
       const comparisonMeta = document.getElementById('branchComparisonMeta');
       const comparisonAgents = document.getElementById('branchComparisonAgents');
-      if (comparisonSummary) {
+        if (comparisonSummary) {
         const lines = [comparison.comparisonSummary || comparison.comparisonText || 'No comparison summary is available for these workstreams.'];
         if (comparison.comparisonActionHint) {
           lines.push(`Next: ${comparison.comparisonActionHint}`);
+        }
+        if (comparison.reconcileStrategySummary) {
+          lines.push(`Reconcile: ${comparison.reconcileStrategySummary}`);
         }
         comparisonSummary.textContent = lines.join(' ');
       }
@@ -199,6 +202,7 @@
           `<article><span>Changed-line overlap</span><strong>${esc(lineOverlapSummary)}</strong></article>`,
           `<article><span>Hotspots</span><strong>${esc(comparison.changeHotspotSummary || 'none')}</strong></article>`,
           `<article><span>Merge risk</span><strong>${esc(comparison.mergeRiskSummary || 'unknown')}</strong></article>`,
+          `<article><span>Reconcile</span><strong>${esc(comparison.reconcileStrategySummary || 'unknown')}</strong></article>`,
           `<article><span>Blockers</span><strong>${esc(comparison.comparisonBlockers?.length ? comparison.comparisonBlockers.join(' ') : 'none')}</strong></article>`,
           `<article><span>Review</span><strong>${esc(comparison.comparisonReviewItems?.length ? comparison.comparisonReviewItems.join(' ') : 'none')}</strong></article>`,
           `<article><span>Shared agents</span><strong>${esc(comparison.sharedAgents.length > 0 ? comparison.sharedAgents.join(', ') : 'none')}</strong></article>`

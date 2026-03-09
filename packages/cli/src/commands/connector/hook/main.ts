@@ -28,7 +28,7 @@ export function createHookMainCommand(deps: HookCommandDeps) {
         const rawAgentFlag = deps.parseOptionalStringFlag(flags.agent)?.trim().toLowerCase() ?? null;
         const agent = deps.extractSupportedHookAgent(rawAgentFlag);
         if (!agent) {
-            console.error("connector_hook_ingest_requires_agent: pass --agent=claude|windsurf|codex|cursor|factory|antigravity");
+            console.error("connector_hook_ingest_requires_agent: pass --agent=claude|factory|antigravity for the GA path, or explicitly pass a replay-only agent with --agent=codex|cursor|windsurf");
             return 1;
         }
 

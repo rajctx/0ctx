@@ -538,6 +538,65 @@ describe('Graph context isolation', () => {
         }
     });
 
+    it('filters assistant planning chatter out of reviewed insights', () => {
+        const { db, graph } = createGraph();
+        try {
+            const ctx = graph.createContext('knowledge-planning-filter');
+            graph.addNode({
+                contextId: ctx.id,
+                thread: 'session-planning-1',
+                type: 'artifact',
+                content: 'planning filtering session',
+                key: 'chat_session:factory:session-planning-1',
+                tags: ['chat_session', 'agent:factory'],
+                source: 'hook:factory',
+                hidden: true,
+                rawPayload: {
+                    sessionId: 'session-planning-1',
+                    branch: 'feature/planning-filter',
+                    commitSha: '1234abcd9999',
+                    agent: 'factory'
+                }
+            });
+
+            for (const [key, role, content, createdAt] of [
+                ['assistant-1', 'assistant', 'We need to keep going on supported-agent retrieval ergonomics next.', 1700000250000],
+                ['assistant-2', 'assistant', 'The correct move is to continue on retention UX after that.', 1700000251000],
+                ['assistant-3', 'assistant', 'We decided metadata_only should remain the default sync policy.', 1700000252000]
+            ] as const) {
+                graph.addNode({
+                    contextId: ctx.id,
+                    thread: 'session-planning-1',
+                    type: 'artifact',
+                    content,
+                    key: `chat_turn:factory:session-planning-1:${key}`,
+                    tags: ['chat_turn', `role:${role}`],
+                    source: 'hook:factory',
+                    hidden: true,
+                    rawPayload: {
+                        sessionId: 'session-planning-1',
+                        messageId: key,
+                        role,
+                        branch: 'feature/planning-filter',
+                        commitSha: '1234abcd9999',
+                        occurredAt: createdAt
+                    }
+                });
+            }
+
+            const preview = graph.previewKnowledgeFromSession(ctx.id, 'session-planning-1');
+            expect(preview.candidates.some(candidate => /keep going on supported-agent retrieval/i.test(candidate.content))).toBe(false);
+            expect(preview.candidates.some(candidate => /continue on retention ux/i.test(candidate.content))).toBe(false);
+            expect(preview.candidates.some(candidate => /metadata only should remain the default sync policy/i.test(candidate.content))).toBe(true);
+
+            const extraction = graph.extractKnowledgeFromSession(ctx.id, 'session-planning-1');
+            expect(extraction.nodeCount).toBe(1);
+            expect(extraction.nodes[0]?.type).toBe('constraint');
+        } finally {
+            db.close();
+        }
+    });
+
     it('filters repair and support procedures while honoring confidence thresholds', () => {
         const { db, graph } = createGraph();
         try {
@@ -711,6 +770,60 @@ describe('Graph context isolation', () => {
             const permissiveExtraction = graph.extractKnowledgeFromSession(ctx.id, 'session-threshold-1', { minConfidence: 0.55 });
             expect(permissiveExtraction.nodeCount).toBe(1);
             expect(permissiveExtraction.nodes[0]?.type).toBe('assumption');
+        } finally {
+            db.close();
+        }
+    });
+
+    it('keeps single assistant goals in review but out of default extraction', () => {
+        const { db, graph } = createGraph();
+        try {
+            const ctx = graph.createContext('knowledge-assistant-goal-threshold');
+            graph.addNode({
+                contextId: ctx.id,
+                thread: 'session-assistant-goal-1',
+                type: 'artifact',
+                content: 'assistant-only goal session',
+                key: 'chat_session:factory:session-assistant-goal-1',
+                tags: ['chat_session', 'agent:factory'],
+                source: 'hook:factory',
+                hidden: true,
+                rawPayload: {
+                    sessionId: 'session-assistant-goal-1',
+                    branch: 'feature/assistant-goal-threshold',
+                    commitSha: 'ab12cd34ef56',
+                    agent: 'factory'
+                }
+            });
+
+            graph.addNode({
+                contextId: ctx.id,
+                thread: 'session-assistant-goal-1',
+                type: 'artifact',
+                content: 'We need to support automatic context injection for Claude session start.',
+                key: 'chat_turn:factory:session-assistant-goal-1:assistant-1',
+                tags: ['chat_turn', 'role:assistant'],
+                source: 'hook:factory',
+                hidden: true,
+                rawPayload: {
+                    sessionId: 'session-assistant-goal-1',
+                    messageId: 'assistant-1',
+                    role: 'assistant',
+                    branch: 'feature/assistant-goal-threshold',
+                    commitSha: 'ab12cd34ef56',
+                    occurredAt: 1700000550000
+                }
+            });
+
+            const preview = graph.previewKnowledgeFromSession(ctx.id, 'session-assistant-goal-1');
+            expect(preview.candidates.some(candidate => candidate.type === 'goal')).toBe(true);
+
+            const extraction = graph.extractKnowledgeFromSession(ctx.id, 'session-assistant-goal-1');
+            expect(extraction.nodeCount).toBe(0);
+
+            const permissiveExtraction = graph.extractKnowledgeFromSession(ctx.id, 'session-assistant-goal-1', { minConfidence: 0.65 });
+            expect(permissiveExtraction.nodeCount).toBe(1);
+            expect(permissiveExtraction.nodes[0]?.type).toBe('goal');
         } finally {
             db.close();
         }

@@ -293,6 +293,80 @@ function deriveMergeRisk(options: {
     };
 }
 
+function deriveReconcileStrategy(options: {
+    sameRepository: boolean;
+    comparable: boolean;
+    comparisonKind: WorkstreamComparison['comparisonKind'];
+    comparisonReadiness: WorkstreamComparison['comparisonReadiness'];
+    mergeRisk: WorkstreamComparison['mergeRisk'];
+    newerSide: WorkstreamComparison['newerSide'];
+    sourceLabel: string;
+    targetLabel: string;
+}): {
+    reconcileStrategy: WorkstreamComparison['reconcileStrategy'];
+    reconcileStrategySummary: string;
+} {
+    if (options.comparisonReadiness === 'blocked') {
+        return {
+            reconcileStrategy: 'blocked',
+            reconcileStrategySummary: 'Resolve checkout and handoff blockers before reconciling these workstreams.'
+        };
+    }
+
+    if (!options.sameRepository || !options.comparable) {
+        return {
+            reconcileStrategy: 'unknown',
+            reconcileStrategySummary: 'Reconcile guidance is unavailable until both workstreams are comparable branches in the same repository.'
+        };
+    }
+
+    switch (options.comparisonKind) {
+        case 'aligned':
+            return {
+                reconcileStrategy: 'none',
+                reconcileStrategySummary: 'No git reconcile is needed. Both workstreams are already aligned.'
+            };
+        case 'source_ahead':
+            return {
+                reconcileStrategy: 'fast_forward_target_to_source',
+                reconcileStrategySummary: `Fast-forward ${options.targetLabel} to ${options.sourceLabel}.`
+            };
+        case 'target_ahead':
+            return {
+                reconcileStrategy: 'fast_forward_source_to_target',
+                reconcileStrategySummary: `Fast-forward ${options.sourceLabel} to ${options.targetLabel}.`
+            };
+        case 'diverged':
+            if (options.mergeRisk === 'high' || options.mergeRisk === 'medium') {
+                return {
+                    reconcileStrategy: 'manual_conflict_resolution',
+                    reconcileStrategySummary: 'Manual reconcile is recommended. Review overlap and resolve conflicts before merging or rebasing either workstream.'
+                };
+            }
+            if (options.newerSide === 'source') {
+                return {
+                    reconcileStrategy: 'rebase_target_on_source',
+                    reconcileStrategySummary: `Rebase ${options.targetLabel} onto ${options.sourceLabel}, then review the resulting history before handoff.`
+                };
+            }
+            if (options.newerSide === 'target') {
+                return {
+                    reconcileStrategy: 'rebase_source_on_target',
+                    reconcileStrategySummary: `Rebase ${options.sourceLabel} onto ${options.targetLabel}, then review the resulting history before handoff.`
+                };
+            }
+            return {
+                reconcileStrategy: 'manual_conflict_resolution',
+                reconcileStrategySummary: 'Both workstreams diverged and neither side is clearly newer. Review manually before choosing a merge or rebase direction.'
+            };
+        default:
+            return {
+                reconcileStrategy: 'unknown',
+                reconcileStrategySummary: 'Reconcile guidance is not available for this comparison.'
+            };
+    }
+}
+
 export function compareWorkstreams(
     graph: Graph,
     contextId: string,
@@ -341,8 +415,8 @@ export function compareWorkstreams(
         if (mergeBaseSha) {
             sourceChangedFiles = parseChangedFiles(safeGit(source.repositoryRoot, ['diff', '--name-only', `${mergeBaseSha}..${source.branch}`])) ?? [];
             targetChangedFiles = parseChangedFiles(safeGit(source.repositoryRoot, ['diff', '--name-only', `${mergeBaseSha}..${target.branch}`])) ?? [];
-            sourceChangedLineRanges = parseChangedBaseRanges(safeGit(source.repositoryRoot, ['diff', '--unified=0', '--no-color', `${mergeBaseSha}..${source.branch}`]));
-            targetChangedLineRanges = parseChangedBaseRanges(safeGit(source.repositoryRoot, ['diff', '--unified=0', '--no-color', `${mergeBaseSha}..${target.branch}`]));
+            sourceChangedLineRanges = parseChangedBaseRanges(safeGit(source.repositoryRoot, ['diff', '--unified=0', '--no-color', `${mergeBaseSha}..${source.branch}`])) ?? new Map();
+            targetChangedLineRanges = parseChangedBaseRanges(safeGit(source.repositoryRoot, ['diff', '--unified=0', '--no-color', `${mergeBaseSha}..${target.branch}`])) ?? new Map();
         }
     } else if (sameRepository && source.branch && target.branch && source.branch === target.branch) {
         comparable = true;
@@ -400,6 +474,16 @@ export function compareWorkstreams(
         lineOverlapKind: changedLines.lineOverlapKind,
         sharedConflictLikelyCount: changedLines.sharedConflictLikelyCount
     });
+    const reconcile = deriveReconcileStrategy({
+        sameRepository,
+        comparable,
+        comparisonKind: comparisonState.kind,
+        comparisonReadiness: comparisonState.readiness,
+        mergeRisk: mergeRisk.mergeRisk,
+        newerSide,
+        sourceLabel: source.branch ?? 'source workstream',
+        targetLabel: target.branch ?? 'target workstream'
+    });
     const comparisonBlockers = [
         ...(comparisonState.blockers ?? []),
         ...(mergeRisk.mergeRisk === 'blocked' ? [mergeRisk.mergeRiskSummary] : [])
@@ -429,7 +513,8 @@ export function compareWorkstreams(
         `Changed files: ${changedFiles.changeOverlapSummary}`,
         `Changed lines: ${changedLines.lineOverlapSummary}`,
         `Hotspots: ${hotspots.changeHotspotSummary}`,
-        `Merge risk: ${mergeRisk.mergeRiskSummary}`
+        `Merge risk: ${mergeRisk.mergeRiskSummary}`,
+        `Reconcile: ${reconcile.reconcileStrategySummary}`
     ];
     if (comparisonBlockers.length > 0) lines.push(`Blockers: ${comparisonBlockers.join(' ')}`);
     if (comparisonReviewItems.length > 0) lines.push(`Review: ${comparisonReviewItems.join(' ')}`);
@@ -463,6 +548,8 @@ export function compareWorkstreams(
         comparisonReadiness: comparisonState.readiness,
         comparisonSummary: comparisonState.summary,
         comparisonActionHint: comparisonState.actionHint,
+        reconcileStrategy: reconcile.reconcileStrategy,
+        reconcileStrategySummary: reconcile.reconcileStrategySummary,
         comparisonBlockers,
         comparisonReviewItems,
         sharedAgents,
@@ -481,10 +568,6 @@ export function compareWorkstreams(
         targetOnlyChangedFiles: changedFiles.targetOnlyChangedFiles,
         changeOverlapKind: changedFiles.changeOverlapKind,
         changeOverlapSummary: changedFiles.changeOverlapSummary,
-        sharedConflictLikelyCount: changedLines.sharedConflictLikelyCount,
-        sharedConflictLikelyFiles: changedLines.sharedConflictLikelyFiles,
-        lineOverlapKind: changedLines.lineOverlapKind,
-        lineOverlapSummary: changedLines.lineOverlapSummary,
         changeHotspotSummary: hotspots.changeHotspotSummary,
         mergeRisk: mergeRisk.mergeRisk,
         mergeRiskSummary: mergeRisk.mergeRiskSummary,

@@ -12,6 +12,55 @@ interface DataPolicyPayload {
     preset: DataPolicyPreset;
 }
 
+interface DataPolicyPresetDefinition {
+    preset: Exclude<DataPolicyPreset, 'custom'>;
+    label: string;
+    syncPolicy: 'metadata_only' | 'full_sync';
+    captureRetentionDays: number;
+    debugRetentionDays: number;
+    debugArtifactsEnabled: boolean;
+    recommendation: string;
+}
+
+const DATA_POLICY_PRESETS: DataPolicyPresetDefinition[] = [
+    {
+        preset: 'lean',
+        label: 'Lean (default)',
+        syncPolicy: 'metadata_only',
+        captureRetentionDays: 14,
+        debugRetentionDays: 7,
+        debugArtifactsEnabled: false,
+        recommendation: 'Best for most repos. Keep sync lean and keep raw capture local.'
+    },
+    {
+        preset: 'review',
+        label: 'Review',
+        syncPolicy: 'metadata_only',
+        captureRetentionDays: 30,
+        debugRetentionDays: 7,
+        debugArtifactsEnabled: false,
+        recommendation: 'Use when you want longer local history for session and checkpoint review.'
+    },
+    {
+        preset: 'debug',
+        label: 'Debug',
+        syncPolicy: 'metadata_only',
+        captureRetentionDays: 30,
+        debugRetentionDays: 14,
+        debugArtifactsEnabled: true,
+        recommendation: 'Use temporarily when troubleshooting capture or adapter behavior.'
+    },
+    {
+        preset: 'shared',
+        label: 'Shared (opt-in)',
+        syncPolicy: 'full_sync',
+        captureRetentionDays: 14,
+        debugRetentionDays: 7,
+        debugArtifactsEnabled: false,
+        recommendation: 'Use only when you explicitly want richer cloud sync for this workspace.'
+    }
+];
+
 function formatPresetLabel(preset: DataPolicyPreset): string {
     switch (preset) {
         case 'lean': return 'Lean (default)';
@@ -20,6 +69,10 @@ function formatPresetLabel(preset: DataPolicyPreset): string {
         case 'shared': return 'Shared (opt-in)';
         default: return 'Custom';
     }
+}
+
+function getPresetDefinition(preset: Exclude<DataPolicyPreset, 'custom'>): DataPolicyPresetDefinition {
+    return DATA_POLICY_PRESETS.find((definition) => definition.preset === preset)!;
 }
 
 function parsePreset(value: string | null): DataPolicyPreset | null {
@@ -41,7 +94,37 @@ function printPolicySummary(payload: DataPolicyPayload, formatSyncPolicyLabel: P
         : 'Raw payloads stay local by default and cloud sync remains lean.'}`);
 }
 
+function printPresetCatalog(
+    formatSyncPolicyLabel: PolicyCommandDeps['formatSyncPolicyLabel'],
+    formatDebugArtifactsLabel: PolicyCommandDeps['formatDebugArtifactsLabel']
+): void {
+    console.log('Preset catalog\n');
+    for (const definition of DATA_POLICY_PRESETS) {
+        console.log(`  ${definition.label}`);
+        console.log(`    Sync:              ${formatSyncPolicyLabel(definition.syncPolicy)}`);
+        console.log(`    Capture retention: ${definition.captureRetentionDays}d`);
+        console.log(`    Debug retention:   ${definition.debugRetentionDays}d`);
+        console.log(`    Debug artifacts:   ${formatDebugArtifactsLabel(definition.debugArtifactsEnabled)}`);
+        console.log(`    Use when:          ${definition.recommendation}`);
+        console.log('');
+    }
+    console.log('  Apply with: 0ctx data-policy <lean|review|debug|shared> [--repo-root=<path>] [--json]');
+    console.log('');
+}
+
 export function createDataPolicyCommands(deps: PolicyCommandDeps) {
+    async function commandDataPolicyPresets(flags: FlagMap): Promise<number> {
+        const asJson = Boolean(flags.json);
+        const payload = {
+            presets: DATA_POLICY_PRESETS,
+            recommended: 'lean'
+        };
+        return deps.printJsonOrValue(asJson, payload, () => {
+            console.log('\nData Policy Presets\n');
+            printPresetCatalog(deps.formatSyncPolicyLabel, deps.formatDebugArtifactsLabel);
+        });
+    }
+
     async function commandDataPolicyShow(flags: FlagMap): Promise<number> {
         const asJson = Boolean(flags.json);
         const check = await deps.ensureDaemonCapabilities(['getDataPolicy']);
@@ -55,6 +138,15 @@ export function createDataPolicyCommands(deps: PolicyCommandDeps) {
         return deps.printJsonOrValue(asJson, payload, () => {
             console.log('\nData Policy\n');
             printPolicySummary(payload, deps.formatSyncPolicyLabel, deps.formatDebugArtifactsLabel);
+            console.log('');
+            if (payload.preset === 'custom') {
+                console.log('  Recommendation:       Use `0ctx data-policy presets` to review the supported presets.');
+            } else {
+                const definition = getPresetDefinition(payload.preset);
+                console.log(`  Recommended for:      ${definition.recommendation}`);
+            }
+            console.log('');
+            printPresetCatalog(deps.formatSyncPolicyLabel, deps.formatDebugArtifactsLabel);
             console.log('');
         });
     }
@@ -121,6 +213,9 @@ export function createDataPolicyCommands(deps: PolicyCommandDeps) {
         if (!subcommand || subcommand === 'show' || subcommand === 'get') {
             return commandDataPolicyShow(flags);
         }
+        if (subcommand === 'presets' || subcommand === 'catalog') {
+            return commandDataPolicyPresets(flags);
+        }
         if (subcommand === 'set') {
             return commandDataPolicySet(flags);
         }
@@ -128,6 +223,7 @@ export function createDataPolicyCommands(deps: PolicyCommandDeps) {
             return commandDataPolicyPreset(subcommand, flags);
         }
         console.error('Usage: 0ctx data-policy [--repo-root=<path>] [--json]');
+        console.error('   or: 0ctx data-policy presets [--json]');
         console.error('   or: 0ctx data-policy set [--repo-root=<path>] [--preset=<lean|review|debug|shared>] [--sync-policy=<local_only|metadata_only|full_sync>] [--capture-retention-days=<days>] [--debug-retention-days=<days>] [--debug-artifacts=<on|off>] [--json]');
         console.error('   or: 0ctx data-policy <lean|review|debug|shared> [--repo-root=<path>] [--json]');
         return 1;

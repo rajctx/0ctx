@@ -12,7 +12,7 @@
     sessions: {
       eyebrow: 'Captured sessions',
       title: 'Sessions and messages',
-      summary: 'Choose a session, read the message stream, and open advanced capture data only when you need deeper debugging detail.',
+      summary: 'Choose a session, read the message stream, and capture a checkpoint when the work becomes worth preserving.',
       primaryLabel: 'Create checkpoint',
       primaryAction: 'create-checkpoint'
     },
@@ -141,9 +141,6 @@
     activeInsightNodeId: null,
     promotionTargetContextId: null,
     lastInsightPromotion: null,
-    payload: null,
-    payloadNodeId: null,
-    payloadExpanded: false,
     subscriptionId: null,
     subscriptionContextId: null,
     lastSeq: 0,

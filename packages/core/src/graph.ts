@@ -284,6 +284,12 @@ export class Graph {
             return true;
         }
         if (
+            /\b(the right (path|direction|move)|the correct move|continue (with|on)|keep going on|execution target|next slice|follow[- ]on work|remaining items?)\b/.test(normalized)
+            && !/\b(decided|decision|must|need to|goal|constraint|default|policy|required)\b/.test(normalized)
+        ) {
+            return true;
+        }
+        if (
             /\b(done enough|current status|product status|what remains|what is still open|what is still remaining)\b/.test(normalized)
             && !/\b(default|policy|must|should|constraint|decision)\b/.test(normalized)
         ) {
@@ -375,9 +381,15 @@ export class Graph {
             if (/\b(test|tests|smoke|refresh|restart|rerun|validate|repair|debug|click|open|copy|paste|command|button|screen|reload|review|check|verify|inspect)\b/.test(normalized)) {
                 return null;
             }
+            if (
+                lowerRole === 'assistant'
+                && /\b(next move|next slice|execution target|keep going on|continue with|continue on|remaining work|remaining items?|follow[- ]on)\b/.test(normalized)
+            ) {
+                return null;
+            }
             return {
                 type: 'goal',
-                confidence: lowerRole === 'user' ? 0.88 : 0.8,
+                confidence: lowerRole === 'user' ? 0.88 : 0.64,
                 reason: 'goal-language'
             };
         }

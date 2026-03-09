@@ -296,6 +296,16 @@ export interface WorkstreamComparison {
     comparisonReadiness: 'ready' | 'review' | 'blocked';
     comparisonSummary: string;
     comparisonActionHint: string | null;
+    reconcileStrategy:
+        | 'none'
+        | 'fast_forward_target_to_source'
+        | 'fast_forward_source_to_target'
+        | 'rebase_source_on_target'
+        | 'rebase_target_on_source'
+        | 'manual_conflict_resolution'
+        | 'blocked'
+        | 'unknown';
+    reconcileStrategySummary: string;
     comparisonBlockers: string[];
     comparisonReviewItems: string[];
     sharedAgents: string[];

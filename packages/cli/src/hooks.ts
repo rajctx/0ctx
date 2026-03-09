@@ -1082,12 +1082,12 @@ export function installHooks(options: {
     if (selectedClients.has('windsurf') && !windsurfHook.configured) {
         warnings.push(`Windsurf hook was not configured: ${windsurfHook.reason ?? 'unknown reason'}.`);
     } else if (selectedClients.has('windsurf') && windsurfHook.configured) {
-        warnings.push('Windsurf capture is preview-grade: hooks are installed, but 0ctx does not treat Windsurf as GA yet.');
+        warnings.push('Windsurf capture is explicit opt-in: hooks are installed, but 0ctx does not treat Windsurf as GA yet.');
     }
     if (selectedClients.has('cursor') && !cursorHook.configured) {
         warnings.push(`Cursor hook was not configured: ${cursorHook.reason ?? 'unknown reason'}.`);
     } else if (selectedClients.has('cursor') && cursorHook.configured) {
-        warnings.push('Cursor capture is preview-grade: hooks are installed, but 0ctx does not treat Cursor as GA yet.');
+        warnings.push('Cursor capture is explicit opt-in: hooks are installed, but 0ctx does not treat Cursor as GA yet.');
     }
     if (selectedClients.has('factory') && !factoryHook.configured) {
         warnings.push(`Factory hook was not configured: ${factoryHook.reason ?? 'unknown reason'}.`);
@@ -1098,7 +1098,7 @@ export function installHooks(options: {
     if (selectedClients.has('codex') && !codexNotify.configured) {
         warnings.push(`Codex notify was not configured: ${codexNotify.reason ?? 'unknown reason'}.`);
     } else if (selectedClients.has('codex') && codexNotify.configured) {
-        warnings.push('Codex capture is preview-grade: notify triggers ingestion, and 0ctx reconstructs sessions from the local Codex archive.');
+        warnings.push('Codex capture is explicit opt-in: notify triggers ingestion, and 0ctx reconstructs sessions from the local Codex archive.');
     }
 
     const agents = defaultHookAgents(now).map((agent): HookAgentState => {

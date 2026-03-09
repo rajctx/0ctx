@@ -1,7 +1,7 @@
 (() => {
   window.OctxDesktop = window.OctxDesktop || {};
   const app = window.OctxDesktop;
-  const { state, matches, activeContext, activeBranch, activeSession, activeSessionKnowledgePreview, selectedKnowledgeKeys, selectedTurn, describeSession, describeTurn, describeSelectedTurn, describeBranchLane, esc, formatRelativeTime, renderMetaLine, humanizeLabel, commitShort, renderChip, chipToneForRole, chipToneForAgent, formatTime, renderKnowledgeCandidates, jsonText, normalizeBranch, debugArtifactsEnabled } = app;
+  const { state, matches, activeContext, activeBranch, activeSession, activeSessionKnowledgePreview, selectedKnowledgeKeys, selectedTurn, describeSession, describeTurn, describeSelectedTurn, describeBranchLane, esc, formatRelativeTime, renderMetaLine, humanizeLabel, commitShort, renderChip, chipToneForRole, chipToneForAgent, formatTime, renderKnowledgeCandidates, normalizeBranch } = app;
 
   function renderSessions() {
     const sessions = state.sessions.filter((session) => matches(`${session.sessionId} ${session.summary || ''} ${session.branch || ''} ${session.commitSha || ''} ${session.agent || ''}`));
@@ -78,21 +78,12 @@
     }
 
     const turn = selectedTurn();
-    const debugEnabled = debugArtifactsEnabled();
     const body = document.getElementById('turnDetailBody');
     const empty = document.getElementById('turnDetailEmpty');
-    const toggle = document.getElementById('togglePayload');
     if (!turn) {
       document.getElementById('turnDetailTitle').textContent = 'Choose a message';
       empty.classList.remove('hidden');
       body.classList.add('hidden');
-      toggle.disabled = true;
-      toggle.textContent = debugEnabled ? 'Show debug payload' : 'Debug payload disabled';
-      document.getElementById('payloadPanel').classList.add('hidden');
-      document.getElementById('payloadText').textContent = debugEnabled
-        ? 'Open debug mode on a selected message to inspect the stored payload.'
-        : 'Enable debug artifacts in Utilities before inspecting stored payloads.';
-      document.getElementById('payloadBadge').textContent = 'none';
       document.getElementById('turnPrimaryLabel').textContent = 'Message';
       document.getElementById('turnSecondaryLabel').textContent = 'Related context';
       document.getElementById('turnPrompt').textContent = '';
@@ -127,7 +118,6 @@
     const meta = [
       { label: 'Captured', value: formatTime(turn.createdAt) },
       { label: 'Session checkpoints', value: String(state.sessionDetail?.checkpointCount || 0) },
-      { label: 'Debug payload', value: !debugEnabled ? 'Disabled by policy' : (turn.hasPayload ? 'Available on demand' : 'Not retained') },
       { label: 'Session summary', value: short(state.sessionDetail?.session?.summary || turn.sessionId || 'No session summary stored', 88) }
     ];
     document.getElementById('turnMeta').innerHTML = meta.map((item) => {
@@ -141,28 +131,12 @@
       { label: 'Parent id', value: turn.parentId || 'none' },
       { label: 'Branch', value: turn.branch || 'none' },
       { label: 'Commit', value: turn.commitSha || 'none' },
-      { label: 'Payload bytes', value: turn.payloadBytes != null ? String(turn.payloadBytes) : 'none' },
+      { label: 'Debug bytes', value: turn.payloadBytes != null ? String(turn.payloadBytes) : 'none' },
       { label: 'Visibility', value: turn.hidden ? 'Hidden by default' : 'Visible in insights view' }
     ];
     document.getElementById('turnTechnical').innerHTML = technical.map((item) => {
       return `<article><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong></article>`;
     }).join('');
-
-    toggle.disabled = !debugEnabled || !turn.hasPayload;
-    toggle.textContent = !debugEnabled
-      ? 'Debug payload disabled'
-      : (turn.hasPayload ? (state.payloadExpanded ? 'Hide debug payload' : 'Show debug payload') : 'No debug payload');
-    const payloadPanel = document.getElementById('payloadPanel');
-    payloadPanel.classList.toggle('hidden', !debugEnabled || !turn.hasPayload || !state.payloadExpanded);
-    document.getElementById('payloadBadge').textContent = turn.payloadBytes != null ? `${turn.payloadBytes} bytes` : 'payload';
-    document.getElementById('payloadTitle').textContent = turn.hasPayload
-      ? 'Captured sidecar payload'
-      : 'No payload stored for this message';
-    document.getElementById('payloadText').textContent = !debugEnabled
-      ? 'Debug artifacts are disabled by policy. Enable them in Utilities if you need payload inspection for support work.'
-      : turn.hasPayload
-        ? (state.payload ? jsonText(state.payload) : 'Debug payload not loaded yet.')
-        : 'This message has no raw payload sidecar.';
 
     const preview = activeSessionKnowledgePreview();
     const previewPanel = document.getElementById('sessionKnowledgePreviewPanel');

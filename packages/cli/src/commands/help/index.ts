@@ -4,7 +4,7 @@ export function printHelp(showAdvanced = false): void {
 
 Usage:
   0ctx                    Auto-enable inside a repo. Outside a repo, show readiness/help.
-  0ctx enable [--repo-root=<path>] [--name=<workspace>] [--json]
+  0ctx enable [--repo-root=<path>] [--name=<workspace>] [--data-policy=<lean|review|debug|shared>] [--json]
               [--clients=ga|claude,factory,antigravity] [--mcp-clients=none|ga|claude,antigravity]
               [--skip-bootstrap] [--skip-hooks] [--mcp-profile=core|recall|ops]
 
@@ -54,7 +54,7 @@ Usage:
   0ctx --version | -v
 
 Recommended daily flow:
-  0ctx enable [--repo-root=<path>] [--name=<workspace>] [--json]
+  0ctx enable [--repo-root=<path>] [--name=<workspace>] [--data-policy=<lean|review|debug|shared>] [--json]
               [--clients=ga|claude,factory,antigravity] [--mcp-clients=none|ga|claude,antigravity]
               [--skip-bootstrap] [--skip-hooks] [--mcp-profile=core|recall|ops]
 
@@ -105,13 +105,12 @@ Advanced / machine management:
   0ctx daemon start
 
 Capture support:
-  GA:      claude, factory, antigravity
-  Preview: available only by explicit opt-in
+  GA:                    claude, factory, antigravity
+  Explicit opt-in only:  non-GA integrations stay outside the normal enable path
 
 Client scope defaults:
   ga      Supported-by-default product path
-  Preview integrations must be named explicitly when you opt into them.
-  Example: --clients=codex or --clients=cursor,windsurf
+  Name non-GA integrations directly only when you intentionally opt into them.
 
 Authentication:
   0ctx auth login    Start device-code login flow
@@ -124,6 +123,7 @@ Configuration:
   0ctx config get <key>         Get a specific setting
   0ctx config set <key> <value> Set a specific setting
   0ctx data-policy [--repo-root=<path>] [--json]
+  0ctx data-policy presets [--json]
   0ctx data-policy set [--repo-root=<path>] [--sync-policy=<local_only|metadata_only|full_sync>]
                        [--capture-retention-days=<days>] [--debug-retention-days=<days>]
                        [--debug-artifacts=<on|off>] [--json]
@@ -146,11 +146,14 @@ Connector:
   0ctx connector register [--force] [--local-only] [--require-cloud] [--json]
   0ctx connector run [--once] [--interval-ms=5000] [--no-daemon-autostart]
   0ctx connector hook install [--clients=ga|<explicit-list>] [--repo-root=<path>] [--global]
-  0ctx connector hook status [--json] [--include-preview]
+  0ctx connector hook status [--json] [--include-explicit]
   0ctx connector hook prune [--days=14] [--json]
   0ctx connector hook session-start --agent=claude|factory|antigravity [--repo-root=<path>]
                                      [--input-file=<path>|--payload='<json>'|stdin] [--json]
-  0ctx connector hook ingest --agent=claude|windsurf|codex|cursor|factory|antigravity [--repo-root=<path>]
+  0ctx connector hook ingest --agent=claude|factory|antigravity [--repo-root=<path>]
+                              [--input-file=<path>|--payload='<json>'|stdin]
+  Explicit replay / utility only:
+  0ctx connector hook ingest --agent=codex|cursor|windsurf [--repo-root=<path>]
                               [--input-file=<path>|--payload='<json>'|stdin]
   0ctx hook install|status|prune|session-start|ingest  Alias for "0ctx connector hook ..."
   0ctx connector queue status [--json]

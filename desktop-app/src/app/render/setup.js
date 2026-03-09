@@ -15,7 +15,6 @@
     formatDataPolicyPresetLabel,
     enableCommand,
     hookInstallCommand,
-    hookIngestCommand,
     capturePolicySummary,
     matches,
     esc,
@@ -27,7 +26,6 @@
   function renderSetup() {
     document.getElementById('setupCommand').textContent = enableCommand();
     document.getElementById('hookInstallCommand').textContent = hookInstallCommand();
-    document.getElementById('hookIngestCommand').textContent = hookIngestCommand();
 
     const hooks = Array.isArray(state.hook?.agents) ? state.hook.agents : [];
     const gaHooks = hooks.filter((hook) => isGaIntegration(hook.agent));
@@ -38,7 +36,7 @@
       setupPageMeta.textContent = state.runtimeIssue
         ? state.runtimeIssue.detail
         : installedGa.length > 0
-          ? `${installedGa.length} GA integration${installedGa.length === 1 ? '' : 's'} ${installedGa.length === 1 ? 'is' : 'are'} installed on this machine. Use this screen only to enable another repo, add another GA agent, run a smoke test, or repair the runtime.`
+          ? `${installedGa.length} GA integration${installedGa.length === 1 ? '' : 's'} ${installedGa.length === 1 ? 'is' : 'are'} installed on this machine. Use this screen only to enable another repo, add another GA agent, or repair the runtime when something is off.`
           : 'Enable the repo, install the integrations you actually use, then leave this screen. Daily work should happen in workstreams, sessions, and checkpoints.';
     }
 
@@ -97,7 +95,7 @@
     `).join('');
     document.getElementById('setupSupportCopy').textContent = state.runtimeIssue
       ? state.runtimeIssue.detail
-      : 'Use utilities only when you need to enable a repo, install GA integrations, smoke-test capture, check updates, or repair the local runtime.';
+      : 'Use utilities only when you need to enable a repo, install GA integrations, check updates, or repair the local runtime.';
 
     const policy = state.dataPolicy || {
       contextId: null,
@@ -115,7 +113,7 @@
     const workspaceResolved = policy.workspaceResolved === true && Boolean(activeContext()?.id);
     const preset = String(policy.preset || 'lean').trim().toLowerCase();
 
-    document.querySelectorAll('[data-policy-preset]').forEach((button) => {
+    document.querySelectorAll('#dataPolicyForm [data-policy-preset]').forEach((button) => {
       const presetValue = String(button.getAttribute('data-policy-preset') || '').trim().toLowerCase();
       button.classList.toggle('active', presetValue === preset);
       const requiresWorkspace = presetValue === 'shared';

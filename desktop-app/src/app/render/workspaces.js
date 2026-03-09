@@ -1,7 +1,7 @@
 (() => {
   window.OctxDesktop = window.OctxDesktop || {};
   const app = window.OctxDesktop;
-  const { state, matches, activeContext, captureState, automaticContextState, formatSyncPolicyLabel, capturePolicySummary, esc, formatRelativeTime, renderChip, renderMetaLine, short, humanizeLabel, methodSupported, contextById, syncWorkspaceComparisonTargetSelection, workspaceComparisonTargetContext } = app;
+  const { state, matches, activeContext, captureState, automaticContextState, formatSyncPolicyLabel, formatDataPolicyPresetLabel, capturePolicySummary, esc, formatRelativeTime, renderChip, renderMetaLine, short, humanizeLabel, methodSupported, contextById, syncWorkspaceComparisonTargetSelection, workspaceComparisonTargetContext } = app;
 
   function renderWorkspaces() {
     const contexts = state.contexts.filter((context) => matches(`${context.name || ''} ${(context.paths || []).join(' ')}`));
@@ -177,6 +177,63 @@
         </article>
       `;
     }).join('');
+
+    const policy = state.dataPolicy || {
+      contextId: null,
+      workspaceResolved: false,
+      syncPolicy: 'metadata_only',
+      captureRetentionDays: 14,
+      debugRetentionDays: 7,
+      debugArtifactsEnabled: false,
+      preset: 'lean'
+    };
+    const policyBadge = document.getElementById('workspacePolicySummaryBadge');
+    const policyHint = document.getElementById('workspacePolicyHint');
+    const policyDetailList = document.getElementById('workspacePolicyDetailList');
+    const supportsMutation = methodSupported('setDataPolicy');
+    const workspaceResolved = policy.workspaceResolved === true && Boolean(activeContext()?.id);
+    const preset = String(policy.preset || 'lean').trim().toLowerCase();
+
+    document.querySelectorAll('.workspace-policy-preset').forEach((button) => {
+      const presetValue = String(button.getAttribute('data-policy-preset') || '').trim().toLowerCase();
+      button.classList.toggle('active', presetValue === preset);
+      const requiresWorkspace = presetValue === 'shared';
+      button.disabled = !supportsMutation || (requiresWorkspace && !workspaceResolved);
+      button.title = requiresWorkspace && !workspaceResolved
+        ? 'Shared requires an active workspace because it opts that workspace into full sync.'
+        : '';
+    });
+
+    if (policyBadge) {
+      policyBadge.textContent = formatDataPolicyPresetLabel(policy.preset || 'lean');
+    }
+
+    if (policyDetailList) {
+      const detailItems = [
+        { title: 'Workspace sync', detail: formatSyncPolicyLabel(policy.syncPolicy || 'metadata_only') },
+        { title: 'Local capture retention', detail: `${policy.captureRetentionDays || 14} days` },
+        { title: 'Debug retention', detail: `${policy.debugRetentionDays || 7} days` },
+        { title: 'Debug artifacts', detail: policy.debugArtifactsEnabled === true ? 'Enabled explicitly' : 'Off by default' }
+      ];
+      policyDetailList.innerHTML = detailItems.map((item) => `
+        <article>
+          <strong>${esc(item.title)}</strong>
+          <p>${esc(item.detail)}</p>
+        </article>
+      `).join('');
+    }
+
+    if (policyHint) {
+      policyHint.textContent = !supportsMutation
+        ? 'Update the local runtime before changing the data policy from the desktop.'
+        : preset === 'custom'
+          ? 'This workspace is using a custom policy. Choose one of the supported presets to return to a standard product path.'
+          : !workspaceResolved
+            ? 'Lean, Review, and Debug can be applied immediately. Shared requires an active workspace because it opts that workspace into full sync.'
+            : preset === 'shared'
+              ? 'Shared opts this workspace into full sync. Raw payloads still stay local and debug trails remain off unless you explicitly enable them elsewhere.'
+              : 'Lean is the normal default. Review keeps more local capture, Debug temporarily enables debug trails, and Shared opts this workspace into full sync.';
+    }
   }
 
   Object.assign(app, { renderWorkspaces });

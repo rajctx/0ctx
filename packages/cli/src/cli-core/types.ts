@@ -54,6 +54,8 @@ export interface RepoReadinessSummary {
     autoContextAgents: HookSupportedAgent[];
     captureMissingAgents: HookInstallClient[];
     captureManagedForRepo: boolean;
+    zeroTouchReady: boolean;
+    nextActionHint: string | null;
     captureRetentionDays: number;
     debugRetentionDays: number;
     debugArtifactsEnabled: boolean;

@@ -1,7 +1,7 @@
 (() => {
   window.OctxDesktop = window.OctxDesktop || {};
   const app = window.OctxDesktop;
-  const { state, matches, activeSession, selectedCheckpoint, activeCheckpointKnowledgePreview, selectedKnowledgeKeys, describeCheckpoint, describeSession, esc, formatRelativeTime, renderMetaLine, commitShort, formatTime, renderKnowledgeCandidates, short, normalizeBranch, debugArtifactsEnabled } = app;
+  const { state, matches, activeSession, selectedCheckpoint, activeCheckpointKnowledgePreview, selectedKnowledgeKeys, describeCheckpoint, describeSession, esc, formatRelativeTime, renderMetaLine, commitShort, formatTime, renderKnowledgeCandidates, short, normalizeBranch } = app;
 
   function renderCheckpoints() {
       const checkpoints = state.checkpoints.filter((checkpoint) => matches(`${checkpoint.summary || ''} ${checkpoint.name || ''} ${checkpoint.sessionId || ''} ${checkpoint.commitSha || ''}`));
@@ -109,11 +109,10 @@
         { label: 'Kind', value: checkpoint.kind },
         { label: 'Branch', value: checkpoint.branch || 'none' },
         { label: 'Commit', value: checkpoint.commitSha || 'none' },
-        { label: 'Created', value: formatTime(checkpoint.createdAt) },
+      { label: 'Created', value: formatTime(checkpoint.createdAt) },
       { label: 'Agents', value: checkpoint.agentSet?.length ? checkpoint.agentSet.join(', ') : 'none' },
       { label: 'Snapshot', value: `${String(detail.snapshotNodeCount || 0)} nodes, ${String(detail.snapshotEdgeCount || 0)} edges` },
-      { label: 'Session', value: checkpoint.sessionId || 'none' },
-      { label: 'Payload', value: !debugArtifactsEnabled() ? 'Debug-only, policy disabled' : (detail.payloadAvailable ? 'Stored locally' : 'Missing') }
+      { label: 'Session', value: checkpoint.sessionId || 'none' }
     ];
     document.getElementById('checkpointMeta').innerHTML = meta.map((item) => `<article><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong></article>`).join('');
 

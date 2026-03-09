@@ -3,12 +3,6 @@
   const app = window.OctxDesktop;
   const { state, GA_INTEGRATIONS, REQUIRED_RUNTIME_METHODS, VIEW_META, short, splitConversationText, formatTime, formatRelativeTime, humanizeLabel, chipToneForAgent, chipToneForRole, basenameFromPath, commitShort, describeWorkingTreeState, describeWorkstreamCheckout, describeWorkstreamSync, describeWorkstreamActionHint } = app;
 
-  function resetPayloadState() {
-    state.payload = null;
-    state.payloadNodeId = null;
-    state.payloadExpanded = false;
-  }
-
   function bindById(id, eventName, handler) {
     const element = document.getElementById(id);
     if (!element) {
@@ -309,10 +303,6 @@
     return `0ctx enable --repo-root "${currentRepoRoot()}"`;
   }
 
-  function hookIngestCommand() {
-    return `0ctx connector hook ingest --agent=${preferredAgent()} --repo-root "${currentRepoRoot()}" --payload '{"session":{"id":"demo-session"},"turn":{"id":"demo-turn-1"},"role":"assistant","content":"hello"}' --json`;
-  }
-
   function describeBranchLane(lane) {
     const title = lane?.isDetachedHead && lane?.currentHeadSha
       ? `detached HEAD @ ${commitShort(lane.currentHeadSha)}`
@@ -377,7 +367,6 @@
     state.sessionKnowledgeSelectedKeys = [];
     state.turns = [];
     state.activeTurnId = null;
-    resetPayloadState();
     state.checkpoints = [];
     state.activeCheckpointId = null;
     state.checkpointDetail = null;
@@ -395,6 +384,6 @@
     document.getElementById('statusTime').textContent = `Updated ${new Date().toLocaleTimeString()}`;
   }
 
-  Object.assign(app, { resetPayloadState, bindById, matches, activeContext, selectedTurn, branchKey, normalizeBranch, activeBranch, comparisonTargetBranch, activeSession, selectedCheckpoint, activeInsightNode, contextById, workspaceComparisonTargetContext, extractTagValue, insightSummary, insightTargetContexts, syncInsightSelection, syncPromotionTargetSelection, workspaceComparisonTargets, syncWorkspaceComparisonTargetSelection, installedAgents, isGaIntegration, installedGaAgents, integrationType, integrationLabel, formatIntegrationNote, methodSupported, missingRequiredMethods, integrationListText, hasLocalRuntimeData, formatPosture, postureClass, formatSyncPolicyLabel, formatDataPolicyPresetLabel, captureState, automaticContextState, capturePolicySummary, debugArtifactsEnabled, currentRepoRoot, preferredClients, preferredAgent, hookInstallCommand, enableCommand, hookIngestCommand, describeBranchLane, syncComparisonTargetSelection, describeCheckpoint, syncBranchSelectionFromSession, resetBranchScopedState, setStatus });
+  Object.assign(app, { bindById, matches, activeContext, selectedTurn, branchKey, normalizeBranch, activeBranch, comparisonTargetBranch, activeSession, selectedCheckpoint, activeInsightNode, contextById, workspaceComparisonTargetContext, extractTagValue, insightSummary, insightTargetContexts, syncInsightSelection, syncPromotionTargetSelection, workspaceComparisonTargets, syncWorkspaceComparisonTargetSelection, installedAgents, isGaIntegration, installedGaAgents, integrationType, integrationLabel, formatIntegrationNote, methodSupported, missingRequiredMethods, integrationListText, hasLocalRuntimeData, formatPosture, postureClass, formatSyncPolicyLabel, formatDataPolicyPresetLabel, captureState, automaticContextState, capturePolicySummary, debugArtifactsEnabled, currentRepoRoot, preferredClients, preferredAgent, hookInstallCommand, enableCommand, describeBranchLane, syncComparisonTargetSelection, describeCheckpoint, syncBranchSelectionFromSession, resetBranchScopedState, setStatus });
 })();
 

@@ -6,7 +6,7 @@ export function createHookStatusCommand(deps: HookCommandDeps) {
     return async function commandHookStatus(flags: FlagMap): Promise<number> {
         const asJson = Boolean(flags.json);
         const quiet = Boolean(flags.quiet) || asJson;
-        const includePreview = Boolean(flags['include-preview']) || Boolean(flags.all);
+        const includePreview = Boolean(flags['include-preview']) || Boolean(flags['include-explicit']) || Boolean(flags.all);
         const state = deps.readHookInstallState();
         const gaAgents = state.agents.filter((agent) => isGaHookAgent(agent.agent as HookSupportedAgent));
         const previewAgents = state.agents.filter((agent) => !isGaHookAgent(agent.agent as HookSupportedAgent));
@@ -29,7 +29,7 @@ export function createHookStatusCommand(deps: HookCommandDeps) {
                 console.log(`  ${agent.agent}: ${agent.status}${agent.installed ? ' (installed)' : ''}`);
             }
             if (!includePreview && previewAgents.some((agent) => agent.installed)) {
-                console.log('  preview: hidden (use --include-preview to inspect explicit preview installs)');
+                console.log('  non_ga: hidden (use --include-explicit to inspect explicit opt-in installs)');
             }
             console.log('');
         }

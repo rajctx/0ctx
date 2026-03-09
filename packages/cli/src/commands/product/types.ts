@@ -15,6 +15,8 @@ export interface RepoReadinessSummary {
     captureMissingAgents: string[];
     autoContextAgents: string[];
     syncPolicy: string | null;
+    zeroTouchReady: boolean;
+    nextActionHint: string | null;
     captureRetentionDays: number;
     debugRetentionDays: number;
     debugArtifactsEnabled: boolean;

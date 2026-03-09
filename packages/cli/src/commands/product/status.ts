@@ -156,11 +156,13 @@ export function createStatusCommands(deps: ProductCommandDeps) {
             deps.formatLabelValue('Repo', repoReadiness.repoRoot),
             deps.formatLabelValue('Workspace', repoReadiness.workspaceName),
             deps.formatLabelValue('Workstream', repoReadiness.workstream ?? '-'),
+            deps.formatLabelValue('Ready', repoReadiness.zeroTouchReady ? 'zero-touch for supported agents' : 'needs one-time setup'),
             deps.formatLabelValue('Capture', captureLine),
             deps.formatLabelValue('Context', autoContextLine),
             deps.formatLabelValue('History', historySummary),
             deps.formatLabelValue('Sync', deps.formatSyncPolicyLabel(repoReadiness.syncPolicy)),
-            deps.formatLabelValue('Retention', deps.formatRetentionLabel(repoReadiness))
+            deps.formatLabelValue('Retention', deps.formatRetentionLabel(repoReadiness)),
+            ...(repoReadiness.nextActionHint ? [deps.formatLabelValue('Next step', repoReadiness.nextActionHint)] : [])
         ].join('\n'), 'Repo Readiness');
         p.outro(color.green('Use a supported agent normally in this repo. 0ctx will inject context and route capture automatically.'));
         return payload.ok ? 0 : 1;

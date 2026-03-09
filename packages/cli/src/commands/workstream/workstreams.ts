@@ -142,6 +142,7 @@ export function createBranchCommands(ctx: WorkstreamCommandContext) {
                     if (result.lineOverlapSummary) console.log(`  Lines:     ${result.lineOverlapSummary}`);
                     if (result.changeHotspotSummary) console.log(`  Hotspots:  ${result.changeHotspotSummary}`);
                     if (result.mergeRiskSummary) console.log(`  Risk:      ${result.mergeRiskSummary}`);
+                    if (result.reconcileStrategySummary) console.log(`  Reconcile: ${result.reconcileStrategySummary}`);
                     if (Array.isArray(result.comparisonBlockers) && result.comparisonBlockers.length > 0) {
                         console.log(`  Blockers:  ${result.comparisonBlockers.join(' | ')}`);
                     }

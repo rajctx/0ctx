@@ -201,6 +201,8 @@ export function createRepoReadinessCollector(deps: {
                 autoContextAgents: [],
                 captureMissingAgents: [...deps.defaultHookInstallClients],
                 captureManagedForRepo: false,
+                zeroTouchReady: false,
+                nextActionHint: 'Run 0ctx enable in this repo.',
                 captureRetentionDays: typeof policy?.captureRetentionDays === 'number' ? policy.captureRetentionDays : 14,
                 debugRetentionDays: typeof policy?.debugRetentionDays === 'number' ? policy.debugRetentionDays : 7,
                 debugArtifactsEnabled: policy?.debugArtifactsEnabled === true
@@ -241,6 +243,14 @@ export function createRepoReadinessCollector(deps: {
         const captureMissingAgents = deps.defaultHookInstallClients.filter(
             agent => !captureReadyAgents.includes(agent as Extract<HookSupportedAgent, 'claude' | 'factory' | 'antigravity'>)
         );
+        const zeroTouchReady = captureManagedForRepo && autoContextAgents.length > 0;
+        let nextActionHint: string | null = null;
+
+        if (!captureManagedForRepo || captureReadyAgents.length === 0) {
+            nextActionHint = 'Run 0ctx enable to install supported capture integrations.';
+        } else if (autoContextAgents.length === 0) {
+            nextActionHint = 'Install a GA integration with automatic context injection (claude, factory, or antigravity).';
+        }
 
         return {
             repoRoot,
@@ -258,6 +268,8 @@ export function createRepoReadinessCollector(deps: {
             autoContextAgents,
             captureMissingAgents,
             captureManagedForRepo,
+            zeroTouchReady,
+            nextActionHint,
             captureRetentionDays: typeof dataPolicy?.captureRetentionDays === 'number' ? dataPolicy.captureRetentionDays : 14,
             debugRetentionDays: typeof dataPolicy?.debugRetentionDays === 'number' ? dataPolicy.debugRetentionDays : 7,
             debugArtifactsEnabled: dataPolicy?.debugArtifactsEnabled === true

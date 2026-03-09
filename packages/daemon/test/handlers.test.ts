@@ -1482,6 +1482,8 @@ describe('daemon request handling', () => {
                 comparisonReadiness?: string;
                 comparisonSummary: string;
                 comparisonActionHint: string | null;
+                reconcileStrategy: string;
+                reconcileStrategySummary: string;
                 sourceChangedFileCount: number | null;
                 targetChangedFileCount: number | null;
                 sharedChangedFileCount: number | null;
@@ -1518,6 +1520,8 @@ describe('daemon request handling', () => {
             expect(comparison.comparisonReadiness).toBe('review');
             expect(comparison.comparisonSummary).toContain('feature/runtime-compare is ahead of main');
             expect(comparison.comparisonActionHint).toContain('Update or compare main');
+            expect(comparison.reconcileStrategy).toBe('fast_forward_source_to_target');
+            expect(comparison.reconcileStrategySummary).toContain('Fast-forward main to feature/runtime-compare');
             expect(comparison.sourceChangedFileCount).toBe(0);
             expect(comparison.targetChangedFileCount).toBe(1);
             expect(comparison.sharedChangedFileCount).toBe(0);
@@ -1535,10 +1539,11 @@ describe('daemon request handling', () => {
             expect(comparison.comparisonText).toContain('Readiness: review');
             expect(comparison.comparisonText).toContain('Recommended next step:');
             expect(comparison.comparisonText).toContain('Changed files:');
+            expect(comparison.comparisonText).toContain('Reconcile: Fast-forward main to feature/runtime-compare.');
         } finally {
             db.close();
         }
-    });
+    }, 15000);
 
     it('surfaces shared changed-file overlap for diverged workstreams', () => {
         if (!gitAvailable()) return;
@@ -1648,6 +1653,8 @@ describe('daemon request handling', () => {
                 changeHotspotSummary: string;
                 mergeRisk: string;
                 mergeRiskSummary: string;
+                reconcileStrategy: string;
+                reconcileStrategySummary: string;
                 comparisonText: string;
             };
 
@@ -1669,6 +1676,8 @@ describe('daemon request handling', () => {
             expect(comparison.changeHotspotSummary).toContain('packages/core');
             expect(comparison.mergeRisk).toBe('high');
             expect(comparison.mergeRiskSummary).toContain('High merge risk');
+            expect(comparison.reconcileStrategy).toBe('manual_conflict_resolution');
+            expect(comparison.reconcileStrategySummary).toContain('Manual reconcile is recommended');
             expect(comparison.comparisonBlockers).toEqual([]);
             expect(comparison.comparisonReviewItems).toContain('Both workstreams have diverged and need explicit reconciliation before handoff.');
             expect(comparison.comparisonReviewItems).toContain('Both workstreams touch overlapping line ranges in shared files; resolve those conflicts before handoff or merge.');
@@ -1679,6 +1688,7 @@ describe('daemon request handling', () => {
             expect(comparison.comparisonText).toContain('Changed lines:');
             expect(comparison.comparisonText).toContain('Hotspots: Shared change hotspots:');
             expect(comparison.comparisonText).toContain('Merge risk: High merge risk');
+            expect(comparison.comparisonText).toContain('Reconcile: Manual reconcile is recommended.');
             expect(comparison.comparisonText).toContain('Review:');
         } finally {
             db.close();

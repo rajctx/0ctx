@@ -1,7 +1,7 @@
 (() => {
   window.OctxDesktop = window.OctxDesktop || {};
   const app = window.OctxDesktop;
-  const { state, activeBranch, activeInsightNode, activeSessionKnowledgePreview, activeCheckpointKnowledgePreview, selectedKnowledgeKeys, setSelectedKnowledgeKeys, extractTagValue, contextById, basenameFromPath, setStatus, setView, daemon, loadGraph, loadBranches, loadCheckpoints, loadCheckpointDetail, loadBranchComparisonSafe, loadDataPolicy, refreshAll, renderAll, enableCommand, hookInstallCommand, methodSupported, resetBranchScopedState, debugArtifactsEnabled } = app;
+  const { state, activeBranch, activeInsightNode, activeSessionKnowledgePreview, activeCheckpointKnowledgePreview, selectedKnowledgeKeys, setSelectedKnowledgeKeys, extractTagValue, contextById, basenameFromPath, setStatus, setView, daemon, loadGraph, loadBranches, loadCheckpoints, loadCheckpointDetail, loadBranchComparisonSafe, loadDataPolicy, refreshAll, renderAll, enableCommand, hookInstallCommand, methodSupported, resetBranchScopedState } = app;
 
   async function createContext(event) {
     event.preventDefault();
@@ -67,10 +67,6 @@
     } catch (error) {
       setStatus(`Update data policy failed: ${String(error)}`);
     }
-  }
-
-  function debugPayloadAllowed() {
-    return debugArtifactsEnabled();
   }
 
   async function createCheckpointFromActiveSession() {
@@ -327,24 +323,5 @@
     }
   }
 
-  async function toggleSelectedPayload() {
-    if (!debugPayloadAllowed()) {
-      setStatus('Debug payload inspection is disabled by policy. Enable debug artifacts in Utilities if you need support-level payload access.');
-      return;
-    }
-    const turn = app.selectedTurn();
-    if (!turn || !turn.hasPayload) return;
-    const nextExpanded = !state.payloadExpanded;
-    state.payloadExpanded = nextExpanded;
-    if (nextExpanded && state.payloadNodeId !== turn.nodeId) {
-      await app.loadPayload(turn.nodeId);
-    }
-    if (!nextExpanded) {
-      state.payload = null;
-      state.payloadNodeId = turn.nodeId;
-    }
-    app.renderSessions();
-  }
-
-  Object.assign(app, { createContext, copyText, applyDataPolicyPreset, createCheckpointFromActiveSession, previewKnowledgeFromActiveSession, extractKnowledgeFromActiveSession, previewKnowledgeFromActiveCheckpoint, extractKnowledgeFromActiveCheckpoint, promoteActiveInsight, explainActiveCheckpoint, rewindActiveCheckpoint, performHeroAction, toggleSelectedPayload });
+  Object.assign(app, { createContext, copyText, applyDataPolicyPreset, createCheckpointFromActiveSession, previewKnowledgeFromActiveSession, extractKnowledgeFromActiveSession, previewKnowledgeFromActiveCheckpoint, extractKnowledgeFromActiveCheckpoint, promoteActiveInsight, explainActiveCheckpoint, rewindActiveCheckpoint, performHeroAction });
 })();

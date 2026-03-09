@@ -44,6 +44,9 @@ cd <repo>
 cd <repo>
 0ctx enable
 
+# Optional: pick a product data policy during enable
+0ctx enable --data-policy=review
+
 # Daemon/runtime health
 0ctx status
 
@@ -108,8 +111,8 @@ GA integrations:
 - Factory / Droid
 - Antigravity
 
-Preview integrations stay outside the normal product path.
-Only use them when you explicitly opt into a preview workflow.
+Non-GA integrations stay outside the normal product path.
+Only use them when you explicitly opt into them.
 
 The normal product path is repo-first:
 

@@ -1,7 +1,7 @@
 (() => {
   window.OctxDesktop = window.OctxDesktop || {};
   const app = window.OctxDesktop;
-  const { state, bindById, setView, renderAll, selectContext, resetBranchScopedState, resetPayloadState, loadBranches, loadSessions, loadSessionDetail, loadTurns, loadCheckpoints, loadCheckpointDetail, loadHandoff, loadBranchComparisonSafe, loadWorkspaceComparison, loadGraph, refreshAll, setStatus, invoke, copyText, createContext, applyDataPolicyPreset, performHeroAction, createCheckpointFromActiveSession, previewKnowledgeFromActiveSession, extractKnowledgeFromActiveSession, previewKnowledgeFromActiveCheckpoint, extractKnowledgeFromActiveCheckpoint, promoteActiveInsight, rewindActiveCheckpoint, explainActiveCheckpoint, hookInstallCommand, hookIngestCommand, selectKnowledgeCandidates, selectedKnowledgeKeys, setSelectedKnowledgeKeys, syncBranchSelectionFromSession, startBackgroundRefreshLoops, toggleSelectedPayload, basenameFromPath } = app;
+  const { state, bindById, setView, renderAll, selectContext, resetBranchScopedState, loadBranches, loadSessions, loadSessionDetail, loadTurns, loadCheckpoints, loadCheckpointDetail, loadHandoff, loadBranchComparisonSafe, loadWorkspaceComparison, loadGraph, refreshAll, setStatus, invoke, copyText, createContext, applyDataPolicyPreset, performHeroAction, createCheckpointFromActiveSession, previewKnowledgeFromActiveSession, extractKnowledgeFromActiveSession, previewKnowledgeFromActiveCheckpoint, extractKnowledgeFromActiveCheckpoint, promoteActiveInsight, rewindActiveCheckpoint, explainActiveCheckpoint, hookInstallCommand, selectKnowledgeCandidates, selectedKnowledgeKeys, setSelectedKnowledgeKeys, syncBranchSelectionFromSession, startBackgroundRefreshLoops, basenameFromPath } = app;
 
   function wire() {
     document.querySelectorAll('.nav-btn').forEach((button) => {
@@ -23,7 +23,6 @@
       await loadSessions();
       await loadSessionDetail();
       await loadTurns();
-      resetPayloadState();
       await loadCheckpoints();
       await loadCheckpointDetail();
       await loadHandoff();
@@ -70,8 +69,6 @@
       await loadGraph();
       renderAll();
     });
-    bindById('togglePayload', 'click', () => void toggleSelectedPayload());
-
     const createCheckpointBtn = document.getElementById('createCheckpointBtn');
     if (createCheckpointBtn) {
       createCheckpointBtn.addEventListener('click', () => void createCheckpointFromActiveSession());
@@ -97,7 +94,6 @@
     bindById('explainCheckpointBtn', 'click', () => void explainActiveCheckpoint());
 
     bindById('copyHookInstall', 'click', () => void copyText(hookInstallCommand()));
-    bindById('copyIngest', 'click', () => void copyText(hookIngestCommand()));
     bindById('copyShell', 'click', () => void copyText('0ctx shell'));
     bindById('copyRepair', 'click', () => void copyText('0ctx repair'));
     bindById('copyDoctor', 'click', () => void copyText('0ctx doctor'));
@@ -151,7 +147,6 @@
           state.sessionKnowledgePreview = null;
           state.sessionKnowledgeSelectedKeys = [];
           state.activeTurnId = null;
-        resetPayloadState();
           state.activeCheckpointId = null;
           state.checkpointDetail = null;
           state.checkpointSessionDetail = null;
@@ -160,7 +155,6 @@
         await loadSessions();
         await loadSessionDetail();
         await loadTurns();
-        resetPayloadState();
         await loadCheckpoints();
         await loadCheckpointDetail();
         await loadHandoff();
@@ -181,10 +175,8 @@
           state.sessionKnowledgePreview = null;
           state.sessionKnowledgeSelectedKeys = [];
           state.activeTurnId = null;
-        resetPayloadState();
         await loadSessionDetail();
         await loadTurns();
-        resetPayloadState();
         await loadCheckpoints();
         await loadCheckpointDetail();
         await loadHandoff();
@@ -199,7 +191,6 @@
       const turnTarget = event.target.closest('[data-turn-id]');
       if (turnTarget) {
         state.activeTurnId = String(turnTarget.getAttribute('data-turn-id'));
-        resetPayloadState();
         if (turnTarget.dataset.openView) {
           setView(turnTarget.dataset.openView);
         }
@@ -235,7 +226,6 @@
         await loadSessions();
         await loadSessionDetail();
         await loadTurns();
-        resetPayloadState();
         await loadCheckpoints();
         await loadCheckpointDetail();
         await loadHandoff();

@@ -649,7 +649,7 @@ async function main(): Promise<number> {
                 return 1;
             }
             case 'data-policy':
-                return commandDataPolicy(parsed.subcommand, parsed.flags);
+                return commandDataPolicy(parsed.subcommand ?? parsed.positionalArgs[0] ?? null, parsed.flags);
             case 'sync': {
                 const sub = parsed.subcommand;
                 if (sub === 'status' || !sub) return commandSyncStatus();

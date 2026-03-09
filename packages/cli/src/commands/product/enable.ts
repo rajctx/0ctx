@@ -2,6 +2,15 @@ import path from 'path';
 import color from 'picocolors';
 import type { ProductCommandDeps, FlagMap, CheckStatus, BootstrapResult } from './types';
 
+type DataPolicyPreset = 'lean' | 'review' | 'debug' | 'shared';
+
+function parseDataPolicyPreset(value: string | null): DataPolicyPreset | null {
+    if (value === 'lean' || value === 'review' || value === 'debug' || value === 'shared') {
+        return value;
+    }
+    return null;
+}
+
 export function createEnableCommands(deps: ProductCommandDeps & { commandBootstrap: (flags: FlagMap) => Promise<number> }) {
     async function commandInstall(flags: FlagMap): Promise<number> {
         const p = await import('@clack/prompts');
@@ -69,10 +78,16 @@ export function createEnableCommands(deps: ProductCommandDeps & { commandBootstr
         const skipHooks = Boolean(flags['skip-hooks']);
         const repoRoot = deps.resolveRepoRoot(deps.parseOptionalStringFlag(flags['repo-root'] ?? flags.repoRoot));
         const requestedName = deps.parseOptionalStringFlag(flags.name ?? flags['workspace-name'] ?? flags.workspaceName);
+        const requestedDataPolicy = deps.parseOptionalStringFlag(flags['data-policy'] ?? flags.dataPolicy);
+        const dataPolicyPreset = parseDataPolicyPreset(requestedDataPolicy);
         const workspaceName = requestedName ?? (path.basename(repoRoot) || 'Workspace');
         const hookPreviewError = deps.validateExplicitPreviewSelection(flags.clients, 'codex,cursor,windsurf');
         if (hookPreviewError) {
             console.error(hookPreviewError);
+            return 1;
+        }
+        if (requestedDataPolicy && !dataPolicyPreset) {
+            console.error('Invalid data policy. Use lean, review, debug, or shared.');
             return 1;
         }
         const mcpPreviewError = deps.validateExplicitPreviewSelection(flags['mcp-clients'] ?? flags.mcpClients, 'codex', 'claude,antigravity');
@@ -131,6 +146,39 @@ export function createEnableCommands(deps: ProductCommandDeps & { commandBootstr
         await deps.sendToDaemon('switchContext', { contextId });
         steps.push({ id: 'workspace', status: 'pass', message: created ? `Created and selected workspace '${workspaceName}'.` : 'Selected the workspace bound to this repository.', details: { contextId, repoRoot, created } });
 
+        if (dataPolicyPreset) {
+            if (spinner) spinner.message('Applying data policy');
+            const dataPolicy = await deps.sendToDaemon('setDataPolicy', {
+                contextId,
+                preset: dataPolicyPreset
+            }) as {
+                preset?: string;
+                syncPolicy?: string | null;
+                captureRetentionDays?: number;
+                debugRetentionDays?: number;
+                debugArtifactsEnabled?: boolean;
+            };
+            steps.push({
+                id: 'data_policy',
+                status: 'pass',
+                message: `Applied the ${dataPolicyPreset} data policy preset.`,
+                details: {
+                    preset: dataPolicy.preset ?? dataPolicyPreset,
+                    syncPolicy: dataPolicy.syncPolicy ?? null,
+                    captureRetentionDays: dataPolicy.captureRetentionDays ?? null,
+                    debugRetentionDays: dataPolicy.debugRetentionDays ?? null,
+                    debugArtifactsEnabled: dataPolicy.debugArtifactsEnabled ?? null
+                }
+            });
+        } else {
+            steps.push({
+                id: 'data_policy',
+                status: 'warn',
+                message: 'Using the current data policy. Pass --data-policy to change it during enable.',
+                details: { preset: null }
+            });
+        }
+
         let bootstrapResults: BootstrapResult[] = [];
         if (!skipBootstrap && mcpClients.length > 0) {
             if (spinner) spinner.message('Registering MCP clients');
@@ -166,8 +214,9 @@ export function createEnableCommands(deps: ProductCommandDeps & { commandBootstr
 
         if (asJson) {
             console.log(JSON.stringify({
-                ok: true, repoRoot, contextId, workspaceName, created, hookClients, mcpClients, mcpProfile, steps, bootstrapResults, hooks: hookSummary, repoReadiness,
+                ok: true, repoRoot, contextId, workspaceName, created, hookClients, mcpClients, mcpProfile, dataPolicyPreset, steps, bootstrapResults, hooks: hookSummary, repoReadiness,
                 dataPolicy: repoReadiness ? {
+                    preset: dataPolicyPreset ?? null,
                     syncPolicy: deps.formatSyncPolicyLabel(repoReadiness.syncPolicy),
                     captureRetentionDays: repoReadiness.captureRetentionDays,
                     debugRetentionDays: repoReadiness.debugRetentionDays,
@@ -181,10 +230,12 @@ export function createEnableCommands(deps: ProductCommandDeps & { commandBootstr
             deps.formatLabelValue('Repo', repoReadiness.repoRoot),
             deps.formatLabelValue('Workspace', repoReadiness.workspaceName ?? workspaceName),
             deps.formatLabelValue('Workstream', repoReadiness.workstream ?? '-'),
+            deps.formatLabelValue('Ready', repoReadiness.zeroTouchReady ? 'zero-touch for supported agents' : 'needs one-time setup'),
             deps.formatLabelValue('Capture', repoReadiness.captureMissingAgents.length === 0 ? `${deps.formatAgentList(repoReadiness.captureReadyAgents)} ready` : `${deps.formatAgentList(repoReadiness.captureReadyAgents)} ready${repoReadiness.captureReadyAgents.length > 0 ? '; ' : ''}${deps.formatAgentList(repoReadiness.captureMissingAgents)} not installed`),
             deps.formatLabelValue('Context', repoReadiness.autoContextAgents.length > 0 ? `${deps.formatAgentList(repoReadiness.autoContextAgents)} inject current workstream context automatically` : 'No supported context injection integrations installed yet'),
             deps.formatLabelValue('History', repoReadiness.sessionCount === null ? 'No captured workstream history yet' : `${repoReadiness.sessionCount} sessions, ${repoReadiness.checkpointCount ?? 0} checkpoints`),
-            deps.formatLabelValue('Data policy', deps.formatDataPolicyNarrative({ syncPolicy: repoReadiness.syncPolicy, captureRetentionDays: repoReadiness.captureRetentionDays, debugRetentionDays: repoReadiness.debugRetentionDays, debugArtifactsEnabled: repoReadiness.debugArtifactsEnabled }))
+            deps.formatLabelValue('Data policy', deps.formatDataPolicyNarrative({ syncPolicy: repoReadiness.syncPolicy, captureRetentionDays: repoReadiness.captureRetentionDays, debugRetentionDays: repoReadiness.debugRetentionDays, debugArtifactsEnabled: repoReadiness.debugArtifactsEnabled })),
+            ...(repoReadiness.nextActionHint ? [deps.formatLabelValue('Next step', repoReadiness.nextActionHint)] : [])
         ] : [deps.formatLabelValue('Repo', repoRoot), deps.formatLabelValue('Workspace', workspaceName)];
 
         p?.note(info.join('\n'), 'Repo Readiness');

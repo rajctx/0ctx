@@ -170,6 +170,36 @@
                   <div id="workspaceFocus" class="workspace-focus-grid info-list"></div>
                 </section>
 
+                <section class="panel subpanel">
+                  <div class="section-row small">
+                    <div>
+                      <p class="section-label">Data handling</p>
+                      <h4>Capture and sync posture</h4>
+                    </div>
+                    <span id="workspacePolicySummaryBadge" class="chip">Default</span>
+                  </div>
+                  <div class="policy-preset-grid">
+                    <button class="btn tertiary policy-preset-btn workspace-policy-preset" data-policy-preset="lean" type="button">
+                      <strong>Lean</strong>
+                      <span>Normal default. Metadata-only sync, short local retention, no debug trails.</span>
+                    </button>
+                    <button class="btn tertiary policy-preset-btn workspace-policy-preset" data-policy-preset="review" type="button">
+                      <strong>Review</strong>
+                      <span>Keep more local capture on this machine for project review and investigation.</span>
+                    </button>
+                    <button class="btn tertiary policy-preset-btn workspace-policy-preset" data-policy-preset="debug" type="button">
+                      <strong>Debug</strong>
+                      <span>Temporarily enable richer local debugging artifacts for support and diagnosis.</span>
+                    </button>
+                    <button class="btn tertiary policy-preset-btn workspace-policy-preset" data-policy-preset="shared" type="button">
+                      <strong>Shared</strong>
+                      <span>Explicitly opt this workspace into full sync while keeping raw payload sidecars local.</span>
+                    </button>
+                  </div>
+                  <div id="workspacePolicyDetailList" class="info-list compact-info-list"></div>
+                  <p id="workspacePolicyHint" class="page-copy compact-copy">Metadata-only sync is the normal default. Local capture stays on this machine and debug trails remain off unless you explicitly enable them.</p>
+                </section>
+
                 <section class="panel subpanel compare-panel">
                   <div class="section-row small">
                     <div>
@@ -282,7 +312,7 @@
             <header class="page-head">
               <p class="page-kicker">Captured sessions</p>
               <h1>Read the message stream</h1>
-            <p id="sessionsPageMeta" class="page-copy">Choose a session, read its messages, and only open advanced capture data when you need the underlying debugging detail.</p>
+            <p id="sessionsPageMeta" class="page-copy">Choose a session, read its messages, and capture a checkpoint when the work becomes worth preserving.</p>
             </header>
 
             <div class="page-grid page-grid-sessions">
@@ -296,7 +326,6 @@
                 <p id="sessionFocusMeta" class="page-copy compact-copy">Pick a workstream, then choose a session to read the message stream and capture a checkpoint.</p>
                 <div class="action-stack">
                   <button id="createCheckpointBtn" class="btn primary wide" type="button">Create checkpoint</button>
-            <button id="togglePayload" class="btn tertiary wide" type="button">Show debug payload</button>
                 </div>
                 <div class="utility-inline">
                   <button id="previewSessionKnowledgeBtn" class="btn quiet" type="button">Preview insights</button>
@@ -330,7 +359,7 @@
                 </div>
 
                 <section class="panel reader-panel">
-            <div id="turnDetailEmpty" class="empty-state">Select a message to inspect its text and companion context. Raw payload stays in debug mode.</div>
+            <div id="turnDetailEmpty" class="empty-state">Select a message to inspect its text and companion context.</div>
 
                   <div id="turnDetailBody" class="reader-body hidden">
                     <div class="reader-header-block">
@@ -374,16 +403,6 @@
                       <div id="turnTechnical" class="meta-grid tech-grid"></div>
                     </details>
 
-                    <section id="payloadPanel" class="panel subpanel hidden">
-                      <div class="section-row small">
-                        <div>
-              <p class="section-label">Debug data</p>
-                          <h4 id="payloadTitle">Captured sidecar payload</h4>
-                        </div>
-                        <span id="payloadBadge" class="chip">none</span>
-                      </div>
-              <pre id="payloadText">Open debug mode on a selected message to inspect the stored payload.</pre>
-                    </section>
                   </div>
                 </section>
               </section>
@@ -590,14 +609,9 @@
                     <span>Install integrations for this workspace</span>
                     <code id="hookInstallCommand">0ctx connector hook install --clients=factory,antigravity,claude</code>
                   </article>
-                  <article class="command-card">
-                    <span>Smoke-test one captured turn</span>
-                    <code id="hookIngestCommand">0ctx connector hook ingest --agent=factory --payload '{"session":{"id":"demo"},"turn":{"id":"t1"},"content":"hello"}'</code>
-                  </article>
                 </div>
                 <div class="row-actions wrap-row">
                   <button id="copyHookInstall" class="btn tertiary" type="button">Copy install command</button>
-                  <button id="copyIngest" class="btn tertiary" type="button">Copy smoke test</button>
                   <button id="copyShell" class="btn tertiary" type="button">Copy 0ctx shell</button>
                 </div>
               </aside>
@@ -658,7 +672,7 @@
                     </div>
                   </div>
                   <div id="setupSupportList" class="info-list compact-info-list"></div>
-                <p id="setupSupportCopy" class="page-copy compact-copy">Use utilities only when you need to enable a repo, install integrations, smoke-test capture, or repair the runtime.</p>
+                <p id="setupSupportCopy" class="page-copy compact-copy">Use utilities only when you need to enable a repo, install integrations, check updates, or repair the runtime.</p>
                 </section>
               </section>
             </div>
