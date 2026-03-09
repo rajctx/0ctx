@@ -88,7 +88,6 @@
   const EVENT_POLL_MS = 2500;
   const HEALTH_REFRESH_MS = 60000;
   const GA_INTEGRATIONS = new Set(['claude', 'factory', 'antigravity']);
-  const PREVIEW_INTEGRATIONS = new Set(['codex', 'cursor', 'windsurf']);
 
   let eventPollTimer = null;
   let healthRefreshTimer = null;
@@ -155,5 +154,5 @@
     ? window.__TAURI__.core.invoke.bind(window.__TAURI__.core)
     : null;
 
-  Object.assign(app, { VIEW_META, SEARCH_HINTS, REQUIRED_RUNTIME_METHODS, MUTATION_EVENT_TYPES, EVENT_POLL_MS, HEALTH_REFRESH_MS, GA_INTEGRATIONS, PREVIEW_INTEGRATIONS, state, bridge });
+  Object.assign(app, { VIEW_META, SEARCH_HINTS, REQUIRED_RUNTIME_METHODS, MUTATION_EVENT_TYPES, EVENT_POLL_MS, HEALTH_REFRESH_MS, GA_INTEGRATIONS, state, bridge });
 })();

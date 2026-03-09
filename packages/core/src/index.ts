@@ -28,6 +28,7 @@ export type {
     WorkspaceComparison,
     WorkspaceComparisonSide,
     AgentContextPack,
+    DataPolicyPreset,
     DataPolicySummary,
     InsightSummary,
     SessionMessage,
@@ -49,3 +50,4 @@ export type {
     SyncQueueEntry,
     SyncEnvelope
 } from './schema';
+

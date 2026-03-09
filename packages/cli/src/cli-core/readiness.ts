@@ -103,7 +103,7 @@ export function createHookHealthCollector(deps: {
             message = 'One or more managed capture integration configs are missing or stale.';
         } else if (state.contextId && contextIdExists === false) {
             status = 'warn';
-            message = 'Stored capture context id no longer exists; reinstall integrations to refresh context binding.';
+            message = 'Stored capture state references a missing workspace; rerun 0ctx enable in this repo.';
         }
 
         const details: HookHealthDetails = {

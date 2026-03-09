@@ -108,8 +108,8 @@ GA integrations:
 - Factory / Droid
 - Antigravity
 
-Preview integrations are opt-in only and are not part of the normal product path.
-If you need one explicitly, name it directly in an advanced workflow.
+Preview integrations stay outside the normal product path.
+Only use them when you explicitly opt into a preview workflow.
 
 The normal product path is repo-first:
 

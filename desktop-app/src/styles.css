@@ -1087,14 +1087,39 @@ tbody td {
   gap: 14px;
 }
 
-.policy-grid {
+.policy-preset-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
-.policy-toggle {
-  justify-content: flex-start;
+.policy-preset-btn {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  min-height: 72px;
+  text-align: left;
+}
+
+.policy-preset-btn strong {
+  color: var(--text-strong);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.policy-preset-btn span {
+  color: var(--text-soft);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.policy-preset-btn.active {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.policy-preset-btn:disabled {
+  opacity: 0.5;
 }
 
 .command-card {
@@ -1157,7 +1182,7 @@ tbody td {
   .workspace-layout,
   .utility-layout,
   .page-card-grid.two-up,
-  .policy-grid,
+  .policy-preset-grid,
   .fact-grid,
   .meta-grid,
   .compact-meta-grid,
@@ -1192,3 +1217,5 @@ tbody td {
     width: 220px;
   }
 }
+
+

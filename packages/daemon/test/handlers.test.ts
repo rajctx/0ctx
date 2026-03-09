@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'fs';
 import os from 'os';
 import path from 'path';
 import { spawnSync } from 'child_process';
@@ -328,6 +328,65 @@ describe('daemon request handling', () => {
         }
     });
 
+    it('applies supported data policy presets through the daemon', () => {
+        const { db, graph } = createGraph();
+        const previousConfigPath = process.env.CTX_CONFIG_PATH;
+        const configPath = path.join(path.dirname(db.name), 'config.json');
+        try {
+            process.env.CTX_CONFIG_PATH = configPath;
+            const session = handleRequest(graph, 'conn-preset-data-policy', { method: 'createSession' }, runtime()) as { sessionToken: string };
+            const context = handleRequest(graph, 'conn-preset-data-policy', {
+                method: 'createContext',
+                sessionToken: session.sessionToken,
+                params: { name: 'preset-data-policy-context' }
+            }, runtime()) as { id: string };
+
+            const debugPolicy = handleRequest(graph, 'conn-preset-data-policy', {
+                method: 'setDataPolicy',
+                sessionToken: session.sessionToken,
+                params: { preset: 'debug' }
+            }, runtime()) as {
+                syncPolicy: string;
+                captureRetentionDays: number;
+                debugRetentionDays: number;
+                debugArtifactsEnabled: boolean;
+                preset: string;
+            };
+
+            const sharedPolicy = handleRequest(graph, 'conn-preset-data-policy', {
+                method: 'setDataPolicy',
+                sessionToken: session.sessionToken,
+                params: { contextId: context.id, preset: 'shared' }
+            }, runtime()) as {
+                contextId: string | null;
+                syncPolicy: string;
+                captureRetentionDays: number;
+                debugRetentionDays: number;
+                debugArtifactsEnabled: boolean;
+                preset: string;
+            };
+
+            expect(debugPolicy.syncPolicy).toBe('metadata_only');
+            expect(debugPolicy.captureRetentionDays).toBe(30);
+            expect(debugPolicy.debugRetentionDays).toBe(14);
+            expect(debugPolicy.debugArtifactsEnabled).toBe(true);
+            expect(debugPolicy.preset).toBe('debug');
+
+            expect(sharedPolicy.contextId).toBe(context.id);
+            expect(sharedPolicy.syncPolicy).toBe('full_sync');
+            expect(sharedPolicy.captureRetentionDays).toBe(14);
+            expect(sharedPolicy.debugRetentionDays).toBe(7);
+            expect(sharedPolicy.debugArtifactsEnabled).toBe(false);
+            expect(sharedPolicy.preset).toBe('shared');
+        } finally {
+            if (previousConfigPath === undefined) {
+                delete process.env.CTX_CONFIG_PATH;
+            } else {
+                process.env.CTX_CONFIG_PATH = previousConfigPath;
+            }
+            db.close();
+        }
+    });
     it('defaults new contexts to metadata_only sync', () => {
         const { db, graph } = createGraph();
         try {
@@ -541,9 +600,13 @@ describe('daemon request handling', () => {
             expect(brief.tracked).toBe(true);
             expect(brief.handoffReadiness).toBe('review');
             expect(brief.handoffSummary).toContain('local-only workstream has no baseline and no checkpoint coverage');
+            expect(brief.handoffBlockers).toEqual([]);
+            expect(brief.handoffReviewItems).toContain('This workstream has no upstream or baseline.');
+            expect(brief.handoffReviewItems).toContain('Create a checkpoint before handoff.');
             expect(brief.recentSessions[0]?.sessionId).toBe('session-branch-1');
             expect(brief.contextText).toContain('Current workstream: feature/branch-lane');
             expect(brief.contextText).toContain('Handoff: Review before handoff.');
+            expect(brief.contextText).toContain('Review:');
 
             const agentContext = handleRequest(graph, 'conn-branch', {
                 method: 'getAgentContextPack',
@@ -1158,6 +1221,8 @@ describe('daemon request handling', () => {
             expect(brief.stateActionHint).toContain('Create or switch to a named branch');
             expect(brief.handoffReadiness).toBe('blocked');
             expect(brief.handoffSummary).toContain('Do not hand this workstream off yet');
+            expect(brief.handoffBlockers).toContain('This checkout is on detached HEAD and is not attached to a named branch.');
+            expect(brief.handoffReviewItems).toEqual([]);
             expect(brief.baseline?.branch).toBe('main');
             expect(brief.baseline?.comparable).toBe(false);
             expect(brief.contextText).toContain('Status: Detached HEAD. This checkout is not on a named branch.');
@@ -1420,8 +1485,14 @@ describe('daemon request handling', () => {
                 sourceChangedFileCount: number | null;
                 targetChangedFileCount: number | null;
                 sharedChangedFileCount: number | null;
+                sharedConflictLikelyCount: number | null;
+                sharedConflictLikelyFiles: string[];
                 changeOverlapKind: string;
                 changeOverlapSummary: string;
+                lineOverlapKind: string;
+                lineOverlapSummary: string;
+                mergeRisk: string;
+                mergeRiskSummary: string;
                 sharedChangedFiles: string[];
                 source: { sessionCount: number; branch: string | null };
                 target: { sessionCount: number; branch: string | null };
@@ -1450,8 +1521,14 @@ describe('daemon request handling', () => {
             expect(comparison.sourceChangedFileCount).toBe(0);
             expect(comparison.targetChangedFileCount).toBe(1);
             expect(comparison.sharedChangedFileCount).toBe(0);
+            expect(comparison.sharedConflictLikelyCount).toBe(0);
+            expect(comparison.sharedConflictLikelyFiles).toEqual([]);
             expect(comparison.changeOverlapKind).toBe('none');
             expect(comparison.changeOverlapSummary).toContain('different files');
+            expect(comparison.lineOverlapKind).toBe('none');
+            expect(comparison.lineOverlapSummary).toContain('No overlapping changed line ranges');
+            expect(comparison.mergeRisk).toBe('low');
+            expect(comparison.mergeRiskSummary).toContain('Low merge risk');
             expect(comparison.sharedChangedFiles).toEqual([]);
             expect(comparison.comparisonText).toContain('Source: main');
             expect(comparison.comparisonText).toContain('Target: feature/runtime-compare');
@@ -1472,19 +1549,24 @@ describe('daemon request handling', () => {
             spawnSync('git', ['init', '-b', 'main', repoRoot], { encoding: 'utf8', windowsHide: true });
             spawnSync('git', ['-C', repoRoot, 'config', 'user.email', 'test@example.com'], { encoding: 'utf8', windowsHide: true });
             spawnSync('git', ['-C', repoRoot, 'config', 'user.name', 'Test User'], { encoding: 'utf8', windowsHide: true });
+            const sharedDir = path.join(repoRoot, 'packages', 'core');
+            mkdirSync(sharedDir, { recursive: true });
             spawnSync('powershell', ['-NoProfile', '-Command', `Set-Content -Path '${path.join(repoRoot, 'shared.txt')}' -Value 'base'`], { encoding: 'utf8', windowsHide: true });
+            spawnSync('powershell', ['-NoProfile', '-Command', `Set-Content -Path '${path.join(sharedDir, 'shared.ts')}' -Value 'export const base = true;'`], { encoding: 'utf8', windowsHide: true });
             spawnSync('powershell', ['-NoProfile', '-Command', `Set-Content -Path '${path.join(repoRoot, 'base.txt')}' -Value 'base'`], { encoding: 'utf8', windowsHide: true });
             spawnSync('git', ['-C', repoRoot, 'add', '.'], { encoding: 'utf8', windowsHide: true });
             spawnSync('git', ['-C', repoRoot, 'commit', '-m', 'base'], { encoding: 'utf8', windowsHide: true });
 
             spawnSync('git', ['-C', repoRoot, 'checkout', '-b', 'feature/shared-overlap'], { encoding: 'utf8', windowsHide: true });
             spawnSync('powershell', ['-NoProfile', '-Command', `Set-Content -Path '${path.join(repoRoot, 'shared.txt')}' -Value 'feature change'`], { encoding: 'utf8', windowsHide: true });
+            spawnSync('powershell', ['-NoProfile', '-Command', `Set-Content -Path '${path.join(sharedDir, 'shared.ts')}' -Value 'export const feature = true;'`], { encoding: 'utf8', windowsHide: true });
             spawnSync('powershell', ['-NoProfile', '-Command', `Set-Content -Path '${path.join(repoRoot, 'feature-only.txt')}' -Value 'feature only'`], { encoding: 'utf8', windowsHide: true });
             spawnSync('git', ['-C', repoRoot, 'add', '.'], { encoding: 'utf8', windowsHide: true });
             spawnSync('git', ['-C', repoRoot, 'commit', '-m', 'feature overlap'], { encoding: 'utf8', windowsHide: true });
 
             spawnSync('git', ['-C', repoRoot, 'checkout', 'main'], { encoding: 'utf8', windowsHide: true });
             spawnSync('powershell', ['-NoProfile', '-Command', `Set-Content -Path '${path.join(repoRoot, 'shared.txt')}' -Value 'main change'`], { encoding: 'utf8', windowsHide: true });
+            spawnSync('powershell', ['-NoProfile', '-Command', `Set-Content -Path '${path.join(sharedDir, 'shared.ts')}' -Value 'export const main = true;'`], { encoding: 'utf8', windowsHide: true });
             spawnSync('powershell', ['-NoProfile', '-Command', `Set-Content -Path '${path.join(repoRoot, 'main-only.txt')}' -Value 'main only'`], { encoding: 'utf8', windowsHide: true });
             spawnSync('git', ['-C', repoRoot, 'add', '.'], { encoding: 'utf8', windowsHide: true });
             spawnSync('git', ['-C', repoRoot, 'commit', '-m', 'main overlap'], { encoding: 'utf8', windowsHide: true });
@@ -1554,22 +1636,50 @@ describe('daemon request handling', () => {
                 targetAheadCount: number | null;
                 sharedChangedFileCount: number | null;
                 sharedChangedFiles: string[];
+                sharedConflictLikelyCount: number | null;
+                sharedConflictLikelyFiles: string[];
+                sharedChangedAreas: string[];
                 sourceOnlyChangedFiles: string[];
                 targetOnlyChangedFiles: string[];
                 changeOverlapKind: string;
                 changeOverlapSummary: string;
+                lineOverlapKind: string;
+                lineOverlapSummary: string;
+                changeHotspotSummary: string;
+                mergeRisk: string;
+                mergeRiskSummary: string;
                 comparisonText: string;
             };
 
             expect(comparison.sourceAheadCount).toBe(1);
             expect(comparison.targetAheadCount).toBe(1);
-            expect(comparison.sharedChangedFileCount).toBe(1);
+            expect(comparison.sharedChangedFileCount).toBe(2);
             expect(comparison.sharedChangedFiles).toContain('shared.txt');
+            expect(comparison.sharedChangedFiles).toContain('packages/core/shared.ts');
+            expect(comparison.sharedConflictLikelyCount).toBe(2);
+            expect(comparison.sharedConflictLikelyFiles).toContain('shared.txt');
+            expect(comparison.sharedConflictLikelyFiles).toContain('packages/core/shared.ts');
+            expect(comparison.sharedChangedAreas).toContain('packages/core');
             expect(comparison.sourceOnlyChangedFiles).toContain('main-only.txt');
             expect(comparison.targetOnlyChangedFiles).toContain('feature-only.txt');
-            expect(comparison.changeOverlapKind).toBe('partial');
+            expect(comparison.changeOverlapKind).toBe('high');
             expect(comparison.changeOverlapSummary).toContain('shared.txt');
-            expect(comparison.comparisonText).toContain('Shared files: shared.txt');
+            expect(comparison.lineOverlapKind).toBe('high');
+            expect(comparison.lineOverlapSummary).toContain('overlapping line ranges');
+            expect(comparison.changeHotspotSummary).toContain('packages/core');
+            expect(comparison.mergeRisk).toBe('high');
+            expect(comparison.mergeRiskSummary).toContain('High merge risk');
+            expect(comparison.comparisonBlockers).toEqual([]);
+            expect(comparison.comparisonReviewItems).toContain('Both workstreams have diverged and need explicit reconciliation before handoff.');
+            expect(comparison.comparisonReviewItems).toContain('Both workstreams touch overlapping line ranges in shared files; resolve those conflicts before handoff or merge.');
+            expect(comparison.comparisonReviewItems).toContain('Both workstreams modify many of the same files; review those files before merging or handing work off.');
+            expect(comparison.comparisonReviewItems.some((item) => item.includes('Focus review on:'))).toBe(true);
+            expect(comparison.comparisonText).toContain('Shared files: packages/core/shared.ts, shared.txt.');
+            expect(comparison.comparisonText).toContain('Likely conflict files: packages/core/shared.ts, shared.txt.');
+            expect(comparison.comparisonText).toContain('Changed lines:');
+            expect(comparison.comparisonText).toContain('Hotspots: Shared change hotspots:');
+            expect(comparison.comparisonText).toContain('Merge risk: High merge risk');
+            expect(comparison.comparisonText).toContain('Review:');
         } finally {
             db.close();
         }
@@ -1733,6 +1843,13 @@ describe('daemon request handling', () => {
             }, runtime()) as { checkpointId: string | null; candidateCount: number };
             expect(previewCheckpoint.checkpointId).toBe(checkpoint.id);
             expect(previewCheckpoint.candidateCount).toBeGreaterThan(0);
+
+            const highConfidencePreview = handleRequest(graph, 'conn-extract', {
+                method: 'previewSessionKnowledge',
+                sessionToken: session.sessionToken,
+                params: { contextId: context.id, sessionId: 'session-extract-1', minConfidence: 0.9 }
+            }, runtime()) as { candidateCount: number };
+            expect(highConfidencePreview.candidateCount).toBe(0);
 
             const fromCheckpoint = handleRequest(graph, 'conn-extract', {
                 method: 'extractCheckpointKnowledge',
@@ -2084,3 +2201,5 @@ describe('daemon request handling', () => {
         }
     });
 });
+
+

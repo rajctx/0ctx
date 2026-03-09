@@ -99,8 +99,9 @@ describe('@0ctx/cli build artifact source', () => {
         expect(cliSurface).toContain("0ctx connector register [--force] [--local-only] [--require-cloud] [--json]");
         expect(cliSurface).toContain("0ctx sync policy get [--repo-root=<path>] [--json]");
         expect(cliSurface).toContain("0ctx data-policy [--repo-root=<path>] [--json]");
-        expect(cliSurface).toContain("0ctx data-policy set [--repo-root=<path>] [--sync-policy=<local_only|metadata_only|full_sync>]");
-        expect(cliSurface).toContain("capture.retentionDays, capture.debugRetentionDays, capture.debugArtifacts,");
+        expect(policySource).toContain("Usage: 0ctx data-policy set [--repo-root=<path>] [--preset=<lean|review|debug|shared>] [--sync-policy=<local_only|metadata_only|full_sync>]");
+        expect(policySource).toContain("0ctx data-policy <lean|review|debug|shared> [--repo-root=<path>] [--json]");
+        expect(policySource).toContain("formatPresetLabel");
         expect(cliSurface).toContain("Support overrides:");
         expect(cliSurface).toContain("Advanced utilities:");
         expect(cliSurface).toContain("0ctx connector hook install [--clients=ga|<explicit-list>] [--repo-root=<path>] [--global]");
@@ -108,7 +109,7 @@ describe('@0ctx/cli build artifact source', () => {
         expect(cliSurface).toContain("Example: --clients=codex or --clients=cursor,windsurf");
         expect(cliSurface).toContain("0ctx connector hook prune [--days=14] [--json]");
         expect(clientsSource).toContain("export const DEFAULT_HOOK_INSTALL_CLIENTS: HookInstallClient[] = ['claude', 'factory', 'antigravity'];");
-        expect(cliSurface).toContain("0ctx connector hook status [--json]");
+        expect(cliSurface).toContain("0ctx connector hook status [--json] [--include-preview]");
         expect(cliSurface).toContain("0ctx connector hook prune [--days=14] [--json]");
         expect(cliSurface).toContain("0ctx connector hook session-start --agent=claude|factory|antigravity [--repo-root=<path>]");
         expect(source).toContain("import { createWorkstreamCommands } from './commands/workstream';");
@@ -159,3 +160,5 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("Use `0ctx enable` inside a repo for the normal product flow. Use `0ctx dashboard` only for hosted support surfaces.");
     });
 });
+
+

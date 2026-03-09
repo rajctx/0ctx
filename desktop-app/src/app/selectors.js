@@ -1,7 +1,7 @@
 (() => {
   window.OctxDesktop = window.OctxDesktop || {};
   const app = window.OctxDesktop;
-  const { state, GA_INTEGRATIONS, PREVIEW_INTEGRATIONS, REQUIRED_RUNTIME_METHODS, VIEW_META, short, splitConversationText, formatTime, formatRelativeTime, humanizeLabel, chipToneForAgent, chipToneForRole, basenameFromPath, commitShort, describeWorkingTreeState, describeWorkstreamCheckout, describeWorkstreamSync, describeWorkstreamActionHint } = app;
+  const { state, GA_INTEGRATIONS, REQUIRED_RUNTIME_METHODS, VIEW_META, short, splitConversationText, formatTime, formatRelativeTime, humanizeLabel, chipToneForAgent, chipToneForRole, basenameFromPath, commitShort, describeWorkingTreeState, describeWorkstreamCheckout, describeWorkstreamSync, describeWorkstreamActionHint } = app;
 
   function resetPayloadState() {
     state.payload = null;
@@ -163,16 +163,8 @@
     return GA_INTEGRATIONS.has(String(agent || '').toLowerCase());
   }
 
-  function isPreviewIntegration(agent) {
-    return PREVIEW_INTEGRATIONS.has(String(agent || '').toLowerCase());
-  }
-
   function installedGaAgents() {
     return installedAgents().filter((agent) => isGaIntegration(agent.agent));
-  }
-
-  function installedPreviewAgents() {
-    return installedAgents().filter((agent) => isPreviewIntegration(agent.agent));
   }
 
   function integrationType(agent) {
@@ -187,13 +179,13 @@
   function formatIntegrationNote(note) {
     const value = String(note || '').trim().toLowerCase();
     if (!value) return '';
-    if (value === 'preview-notify-archive') return 'Preview: notify + archive';
-    if (value === 'preview-hook') return 'Preview integration';
-    if (value === 'preview-installed') return 'Preview installed';
-    if (value === 'preview-not-selected') return 'Preview optional';
     if (value === 'installed') return 'Installed';
     if (value === 'supported') return 'Supported';
     if (value === 'not-selected') return 'Not selected';
+    if (value === 'preview-installed') return 'Installed explicitly';
+    if (value === 'preview-not-selected') return 'Not in the normal path';
+    if (value === 'preview-hook') return 'Preview hook';
+    if (value === 'preview-notify-archive') return 'Preview notify/archive';
     return humanizeLabel(value);
   }
 
@@ -236,9 +228,17 @@
     return 'Metadata Only (default)';
   }
 
+  function formatDataPolicyPresetLabel(preset) {
+    const value = String(preset || '').trim().toLowerCase();
+    if (value === 'lean') return 'Lean (default)';
+    if (value === 'review') return 'Review';
+    if (value === 'debug') return 'Debug';
+    if (value === 'shared') return 'Shared (opt-in)';
+    return 'Custom';
+  }
+
   function captureState() {
     const gaHooks = installedGaAgents();
-    const previewHooks = installedPreviewAgents();
     if (state.sessions.length > 0) {
       return {
         label: 'Live',
@@ -252,15 +252,7 @@
         className: 'badge degraded',
         detail: `GA integrations installed for ${integrationListText(gaHooks)}`
       };
-    }
-    if (previewHooks.length > 0) {
-      return {
-        label: 'Not ready',
-        className: 'badge offline',
-        detail: 'Preview-only integrations are installed. Add Claude, Factory, or Antigravity for the supported capture path.'
-      };
-    }
-    return {
+    }    return {
       label: 'Not ready',
       className: 'badge offline',
       detail: 'No installed integrations found'
@@ -403,5 +395,6 @@
     document.getElementById('statusTime').textContent = `Updated ${new Date().toLocaleTimeString()}`;
   }
 
-  Object.assign(app, { resetPayloadState, bindById, matches, activeContext, selectedTurn, branchKey, normalizeBranch, activeBranch, comparisonTargetBranch, activeSession, selectedCheckpoint, activeInsightNode, contextById, workspaceComparisonTargetContext, extractTagValue, insightSummary, insightTargetContexts, syncInsightSelection, syncPromotionTargetSelection, workspaceComparisonTargets, syncWorkspaceComparisonTargetSelection, installedAgents, isGaIntegration, isPreviewIntegration, installedGaAgents, installedPreviewAgents, integrationType, integrationLabel, formatIntegrationNote, methodSupported, missingRequiredMethods, integrationListText, hasLocalRuntimeData, formatPosture, postureClass, formatSyncPolicyLabel, captureState, automaticContextState, capturePolicySummary, debugArtifactsEnabled, currentRepoRoot, preferredClients, preferredAgent, hookInstallCommand, enableCommand, hookIngestCommand, describeBranchLane, syncComparisonTargetSelection, describeCheckpoint, syncBranchSelectionFromSession, resetBranchScopedState, setStatus });
+  Object.assign(app, { resetPayloadState, bindById, matches, activeContext, selectedTurn, branchKey, normalizeBranch, activeBranch, comparisonTargetBranch, activeSession, selectedCheckpoint, activeInsightNode, contextById, workspaceComparisonTargetContext, extractTagValue, insightSummary, insightTargetContexts, syncInsightSelection, syncPromotionTargetSelection, workspaceComparisonTargets, syncWorkspaceComparisonTargetSelection, installedAgents, isGaIntegration, installedGaAgents, integrationType, integrationLabel, formatIntegrationNote, methodSupported, missingRequiredMethods, integrationListText, hasLocalRuntimeData, formatPosture, postureClass, formatSyncPolicyLabel, formatDataPolicyPresetLabel, captureState, automaticContextState, capturePolicySummary, debugArtifactsEnabled, currentRepoRoot, preferredClients, preferredAgent, hookInstallCommand, enableCommand, hookIngestCommand, describeBranchLane, syncComparisonTargetSelection, describeCheckpoint, syncBranchSelectionFromSession, resetBranchScopedState, setStatus });
 })();
+

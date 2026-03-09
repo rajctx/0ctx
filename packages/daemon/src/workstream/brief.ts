@@ -95,6 +95,8 @@ export function buildWorkstreamBrief(
         `Handoff: ${handoff.summary}`
     ];
     if (state.actionHint) lines.push(`Recommended next step: ${state.actionHint}`);
+    if (handoff.blockers.length > 0) lines.push(`Blockers: ${handoff.blockers.join(' ')}`);
+    if (handoff.reviewItems.length > 0) lines.push(`Review: ${handoff.reviewItems.join(' ')}`);
 
     if (lane) {
         const laneFacts = [
@@ -211,6 +213,8 @@ export function buildWorkstreamBrief(
         stateActionHint: state.actionHint,
         handoffReadiness: handoff.readiness,
         handoffSummary: handoff.summary,
+        handoffBlockers: handoff.blockers,
+        handoffReviewItems: handoff.reviewItems,
         recentSessions,
         latestCheckpoints,
         insights,

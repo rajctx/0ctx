@@ -1,12 +1,47 @@
-import { getConfigValue, setConfigValue, type AppConfig, type DataPolicySummary, type Graph, type SyncPolicy } from '@0ctx/core';
+import { getConfigValue, setConfigValue, type AppConfig, type DataPolicyPreset, type DataPolicySummary, type Graph, type SyncPolicy } from '@0ctx/core';
 
 export interface DataPolicyUpdate {
     contextId?: string | null;
+    preset?: DataPolicyPreset | null;
     syncPolicy?: SyncPolicy | null;
     captureRetentionDays?: number | null;
     debugRetentionDays?: number | null;
     debugArtifactsEnabled?: boolean | null;
 }
+
+type DataPolicyPresetConfig = {
+    syncPolicy: SyncPolicy;
+    captureRetentionDays: number;
+    debugRetentionDays: number;
+    debugArtifactsEnabled: boolean;
+};
+
+const DATA_POLICY_PRESETS: Record<Exclude<DataPolicyPreset, 'custom'>, DataPolicyPresetConfig> = {
+    lean: {
+        syncPolicy: 'metadata_only',
+        captureRetentionDays: 14,
+        debugRetentionDays: 7,
+        debugArtifactsEnabled: false
+    },
+    review: {
+        syncPolicy: 'metadata_only',
+        captureRetentionDays: 30,
+        debugRetentionDays: 7,
+        debugArtifactsEnabled: false
+    },
+    debug: {
+        syncPolicy: 'metadata_only',
+        captureRetentionDays: 30,
+        debugRetentionDays: 14,
+        debugArtifactsEnabled: true
+    },
+    shared: {
+        syncPolicy: 'full_sync',
+        captureRetentionDays: 14,
+        debugRetentionDays: 7,
+        debugArtifactsEnabled: false
+    }
+};
 
 export function getHookDumpRetentionDays(): number {
     const configured = getConfigValue('capture.retentionDays');
@@ -22,22 +57,68 @@ export function isHookDebugArtifactsEnabled(): boolean {
     return getConfigValue('capture.debugArtifacts') === true;
 }
 
+export function inferDataPolicyPreset(summary: {
+    syncPolicy: SyncPolicy;
+    captureRetentionDays: number;
+    debugRetentionDays: number;
+    debugArtifactsEnabled: boolean;
+}): DataPolicyPreset {
+    for (const [preset, config] of Object.entries(DATA_POLICY_PRESETS) as Array<[Exclude<DataPolicyPreset, 'custom'>, DataPolicyPresetConfig]>) {
+        if (
+            config.syncPolicy === summary.syncPolicy
+            && config.captureRetentionDays === summary.captureRetentionDays
+            && config.debugRetentionDays === summary.debugRetentionDays
+            && config.debugArtifactsEnabled === summary.debugArtifactsEnabled
+        ) {
+            return preset;
+        }
+    }
+    return 'custom';
+}
+
+export function getDataPolicyPresetConfig(preset: DataPolicyPreset | null | undefined): DataPolicyPresetConfig | null {
+    if (!preset || preset === 'custom') {
+        return null;
+    }
+    return DATA_POLICY_PRESETS[preset] ?? null;
+}
+
 export function buildDataPolicySummary(graph: Graph, contextId: string | null): DataPolicySummary {
     const syncPolicy = contextId
         ? graph.getContextSyncPolicy(contextId) ?? 'metadata_only'
         : 'metadata_only';
+    const captureRetentionDays = getHookDumpRetentionDays();
+    const debugRetentionDays = getHookDebugRetentionDays();
+    const debugArtifactsEnabled = isHookDebugArtifactsEnabled();
     return {
         contextId,
         workspaceResolved: Boolean(contextId),
         syncPolicy,
-        captureRetentionDays: getHookDumpRetentionDays(),
-        debugRetentionDays: getHookDebugRetentionDays(),
-        debugArtifactsEnabled: isHookDebugArtifactsEnabled()
+        captureRetentionDays,
+        debugRetentionDays,
+        debugArtifactsEnabled,
+        preset: inferDataPolicyPreset({
+            syncPolicy,
+            captureRetentionDays,
+            debugRetentionDays,
+            debugArtifactsEnabled
+        })
     };
 }
 
 export function applyDataPolicyUpdate(graph: Graph, update: DataPolicyUpdate): DataPolicySummary {
     const configUpdates: Array<[keyof AppConfig, AppConfig[keyof AppConfig]]> = [];
+
+    const presetConfig = getDataPolicyPresetConfig(update.preset);
+    if (presetConfig) {
+        update = {
+            ...update,
+            syncPolicy: update.syncPolicy ?? presetConfig.syncPolicy,
+            captureRetentionDays: update.captureRetentionDays ?? presetConfig.captureRetentionDays,
+            debugRetentionDays: update.debugRetentionDays ?? presetConfig.debugRetentionDays,
+            debugArtifactsEnabled: update.debugArtifactsEnabled ?? presetConfig.debugArtifactsEnabled
+        };
+    }
 
     if (typeof update.captureRetentionDays === 'number' && Number.isFinite(update.captureRetentionDays) && update.captureRetentionDays > 0) {
         configUpdates.push(['capture.retentionDays', Math.floor(update.captureRetentionDays)]);

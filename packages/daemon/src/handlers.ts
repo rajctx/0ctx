@@ -1412,6 +1412,7 @@ export function handleRequest(
             return graph.previewKnowledgeFromSession(contextId!, sessionId, {
                 checkpointId: typeof params.checkpointId === 'string' ? params.checkpointId : null,
                 maxNodes: params.maxNodes as number | undefined,
+                minConfidence: typeof params.minConfidence === 'number' ? params.minConfidence : undefined,
                 source: params.source === 'checkpoint' ? 'checkpoint' : 'session'
             });
         }
@@ -1423,6 +1424,7 @@ export function handleRequest(
             const result = graph.extractKnowledgeFromSession(contextId!, sessionId, {
                 checkpointId: typeof params.checkpointId === 'string' ? params.checkpointId : null,
                 maxNodes: params.maxNodes as number | undefined,
+                minConfidence: typeof params.minConfidence === 'number' ? params.minConfidence : undefined,
                 source: params.source === 'checkpoint' ? 'checkpoint' : 'session',
                 allowedKeys: parseStringArray(params.candidateKeys)
             });
@@ -1479,7 +1481,8 @@ export function handleRequest(
                 throw new Error("Missing required 'checkpointId' for previewCheckpointKnowledge.");
             }
             return graph.previewKnowledgeFromCheckpoint(checkpointId, {
-                maxNodes: params.maxNodes as number | undefined
+                maxNodes: params.maxNodes as number | undefined,
+                minConfidence: typeof params.minConfidence === 'number' ? params.minConfidence : undefined
             });
         }
         case 'extractCheckpointKnowledge': {
@@ -1489,6 +1492,7 @@ export function handleRequest(
             }
             const result = graph.extractKnowledgeFromCheckpoint(checkpointId, {
                 maxNodes: params.maxNodes as number | undefined,
+                minConfidence: typeof params.minConfidence === 'number' ? params.minConfidence : undefined,
                 allowedKeys: parseStringArray(params.candidateKeys)
             });
             recordMutationAudit(graph, req, 'extract_knowledge', result.contextId, params, {
@@ -1669,8 +1673,13 @@ export function handleRequest(
             if (params.syncPolicy !== undefined && !policy) {
                 throw new Error("Invalid syncPolicy. Expected one of: local_only, metadata_only, full_sync.");
             }
+            const preset = typeof params.preset === 'string'
+                && ['lean', 'review', 'debug', 'shared', 'custom'].includes(params.preset)
+                ? params.preset as 'lean' | 'review' | 'debug' | 'shared' | 'custom'
+                : null;
             const result = applyDataPolicyUpdate(graph, {
                 contextId: targetContextId,
+                preset,
                 syncPolicy: policy,
                 captureRetentionDays: typeof params.captureRetentionDays === 'number' ? params.captureRetentionDays : null,
                 debugRetentionDays: typeof params.debugRetentionDays === 'number' ? params.debugRetentionDays : null,
@@ -1727,3 +1736,4 @@ export function handleRequest(
             throw new Error(`Unknown method: ${req.method}`);
     }
 }
+

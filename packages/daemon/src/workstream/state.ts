@@ -130,6 +130,8 @@ export function deriveHandoffReadiness(options: {
 }): {
     readiness: 'ready' | 'review' | 'blocked';
     summary: string;
+    blockers: string[];
+    reviewItems: string[];
 } {
     const checkpointCount = typeof options.checkpointCount === 'number' ? options.checkpointCount : 0;
     switch (options.stateKind) {
@@ -138,21 +140,29 @@ export function deriveHandoffReadiness(options: {
                 readiness: 'ready',
                 summary: checkpointCount > 0
                     ? 'Ready to continue. The checkout matches captured state and a recent checkpoint exists.'
-                    : 'Ready to continue. The checkout matches captured state; create a checkpoint before handoff if you need a durable restore point.'
+                    : 'Ready to continue. The checkout matches captured state; create a checkpoint before handoff if you need a durable restore point.',
+                blockers: [],
+                reviewItems: checkpointCount > 0 ? [] : ['Create a checkpoint before handing this workstream to another agent.']
             };
         case 'ahead':
             return {
                 readiness: 'ready',
                 summary: checkpointCount > 0
                     ? 'Ready to continue locally. This workstream is ahead and already has checkpoint coverage.'
-                    : 'Ready to continue locally, but create a checkpoint before handing this workstream to another agent.'
+                    : 'Ready to continue locally, but create a checkpoint before handing this workstream to another agent.',
+                blockers: [],
+                reviewItems: checkpointCount > 0 ? [] : ['Create a checkpoint before handing this ahead workstream to another agent.']
             };
         case 'isolated':
             return {
                 readiness: 'review',
                 summary: checkpointCount > 0
                     ? 'Review before handoff. This workstream is local-only and should be compared or checkpointed deliberately.'
-                    : 'Review before handoff. This local-only workstream has no baseline and no checkpoint coverage yet.'
+                    : 'Review before handoff. This local-only workstream has no baseline and no checkpoint coverage yet.',
+                blockers: [],
+                reviewItems: checkpointCount > 0
+                    ? ['This workstream has no upstream or baseline; compare it deliberately before handoff.']
+                    : ['This workstream has no upstream or baseline.', 'Create a checkpoint before handoff.']
             };
         case 'dirty':
         case 'drifted':
@@ -160,7 +170,15 @@ export function deriveHandoffReadiness(options: {
         case 'diverged':
             return {
                 readiness: 'review',
-                summary: 'Review git state before handoff. The current checkout and recorded memory are no longer cleanly aligned.'
+                summary: 'Review git state before handoff. The current checkout and recorded memory are no longer cleanly aligned.',
+                blockers: [],
+                reviewItems: options.stateKind === 'dirty'
+                    ? ['Commit or checkpoint local changes before handoff.']
+                    : options.stateKind === 'drifted'
+                        ? ['Capture a fresh session or checkpoint so memory matches the current HEAD.']
+                        : options.stateKind === 'behind'
+                            ? ['Update from upstream or the baseline branch before handoff.']
+                            : ['Reconcile divergence before handing work across agents.']
             };
         case 'detached':
         case 'elsewhere':
@@ -168,7 +186,13 @@ export function deriveHandoffReadiness(options: {
         default:
             return {
                 readiness: 'blocked',
-                summary: 'Do not hand this workstream off yet. Resolve checkout state first so another agent does not start from the wrong place.'
+                summary: 'Do not hand this workstream off yet. Resolve checkout state first so another agent does not start from the wrong place.',
+                blockers: options.stateKind === 'detached'
+                    ? ['This checkout is on detached HEAD and is not attached to a named branch.']
+                    : options.stateKind === 'elsewhere'
+                        ? ['This workstream is checked out in another worktree, not here.']
+                        : ['0ctx could not determine the checkout state for this workstream.'],
+                reviewItems: []
             };
     }
 }
@@ -194,6 +218,8 @@ export function deriveWorkstreamComparisonState(options: {
     readiness: 'ready' | 'review' | 'blocked';
     summary: string;
     actionHint: string | null;
+    blockers: string[];
+    reviewItems: string[];
 } {
     const sourceLabel = options.sourceBranch || 'source workstream';
     const targetLabel = options.targetBranch || 'target workstream';
@@ -223,13 +249,19 @@ export function deriveWorkstreamComparisonState(options: {
             kind: 'aligned' | 'source_ahead' | 'target_ahead' | 'diverged' | 'different_repository' | 'not_comparable';
             summary: string;
             actionHint: string | null;
+            blockers?: string[];
+            reviewItems?: string[];
         }
     ): {
         kind: 'aligned' | 'source_ahead' | 'target_ahead' | 'diverged' | 'different_repository' | 'not_comparable';
         readiness: 'ready' | 'review' | 'blocked';
         summary: string;
         actionHint: string | null;
+        blockers: string[];
+        reviewItems: string[];
     } => {
+        const baseBlockers = base.blockers ?? [];
+        const baseReviewItems = base.reviewItems ?? [];
         if (sourceBlocked || targetBlocked) {
             const blockedLabel = sourceBlocked && targetBlocked
                 ? 'Both workstreams are currently blocked for handoff.'
@@ -240,7 +272,13 @@ export function deriveWorkstreamComparisonState(options: {
                 kind: base.kind,
                 readiness: 'blocked',
                 summary: `${base.summary} ${blockedLabel}`,
-                actionHint: blockedHint() ?? base.actionHint
+                actionHint: blockedHint() ?? base.actionHint,
+                blockers: [
+                    ...baseBlockers,
+                    ...(sourceBlocked ? [`${sourceLabel}: ${options.sourceHandoffSummary ?? 'blocked for handoff'}`] : []),
+                    ...(targetBlocked ? [`${targetLabel}: ${options.targetHandoffSummary ?? 'blocked for handoff'}`] : [])
+                ],
+                reviewItems: baseReviewItems
             };
         }
 
@@ -254,22 +292,29 @@ export function deriveWorkstreamComparisonState(options: {
                 kind: base.kind,
                 readiness: 'review',
                 summary: `${base.summary} ${reviewLabel}`,
-                actionHint: reviewHint() ?? base.actionHint
+                actionHint: reviewHint() ?? base.actionHint,
+                blockers: baseBlockers,
+                reviewItems: [
+                    ...baseReviewItems,
+                    ...(sourceReview ? [`${sourceLabel}: ${options.sourceHandoffSummary ?? 'review before handoff'}`] : []),
+                    ...(targetReview ? [`${targetLabel}: ${options.targetHandoffSummary ?? 'review before handoff'}`] : [])
+                ]
             };
         }
 
         if (base.kind === 'aligned') {
-            return { ...base, readiness: 'ready' };
+            return { ...base, readiness: 'ready', blockers: baseBlockers, reviewItems: baseReviewItems };
         }
 
-        return { ...base, readiness: 'review' };
+        return { ...base, readiness: 'review', blockers: baseBlockers, reviewItems: baseReviewItems };
     };
 
     if (!options.sameRepository) {
         return withReadiness({
             kind: 'different_repository',
             summary: 'These workstreams resolve to different repositories.',
-            actionHint: 'Compare them only at the session and checkpoint level; git divergence is not meaningful across repositories.'
+            actionHint: 'Compare them only at the session and checkpoint level; git divergence is not meaningful across repositories.',
+            blockers: ['These workstreams belong to different repositories.']
         });
     }
 
@@ -277,7 +322,8 @@ export function deriveWorkstreamComparisonState(options: {
         return withReadiness({
             kind: 'not_comparable',
             summary: 'Git divergence could not be computed for these workstreams.',
-            actionHint: 'Open both workstreams from named branches in the same repository before relying on git comparison.'
+            actionHint: 'Open both workstreams from named branches in the same repository before relying on git comparison.',
+            blockers: ['Git divergence is unavailable for one or both workstreams.']
         });
     }
 
@@ -293,7 +339,8 @@ export function deriveWorkstreamComparisonState(options: {
         return withReadiness({
             kind: 'source_ahead',
             summary: `${sourceLabel} is ahead of ${targetLabel} by ${options.sourceAheadCount} commit${options.sourceAheadCount === 1 ? '' : 's'}.`,
-            actionHint: `Merge or checkpoint ${sourceLabel} before handing it off as the newer line of work.`
+            actionHint: `Merge or checkpoint ${sourceLabel} before handing it off as the newer line of work.`,
+            reviewItems: [`${sourceLabel} is ahead and should be checkpointed or merged before handoff.`]
         });
     }
 
@@ -301,13 +348,15 @@ export function deriveWorkstreamComparisonState(options: {
         return withReadiness({
             kind: 'target_ahead',
             summary: `${targetLabel} is ahead of ${sourceLabel} by ${options.targetAheadCount} commit${options.targetAheadCount === 1 ? '' : 's'}.`,
-            actionHint: `Update or compare ${sourceLabel} against ${targetLabel} before continuing work there.`
+            actionHint: `Update or compare ${sourceLabel} against ${targetLabel} before continuing work there.`,
+            reviewItems: [`${sourceLabel} should be updated or compared against ${targetLabel} before work continues there.`]
         });
     }
 
     return withReadiness({
         kind: 'diverged',
         summary: `${sourceLabel} and ${targetLabel} have diverged from merge base ${options.mergeBaseSha ? options.mergeBaseSha.slice(0, 8) : 'unknown'}.`,
-        actionHint: 'Review both branches before merging or handing work across agents.'
+        actionHint: 'Review both branches before merging or handing work across agents.',
+        reviewItems: ['Both workstreams have diverged and need explicit reconciliation before handoff.']
     });
 }

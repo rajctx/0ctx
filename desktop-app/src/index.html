@@ -622,31 +622,25 @@
                     <span id="policySummaryBadge" class="chip">Default</span>
                   </div>
                   <form id="dataPolicyForm" class="workspace-form compact-form">
-                    <label>
-                      <span>Workspace sync</span>
-                      <select id="policySync">
-                        <option value="local_only">local_only</option>
-                        <option value="metadata_only">metadata_only</option>
-                        <option value="full_sync">full_sync</option>
-                      </select>
-                    </label>
-                    <div class="policy-grid">
-                      <label>
-                        <span>Capture retention (days)</span>
-                        <input id="policyCaptureRetention" type="number" min="1" step="1" />
-                      </label>
-                      <label>
-                        <span>Debug retention (days)</span>
-                        <input id="policyDebugRetention" type="number" min="1" step="1" />
-                      </label>
+                    <div class="policy-preset-grid" role="group" aria-label="Choose a data policy preset">
+                      <button class="btn tertiary policy-preset-btn" data-policy-preset="lean" type="button">
+                        <strong>Lean</strong>
+                        <span>Local-first default</span>
+                      </button>
+                      <button class="btn tertiary policy-preset-btn" data-policy-preset="review" type="button">
+                        <strong>Review</strong>
+                        <span>Longer local capture</span>
+                      </button>
+                      <button class="btn tertiary policy-preset-btn" data-policy-preset="debug" type="button">
+                        <strong>Debug</strong>
+                        <span>Temporary debug trails</span>
+                      </button>
+                      <button class="btn tertiary policy-preset-btn" data-policy-preset="shared" type="button">
+                        <strong>Shared</strong>
+                        <span>Opt into full sync</span>
+                      </button>
                     </div>
-                    <label class="toggle policy-toggle">
-                      <input id="policyDebugArtifacts" type="checkbox" />
-                      <span>Enable debug artifacts</span>
-                    </label>
-                    <div class="row-actions wrap-row">
-                      <button id="saveDataPolicyBtn" class="btn tertiary" type="button">Save policy</button>
-                    </div>
+                    <div id="policyDetailList" class="info-list compact-info-list"></div>
                     <p id="policyHint" class="page-copy compact-copy">Metadata-only sync is the normal default. Raw payloads stay local and debug artifacts stay off unless you explicitly enable them.</p>
                   </form>
                 </section>
@@ -696,3 +690,4 @@
 <script src="./app/wire.js" defer></script>
 </body>
 </html>
+

@@ -1,7 +1,28 @@
 (() => {
   window.OctxDesktop = window.OctxDesktop || {};
   const app = window.OctxDesktop;
-  const { state, activeContext, isGaIntegration, isPreviewIntegration, integrationLabel, integrationType, integrationListText, formatIntegrationNote, automaticContextState, formatPosture, formatSyncPolicyLabel, enableCommand, hookInstallCommand, hookIngestCommand, capturePolicySummary, matches, esc, renderMetaLine, short, methodSupported } = app;
+  const {
+    state,
+    activeContext,
+    isGaIntegration,
+    integrationLabel,
+    integrationType,
+    integrationListText,
+    formatIntegrationNote,
+    automaticContextState,
+    formatPosture,
+    formatSyncPolicyLabel,
+    formatDataPolicyPresetLabel,
+    enableCommand,
+    hookInstallCommand,
+    hookIngestCommand,
+    capturePolicySummary,
+    matches,
+    esc,
+    renderMetaLine,
+    short,
+    methodSupported
+  } = app;
 
   function renderSetup() {
     document.getElementById('setupCommand').textContent = enableCommand();
@@ -10,9 +31,7 @@
 
     const hooks = Array.isArray(state.hook?.agents) ? state.hook.agents : [];
     const gaHooks = hooks.filter((hook) => isGaIntegration(hook.agent));
-    const previewHooks = hooks.filter((hook) => isPreviewIntegration(hook.agent));
     const installedGa = gaHooks.filter((hook) => hook.installed);
-    const installedPreview = previewHooks.filter((hook) => hook.installed);
     const filteredHooks = gaHooks.filter((hook) => matches(`${hook.agent} ${hook.status} ${hook.notes || ''} ${hook.command || ''}`));
     const setupPageMeta = document.getElementById('setupPageMeta');
     if (setupPageMeta) {
@@ -20,10 +39,9 @@
         ? state.runtimeIssue.detail
         : installedGa.length > 0
           ? `${installedGa.length} GA integration${installedGa.length === 1 ? '' : 's'} ${installedGa.length === 1 ? 'is' : 'are'} installed on this machine. Use this screen only to enable another repo, add another GA agent, run a smoke test, or repair the runtime.`
-          : installedPreview.length > 0
-            ? 'No GA integrations are installed on this machine. Install Claude, Factory, or Antigravity for the normal product path.'
           : 'Enable the repo, install the integrations you actually use, then leave this screen. Daily work should happen in workstreams, sessions, and checkpoints.';
     }
+
     document.getElementById('hookSummary').textContent = `${installedGa.length} GA installed / ${gaHooks.length}`;
     document.getElementById('hookList').innerHTML = filteredHooks.length > 0
       ? filteredHooks.map((hook) => `
@@ -37,8 +55,8 @@
               ${hook.command ? `<p>${esc(short(hook.command, 180))}</p>` : ''}
             </article>
           `).join('')
-        : gaHooks.length > 0
-          ? '<div class="empty-state">No GA integrations match the current filter.</div>'
+      : gaHooks.length > 0
+        ? '<div class="empty-state">No GA integrations match the current filter.</div>'
         : '<div class="empty-state">GA integration health is unavailable until the daemon can read local setup state.</div>';
 
     const supportItems = [
@@ -58,28 +76,28 @@
         title: 'GA integrations',
         detail: installedGa.length > 0 ? integrationListText(installedGa) : 'No GA integrations installed',
         hint: 'Install only the GA agents you actually use on this machine.'
-        },
-        {
+      },
+      {
         title: 'Automatic context',
         detail: automaticContextState(),
         hint: 'Supported agents get the current workstream automatically at session start.'
-        },
-          {
-          title: 'Data policy',
-          detail: `${formatSyncPolicyLabel(state.dataPolicy?.syncPolicy || activeContext()?.syncPolicy)} | ${capturePolicySummary()}`,
-          hint: 'Metadata-only sync is the normal default. Local capture stays on this machine and debug trails remain off unless you enable them.'
-          }
-        ];
-      document.getElementById('setupSupportList').innerHTML = supportItems.map((item) => `
-        <article>
-          <strong>${esc(item.title)}</strong>
+      },
+      {
+        title: 'Data policy',
+        detail: `${formatDataPolicyPresetLabel(state.dataPolicy?.preset || 'lean')} | ${capturePolicySummary()}`,
+        hint: 'Metadata-only sync is the normal default. Local capture stays on this machine and debug trails remain off unless you explicitly enable them.'
+      }
+    ];
+    document.getElementById('setupSupportList').innerHTML = supportItems.map((item) => `
+      <article>
+        <strong>${esc(item.title)}</strong>
         <p>${esc(item.detail)}</p>
         <p>${esc(item.hint)}</p>
-        </article>
-      `).join('');
+      </article>
+    `).join('');
     document.getElementById('setupSupportCopy').textContent = state.runtimeIssue
-        ? state.runtimeIssue.detail
-        : 'Use utilities only when you need to enable a repo, install GA integrations, smoke-test capture, check updates, or repair the local runtime.';
+      ? state.runtimeIssue.detail
+      : 'Use utilities only when you need to enable a repo, install GA integrations, smoke-test capture, check updates, or repair the local runtime.';
 
     const policy = state.dataPolicy || {
       contextId: null,
@@ -87,37 +105,55 @@
       syncPolicy: 'metadata_only',
       captureRetentionDays: 14,
       debugRetentionDays: 7,
-      debugArtifactsEnabled: false
+      debugArtifactsEnabled: false,
+      preset: 'lean'
     };
-    const syncSelect = document.getElementById('policySync');
-    const captureInput = document.getElementById('policyCaptureRetention');
-    const debugInput = document.getElementById('policyDebugRetention');
-    const debugToggle = document.getElementById('policyDebugArtifacts');
-    const saveBtn = document.getElementById('saveDataPolicyBtn');
     const badge = document.getElementById('policySummaryBadge');
     const hint = document.getElementById('policyHint');
+    const detailList = document.getElementById('policyDetailList');
     const supportsMutation = methodSupported('setDataPolicy');
     const workspaceResolved = policy.workspaceResolved === true && Boolean(activeContext()?.id);
+    const preset = String(policy.preset || 'lean').trim().toLowerCase();
 
-    if (syncSelect) {
-      syncSelect.value = String(policy.syncPolicy || 'metadata_only');
-      syncSelect.disabled = !supportsMutation || !workspaceResolved;
-    }
-    if (captureInput) captureInput.value = String(policy.captureRetentionDays || 14);
-    if (debugInput) debugInput.value = String(policy.debugRetentionDays || 7);
-    if (debugToggle) debugToggle.checked = policy.debugArtifactsEnabled === true;
-    if (saveBtn) saveBtn.disabled = !supportsMutation;
+    document.querySelectorAll('[data-policy-preset]').forEach((button) => {
+      const presetValue = String(button.getAttribute('data-policy-preset') || '').trim().toLowerCase();
+      button.classList.toggle('active', presetValue === preset);
+      const requiresWorkspace = presetValue === 'shared';
+      button.disabled = !supportsMutation || (requiresWorkspace && !workspaceResolved);
+      button.title = requiresWorkspace && !workspaceResolved
+        ? 'Shared requires an active workspace because it opts that workspace into full sync.'
+        : '';
+    });
+
     if (badge) {
-      badge.textContent = workspaceResolved
-        ? formatSyncPolicyLabel(policy.syncPolicy || 'metadata_only')
-        : `${formatSyncPolicyLabel(policy.syncPolicy || 'metadata_only')} | no workspace`;
+      badge.textContent = formatDataPolicyPresetLabel(policy.preset || 'lean');
     }
+
+    if (detailList) {
+      const detailItems = [
+        { title: 'Workspace sync', detail: formatSyncPolicyLabel(policy.syncPolicy || 'metadata_only') },
+        { title: 'Local capture retention', detail: `${policy.captureRetentionDays || 14} days` },
+        { title: 'Debug retention', detail: `${policy.debugRetentionDays || 7} days` },
+        { title: 'Debug artifacts', detail: policy.debugArtifactsEnabled === true ? 'Enabled explicitly' : 'Off by default' }
+      ];
+      detailList.innerHTML = detailItems.map((item) => `
+        <article>
+          <strong>${esc(item.title)}</strong>
+          <p>${esc(item.detail)}</p>
+        </article>
+      `).join('');
+    }
+
     if (hint) {
       hint.textContent = !supportsMutation
-        ? 'Update the local runtime before changing policy from the desktop.'
-        : !workspaceResolved
-          ? 'Capture and debug settings can be updated globally here. Workspace sync requires an active workspace.'
-          : 'Metadata-only sync is the normal default. Raw payloads stay local and debug artifacts stay off unless you explicitly enable them.';
+        ? 'Update the local runtime before changing the data policy from the desktop.'
+        : preset === 'custom'
+          ? 'This workspace is using a custom policy. Choose one of the supported presets to return to a standard product path.'
+          : !workspaceResolved
+            ? 'Lean, Review, and Debug can be applied immediately. Shared requires an active workspace because it opts that workspace into full sync.'
+            : preset === 'shared'
+              ? 'Shared opts this workspace into full sync. Raw payloads still stay local and debug trails remain off unless you explicitly enable them elsewhere.'
+              : 'Lean is the normal default. Review keeps more local capture, Debug temporarily enables debug trails, and Shared opts this workspace into full sync.';
     }
   }
 

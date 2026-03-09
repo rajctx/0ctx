@@ -1,7 +1,7 @@
 (() => {
   window.OctxDesktop = window.OctxDesktop || {};
   const app = window.OctxDesktop;
-  const { state, activeBranch, activeInsightNode, activeSessionKnowledgePreview, activeCheckpointKnowledgePreview, selectedKnowledgeKeys, setSelectedKnowledgeKeys, extractTagValue, contextById, basenameFromPath, setStatus, setView, daemon, loadGraph, loadBranches, loadCheckpoints, loadCheckpointDetail, loadBranchComparisonSafe, loadDataPolicy, refreshAll, enableCommand, hookInstallCommand, methodSupported, resetBranchScopedState, debugArtifactsEnabled } = app;
+  const { state, activeBranch, activeInsightNode, activeSessionKnowledgePreview, activeCheckpointKnowledgePreview, selectedKnowledgeKeys, setSelectedKnowledgeKeys, extractTagValue, contextById, basenameFromPath, setStatus, setView, daemon, loadGraph, loadBranches, loadCheckpoints, loadCheckpointDetail, loadBranchComparisonSafe, loadDataPolicy, refreshAll, renderAll, enableCommand, hookInstallCommand, methodSupported, resetBranchScopedState, debugArtifactsEnabled } = app;
 
   async function createContext(event) {
     event.preventDefault();
@@ -39,38 +39,31 @@
     }
   }
 
-  async function saveDataPolicy() {
+  async function applyDataPolicyPreset(preset) {
     if (!methodSupported('setDataPolicy')) {
       setStatus('Update the local runtime before changing data policy from the desktop.');
       return;
     }
-    const syncSelect = document.getElementById('policySync');
-    const captureInput = document.getElementById('policyCaptureRetention');
-    const debugInput = document.getElementById('policyDebugRetention');
-    const debugToggle = document.getElementById('policyDebugArtifacts');
 
-    const captureRetentionDays = Number.parseInt(String(captureInput?.value || '').trim(), 10);
-    const debugRetentionDays = Number.parseInt(String(debugInput?.value || '').trim(), 10);
-    if (!Number.isFinite(captureRetentionDays) || captureRetentionDays <= 0) {
-      setStatus('Capture retention must be a positive number of days.');
+    const normalized = String(preset || '').trim().toLowerCase();
+    if (!['lean', 'review', 'debug', 'shared'].includes(normalized)) {
+      setStatus('Choose a valid data policy preset.');
       return;
     }
-    if (!Number.isFinite(debugRetentionDays) || debugRetentionDays <= 0) {
-      setStatus('Debug retention must be a positive number of days.');
+    if (normalized === 'shared' && !state.activeContextId) {
+      setStatus('Shared requires an active workspace because it opts that workspace into full sync.');
       return;
     }
 
     try {
       const result = await daemon('setDataPolicy', {
-        ...(state.activeContextId ? { contextId: state.activeContextId, syncPolicy: String(syncSelect?.value || 'metadata_only') } : {}),
-        captureRetentionDays,
-        debugRetentionDays,
-        debugArtifactsEnabled: Boolean(debugToggle?.checked)
+        ...(state.activeContextId ? { contextId: state.activeContextId } : {}),
+        preset: normalized
       });
       state.dataPolicy = result;
       await loadDataPolicy();
       renderAll();
-      setStatus('Updated data policy.');
+      setStatus(`Applied ${normalized} data policy.`);
     } catch (error) {
       setStatus(`Update data policy failed: ${String(error)}`);
     }
@@ -353,5 +346,5 @@
     app.renderSessions();
   }
 
-  Object.assign(app, { createContext, copyText, saveDataPolicy, createCheckpointFromActiveSession, previewKnowledgeFromActiveSession, extractKnowledgeFromActiveSession, previewKnowledgeFromActiveCheckpoint, extractKnowledgeFromActiveCheckpoint, promoteActiveInsight, explainActiveCheckpoint, rewindActiveCheckpoint, performHeroAction, toggleSelectedPayload });
+  Object.assign(app, { createContext, copyText, applyDataPolicyPreset, createCheckpointFromActiveSession, previewKnowledgeFromActiveSession, extractKnowledgeFromActiveSession, previewKnowledgeFromActiveCheckpoint, extractKnowledgeFromActiveCheckpoint, promoteActiveInsight, explainActiveCheckpoint, rewindActiveCheckpoint, performHeroAction, toggleSelectedPayload });
 })();

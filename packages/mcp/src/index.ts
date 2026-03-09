@@ -273,7 +273,8 @@ server.setRequestHandler(CallToolRequestSchema, async (req: any) => {
                 if (typeof args.checkpointId === 'string' && args.checkpointId.length > 0) {
                     const preview = await callDaemon('previewCheckpointKnowledge', {
                         checkpointId: args.checkpointId,
-                        maxNodes: args.maxNodes
+                        maxNodes: args.maxNodes,
+                        minConfidence: args.minConfidence
                     });
                     return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(preview, null, 2) }] } };
                 }
@@ -281,7 +282,8 @@ server.setRequestHandler(CallToolRequestSchema, async (req: any) => {
                     const preview = await callDaemon('previewSessionKnowledge', {
                         contextId,
                         sessionId: args.sessionId,
-                        maxNodes: args.maxNodes
+                        maxNodes: args.maxNodes,
+                        minConfidence: args.minConfidence
                     });
                     return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(preview, null, 2) }] } };
                 }
@@ -293,6 +295,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req: any) => {
                     const extraction = await callDaemon('extractCheckpointKnowledge', {
                         checkpointId: args.checkpointId,
                         maxNodes: args.maxNodes,
+                        minConfidence: args.minConfidence,
                         candidateKeys: args.candidateKeys
                     });
                     return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(extraction, null, 2) }] } };
@@ -302,6 +305,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req: any) => {
                         contextId,
                         sessionId: args.sessionId,
                         maxNodes: args.maxNodes,
+                        minConfidence: args.minConfidence,
                         candidateKeys: args.candidateKeys
                     });
                     return { _meta: {}, toolResult: { content: [{ type: 'text', text: JSON.stringify(extraction, null, 2) }] } };

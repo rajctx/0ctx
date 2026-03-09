@@ -26,6 +26,41 @@ function parseChangedFiles(output: string | null): string[] | null {
         .sort();
 }
 
+interface ChangedBaseRange {
+    start: number;
+    end: number;
+}
+
+function parseChangedBaseRanges(output: string | null): Map<string, ChangedBaseRange[]> | null {
+    if (output === null) return null;
+    const rangesByFile = new Map<string, ChangedBaseRange[]>();
+    let currentFile: string | null = null;
+
+    for (const rawLine of output.split(/\r?\n/)) {
+        const line = rawLine.trimEnd();
+        if (line.startsWith('diff --git ')) {
+            const match = /^diff --git a\/(.+?) b\/(.+)$/.exec(line);
+            currentFile = match?.[2] ?? null;
+            if (currentFile && !rangesByFile.has(currentFile)) {
+                rangesByFile.set(currentFile, []);
+            }
+            continue;
+        }
+        if (!currentFile || !line.startsWith('@@')) {
+            continue;
+        }
+        const match = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(line);
+        if (!match) continue;
+        const oldStart = Number(match[1]);
+        const oldCount = Number(match[2] ?? '1');
+        const start = oldStart;
+        const end = oldCount <= 0 ? oldStart : oldStart + oldCount - 1;
+        rangesByFile.get(currentFile)?.push({ start, end });
+    }
+
+    return rangesByFile;
+}
+
 function compareChangedFiles(source: string[] | null, target: string[] | null): {
     sourceChangedFileCount: number | null;
     targetChangedFileCount: number | null;
@@ -105,6 +140,159 @@ function compareChangedFiles(source: string[] | null, target: string[] | null): 
     };
 }
 
+function rangesOverlap(left: ChangedBaseRange, right: ChangedBaseRange): boolean {
+    return left.start <= right.end && right.start <= left.end;
+}
+
+function compareChangedLineRanges(
+    source: Map<string, ChangedBaseRange[]> | null,
+    target: Map<string, ChangedBaseRange[]> | null,
+    sharedChangedFiles: string[]
+): {
+    sharedConflictLikelyCount: number | null;
+    sharedConflictLikelyFiles: string[];
+    lineOverlapKind: 'none' | 'partial' | 'high' | 'unknown';
+    lineOverlapSummary: string;
+} {
+    if (source === null || target === null) {
+        return {
+            sharedConflictLikelyCount: null,
+            sharedConflictLikelyFiles: [],
+            lineOverlapKind: 'unknown',
+            lineOverlapSummary: 'Changed-line overlap could not be computed for these workstreams.'
+        };
+    }
+
+    const sharedConflictLikelyFiles = sharedChangedFiles.filter((file) => {
+        const sourceRanges = source.get(file) ?? [];
+        const targetRanges = target.get(file) ?? [];
+        return sourceRanges.some((sourceRange) => targetRanges.some((targetRange) => rangesOverlap(sourceRange, targetRange)));
+    }).sort();
+    const sharedConflictLikelyCount = sharedConflictLikelyFiles.length;
+
+    if (sharedChangedFiles.length === 0 || sharedConflictLikelyCount === 0) {
+        return {
+            sharedConflictLikelyCount,
+            sharedConflictLikelyFiles,
+            lineOverlapKind: 'none',
+            lineOverlapSummary: 'No overlapping changed line ranges were detected in shared files.'
+        };
+    }
+
+    const overlapRatio = sharedConflictLikelyCount / Math.max(sharedChangedFiles.length, 1);
+    const lineOverlapKind = sharedConflictLikelyCount >= 2 || overlapRatio >= 0.6 ? 'high' : 'partial';
+    const sampled = sharedConflictLikelyFiles.slice(0, 3).join(', ');
+    const suffix = sharedConflictLikelyCount > 3 ? ` (+${sharedConflictLikelyCount - 3} more)` : '';
+    return {
+        sharedConflictLikelyCount,
+        sharedConflictLikelyFiles,
+        lineOverlapKind,
+        lineOverlapSummary: lineOverlapKind === 'high'
+            ? `Both workstreams modify overlapping line ranges in ${sharedConflictLikelyCount} shared files: ${sampled}${suffix}.`
+            : `The workstreams overlap on the same line ranges in ${sharedConflictLikelyCount} shared file${sharedConflictLikelyCount === 1 ? '' : 's'}: ${sampled}${suffix}.`
+    };
+}
+
+function summarizeChangedAreas(files: string[]): {
+    sharedChangedAreas: string[];
+    changeHotspotSummary: string;
+} {
+    if (files.length === 0) {
+        return {
+            sharedChangedAreas: [],
+            changeHotspotSummary: 'No shared change hotspots were detected.'
+        };
+    }
+
+    const counts = new Map<string, number>();
+    for (const file of files) {
+        const normalized = file.replace(/\\/g, '/').split('/').filter(Boolean);
+        const area = normalized.length >= 2
+            ? normalized.slice(0, 2).join('/')
+            : normalized[0] || file;
+        counts.set(area, (counts.get(area) ?? 0) + 1);
+    }
+
+    const sharedChangedAreas = [...counts.entries()]
+        .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+        .map(([area]) => area);
+
+    const sample = sharedChangedAreas.slice(0, 3).join(', ');
+    const suffix = sharedChangedAreas.length > 3 ? ` (+${sharedChangedAreas.length - 3} more)` : '';
+    return {
+        sharedChangedAreas,
+        changeHotspotSummary: `Shared change hotspots: ${sample}${suffix}.`
+    };
+}
+
+function deriveMergeRisk(options: {
+    sameRepository: boolean;
+    comparable: boolean;
+    comparisonKind: WorkstreamComparison['comparisonKind'];
+    comparisonReadiness: WorkstreamComparison['comparisonReadiness'];
+    changeOverlapKind: WorkstreamComparison['changeOverlapKind'];
+    sharedChangedFileCount: number | null;
+    lineOverlapKind: WorkstreamComparison['lineOverlapKind'];
+    sharedConflictLikelyCount: number | null;
+}): {
+    mergeRisk: WorkstreamComparison['mergeRisk'];
+    mergeRiskSummary: string;
+} {
+    if (options.comparisonReadiness === 'blocked') {
+        return {
+            mergeRisk: 'blocked',
+            mergeRiskSummary: 'Resolve checkout or handoff blockers before trusting merge guidance for these workstreams.'
+        };
+    }
+
+    if (!options.sameRepository || !options.comparable) {
+        return {
+            mergeRisk: 'unknown',
+            mergeRiskSummary: 'Merge risk cannot be estimated until both workstreams are comparable branches in the same repository.'
+        };
+    }
+
+    if (options.lineOverlapKind === 'high' || options.lineOverlapKind === 'partial') {
+        return {
+            mergeRisk: 'high',
+            mergeRiskSummary: `High merge risk: both workstreams modify overlapping line ranges in ${options.sharedConflictLikelyCount ?? '?'} shared file${options.sharedConflictLikelyCount === 1 ? '' : 's'}.`
+        };
+    }
+
+    if (options.changeOverlapKind === 'high' && options.comparisonKind === 'diverged') {
+        return {
+            mergeRisk: 'high',
+            mergeRiskSummary: `High merge risk: both workstreams diverged and overlap on ${options.sharedChangedFileCount ?? '?'} changed files.`
+        };
+    }
+
+    if (options.changeOverlapKind === 'high') {
+        return {
+            mergeRisk: 'high',
+            mergeRiskSummary: `High merge risk: the workstreams overlap heavily on ${options.sharedChangedFileCount ?? '?'} changed files.`
+        };
+    }
+
+    if (options.comparisonKind === 'diverged' || options.changeOverlapKind === 'partial') {
+        return {
+            mergeRisk: 'medium',
+            mergeRiskSummary: 'Medium merge risk: review the shared files before handing work across these workstreams.'
+        };
+    }
+
+    if (options.changeOverlapKind === 'none') {
+        return {
+            mergeRisk: 'low',
+            mergeRiskSummary: 'Low merge risk: the workstreams currently touch different files.'
+        };
+    }
+
+    return {
+        mergeRisk: 'unknown',
+        mergeRiskSummary: 'Merge risk is unknown for these workstreams.'
+    };
+}
+
 export function compareWorkstreams(
     graph: Graph,
     contextId: string,
@@ -140,6 +328,8 @@ export function compareWorkstreams(
     let comparable = false;
     let sourceChangedFiles: string[] | null = null;
     let targetChangedFiles: string[] | null = null;
+    let sourceChangedLineRanges: Map<string, ChangedBaseRange[]> | null = null;
+    let targetChangedLineRanges: Map<string, ChangedBaseRange[]> | null = null;
 
     if (sameRepository && source.branch && target.branch && source.branch !== target.branch && source.repositoryRoot) {
         const countText = safeGit(source.repositoryRoot, ['rev-list', '--left-right', '--count', `${source.branch}...${target.branch}`]);
@@ -151,6 +341,8 @@ export function compareWorkstreams(
         if (mergeBaseSha) {
             sourceChangedFiles = parseChangedFiles(safeGit(source.repositoryRoot, ['diff', '--name-only', `${mergeBaseSha}..${source.branch}`])) ?? [];
             targetChangedFiles = parseChangedFiles(safeGit(source.repositoryRoot, ['diff', '--name-only', `${mergeBaseSha}..${target.branch}`])) ?? [];
+            sourceChangedLineRanges = parseChangedBaseRanges(safeGit(source.repositoryRoot, ['diff', '--unified=0', '--no-color', `${mergeBaseSha}..${source.branch}`]));
+            targetChangedLineRanges = parseChangedBaseRanges(safeGit(source.repositoryRoot, ['diff', '--unified=0', '--no-color', `${mergeBaseSha}..${target.branch}`]));
         }
     } else if (sameRepository && source.branch && target.branch && source.branch === target.branch) {
         comparable = true;
@@ -159,6 +351,8 @@ export function compareWorkstreams(
         mergeBaseSha = source.mergeBaseSha ?? target.mergeBaseSha ?? null;
         sourceChangedFiles = [];
         targetChangedFiles = [];
+        sourceChangedLineRanges = new Map();
+        targetChangedLineRanges = new Map();
     }
 
     const comparisonState = deriveWorkstreamComparisonState({
@@ -194,6 +388,37 @@ export function compareWorkstreams(
         ]
     );
     const changedFiles = compareChangedFiles(sourceChangedFiles, targetChangedFiles);
+    const changedLines = compareChangedLineRanges(sourceChangedLineRanges, targetChangedLineRanges, changedFiles.sharedChangedFiles);
+    const hotspots = summarizeChangedAreas(changedFiles.sharedChangedFiles);
+    const mergeRisk = deriveMergeRisk({
+        sameRepository,
+        comparable,
+        comparisonKind: comparisonState.kind,
+        comparisonReadiness: comparisonState.readiness,
+        changeOverlapKind: changedFiles.changeOverlapKind,
+        sharedChangedFileCount: changedFiles.sharedChangedFileCount,
+        lineOverlapKind: changedLines.lineOverlapKind,
+        sharedConflictLikelyCount: changedLines.sharedConflictLikelyCount
+    });
+    const comparisonBlockers = [
+        ...(comparisonState.blockers ?? []),
+        ...(mergeRisk.mergeRisk === 'blocked' ? [mergeRisk.mergeRiskSummary] : [])
+    ];
+    const comparisonReviewItems = [
+        ...(comparisonState.reviewItems ?? []),
+        ...(mergeRisk.mergeRisk === 'medium' || mergeRisk.mergeRisk === 'high' ? [mergeRisk.mergeRiskSummary] : []),
+        ...(changedLines.lineOverlapKind === 'high' || changedLines.lineOverlapKind === 'partial'
+            ? ['Both workstreams touch overlapping line ranges in shared files; resolve those conflicts before handoff or merge.']
+            : []),
+        ...(changedFiles.changeOverlapKind === 'high'
+            ? ['Both workstreams modify many of the same files; review those files before merging or handing work off.']
+            : changedFiles.changeOverlapKind === 'partial'
+                ? ['The workstreams overlap on some files; inspect the overlap before handoff.']
+                : []),
+        ...(hotspots.sharedChangedAreas.length > 0
+            ? [`Focus review on: ${hotspots.sharedChangedAreas.slice(0, 3).join(', ')}${hotspots.sharedChangedAreas.length > 3 ? ` (+${hotspots.sharedChangedAreas.length - 3} more)` : ''}.`]
+            : [])
+    ];
 
     const lines = [
         `Workstream comparison for ${source.workspaceName}`,
@@ -201,8 +426,13 @@ export function compareWorkstreams(
         `Target: ${target.branch ?? 'unknown branch'}`,
         comparisonState.summary,
         `Readiness: ${comparisonState.readiness}`,
-        `Changed files: ${changedFiles.changeOverlapSummary}`
+        `Changed files: ${changedFiles.changeOverlapSummary}`,
+        `Changed lines: ${changedLines.lineOverlapSummary}`,
+        `Hotspots: ${hotspots.changeHotspotSummary}`,
+        `Merge risk: ${mergeRisk.mergeRiskSummary}`
     ];
+    if (comparisonBlockers.length > 0) lines.push(`Blockers: ${comparisonBlockers.join(' ')}`);
+    if (comparisonReviewItems.length > 0) lines.push(`Review: ${comparisonReviewItems.join(' ')}`);
     if (comparisonState.actionHint) lines.push(`Recommended next step: ${comparisonState.actionHint}`);
     if (source.stateSummary) lines.push(`Source status: ${source.stateSummary}`);
     if (source.handoffSummary) lines.push(`Source handoff: ${source.handoffSummary}`);
@@ -213,6 +443,8 @@ export function compareWorkstreams(
     if (sourceOnlyAgents.length > 0) lines.push(`Only on ${source.branch ?? 'source'}: ${sourceOnlyAgents.join(', ')}.`);
     if (targetOnlyAgents.length > 0) lines.push(`Only on ${target.branch ?? 'target'}: ${targetOnlyAgents.join(', ')}.`);
     if (changedFiles.sharedChangedFiles.length > 0) lines.push(`Shared files: ${changedFiles.sharedChangedFiles.slice(0, 5).join(', ')}${changedFiles.sharedChangedFiles.length > 5 ? ` (+${changedFiles.sharedChangedFiles.length - 5} more)` : ''}.`);
+    if (changedLines.sharedConflictLikelyFiles.length > 0) lines.push(`Likely conflict files: ${changedLines.sharedConflictLikelyFiles.slice(0, 5).join(', ')}${changedLines.sharedConflictLikelyFiles.length > 5 ? ` (+${changedLines.sharedConflictLikelyFiles.length - 5} more)` : ''}.`);
+    if (hotspots.sharedChangedAreas.length > 0) lines.push(hotspots.changeHotspotSummary);
     if (newerSide === 'source') lines.push(`${source.branch ?? 'Source'} has the newer captured activity.`);
     else if (newerSide === 'target') lines.push(`${target.branch ?? 'Target'} has the newer captured activity.`);
 
@@ -231,17 +463,31 @@ export function compareWorkstreams(
         comparisonReadiness: comparisonState.readiness,
         comparisonSummary: comparisonState.summary,
         comparisonActionHint: comparisonState.actionHint,
+        comparisonBlockers,
+        comparisonReviewItems,
         sharedAgents,
         sourceOnlyAgents,
         targetOnlyAgents,
+        sharedConflictLikelyCount: changedLines.sharedConflictLikelyCount,
+        sharedConflictLikelyFiles: changedLines.sharedConflictLikelyFiles,
+        lineOverlapKind: changedLines.lineOverlapKind,
+        lineOverlapSummary: changedLines.lineOverlapSummary,
         sourceChangedFileCount: changedFiles.sourceChangedFileCount,
         targetChangedFileCount: changedFiles.targetChangedFileCount,
         sharedChangedFileCount: changedFiles.sharedChangedFileCount,
         sharedChangedFiles: changedFiles.sharedChangedFiles,
+        sharedChangedAreas: hotspots.sharedChangedAreas,
         sourceOnlyChangedFiles: changedFiles.sourceOnlyChangedFiles,
         targetOnlyChangedFiles: changedFiles.targetOnlyChangedFiles,
         changeOverlapKind: changedFiles.changeOverlapKind,
         changeOverlapSummary: changedFiles.changeOverlapSummary,
+        sharedConflictLikelyCount: changedLines.sharedConflictLikelyCount,
+        sharedConflictLikelyFiles: changedLines.sharedConflictLikelyFiles,
+        lineOverlapKind: changedLines.lineOverlapKind,
+        lineOverlapSummary: changedLines.lineOverlapSummary,
+        changeHotspotSummary: hotspots.changeHotspotSummary,
+        mergeRisk: mergeRisk.mergeRisk,
+        mergeRiskSummary: mergeRisk.mergeRiskSummary,
         comparisonText: lines.join('\n')
     };
 }

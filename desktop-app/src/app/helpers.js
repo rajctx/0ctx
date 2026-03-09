@@ -405,6 +405,7 @@
                 ${renderChip(candidate.type || 'node', candidate.action === 'create' ? 'green' : 'beige')}
                 ${renderChip(candidate.action === 'create' ? 'new node' : 'already in graph', candidate.action === 'create' ? 'green' : 'orange')}
                 ${candidate.confidence != null ? renderChip(formatConfidence(candidate.confidence), confidenceTone(candidate.confidence)) : ''}
+                ${candidate.evidenceCount && candidate.evidenceCount > 1 ? renderChip(`${candidate.evidenceCount} mentions`, 'purple') : ''}
                 ${candidate.role ? renderChip(candidate.role, chipToneForRole(candidate.role)) : ''}
                 ${candidate.messageId ? renderChip(short(candidate.messageId, 24), 'beige', { mono: true }) : ''}
               </div>

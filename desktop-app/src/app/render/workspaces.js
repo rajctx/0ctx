@@ -136,7 +136,7 @@
           {
             title: 'Capture readiness',
             detail: `${capture.label} | ${capture.detail}`,
-            hint: 'This only reflects the GA product path. Preview integrations stay outside normal readiness.'
+            hint: 'This reflects the supported product path for the integrations installed on this machine.'
           },
           {
             title: 'Automatic context',

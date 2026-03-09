@@ -298,6 +298,47 @@ export class Graph {
         return false;
     }
 
+    private isOperationalProcedure(text: string): boolean {
+        const normalized = text.toLowerCase().trim();
+        if (!normalized) return false;
+
+        if (/^(please\s+)?(run|open|click|choose|select|copy|paste|refresh|restart|reinstall|install|debug|repair|check|verify|review|inspect|show|switch|reopen)\b/.test(normalized)) {
+            return true;
+        }
+        if (/\b(if the issue remains|if needed|then refresh|then reopen|then rerun|before handing|before continuing|after reinstall)\b/.test(normalized)) {
+            return true;
+        }
+        if (
+            /\b(connector|daemon|runtime|payload|debug payload|install command|smoke test|utilities|setup screen|desktop app)\b/.test(normalized)
+            && /\b(refresh|restart|repair|rerun|copy|open|show|check|inspect|review|reinstall|install)\b/.test(normalized)
+        ) {
+            return true;
+        }
+        return false;
+    }
+
+    private isImplementationStatus(text: string): boolean {
+        const normalized = text.toLowerCase().trim();
+        if (!normalized) return false;
+
+        const hasImplementationSubject = /\b(app|desktop|desktop app|ui|screen|view|page|panel|reader|sidebar|setup|utility|graph|daemon|runtime|connector|cli|command|mcp|tool|workstream compare|compare panel|session-start|session start)\b/.test(normalized);
+        const hasStatusVerb = /\b(shows?|renders?|loads?|displays?|returns?|prints?|writes?|stores?|captures?|installs?|supports?|exposes?|uses?|includes?|contains?|lists?|promotes?|loads)\b/.test(normalized);
+        const hasTemporalMarker = /\b(now|currently|already|no longer|is now|are now|was updated|were updated)\b/.test(normalized);
+        const hasStableIntentLanguage = /\b(decided|decision|must|should|need to|goal|constraint|default|policy|required|requirement|never|cannot|can't)\b/.test(normalized);
+
+        if (hasImplementationSubject && hasStatusVerb && hasTemporalMarker && !hasStableIntentLanguage) {
+            return true;
+        }
+
+        if (/^(the|this)\s+(desktop|desktop app|app|daemon|runtime|cli|ui|screen|view|panel|reader|graph|setup)\b/.test(normalized)) {
+            if (/\b(now|currently|already|no longer)\b/.test(normalized) && !hasStableIntentLanguage) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private scoreKnowledgeCandidate(
         text: string,
         role: string | null | undefined
@@ -308,6 +349,8 @@ export class Graph {
     } | null {
         const normalized = text.toLowerCase().trim();
         if (!normalized || this.isExtractionNoise(text)) return null;
+        if (this.isOperationalProcedure(text)) return null;
+        if (this.isImplementationStatus(text)) return null;
 
         const wordCount = normalized.split(/\s+/).filter(Boolean).length;
         if (wordCount < 5) return null;
@@ -329,7 +372,7 @@ export class Graph {
         }
 
         if (/\b(we need to|need to build|need to create|need to support|want to|goal is to|aim is to|objective is to|build a|build an|create a|create an|implement a|implement an|add support for)\b/.test(normalized)) {
-            if (/\b(test|tests|smoke|refresh|restart|rerun|validate|repair|debug|click|open|copy|paste|command|button)\b/.test(normalized)) {
+            if (/\b(test|tests|smoke|refresh|restart|rerun|validate|repair|debug|click|open|copy|paste|command|button|screen|reload|review|check|verify|inspect)\b/.test(normalized)) {
                 return null;
             }
             return {
@@ -340,6 +383,9 @@ export class Graph {
         }
 
         if (/\b(must|cannot|can't|should not|should stay|should remain|do not|don't|required|requirement|never|enabled by default|disabled by default|local-first)\b/.test(normalized)) {
+            if (/\b(click|open|refresh|restart|repair|reinstall|review|check|verify|inspect|copy|paste|button|screen)\b/.test(normalized)) {
+                return null;
+            }
             return {
                 type: 'constraint',
                 confidence: 0.84,
@@ -348,7 +394,7 @@ export class Graph {
         }
 
         if (/\b(decided|decision|going with|adopt|adopted|chosen|choose to|switched to|default to|standardize|migrate to)\b/.test(normalized)) {
-            if (/\b(test|tests|smoke|refresh|restart|rerun|validate|repair|debug|build|compiled|verified|installed)\b/.test(normalized)) {
+            if (/\b(test|tests|smoke|refresh|restart|rerun|validate|repair|debug|build|compiled|verified|installed|review|check|verify|inspect|button|screen)\b/.test(normalized)) {
                 return null;
             }
             return {
@@ -385,6 +431,32 @@ export class Graph {
         }
 
         return null;
+    }
+
+    private boostKnowledgeCandidateConfidence(baseConfidence: number, evidenceCount: number, roles: Set<string>): number {
+        let adjusted = baseConfidence;
+        if (evidenceCount > 1) {
+            adjusted += Math.min(0.12, (evidenceCount - 1) * 0.04);
+        }
+        if (roles.has('assistant') && roles.has('user')) {
+            adjusted += 0.04;
+        } else if (roles.has('assistant')) {
+            adjusted += 0.02;
+        }
+        return Math.min(0.98, adjusted);
+    }
+
+    private buildKnowledgeEvidenceReason(baseReason: string, evidenceCount: number, roles: Set<string>): string {
+        const reasonParts = [baseReason];
+        if (evidenceCount > 1) {
+            reasonParts.push(`repeated-${evidenceCount}-times`);
+        }
+        if (roles.has('assistant') && roles.has('user')) {
+            reasonParts.push('corroborated-across-roles');
+        } else if (roles.has('assistant')) {
+            reasonParts.push('assistant-confirmed');
+        }
+        return reasonParts.join(', ');
     }
 
     private ensureEdge(fromId: string, toId: string, relation: EdgeType): void {
@@ -1482,7 +1554,6 @@ export class Graph {
             reused: false
         };
     }
-
     private collectSessionKnowledgeCandidates(
         contextId: string,
         sessionId: string,
@@ -1508,52 +1579,99 @@ export class Graph {
         const allowedKeys = Array.isArray(options.allowedKeys)
             ? new Set(options.allowedKeys.map((value) => String(value || '').trim()).filter(Boolean))
             : null;
-        const seenCandidates = new Set<string>();
         const candidates: Array<KnowledgeCandidate & { existingNode: ContextNode | null }> = [];
 
         if (!session) {
             return { session: null, source, checkpointId, candidates };
         }
 
+        const aggregated = new Map<string, {
+            type: Exclude<NodeType, 'artifact'>;
+            content: string;
+            key: string;
+            sourceNodeId: string | null;
+            messageId: string | null;
+            role: string | null;
+            createdAt: number;
+            bestConfidence: number;
+            bestReason: string;
+            evidenceCount: number;
+            roles: Set<string>;
+        }>();
+
         for (const message of detail.messages) {
             const extracted = this.splitExtractionCandidates(message.content);
             for (const candidateText of extracted) {
-                if (candidates.length >= safeLimit) break;
                 const classified = this.scoreKnowledgeCandidate(candidateText, message.role);
-                if (!classified || classified.confidence < minConfidence) continue;
+                if (!classified) continue;
                 const type = classified.type;
                 const dedupeKey = `${type}:${candidateText.toLowerCase()}`;
-                if (seenCandidates.has(dedupeKey)) continue;
-                seenCandidates.add(dedupeKey);
-
                 const key = this.buildKnowledgeKey(contextId, type, candidateText, {
                     branch: session.branch,
                     worktreePath: session.worktreePath
                 });
                 if (allowedKeys && !allowedKeys.has(key)) continue;
-                const existingNode = this.getByKey(contextId, key, { includeHidden: true });
-                candidates.push({
+
+                const existing = aggregated.get(dedupeKey);
+                if (!existing) {
+                    aggregated.set(dedupeKey, {
+                        type,
+                        content: candidateText,
+                        key,
+                        sourceNodeId: message.nodeId ?? null,
+                        messageId: message.messageId ?? null,
+                        role: message.role ?? null,
+                        createdAt: message.createdAt,
+                        bestConfidence: classified.confidence,
+                        bestReason: classified.reason,
+                        evidenceCount: 1,
+                        roles: new Set((message.role ?? '').trim() ? [(message.role ?? '').toLowerCase()] : [])
+                    });
+                    continue;
+                }
+
+                existing.evidenceCount += 1;
+                if ((message.role ?? '').trim()) existing.roles.add((message.role ?? '').toLowerCase());
+                if (classified.confidence > existing.bestConfidence) {
+                    existing.bestConfidence = classified.confidence;
+                    existing.bestReason = classified.reason;
+                    existing.sourceNodeId = message.nodeId ?? null;
+                    existing.messageId = message.messageId ?? null;
+                    existing.role = message.role ?? null;
+                    existing.createdAt = message.createdAt;
+                }
+            }
+        }
+
+        const ranked = Array.from(aggregated.values())
+            .map((candidate) => {
+                const confidence = this.boostKnowledgeCandidateConfidence(candidate.bestConfidence, candidate.evidenceCount, candidate.roles);
+                const existingNode = this.getByKey(contextId, candidate.key, { includeHidden: true });
+                return {
                     contextId,
                     source,
                     sessionId,
                     checkpointId,
-                    type,
-                    content: candidateText,
-                    key,
-                    action: existingNode ? 'reuse' : 'create',
+                    type: candidate.type,
+                    content: candidate.content,
+                    key: candidate.key,
+                    action: (existingNode ? 'reuse' : 'create') as KnowledgeCandidate['action'],
                     existingNodeId: existingNode?.id ?? null,
-                    sourceNodeId: message.nodeId ?? null,
-                    messageId: message.messageId ?? null,
-                    role: message.role ?? null,
-                    createdAt: message.createdAt,
-                    confidence: classified.confidence,
-                    reason: classified.reason,
+                    sourceNodeId: candidate.sourceNodeId,
+                    messageId: candidate.messageId,
+                    role: candidate.role,
+                    createdAt: candidate.createdAt,
+                    confidence,
+                    reason: this.buildKnowledgeEvidenceReason(candidate.bestReason, candidate.evidenceCount, candidate.roles),
+                    evidenceCount: candidate.evidenceCount,
                     existingNode
-                });
-            }
-            if (candidates.length >= safeLimit) break;
-        }
+                };
+            })
+            .filter((candidate) => candidate.confidence >= minConfidence)
+            .sort((left, right) => (right.confidence ?? 0) - (left.confidence ?? 0) || (right.evidenceCount ?? 0) - (left.evidenceCount ?? 0) || right.createdAt - left.createdAt)
+            .slice(0, safeLimit);
 
+        candidates.push(...ranked);
         return { session, source, checkpointId, candidates };
     }
 
@@ -1588,7 +1706,10 @@ export class Graph {
             minConfidence?: number;
         } = {}
     ): KnowledgeExtractionResult {
-        const { session, source, checkpointId, candidates } = this.collectSessionKnowledgeCandidates(contextId, sessionId, options);
+        const extractionOptions = options.minConfidence == null
+            ? { ...options, minConfidence: 0.7 }
+            : options;
+        const { session, source, checkpointId, candidates } = this.collectSessionKnowledgeCandidates(contextId, sessionId, extractionOptions);
         const resultNodes: ContextNode[] = [];
         const resultIds = new Set<string>();
         let createdCount = 0;
@@ -1720,7 +1841,8 @@ export class Graph {
                 role: 'assistant',
                 createdAt: checkpoint.createdAt,
                 confidence: classified.confidence,
-                reason: classified.reason
+                reason: classified.reason,
+                evidenceCount: 1
             }]
         };
     }

@@ -38,6 +38,12 @@ export function createBranchCommands(ctx: WorkstreamCommandContext) {
                     if (result.lastCommitSha) console.log(`  Last commit: ${String(result.lastCommitSha).slice(0, 12)}`);
                     if (result.stateSummary) console.log(`  Status: ${result.stateSummary}`);
                     if (result.stateActionHint) console.log(`  Next: ${result.stateActionHint}`);
+                    if (Array.isArray(result.handoffBlockers) && result.handoffBlockers.length > 0) {
+                        console.log(`  Blockers: ${result.handoffBlockers.join(' | ')}`);
+                    }
+                    if (Array.isArray(result.handoffReviewItems) && result.handoffReviewItems.length > 0) {
+                        console.log(`  Review: ${result.handoffReviewItems.join(' | ')}`);
+                    }
                     if (result.isDetachedHead && result.currentHeadSha) {
                         console.log(`  HEAD: detached @ ${String(result.currentHeadSha).slice(0, 12)}`);
                     } else if (result.currentHeadSha) {
@@ -133,11 +139,26 @@ export function createBranchCommands(ctx: WorkstreamCommandContext) {
                     if (result.sourceOnlyAgents.length > 0) console.log(`  Source only:   ${result.sourceOnlyAgents.join(', ')}`);
                     if (result.targetOnlyAgents.length > 0) console.log(`  Target only:   ${result.targetOnlyAgents.join(', ')}`);
                     if (result.changeOverlapSummary) console.log(`  Overlap:   ${result.changeOverlapSummary}`);
+                    if (result.lineOverlapSummary) console.log(`  Lines:     ${result.lineOverlapSummary}`);
+                    if (result.changeHotspotSummary) console.log(`  Hotspots:  ${result.changeHotspotSummary}`);
+                    if (result.mergeRiskSummary) console.log(`  Risk:      ${result.mergeRiskSummary}`);
+                    if (Array.isArray(result.comparisonBlockers) && result.comparisonBlockers.length > 0) {
+                        console.log(`  Blockers:  ${result.comparisonBlockers.join(' | ')}`);
+                    }
+                    if (Array.isArray(result.comparisonReviewItems) && result.comparisonReviewItems.length > 0) {
+                        console.log(`  Review:    ${result.comparisonReviewItems.join(' | ')}`);
+                    }
                     if (typeof result.sourceChangedFileCount === 'number' || typeof result.targetChangedFileCount === 'number') {
                         console.log(`  Files:     source ${result.sourceChangedFileCount ?? '?'} | target ${result.targetChangedFileCount ?? '?'} | shared ${result.sharedChangedFileCount ?? '?'}`);
                     }
                     if (Array.isArray(result.sharedChangedFiles) && result.sharedChangedFiles.length > 0) {
                         console.log(`  Shared files: ${result.sharedChangedFiles.slice(0, 5).join(', ')}${result.sharedChangedFiles.length > 5 ? ` (+${result.sharedChangedFiles.length - 5} more)` : ''}`);
+                    }
+                    if (Array.isArray(result.sharedConflictLikelyFiles) && result.sharedConflictLikelyFiles.length > 0) {
+                        console.log(`  Likely conflicts: ${result.sharedConflictLikelyFiles.slice(0, 5).join(', ')}${result.sharedConflictLikelyFiles.length > 5 ? ` (+${result.sharedConflictLikelyFiles.length - 5} more)` : ''}`);
+                    }
+                    if (Array.isArray(result.sharedChangedAreas) && result.sharedChangedAreas.length > 0) {
+                        console.log(`  Focus areas: ${result.sharedChangedAreas.slice(0, 5).join(', ')}${result.sharedChangedAreas.length > 5 ? ` (+${result.sharedChangedAreas.length - 5} more)` : ''}`);
                     }
                     if (result.source.stateSummary) console.log(`  Source status: ${result.source.stateSummary}`);
                     if (result.source.handoffSummary) console.log(`  Source handoff: ${result.source.handoffSummary}`);
@@ -164,6 +185,12 @@ export function createBranchCommands(ctx: WorkstreamCommandContext) {
                     if (lane.lastCommitSha) console.log(`    Last commit: ${String(lane.lastCommitSha).slice(0, 12)}`);
                     if (lane.stateSummary) console.log(`    Status: ${lane.stateSummary}`);
                     if (lane.stateActionHint) console.log(`    Next: ${lane.stateActionHint}`);
+                    if (Array.isArray(lane.handoffBlockers) && lane.handoffBlockers.length > 0) {
+                        console.log(`    Blockers: ${lane.handoffBlockers.join(' | ')}`);
+                    }
+                    if (Array.isArray(lane.handoffReviewItems) && lane.handoffReviewItems.length > 0) {
+                        console.log(`    Review: ${lane.handoffReviewItems.join(' | ')}`);
+                    }
                     if (lane.isDetachedHead && lane.currentHeadSha) {
                         console.log(`    HEAD: detached @ ${String(lane.currentHeadSha).slice(0, 12)}`);
                     } else if (lane.currentHeadSha || lane.currentHeadRef) {

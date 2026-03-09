@@ -193,6 +193,8 @@ export interface BranchLaneSummary {
     stateActionHint?: string | null;
     handoffReadiness?: 'ready' | 'review' | 'blocked';
     handoffSummary?: string | null;
+    handoffBlockers?: string[];
+    handoffReviewItems?: string[];
 }
 
 export interface AgentSessionSummary extends ChatSessionSummary {
@@ -271,6 +273,8 @@ export interface WorkstreamBrief {
     stateActionHint?: string | null;
     handoffReadiness?: 'ready' | 'review' | 'blocked';
     handoffSummary?: string | null;
+    handoffBlockers?: string[];
+    handoffReviewItems?: string[];
     recentSessions: AgentSessionSummary[];
     latestCheckpoints: CheckpointSummary[];
     insights: InsightSummary[];
@@ -292,6 +296,8 @@ export interface WorkstreamComparison {
     comparisonReadiness: 'ready' | 'review' | 'blocked';
     comparisonSummary: string;
     comparisonActionHint: string | null;
+    comparisonBlockers: string[];
+    comparisonReviewItems: string[];
     sharedAgents: string[];
     sourceOnlyAgents: string[];
     targetOnlyAgents: string[];
@@ -299,10 +305,18 @@ export interface WorkstreamComparison {
     targetChangedFileCount: number | null;
     sharedChangedFileCount: number | null;
     sharedChangedFiles: string[];
+    sharedChangedAreas: string[];
     sourceOnlyChangedFiles: string[];
     targetOnlyChangedFiles: string[];
     changeOverlapKind: 'none' | 'partial' | 'high' | 'unknown';
     changeOverlapSummary: string;
+    sharedConflictLikelyCount: number | null;
+    sharedConflictLikelyFiles: string[];
+    lineOverlapKind: 'none' | 'partial' | 'high' | 'unknown';
+    lineOverlapSummary: string;
+    changeHotspotSummary: string;
+    mergeRisk: 'low' | 'medium' | 'high' | 'blocked' | 'unknown';
+    mergeRiskSummary: string;
     comparisonText: string;
 }
 
@@ -356,6 +370,8 @@ export interface AgentContextPack {
     promptText: string;
 }
 
+export type DataPolicyPreset = 'lean' | 'review' | 'debug' | 'shared' | 'custom';
+
 export interface DataPolicySummary {
     contextId: string | null;
     workspaceResolved: boolean;
@@ -363,6 +379,7 @@ export interface DataPolicySummary {
     captureRetentionDays: number;
     debugRetentionDays: number;
     debugArtifactsEnabled: boolean;
+    preset: DataPolicyPreset;
 }
 
 export interface InsightSummary {
@@ -418,6 +435,7 @@ export interface KnowledgeCandidate {
     createdAt: number;
     confidence?: number;
     reason?: string | null;
+    evidenceCount?: number;
 }
 
 export interface KnowledgePreviewResult {
@@ -522,3 +540,4 @@ export interface SyncEnvelope {
 }
 
 export type SyncPolicy = 'local_only' | 'metadata_only' | 'full_sync';
+

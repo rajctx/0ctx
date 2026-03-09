@@ -132,6 +132,8 @@
         { label: 'Handoff readiness', value: lane.handoffSummary || 'unknown' },
         { label: 'Git state', value: describeWorkstreamSync(lane) || 'unknown' },
         { label: 'Recommended next step', value: describeWorkstreamActionHint(lane) || 'Continue normally' },
+        { label: 'Blockers', value: lane.handoffBlockers?.length ? lane.handoffBlockers.join(' ') : 'none' },
+        { label: 'Review before handoff', value: lane.handoffReviewItems?.length ? lane.handoffReviewItems.join(' ') : 'none' },
         { label: 'Capture drift', value: lane.headDiffersFromCaptured === true ? 'yes' : lane.headDiffersFromCaptured === false ? 'no' : 'unknown' },
         { label: 'Baseline', value: lane.baseline?.summary || 'No default-branch baseline available' },
         { label: 'Upstream', value: lane.upstream || 'not configured' },
@@ -184,6 +186,9 @@
         const overlapSummary = typeof comparison.sharedChangedFileCount === 'number'
           ? `source ${comparison.sourceChangedFileCount ?? '?'} · target ${comparison.targetChangedFileCount ?? '?'} · shared ${comparison.sharedChangedFileCount}`
           : 'Changed-file overlap unavailable';
+        const lineOverlapSummary = typeof comparison.sharedConflictLikelyCount === 'number'
+          ? `shared ${comparison.sharedConflictLikelyCount} · ${comparison.lineOverlapKind || 'unknown'}`
+          : 'Changed-line overlap unavailable';
         comparisonMeta.innerHTML = [
           `<article><span>Source</span><strong>${esc(describeBranchLane(comparison.source).title)}</strong></article>`,
           `<article><span>Target</span><strong>${esc(describeBranchLane(comparison.target).title)}</strong></article>`,
@@ -191,6 +196,11 @@
           `<article><span>Ready</span><strong>${esc(String(comparison.comparisonReadiness || 'unknown'))}</strong></article>`,
           `<article><span>Git divergence</span><strong>${esc(gitSummary)}</strong></article>`,
           `<article><span>Changed-file overlap</span><strong>${esc(overlapSummary)}</strong></article>`,
+          `<article><span>Changed-line overlap</span><strong>${esc(lineOverlapSummary)}</strong></article>`,
+          `<article><span>Hotspots</span><strong>${esc(comparison.changeHotspotSummary || 'none')}</strong></article>`,
+          `<article><span>Merge risk</span><strong>${esc(comparison.mergeRiskSummary || 'unknown')}</strong></article>`,
+          `<article><span>Blockers</span><strong>${esc(comparison.comparisonBlockers?.length ? comparison.comparisonBlockers.join(' ') : 'none')}</strong></article>`,
+          `<article><span>Review</span><strong>${esc(comparison.comparisonReviewItems?.length ? comparison.comparisonReviewItems.join(' ') : 'none')}</strong></article>`,
           `<article><span>Shared agents</span><strong>${esc(comparison.sharedAgents.length > 0 ? comparison.sharedAgents.join(', ') : 'none')}</strong></article>`
         ].join('');
       }
@@ -199,7 +209,9 @@
           { label: 'Shared', value: comparison.sharedAgents },
           { label: 'Only on source', value: comparison.sourceOnlyAgents },
           { label: 'Only on target', value: comparison.targetOnlyAgents },
+          { label: 'Focus areas', value: comparison.sharedChangedAreas || [] },
           { label: 'Shared files', value: comparison.sharedChangedFiles || [] },
+          { label: 'Likely conflict files', value: comparison.sharedConflictLikelyFiles || [] },
           { label: 'Only on source files', value: comparison.sourceOnlyChangedFiles || [] },
           { label: 'Only on target files', value: comparison.targetOnlyChangedFiles || [] },
           { label: 'Source status', value: [comparison.source?.stateSummary || 'unknown'] },

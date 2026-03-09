@@ -1,7 +1,7 @@
 (() => {
   window.OctxDesktop = window.OctxDesktop || {};
   const app = window.OctxDesktop;
-  const { state, bindById, setView, renderAll, selectContext, resetBranchScopedState, resetPayloadState, loadBranches, loadSessions, loadSessionDetail, loadTurns, loadCheckpoints, loadCheckpointDetail, loadHandoff, loadBranchComparisonSafe, loadWorkspaceComparison, loadGraph, refreshAll, setStatus, invoke, copyText, createContext, saveDataPolicy, performHeroAction, createCheckpointFromActiveSession, previewKnowledgeFromActiveSession, extractKnowledgeFromActiveSession, previewKnowledgeFromActiveCheckpoint, extractKnowledgeFromActiveCheckpoint, promoteActiveInsight, rewindActiveCheckpoint, explainActiveCheckpoint, hookInstallCommand, hookIngestCommand, selectKnowledgeCandidates, selectedKnowledgeKeys, setSelectedKnowledgeKeys, syncBranchSelectionFromSession, startBackgroundRefreshLoops, toggleSelectedPayload } = app;
+  const { state, bindById, setView, renderAll, selectContext, resetBranchScopedState, resetPayloadState, loadBranches, loadSessions, loadSessionDetail, loadTurns, loadCheckpoints, loadCheckpointDetail, loadHandoff, loadBranchComparisonSafe, loadWorkspaceComparison, loadGraph, refreshAll, setStatus, invoke, copyText, createContext, applyDataPolicyPreset, performHeroAction, createCheckpointFromActiveSession, previewKnowledgeFromActiveSession, extractKnowledgeFromActiveSession, previewKnowledgeFromActiveCheckpoint, extractKnowledgeFromActiveCheckpoint, promoteActiveInsight, rewindActiveCheckpoint, explainActiveCheckpoint, hookInstallCommand, hookIngestCommand, selectKnowledgeCandidates, selectedKnowledgeKeys, setSelectedKnowledgeKeys, syncBranchSelectionFromSession, startBackgroundRefreshLoops, toggleSelectedPayload, basenameFromPath } = app;
 
   function wire() {
     document.querySelectorAll('.nav-btn').forEach((button) => {
@@ -101,7 +101,6 @@
     bindById('copyShell', 'click', () => void copyText('0ctx shell'));
     bindById('copyRepair', 'click', () => void copyText('0ctx repair'));
     bindById('copyDoctor', 'click', () => void copyText('0ctx doctor'));
-    bindById('saveDataPolicyBtn', 'click', () => void saveDataPolicy());
     bindById('checkUpdates', 'click', async () => {
       try {
         const result = await invoke('check_for_updates', {});
@@ -135,6 +134,12 @@
       const navTarget = event.target.closest('[data-nav]');
       if (navTarget) {
         setView(navTarget.dataset.nav || 'branches');
+        return;
+      }
+
+      const policyPresetTarget = event.target.closest('[data-policy-preset]');
+      if (policyPresetTarget) {
+        await applyDataPolicyPreset(policyPresetTarget.getAttribute('data-policy-preset'));
         return;
       }
 
@@ -306,3 +311,6 @@
 
   Object.assign(app, { wire, boot });
 })();
+
+
+
