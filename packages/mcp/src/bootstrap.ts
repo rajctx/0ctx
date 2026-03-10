@@ -2,15 +2,17 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { resolveMcpToolProfile } from './tools';
+import {
+    applyBootstrapRegistration,
+    getCandidatePaths,
+    pickWritablePath,
+    type BootstrapRegistration,
+    type BootstrapSupportedClient
+} from './bootstrap-config';
 
-type SupportedClient = 'claude' | 'cursor' | 'windsurf' | 'codex' | 'antigravity';
+type SupportedClient = BootstrapSupportedClient;
 const SUPPORTED_CLIENTS: SupportedClient[] = ['claude', 'cursor', 'windsurf', 'codex', 'antigravity'];
 const DEFAULT_CLIENTS: SupportedClient[] = ['claude', 'antigravity'];
-
-interface Registration {
-    command: string;
-    args: string[];
-}
 
 interface BootstrapOptions {
     clients: SupportedClient[];
@@ -83,191 +85,6 @@ function resolveEntrypoint(customEntrypoint?: string): string {
     throw new Error('Could not resolve MCP entrypoint. Run `npm run build` or pass --entrypoint=/absolute/path/to/index.js.');
 }
 
-function getCandidatePaths(
-    client: SupportedClient,
-    platform: NodeJS.Platform,
-    homeDir: string,
-    appDataDir: string
-): string[] {
-    switch (client) {
-        case 'claude':
-            if (platform === 'win32') return [path.join(appDataDir, 'Claude', 'claude_desktop_config.json')];
-            if (platform === 'darwin') return [path.join(homeDir, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json')];
-            return [path.join(homeDir, '.config', 'Claude', 'claude_desktop_config.json')];
-
-        case 'cursor':
-            if (platform === 'win32') return [
-                path.join(appDataDir, 'Cursor', 'User', 'mcp.json'),
-                path.join(homeDir, '.cursor', 'mcp.json')
-            ];
-            if (platform === 'darwin') return [
-                path.join(homeDir, 'Library', 'Application Support', 'Cursor', 'User', 'mcp.json'),
-                path.join(homeDir, '.cursor', 'mcp.json')
-            ];
-            return [
-                path.join(homeDir, '.config', 'Cursor', 'User', 'mcp.json'),
-                path.join(homeDir, '.cursor', 'mcp.json')
-            ];
-
-        case 'windsurf':
-            if (platform === 'win32') return [
-                path.join(appDataDir, 'Windsurf', 'User', 'mcp.json'),
-                path.join(homeDir, '.windsurf', 'mcp.json')
-            ];
-            if (platform === 'darwin') return [
-                path.join(homeDir, 'Library', 'Application Support', 'Windsurf', 'User', 'mcp.json'),
-                path.join(homeDir, '.windsurf', 'mcp.json')
-            ];
-            return [
-                path.join(homeDir, '.config', 'Windsurf', 'User', 'mcp.json'),
-                path.join(homeDir, '.windsurf', 'mcp.json')
-            ];
-
-        case 'antigravity':
-            if (platform === 'win32') return [
-                path.join(appDataDir, 'Antigravity', 'User', 'mcp.json'),
-                path.join(homeDir, '.antigravity', 'mcp.json')
-            ];
-            if (platform === 'darwin') return [
-                path.join(homeDir, 'Library', 'Application Support', 'Antigravity', 'User', 'mcp.json'),
-                path.join(homeDir, '.antigravity', 'mcp.json')
-            ];
-            return [
-                path.join(homeDir, '.config', 'Antigravity', 'User', 'mcp.json'),
-                path.join(homeDir, '.antigravity', 'mcp.json')
-            ];
-
-        case 'codex':
-            return [path.join(homeDir, '.codex', 'config.toml')];
-    }
-}
-
-function pickWritablePath(candidates: string[]): string | null {
-    const existing = candidates.find(candidate => fs.existsSync(candidate));
-    if (existing) return existing;
-
-    const parentExists = candidates.find(candidate => fs.existsSync(path.dirname(candidate)));
-    return parentExists || null;
-}
-
-function readJson(pathName: string): Record<string, unknown> {
-    if (!fs.existsSync(pathName)) return {};
-
-    const raw = fs.readFileSync(pathName, 'utf8').trim();
-    if (!raw) return {};
-
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        return {};
-    }
-
-    return parsed as Record<string, unknown>;
-}
-
-function writeJson(pathName: string, value: Record<string, unknown>): void {
-    fs.mkdirSync(path.dirname(pathName), { recursive: true });
-    fs.writeFileSync(pathName, JSON.stringify(value, null, 2) + '\n', 'utf8');
-}
-
-function readText(pathName: string): string {
-    if (!fs.existsSync(pathName)) return '';
-    return fs.readFileSync(pathName, 'utf8');
-}
-
-function writeText(pathName: string, value: string): void {
-    fs.mkdirSync(path.dirname(pathName), { recursive: true });
-    fs.writeFileSync(pathName, value, 'utf8');
-}
-
-function upsertServerConfig(
-    config: Record<string, unknown>,
-    serverName: string,
-    registration: Registration
-): { changed: boolean; nextConfig: Record<string, unknown> } {
-    const nextConfig: Record<string, unknown> = { ...config };
-
-    const rawServers = nextConfig.mcpServers;
-    const servers: Record<string, unknown> = rawServers && typeof rawServers === 'object' && !Array.isArray(rawServers)
-        ? { ...(rawServers as Record<string, unknown>) }
-        : {};
-
-    const previous = servers[serverName];
-    const next = { command: registration.command, args: registration.args };
-    const changed = JSON.stringify(previous) !== JSON.stringify(next);
-
-    servers[serverName] = next;
-    nextConfig.mcpServers = servers;
-
-    return { changed, nextConfig };
-}
-
-function escapeRegExp(value: string): string {
-    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function quoteTomlString(value: string): string {
-    return JSON.stringify(value);
-}
-
-function formatTomlKeySegment(value: string): string {
-    return /^[A-Za-z0-9_-]+$/.test(value) ? value : quoteTomlString(value);
-}
-
-function buildCodexServerBlock(serverName: string, registration: Registration, newline: string): string {
-    return [
-        `[mcp_servers.${formatTomlKeySegment(serverName)}]`,
-        `command = ${quoteTomlString(registration.command)}`,
-        `args = [${registration.args.map(arg => quoteTomlString(arg)).join(', ')}]`
-    ].join(newline);
-}
-
-function upsertCodexServerConfig(
-    rawConfig: string,
-    serverName: string,
-    registration: Registration
-): { changed: boolean; nextConfig: string } {
-    const newline = rawConfig.includes('\r\n') ? '\r\n' : '\n';
-    const lines = rawConfig.length > 0 ? rawConfig.split(/\r?\n/) : [];
-    const escapedServerName = escapeRegExp(serverName);
-    const serverSectionPattern = new RegExp(
-        `^\\s*\\[\\s*mcp_servers\\.(?:${escapedServerName}|"${escapedServerName}")\\s*\\]\\s*$`
-    );
-    const tablePattern = /^\s*\[[^\]]+\]\s*$/;
-    const blockLines = buildCodexServerBlock(serverName, registration, newline).split(newline);
-    let start = -1;
-
-    for (let idx = 0; idx < lines.length; idx += 1) {
-        if (serverSectionPattern.test(lines[idx])) {
-            start = idx;
-            break;
-        }
-    }
-
-    let nextLines: string[];
-    if (start === -1) {
-        nextLines = [...lines];
-        while (nextLines.length > 0 && nextLines[nextLines.length - 1].trim() === '') {
-            nextLines.pop();
-        }
-        if (nextLines.length > 0) {
-            nextLines.push('');
-        }
-        nextLines.push(...blockLines);
-    } else {
-        let end = lines.length;
-        for (let idx = start + 1; idx < lines.length; idx += 1) {
-            if (tablePattern.test(lines[idx])) {
-                end = idx;
-                break;
-            }
-        }
-        nextLines = [...lines.slice(0, start), ...blockLines, ...lines.slice(end)];
-    }
-
-    const nextConfig = nextLines.join(newline).replace(new RegExp(`${newline}*$`), '') + newline;
-    return { changed: nextConfig !== rawConfig, nextConfig };
-}
-
 export function bootstrapMcpRegistration(options: BootstrapOptions): BootstrapResult[] {
     const platform = getPlatform(options);
     const homeDir = getHomeDir(options);
@@ -276,7 +93,7 @@ export function bootstrapMcpRegistration(options: BootstrapOptions): BootstrapRe
     const entrypoint = resolveEntrypoint(options.entrypoint);
     const profile = resolveMcpToolProfile(options.profile ?? 'core');
 
-    const registration: Registration = {
+    const registration: BootstrapRegistration = {
         command: process.execPath,
         args: profile.all ? [entrypoint] : [entrypoint, '--profile', profile.normalized]
     };
@@ -298,36 +115,17 @@ export function bootstrapMcpRegistration(options: BootstrapOptions): BootstrapRe
         }
 
         try {
-            const existedBefore = fs.existsSync(targetPath);
-            const isCodexClient = client === 'codex';
-            if (isCodexClient) {
-                const changedResult = upsertCodexServerConfig(readText(targetPath), serverName, registration);
-
-                if (!changedResult.changed) {
-                    results.push({ client, configPath: targetPath, status: 'unchanged' });
-                    continue;
-                }
-
-                if (!options.dryRun) {
-                    writeText(targetPath, changedResult.nextConfig);
-                }
-            } else {
-                const changedResult = upsertServerConfig(readJson(targetPath), serverName, registration);
-
-                if (!changedResult.changed) {
-                    results.push({ client, configPath: targetPath, status: 'unchanged' });
-                    continue;
-                }
-
-                if (!options.dryRun) {
-                    writeJson(targetPath, changedResult.nextConfig);
-                }
-            }
-
+            const status = applyBootstrapRegistration({
+                targetPath,
+                client,
+                serverName,
+                registration,
+                dryRun: options.dryRun
+            });
             results.push({
                 client,
                 configPath: targetPath,
-                status: existedBefore ? 'updated' : 'created'
+                status
             });
         } catch (error) {
             results.push({

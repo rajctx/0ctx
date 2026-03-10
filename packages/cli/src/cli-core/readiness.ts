@@ -8,67 +8,13 @@ import type {
     HookHealthAgentCheck,
     RepoReadinessSummary
 } from './types';
-
-function isHookCommandPresent(agent: HookSupportedAgent, configContent: string, expectedCommand: string | null): boolean {
-    if (agent === 'codex') {
-        return configContent.includes('# BEGIN 0ctx-codex-notify')
-            && configContent.includes('# END 0ctx-codex-notify')
-            && configContent.includes('--agent=codex');
-    }
-
-    if (!expectedCommand) return false;
-    return configContent.includes('0ctx connector hook ingest')
-        && configContent.includes(`--agent=${agent}`)
-        && configContent.includes(expectedCommand.replace(/\s+/g, ' ').trim().split(' ').slice(0, 4).join(' '));
-}
-
-function isSessionStartCommandPresent(agent: HookSupportedAgent, configContent: string): boolean {
-    if (agent !== 'claude' && agent !== 'factory' && agent !== 'antigravity') {
-        return false;
-    }
-
-    return configContent.includes('SessionStart')
-        && configContent.includes('0ctx connector hook session-start')
-        && configContent.includes(`--agent=${agent}`);
-}
-
-function normalizeRepoIdentity(input: string | null | undefined): string | null {
-    if (typeof input !== 'string' || input.trim().length === 0) {
-        return null;
-    }
-    const normalized = path.normalize(path.resolve(input));
-    return process.platform === 'win32'
-        ? normalized.toLowerCase()
-        : normalized;
-}
-
-function buildDataPolicyActionHint(policy: {
-    syncPolicy?: string | null;
-    captureRetentionDays?: number;
-    debugRetentionDays?: number;
-    debugArtifactsEnabled?: boolean;
-    preset?: string | null;
-} | null | undefined): string | null {
-    const syncPolicy = String(policy?.syncPolicy || '').trim().toLowerCase();
-    const preset = String(policy?.preset || '').trim().toLowerCase();
-    const captureRetentionDays = typeof policy?.captureRetentionDays === 'number' ? policy.captureRetentionDays : 14;
-    const debugRetentionDays = typeof policy?.debugRetentionDays === 'number' ? policy.debugRetentionDays : 7;
-    const debugArtifactsEnabled = policy?.debugArtifactsEnabled === true;
-
-    if (preset === 'custom') {
-        return 'Normalize workspace sync and machine capture with 0ctx data-policy lean, review, debug, or shared.';
-    }
-    if (preset === 'shared' || syncPolicy === 'full_sync') {
-        return 'Return this workspace to Lean when it no longer needs richer cloud sync.';
-    }
-    if (preset === 'debug' || debugArtifactsEnabled) {
-        return 'Return this machine to Lean when troubleshooting is complete.';
-    }
-    if (preset === 'review' || captureRetentionDays > 14 || debugRetentionDays > 7) {
-        return 'Return this machine to Lean when the longer local review window is no longer needed.';
-    }
-    return null;
-}
+import {
+    buildDataPolicyActionHint,
+    isHookCommandPresent,
+    isSessionStartCommandPresent,
+    normalizeRepoIdentity,
+    resolveRepoScopedHookDetails
+} from './readiness-hooks';
 
 export function createHookHealthCollector(deps: {
     getHookDumpDir: () => string;
@@ -282,7 +228,10 @@ export function createRepoReadinessCollector(deps: {
         } | null>('getDataPolicy', { contextId: matchedContextId });
         const syncPolicy = typeof dataPolicy?.syncPolicy === 'string' ? dataPolicy.syncPolicy : null;
 
-        const hookDetails = options.hookDetails ?? (await deps.collectHookHealth()).details;
+        const hookDetails = resolveRepoScopedHookDetails({
+            repoRoot,
+            fallback: options.hookDetails ?? (await deps.collectHookHealth()).details
+        });
         const hookProjectRoot = normalizeRepoIdentity(hookDetails.projectRoot);
         const normalizedRepoRoot = normalizeRepoIdentity(repoRoot);
         const captureManagedForRepo = hookProjectRoot !== null

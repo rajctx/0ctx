@@ -30,6 +30,9 @@ npm run dev
 # Run CLI in dev mode
 npm run dev:cli
 
+# Install the local CLI build into the global npm location
+npm run cli:install-local
+
 # CLI release pipeline (single command)
 0ctx release publish --version vX.Y.Z --dry-run
 
@@ -45,13 +48,17 @@ npm run bootstrap:mcp:dry
 # Run local UI (contributor/dev only; end-user runtime uses hosted UI)
 npm run dev:ui
 
+# Build desktop app debug bundle
+cd desktop-app
+npm run build:debug
+
 # Lint packages
 npm run lint
 
 # Detect nested git repositories under this monorepo
 npm run repo:check-nested-git
 
-# Preview and apply migration of packages/ui nested git into monorepo
+# Preview and apply migration of ui/ nested git into monorepo
 npm run repo:adopt-ui:dry
 npm run repo:adopt-ui
 ```
@@ -61,8 +68,12 @@ npm run repo:adopt-ui
 This is an npm workspaces monorepo. Build/reference order matters:
 
 **`packages/core` -> `packages/daemon` -> `packages/mcp`**  
-`packages/cli` depends on daemon + mcp.  
-(`packages/ui` is independent from the TypeScript reference chain)
+`packages/cli` depends on daemon + mcp.
+
+Current top-level app surfaces outside `packages/`:
+
+- `desktop-app/` - Tauri desktop management surface
+- `ui/` - hosted web UI (contributor/dev surface)
 
 ### `packages/core` (`@0ctx/core`)
 
@@ -119,7 +130,7 @@ MCP stdio server translating tool calls into daemon IPC calls.
 - `src/tools.ts`:
   - Context graph tools plus enterprise operations (`ctx_health`, `ctx_metrics`, sync-policy, audit, and backup tools)
 - `src/bootstrap.ts`:
-  - Auto-registration CLI for MCP clients (Claude/Cursor/Windsurf)
+  - Auto-registration CLI for MCP clients
   - Idempotent merge into client `mcpServers` config
 
 ### `packages/cli` (`@0ctx/cli`)
@@ -127,14 +138,26 @@ MCP stdio server translating tool calls into daemon IPC calls.
 Product-facing command-line surface for install and support workflows.
 
 - `src/index.ts`:
-  - Commands: `shell`, `install`, `bootstrap`, `doctor`, `status`, `repair`, `daemon start`, `release publish`
-  - Runs daemon health checks and startup flow
-  - Uses MCP bootstrap registration for supported clients
-  - Provides diagnostics output (human + JSON)
+  - Thin entrypoint and command wiring
+- `src/commands/`:
+  - Product commands (`enable`, `status`, `bootstrap`, `sync`, `workstreams`, `sessions`, `checkpoints`, `insights`)
+  - Connector/hook commands
+  - Lifecycle and support commands
+- `src/cli-core/`:
+  - Shared argument parsing, readiness, repo resolution, daemon helpers, output formatting
 
-### `packages/ui` (`@0ctx/ui`)
+### `desktop-app/`
 
-Next.js hosted UI codebase (dev/contributor surface). End-user runtime is hosted UI plus local connector/daemon.
+Tauri desktop management surface.
+
+- `src/`:
+  - Desktop frontend
+- `src-tauri/`:
+  - Tauri shell / native bridge
+
+### `ui/`
+
+Hosted UI codebase (dev/contributor surface). End-user runtime is hosted UI plus local connector/daemon.
 
 ## Key Design Constraints
 
@@ -142,6 +165,9 @@ Next.js hosted UI codebase (dev/contributor surface). End-user runtime is hosted
 - SQLite-only for local product (no local Postgres dependency).
 - Strict context isolation by `contextId`.
 - MCP server remains stateless; daemon owns state.
+- Normal product path is repo-first:
+  - `cd <repo>`
+  - `0ctx enable`
 - Graph is append-mostly: prefer supersession relationships over destructive edits where practical.
 - Universal node taxonomy only:
   - `background`, `decision`, `constraint`, `goal`, `assumption`, `open_question`, `artifact`
@@ -172,7 +198,8 @@ or
 
 - MCP uses short-lived socket connections, so context continuity is maintained through daemon session tokens.
 - Context can be provided explicitly via `params.contextId` or resolved from active session state.
-- Prefer explicit `contextId` on context-bound operations when building new clients/integrations.
+- For normal product flows, prefer repo-root/workspace binding over manual `contextId`.
+- Prefer explicit `contextId` only for support tooling, scripted integrations, or cross-context operations.
 
 ## Daemon Methods (High-Value)
 
@@ -188,12 +215,16 @@ Context/session:
 
 CLI/support:
 
-- `0ctx install`
-- `0ctx shell`
-- `0ctx bootstrap`
-- `0ctx doctor`
+- `0ctx enable`
 - `0ctx status`
+- `0ctx bootstrap`
+- `0ctx shell`
+- `0ctx doctor`
 - `0ctx repair`
+- `0ctx workstreams`
+- `0ctx sessions`
+- `0ctx checkpoints`
+- `0ctx insights`
 - `0ctx release publish`
 
 Graph:
@@ -243,6 +274,6 @@ Local state under `~/.0ctx/`:
 
 - Keep a single git root for all `packages/*`.
 - Do not keep nested git repositories inside packages.
-- If nested git is detected (for example `packages/ui/.git`), migrate with:
+- If nested git is detected (for example `ui/.git`), migrate with:
   - `scripts/repo/adopt-ui-monorepo.ps1` (or npm scripts above)
 - Documentation is intentionally pruned right now. Use `README.md`, `AGENTS.md`, CLI help, and the source code as the current ground truth until the docs set is rewritten.
