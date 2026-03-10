@@ -1,27 +1,5 @@
 import type { WorkstreamComparison } from '@0ctx/core';
-
-function summarizeReconcileFocus(options: {
-    sharedConflictLikelyFiles: string[];
-    sharedChangedAreas: string[];
-}): string | null {
-    if (options.sharedConflictLikelyFiles.length > 0) {
-        const sample = options.sharedConflictLikelyFiles.slice(0, 3).join(', ');
-        const suffix = options.sharedConflictLikelyFiles.length > 3
-            ? ` (+${options.sharedConflictLikelyFiles.length - 3} more)`
-            : '';
-        return `Resolve likely conflicts in ${sample}${suffix}.`;
-    }
-
-    if (options.sharedChangedAreas.length > 0) {
-        const sample = options.sharedChangedAreas.slice(0, 3).join(', ');
-        const suffix = options.sharedChangedAreas.length > 3
-            ? ` (+${options.sharedChangedAreas.length - 3} more)`
-            : '';
-        return `Focus review on ${sample}${suffix}.`;
-    }
-
-    return null;
-}
+import { buildReconcileFocusSteps } from './reconcile-focus';
 
 export function deriveMergeRisk(options: {
     sameRepository: boolean;
@@ -187,7 +165,7 @@ export function deriveReconcileSteps(options: {
     sharedConflictLikelyFiles: string[];
     sharedChangedAreas: string[];
 }): string[] {
-    const focus = summarizeReconcileFocus({
+    const focusSteps = buildReconcileFocusSteps({
         sharedConflictLikelyFiles: options.sharedConflictLikelyFiles,
         sharedChangedAreas: options.sharedChangedAreas
     });
@@ -232,20 +210,20 @@ export function deriveReconcileSteps(options: {
             return [
                 `Open ${options.targetLabel}.`,
                 `Rebase it onto ${options.sourceLabel}.`,
-                focus ?? 'Review the shared areas after the rebase completes.',
+                ...(focusSteps.length > 0 ? focusSteps : ['Review the shared areas after the rebase completes.']),
                 'Create a checkpoint before handing the workstream to another agent.'
             ];
         case 'rebase_source_on_target':
             return [
                 `Open ${options.sourceLabel}.`,
                 `Rebase it onto ${options.targetLabel}.`,
-                focus ?? 'Review the shared areas after the rebase completes.',
+                ...(focusSteps.length > 0 ? focusSteps : ['Review the shared areas after the rebase completes.']),
                 'Create a checkpoint before handing the workstream to another agent.'
             ];
         case 'manual_conflict_resolution':
             return [
                 'Review the shared changed files before choosing merge or rebase.',
-                focus ?? 'Review the shared hotspots before reconciling the workstreams.',
+                ...(focusSteps.length > 0 ? focusSteps : ['Review the shared hotspots before reconciling the workstreams.']),
                 'Resolve conflicts manually and verify the resulting branch state.',
                 'Create a checkpoint after reconciliation and before handoff.'
             ];

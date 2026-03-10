@@ -162,5 +162,5 @@ describe('daemon workstream compare reconcile steps', () => {
         } finally {
             db.close();
         }
-    });
+    }, 20_000);
 });

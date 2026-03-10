@@ -1,4 +1,5 @@
 import type { FlagMap, ProductCommandDeps } from './types';
+import { buildWorkspaceCompareFlowLines } from './workspace-compare-display';
 
 interface WorkspaceRecord {
     id?: string;
@@ -113,6 +114,12 @@ export function createWorkspaceCommands(deps: ProductCommandDeps) {
             }
             if (comparison.comparisonActionHint) {
                 console.log(`  Next:     ${String(comparison.comparisonActionHint)}`);
+            }
+            for (const line of buildWorkspaceCompareFlowLines(comparison as {
+                source: { contextId: string };
+                target: { contextId: string };
+            })) {
+                console.log(line);
             }
             if (comparison.comparisonText) {
                 console.log(`\n  ${String(comparison.comparisonText).split('\n').join('\n  ')}\n`);
