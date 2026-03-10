@@ -7,7 +7,7 @@ import { handleKnowledgeToolCall } from './dispatch-knowledge';
 import { handleOpsToolCall } from './dispatch-ops';
 import { handleRecallToolCall } from './dispatch-recall';
 import { handleWorkstreamToolCall } from './dispatch-workstream';
-import { resolveInitialSessionContextId } from './session-context';
+import { resolveInitialSessionContextId, resolveRequestSessionContextId } from './session-context';
 import type { ToolDispatchContext } from './tool-dispatch-types';
 import { textToolResult } from './tool-results';
 import { getToolsForProfile, isToolEnabledForProfile, resolveMcpToolProfile } from './tools';
@@ -49,6 +49,7 @@ if (!resolvedToolProfile.all) {
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: activeTools }));
 
 let sessionToken: string | null = null;
+let sessionContextId: string | null = null;
 
 async function ensureSession(): Promise<string> {
     if (sessionToken) return sessionToken;
@@ -60,6 +61,7 @@ async function ensureSession(): Promise<string> {
     }
 
     sessionToken = session.sessionToken;
+    sessionContextId = initialContextId;
     return session.sessionToken;
 }
 
@@ -68,17 +70,11 @@ async function callDaemon(method: string, params: Record<string, unknown> = {}):
     return sendToDaemon(method, params, { sessionToken: token });
 }
 
-function pickContextId(args: Record<string, unknown> | undefined): string | undefined {
-    return typeof args?.contextId === 'string' && args.contextId.length > 0 ? args.contextId : undefined;
+async function bindSessionContext(contextId: string): Promise<void> {
+    if (sessionContextId === contextId) return;
+    await callDaemon('switchContext', { contextId });
+    sessionContextId = contextId;
 }
-
-const dispatchContext: ToolDispatchContext = {
-    callDaemon,
-    pickContextId,
-    switchSessionContext: async (contextId: string) => {
-        await callDaemon('switchContext', { contextId });
-    }
-};
 
 server.setRequestHandler(CallToolRequestSchema, async (req: any) => {
     const { name, arguments: rawArgs } = req.params;
@@ -89,6 +85,18 @@ server.setRequestHandler(CallToolRequestSchema, async (req: any) => {
     }
 
     try {
+        const requestContextId = await resolveRequestSessionContextId(args, async () =>
+            await callDaemon('listContexts', {}) as Array<{ id?: string; paths?: string[] }> | null
+        );
+        if (requestContextId && name !== 'ctx_switch_context') {
+            await bindSessionContext(requestContextId);
+        }
+
+        const dispatchContext: ToolDispatchContext = {
+            callDaemon,
+            pickContextId: () => requestContextId ?? undefined,
+            switchSessionContext: bindSessionContext
+        };
         const handlers = [
             handleCoreToolCall,
             handleWorkstreamToolCall,

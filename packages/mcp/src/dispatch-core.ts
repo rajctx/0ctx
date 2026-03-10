@@ -14,7 +14,8 @@ export async function handleCoreToolCall(
             return textToolResult(`Created and switched to context: ${created.id} (${created.name})`);
         }
         case 'ctx_switch_context': {
-            const switched = await context.callDaemon('switchContext', { contextId: args.contextId });
+            await context.switchSessionContext(String(args.contextId));
+            const switched = await context.callDaemon('getActiveContext', {});
             return textToolResult(`Switched to active context: ${switched.name}`);
         }
         case 'ctx_set': {
