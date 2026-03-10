@@ -126,6 +126,8 @@ describe('repo readiness local hook manifests', () => {
                     ]
                 }
             }),
+            detectInstalledGaHookClients: () => ['claude'],
+            detectRegisteredGaMcpClients: () => ['claude'],
             defaultHookInstallClients: ['claude', 'factory', 'antigravity'],
             sessionStartAgents: ['claude', 'factory', 'antigravity'],
             isGaHookAgent: (agent) => agent === 'claude' || agent === 'factory' || agent === 'antigravity'
@@ -136,13 +138,17 @@ describe('repo readiness local hook manifests', () => {
 
         expect(readinessA?.captureManagedForRepo).toBe(true);
         expect(readinessA?.captureReadyAgents).toEqual(['claude']);
+        expect(readinessA?.captureMissingAgents).toEqual([]);
         expect(readinessA?.autoContextAgents).toEqual(['claude']);
+        expect(readinessA?.mcpRegistrationMissingAgents).toEqual([]);
         expect(readinessA?.zeroTouchReady).toBe(true);
         expect(readinessA?.nextActionHint).toBeNull();
 
         expect(readinessB?.captureManagedForRepo).toBe(true);
         expect(readinessB?.captureReadyAgents).toEqual(['claude']);
+        expect(readinessB?.captureMissingAgents).toEqual([]);
         expect(readinessB?.autoContextAgents).toEqual(['claude']);
+        expect(readinessB?.mcpRegistrationMissingAgents).toEqual([]);
         expect(readinessB?.zeroTouchReady).toBe(true);
         expect(readinessB?.nextActionHint).toBeNull();
     });

@@ -56,6 +56,9 @@ export interface RepoReadinessSummary {
     debugScope: 'machine';
     captureReadyAgents: HookSupportedAgent[];
     autoContextAgents: HookSupportedAgent[];
+    autoContextMissingAgents: HookSupportedAgent[];
+    sessionStartMissingAgents: HookSupportedAgent[];
+    mcpRegistrationMissingAgents: SupportedClient[];
     captureMissingAgents: HookInstallClient[];
     captureManagedForRepo: boolean;
     zeroTouchReady: boolean;

@@ -141,7 +141,9 @@ function isExecutionPlanningChatter(text: string): boolean {
 function isSourceAttributedKnowledgeCandidate(text: string): boolean {
     const normalized = cleanupExtractionText(text).toLowerCase();
     if (!normalized) return false;
+    const attributedSourceMention = new RegExp(`\\b(?:from|according to|per|based on|quoted from|copied from|as noted in|as written in|in|on)\\s+(?:the\\s+)?(?:${attributedSourcePattern})\\b`);
     if (new RegExp(`^(?:from|according to|per|based on|quoted from|copied from|as noted in|as written in|in|on)\\s+(?:the\\s+)?(?:${attributedSourcePattern})\\b`).test(normalized)) return true;
+    if (attributedSourceMention.test(normalized)) return true;
     if (new RegExp(`^(?:the\\s+)?(?:${attributedSourcePattern})\\b.*\\b${attributedVerbPattern}\\b`).test(normalized)) return true;
     return new RegExp(`^(?:user|assistant|agent|customer|reviewer)\\b.*\\b${attributedVerbPattern}\\b`).test(normalized);
 }

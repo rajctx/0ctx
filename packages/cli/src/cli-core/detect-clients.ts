@@ -43,6 +43,44 @@ function antigravitySignals(platform: NodeJS.Platform, homeDir: string, appDataD
     ];
 }
 
+function claudeMcpConfigPaths(platform: NodeJS.Platform, homeDir: string, appDataDir: string): string[] {
+    if (platform === 'win32') return [path.join(appDataDir, 'Claude', 'claude_desktop_config.json')];
+    if (platform === 'darwin') return [path.join(homeDir, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json')];
+    return [path.join(homeDir, '.config', 'Claude', 'claude_desktop_config.json')];
+}
+
+function antigravityMcpConfigPaths(platform: NodeJS.Platform, homeDir: string, appDataDir: string): string[] {
+    const homeCandidates = [
+        path.join(homeDir, '.gemini', 'mcp.json'),
+        path.join(homeDir, '.antigravity', 'mcp.json')
+    ];
+    if (platform === 'win32') {
+        return [path.join(appDataDir, 'Antigravity', 'User', 'mcp.json'), ...homeCandidates];
+    }
+    if (platform === 'darwin') {
+        return [path.join(homeDir, 'Library', 'Application Support', 'Antigravity', 'User', 'mcp.json'), ...homeCandidates];
+    }
+    return [path.join(homeDir, '.config', 'Antigravity', 'User', 'mcp.json'), ...homeCandidates];
+}
+
+function hasMcpRegistration(candidatePaths: string[], serverName: string): boolean {
+    return candidatePaths.some((candidate) => {
+        if (!exists(candidate)) return false;
+        try {
+            const raw = fs.readFileSync(candidate, 'utf8').trim();
+            if (!raw) return false;
+            const parsed = JSON.parse(raw) as Record<string, unknown>;
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
+            const servers = parsed.mcpServers;
+            if (!servers || typeof servers !== 'object' || Array.isArray(servers)) return false;
+            const registration = (servers as Record<string, unknown>)[serverName];
+            return Boolean(registration && typeof registration === 'object' && !Array.isArray(registration));
+        } catch {
+            return false;
+        }
+    });
+}
+
 export function detectInstalledGaHookClients(options: {
     platform?: NodeJS.Platform;
     homeDir?: string;
@@ -72,6 +110,24 @@ export function detectInstalledGaMcpClients(options: {
 
     if (claudeSignals(platform, homeDir, appDataDir).some(exists)) clients.push('claude');
     if (antigravitySignals(platform, homeDir, appDataDir).some(exists)) clients.push('antigravity');
+
+    return clients;
+}
+
+export function detectRegisteredGaMcpClients(options: {
+    platform?: NodeJS.Platform;
+    homeDir?: string;
+    appDataDir?: string;
+    serverName?: string;
+} = {}): SupportedClient[] {
+    const platform = options.platform || process.platform;
+    const homeDir = options.homeDir || os.homedir();
+    const appDataDir = resolveAppData(homeDir, options.appDataDir);
+    const serverName = options.serverName || '0ctx';
+    const clients: SupportedClient[] = [];
+
+    if (hasMcpRegistration(claudeMcpConfigPaths(platform, homeDir, appDataDir), serverName)) clients.push('claude');
+    if (hasMcpRegistration(antigravityMcpConfigPaths(platform, homeDir, appDataDir), serverName)) clients.push('antigravity');
 
     return clients;
 }

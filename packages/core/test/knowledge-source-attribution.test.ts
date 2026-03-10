@@ -139,4 +139,27 @@ describe('Reviewed insight source attribution filtering', () => {
             db.close();
         }
     });
+
+    it('filters source-attributed decisions even when the attribution appears at the end', () => {
+        const { db, graph } = createGraph();
+        try {
+            const context = graph.createContext('knowledge-source-attribution-trailing');
+            addSession(graph, context.id, 'session-attribution-3');
+            addTurn(
+                graph,
+                context.id,
+                'session-attribution-3',
+                'assistant-1',
+                'assistant',
+                'We decided to keep metadata_only as the default sync policy, according to the Linear issue.',
+                1700001004000
+            );
+
+            const preview = graph.previewKnowledgeFromSession(context.id, 'session-attribution-3');
+            expect(preview.candidateCount).toBe(0);
+            expect(preview.candidates).toEqual([]);
+        } finally {
+            db.close();
+        }
+    });
 });

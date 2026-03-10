@@ -56,6 +56,8 @@ describe('repo readiness', () => {
                     ]
                 }
             }),
+            detectInstalledGaHookClients: () => ['claude'],
+            detectRegisteredGaMcpClients: () => [],
             defaultHookInstallClients: ['claude', 'factory', 'antigravity'],
             sessionStartAgents: ['claude', 'factory', 'antigravity'],
             isGaHookAgent: (agent) => agent === 'claude' || agent === 'factory' || agent === 'antigravity'
@@ -114,6 +116,8 @@ describe('repo readiness', () => {
                     ]
                 }
             }),
+            detectInstalledGaHookClients: () => ['claude', 'factory', 'antigravity'],
+            detectRegisteredGaMcpClients: () => ['claude', 'antigravity'],
             defaultHookInstallClients: ['claude', 'factory', 'antigravity'],
             sessionStartAgents: ['claude', 'factory', 'antigravity'],
             isGaHookAgent: (agent) => agent === 'claude' || agent === 'factory' || agent === 'antigravity'
@@ -122,6 +126,7 @@ describe('repo readiness', () => {
         const readiness = await collectRepoReadiness({ repoRoot: 'C:/repo' });
         expect(readiness?.captureManagedForRepo).toBe(true);
         expect(readiness?.captureReadyAgents).toEqual(['claude', 'factory', 'antigravity']);
+        expect(readiness?.autoContextAgents).toEqual(['claude', 'factory', 'antigravity']);
         expect(readiness?.zeroTouchReady).toBe(true);
     });
 
@@ -169,6 +174,8 @@ describe('repo readiness', () => {
                     ]
                 }
             }),
+            detectInstalledGaHookClients: () => ['claude'],
+            detectRegisteredGaMcpClients: () => ['claude'],
             defaultHookInstallClients: ['claude', 'factory', 'antigravity'],
             sessionStartAgents: ['claude', 'factory', 'antigravity'],
             isGaHookAgent: (agent) => agent === 'claude' || agent === 'factory' || agent === 'antigravity'
@@ -177,7 +184,67 @@ describe('repo readiness', () => {
         const readiness = await collectRepoReadiness({ repoRoot: 'C:\\repo' });
         expect(readiness?.captureReadyAgents).toEqual(['claude']);
         expect(readiness?.autoContextAgents).toEqual([]);
+        expect(readiness?.sessionStartMissingAgents).toEqual(['claude']);
         expect(readiness?.zeroTouchReady).toBe(false);
-        expect(readiness?.nextActionHint).toContain('automatic context injection');
+        expect(readiness?.nextActionHint).toContain('SessionStart injection');
+    });
+
+    it('does not claim zero-touch retrieval when Claude capture exists without MCP registration', async () => {
+        const collectRepoReadiness = createRepoReadinessCollector({
+            ensureDaemonCapabilities: async () => ({ ok: true, missingMethods: [] }),
+            resolveRepoRoot: (repoRoot) => repoRoot ?? 'C:\\repo',
+            selectHookContextId: (contexts) => contexts[0]?.id ?? null,
+            sendToDaemon: async (method: string) => {
+                if (method === 'listContexts') {
+                    return [{ id: 'ctx-1', name: 'Repo', paths: ['C:\\repo'] }];
+                }
+                if (method === 'getAgentContextPack') {
+                    return {
+                        workspaceName: 'Repo',
+                        branch: 'main',
+                        workstream: { sessionCount: 1, checkpointCount: 0 }
+                    };
+                }
+                if (method === 'getDataPolicy') {
+                    return {
+                        syncPolicy: 'metadata_only',
+                        captureRetentionDays: 14,
+                        debugRetentionDays: 7,
+                        debugArtifactsEnabled: false
+                    };
+                }
+                throw new Error(`Unexpected method ${method}`);
+            },
+            getCurrentWorkstream: () => 'main',
+            collectHookHealth: async () => ({
+                check: { id: 'hook_state', status: 'pass', message: 'ok' },
+                dumpCheck: { id: 'hook_dump_dir', status: 'pass', message: 'ok' },
+                details: {
+                    statePath: 'state',
+                    projectRoot: 'C:\\repo',
+                    projectRootExists: true,
+                    projectConfigPath: 'config',
+                    projectConfigExists: true,
+                    contextId: 'ctx-1',
+                    contextIdExists: true,
+                    installedAgentCount: 1,
+                    agents: [
+                        { agent: 'claude', configPath: 'a', configExists: true, commandPresent: true, sessionStartPresent: true, command: '0ctx connector hook ingest --agent=claude' }
+                    ]
+                }
+            }),
+            detectInstalledGaHookClients: () => ['claude'],
+            detectRegisteredGaMcpClients: () => [],
+            defaultHookInstallClients: ['claude', 'factory', 'antigravity'],
+            sessionStartAgents: ['claude', 'factory', 'antigravity'],
+            isGaHookAgent: (agent) => agent === 'claude' || agent === 'factory' || agent === 'antigravity'
+        });
+
+        const readiness = await collectRepoReadiness({ repoRoot: 'C:\\repo' });
+        expect(readiness?.captureReadyAgents).toEqual(['claude']);
+        expect(readiness?.autoContextAgents).toEqual([]);
+        expect(readiness?.mcpRegistrationMissingAgents).toEqual(['claude']);
+        expect(readiness?.zeroTouchReady).toBe(false);
+        expect(readiness?.nextActionHint).toContain('Register the 0ctx MCP server for claude');
     });
 });

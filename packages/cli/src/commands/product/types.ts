@@ -14,6 +14,9 @@ export interface RepoReadinessSummary {
     captureReadyAgents: string[];
     captureMissingAgents: string[];
     autoContextAgents: string[];
+    autoContextMissingAgents: string[];
+    sessionStartMissingAgents: string[];
+    mcpRegistrationMissingAgents: string[];
     syncPolicy: string | null;
     syncScope: 'workspace';
     captureScope: 'machine';

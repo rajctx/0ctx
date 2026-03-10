@@ -62,8 +62,14 @@ function buildAutoContextLine(options: {
     detectedMcpClients?: string[];
 }): string {
     const { repoReadiness } = options;
+    const setupGaps = buildAutoContextSetupGaps(options);
     if (repoReadiness.autoContextAgents.length > 0) {
-        return `${options.formatAgentList(repoReadiness.autoContextAgents)} inject current workstream context automatically`;
+        return setupGaps.length === 0
+            ? `${options.formatAgentList(repoReadiness.autoContextAgents)} inject current workstream context automatically`
+            : `${options.formatAgentList(repoReadiness.autoContextAgents)} inject current workstream context automatically; ${setupGaps.join('; ')}`;
+    }
+    if (setupGaps.length > 0) {
+        return setupGaps.join('; ');
     }
     if (options.mode === 'enable') {
         return (options.detectedMcpClients ?? []).length > 0
@@ -71,6 +77,20 @@ function buildAutoContextLine(options: {
             : 'No supported context-enabled agents detected on this machine yet';
     }
     return 'Run 0ctx enable to install automatic context injection for supported agents';
+}
+
+function buildAutoContextSetupGaps(options: {
+    repoReadiness: RepoReadinessSummary;
+    formatAgentList: (agents: string[]) => string;
+}): string[] {
+    const parts: string[] = [];
+    if (options.repoReadiness.sessionStartMissingAgents.length > 0) {
+        parts.push(`${options.formatAgentList(options.repoReadiness.sessionStartMissingAgents)} need SessionStart injection`);
+    }
+    if (options.repoReadiness.mcpRegistrationMissingAgents.length > 0) {
+        parts.push(`${options.formatAgentList(options.repoReadiness.mcpRegistrationMissingAgents)} need 0ctx MCP registration`);
+    }
+    return parts;
 }
 
 function formatDataPolicyPresetLabel(preset: string | null | undefined): string {

@@ -98,7 +98,7 @@ import {
     parseHookClients,
     validateExplicitPreviewSelection
 } from './cli-core/clients';
-import { detectInstalledGaHookClients, detectInstalledGaMcpClients } from './cli-core/detect-clients';
+import { detectInstalledGaHookClients, detectInstalledGaMcpClients, detectRegisteredGaMcpClients } from './cli-core/detect-clients';
 import { normalizeVersionCommandArgs, printJsonOrValue, resolveCommandOperation } from './cli-core/output';
 import { getCurrentWorkstream, findGitRepoRoot, resolveRepoRoot, safeGitValue } from './cli-core/repo';
 import { createHookHealthCollector, createRepoReadinessCollector } from './cli-core/readiness';
@@ -157,6 +157,8 @@ const collectRepoReadiness = createRepoReadinessCollector({
     sendToDaemon,
     getCurrentWorkstream,
     collectHookHealth,
+    detectInstalledGaHookClients,
+    detectRegisteredGaMcpClients,
     defaultHookInstallClients: DEFAULT_HOOK_INSTALL_CLIENTS,
     sessionStartAgents: SESSION_START_AGENTS,
     isGaHookAgent
