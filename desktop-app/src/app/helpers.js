@@ -357,7 +357,9 @@
     if (mode === 'none') {
       keys = [];
     } else if (mode === 'new') {
-      keys = preview.candidates.filter((candidate) => candidate.action === 'create').map((candidate) => candidate.key);
+      keys = preview.candidates
+        .filter((candidate) => candidateDefaultSelectionEligible(candidate))
+        .map((candidate) => candidate.key);
     } else {
       keys = preview.candidates.map((candidate) => candidate.key);
     }
@@ -384,6 +386,45 @@
     return text.replace(/[_-]+/g, ' ');
   }
 
+  function formatReviewTier(value) {
+    const tier = String(value || '').trim().toLowerCase();
+    if (!tier) return null;
+    if (tier === 'strong') return 'strong signal';
+    if (tier === 'review') return 'review';
+    if (tier === 'weak') return 'tentative';
+    return tier;
+  }
+
+  function reviewTierTone(value) {
+    const tier = String(value || '').trim().toLowerCase();
+    if (tier === 'strong') return 'green';
+    if (tier === 'review') return 'blue';
+    return 'orange';
+  }
+
+  function formatEvidenceSummary(value) {
+    const text = String(value || '').trim();
+    return text || null;
+  }
+
+  function candidateDefaultSelectionEligible(candidate) {
+    if (!candidate || candidate.action !== 'create' || candidate.reviewTier === 'weak') {
+      return false;
+    }
+    if (candidate.reviewTier === 'strong') {
+      return true;
+    }
+    const evidenceCount = Number(candidate.evidenceCount || 0);
+    const distinctEvidenceCount = Number(candidate.distinctEvidenceCount || candidate.evidenceCount || 0);
+    const roles = Array.isArray(candidate.corroboratedRoles)
+      ? candidate.corroboratedRoles.map((value) => String(value || '').trim().toLowerCase()).filter(Boolean)
+      : [];
+    if (distinctEvidenceCount > 1) {
+      return true;
+    }
+    return roles.includes('user');
+  }
+
   function renderKnowledgeCandidates(candidates, scope) {
     if (!Array.isArray(candidates) || candidates.length === 0) {
       return '<div class="empty-state">No extractable insight candidates were found in this source.</div>';
@@ -404,15 +445,20 @@
               <div class="preview-meta">
                 ${renderChip(candidate.type || 'node', candidate.action === 'create' ? 'green' : 'beige')}
                 ${renderChip(candidate.action === 'create' ? 'new node' : 'already in graph', candidate.action === 'create' ? 'green' : 'orange')}
+                ${candidate.reviewTier ? renderChip(formatReviewTier(candidate.reviewTier), reviewTierTone(candidate.reviewTier)) : ''}
                 ${candidate.confidence != null ? renderChip(formatConfidence(candidate.confidence), confidenceTone(candidate.confidence)) : ''}
-                ${candidate.evidenceCount && candidate.evidenceCount > 1 ? renderChip(`${candidate.evidenceCount} mentions`, 'purple') : ''}
+                ${candidate.distinctEvidenceCount && candidate.distinctEvidenceCount > 1 ? renderChip(`${candidate.distinctEvidenceCount} distinct`, 'purple') : ''}
+                ${candidate.evidenceCount && candidate.distinctEvidenceCount && candidate.evidenceCount > candidate.distinctEvidenceCount ? renderChip(`${candidate.evidenceCount} mentions`, 'beige') : ''}
                 ${candidate.role ? renderChip(candidate.role, chipToneForRole(candidate.role)) : ''}
                 ${candidate.messageId ? renderChip(short(candidate.messageId, 24), 'beige', { mono: true }) : ''}
               </div>
             <p class="preview-content">${esc(candidate.content || '')}</p>
+            ${candidate.sourceExcerpt ? `<p class="preview-evidence">From: ${esc(candidate.sourceExcerpt)}</p>` : ''}
             <div class="preview-footnote">
               <span>${esc(formatTime(candidate.createdAt))}</span>
+              ${formatEvidenceSummary(candidate.evidenceSummary) ? `<span>${esc(formatEvidenceSummary(candidate.evidenceSummary))}</span>` : ''}
               ${formatReason(candidate.reason) ? `<span>Why: ${esc(formatReason(candidate.reason))}</span>` : ''}
+              ${candidate.reviewSummary ? `<span>${esc(candidate.reviewSummary)}</span>` : ''}
             </div>
           </div>
         </div>
@@ -432,5 +478,5 @@
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  Object.assign(app, { esc, short, cleanConversationText, splitConversationText, describeSession, describeTurn, findAdjacentTurn, describeSelectedTurn, basenameFromPath, humanizeLabel, formatTime, formatRelativeTime, commitShort, chipToneForAgent, chipToneForRole, renderChip, renderMetaLine, summarizeCheckoutPaths, describeWorkstreamCheckout, describeWorkstreamSync, describeWorkstreamActionHint, describeWorkingTreeState, renderAgentChain, activeSessionKnowledgePreview, activeCheckpointKnowledgePreview, selectedKnowledgeKeys, setSelectedKnowledgeKeys, selectKnowledgeCandidates, formatConfidence, confidenceTone, formatReason, renderKnowledgeCandidates, jsonText, delay });
+  Object.assign(app, { esc, short, cleanConversationText, splitConversationText, describeSession, describeTurn, findAdjacentTurn, describeSelectedTurn, basenameFromPath, humanizeLabel, formatTime, formatRelativeTime, commitShort, chipToneForAgent, chipToneForRole, renderChip, renderMetaLine, summarizeCheckoutPaths, describeWorkstreamCheckout, describeWorkstreamSync, describeWorkstreamActionHint, describeWorkingTreeState, renderAgentChain, activeSessionKnowledgePreview, activeCheckpointKnowledgePreview, selectedKnowledgeKeys, setSelectedKnowledgeKeys, selectKnowledgeCandidates, formatConfidence, confidenceTone, formatReason, formatReviewTier, reviewTierTone, formatEvidenceSummary, candidateDefaultSelectionEligible, renderKnowledgeCandidates, jsonText, delay });
 })();

@@ -24,6 +24,7 @@
     "repo:github:bootstrap:dry": "powershell -ExecutionPolicy Bypass -File scripts/repo/bootstrap-github.ps1 -DryRun",
     "release:validate": "powershell -ExecutionPolicy Bypass -File scripts/release/validate-release.ps1",
     "release:e2e:ga": "node scripts/release/verify-ga-agents.mjs",
+    "release:e2e:daily": "node scripts/release/verify-daily-flow.mjs",
     "release:desktop:artifacts": "node scripts/release/package-desktop-artifacts.mjs",
     "release:changelog:prepare": "powershell -ExecutionPolicy Bypass -File scripts/release/prepare-changelog.ps1",
     "release:tag:dry": "powershell -ExecutionPolicy Bypass -File scripts/release/tag-preview.ps1",

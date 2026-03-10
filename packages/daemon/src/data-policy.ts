@@ -93,6 +93,9 @@ export function buildDataPolicySummary(graph: Graph, contextId: string | null): 
     return {
         contextId,
         workspaceResolved: Boolean(contextId),
+        syncScope: 'workspace',
+        captureScope: 'machine',
+        debugScope: 'machine',
         syncPolicy,
         captureRetentionDays,
         debugRetentionDays,

@@ -30,6 +30,7 @@ export function buildHookCaptureMeta(options: {
     occurredAt: number;
     branch: string | null;
     commitSha: string | null;
+    worktreePath: string | null;
     repositoryRoot: string;
     artifacts: HookArtifactPaths;
     extra?: Record<string, unknown>;
@@ -42,6 +43,7 @@ export function buildHookCaptureMeta(options: {
         occurredAt: options.occurredAt,
         branch: options.branch,
         commitSha: options.commitSha,
+        worktreePath: options.worktreePath,
         repositoryRoot: options.repositoryRoot,
         hookDumpPath: options.artifacts.dumpPath,
         hookEventLogPath: options.artifacts.hookEventLogPath,
@@ -102,6 +104,7 @@ export function createHookSupport(deps: HookSupportDeps) {
         startedAt: number;
         branch: string | null;
         commitSha: string | null;
+        worktreePath: string | null;
         repositoryRoot: string;
         artifacts: HookArtifactPaths;
         sessionTitle?: string | null;
@@ -130,6 +133,7 @@ export function createHookSupport(deps: HookSupportDeps) {
                     sessionTitle: options.sessionTitle ?? null,
                     branch: options.branch,
                     commitSha: options.commitSha,
+                    worktreePath: options.worktreePath,
                     repositoryRoot: options.repositoryRoot,
                     meta: buildHookCaptureMeta({
                         agent: options.agent,
@@ -139,6 +143,7 @@ export function createHookSupport(deps: HookSupportDeps) {
                         occurredAt: options.startedAt,
                         branch: options.branch,
                         commitSha: options.commitSha,
+                        worktreePath: options.worktreePath,
                         repositoryRoot: options.repositoryRoot,
                         artifacts: options.artifacts,
                         extra: { sessionTitle: options.sessionTitle ?? null }

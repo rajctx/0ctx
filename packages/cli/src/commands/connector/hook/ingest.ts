@@ -178,6 +178,7 @@ export function createHookIngestCommand(deps: HookCommandDeps) {
             startedAt: captureData?.startedAt ?? normalized.occurredAt,
             branch,
             commitSha,
+            worktreePath: captureRoot,
             repositoryRoot: captureRoot,
             artifacts,
             sessionTitle: captureData?.sessionTitle ?? (typeof normalized.raw.sessionTitle === 'string' ? normalized.raw.sessionTitle : null)
@@ -230,18 +231,20 @@ export function createHookIngestCommand(deps: HookCommandDeps) {
                         text: message.text,
                         branch,
                         commitSha,
+                        worktreePath: captureRoot,
                         occurredAt: message.occurredAt,
-                        meta: deps.buildHookCaptureMeta({
-                            agent,
-                            sessionId: normalized.sessionId,
-                            turnId: message.messageId,
-                            role: message.role,
-                            occurredAt: message.occurredAt,
-                            branch,
-                            commitSha,
-                            repositoryRoot: captureRoot,
-                            artifacts,
-                            extra: {
+                    meta: deps.buildHookCaptureMeta({
+                        agent,
+                        sessionId: normalized.sessionId,
+                        turnId: message.messageId,
+                        role: message.role,
+                        occurredAt: message.occurredAt,
+                        branch,
+                        commitSha,
+                        worktreePath: captureRoot,
+                        repositoryRoot: captureRoot,
+                        artifacts,
+                        extra: {
                                 parentId: message.parentId,
                                 lineNumber: message.lineNumber,
                                 transcriptMessageId: message.messageId,
@@ -261,6 +264,7 @@ export function createHookIngestCommand(deps: HookCommandDeps) {
                     ...normalized.raw,
                     branch,
                     commitSha,
+                    worktreePath: captureRoot,
                     occurredAt: normalized.occurredAt,
                     meta: deps.buildHookCaptureMeta({
                         agent,
@@ -270,6 +274,7 @@ export function createHookIngestCommand(deps: HookCommandDeps) {
                         occurredAt: normalized.occurredAt,
                         branch,
                         commitSha,
+                        worktreePath: captureRoot,
                         repositoryRoot: captureRoot,
                         artifacts
                     })

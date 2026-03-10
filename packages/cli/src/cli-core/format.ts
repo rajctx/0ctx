@@ -47,17 +47,3 @@ export function formatRetentionLabel(readiness: Pick<RepoReadinessSummary, 'capt
 export function formatDebugArtifactsLabel(enabled: boolean): string {
     return enabled ? 'enabled' : 'disabled by default';
 }
-
-export function formatDataPolicyNarrative(input: {
-    syncPolicy: string | null | undefined;
-    captureRetentionDays: number;
-    debugRetentionDays: number;
-    debugArtifactsEnabled: boolean;
-}): string {
-    const syncLabel = formatSyncPolicyLabel(input.syncPolicy);
-    const retentionLabel = formatRetentionLabel(input);
-    const syncNote = String(input.syncPolicy || 'metadata_only').trim().toLowerCase() === 'full_sync'
-        ? 'richer cloud sync enabled explicitly'
-        : 'raw payloads stay local and cloud sync remains lean';
-    return `${syncLabel}; ${retentionLabel}; ${syncNote}`;
-}

@@ -1,12 +1,11 @@
 (() => {
   window.OctxDesktop = window.OctxDesktop || {};
   const app = window.OctxDesktop;
-  const { state, matches, activeContext, captureState, automaticContextState, formatSyncPolicyLabel, formatDataPolicyPresetLabel, capturePolicySummary, esc, formatRelativeTime, renderChip, renderMetaLine, short, humanizeLabel, methodSupported, contextById, syncWorkspaceComparisonTargetSelection, workspaceComparisonTargetContext } = app;
+  const { state, matches, activeContext, zeroTouchState, formatSyncPolicyLabel, formatDataPolicyPresetLabel, capturePolicySummary, dataPolicyActionHint, esc, formatRelativeTime, renderChip, renderMetaLine, short, humanizeLabel, methodSupported, contextById, syncWorkspaceComparisonTargetSelection, workspaceComparisonTargetContext } = app;
 
   function renderWorkspaces() {
     const contexts = state.contexts.filter((context) => matches(`${context.name || ''} ${(context.paths || []).join(' ')}`));
     const context = activeContext();
-    const capture = captureState();
     document.getElementById('workspaceCount').textContent = `${contexts.length} workspace${contexts.length === 1 ? '' : 's'}`;
     const workspacesPageMeta = document.getElementById('workspacesPageMeta');
     if (workspacesPageMeta) {
@@ -126,22 +125,20 @@
 
     const focusItems = context
       ? [
+          (() => {
+            const zeroTouch = zeroTouchState();
+            return {
+              title: 'Normal path',
+              detail: `${zeroTouch.label} | ${zeroTouch.detail}`,
+              hint: zeroTouch.nextAction
+            };
+          })(),
           {
             title: 'Repository binding',
             detail: Array.isArray(context.paths) && context.paths.length > 0 ? context.paths.join(', ') : 'No repository folder bound yet',
             hint: Array.isArray(context.paths) && context.paths.length > 0
               ? 'Installed integrations resolve this workspace from the active repo path.'
               : 'Bind a repo path so capture can route here automatically.'
-          },
-          {
-            title: 'Capture readiness',
-            detail: `${capture.label} | ${capture.detail}`,
-            hint: 'This reflects the supported product path for the integrations installed on this machine.'
-          },
-          {
-            title: 'Automatic context',
-            detail: automaticContextState(),
-            hint: 'Supported agents get the current workstream pack automatically at session start.'
           },
           {
             title: 'Workstreams',
@@ -154,11 +151,11 @@
             hint: 'All captured runs currently linked to this project.'
           },
           {
-            title: 'Data policy',
-            detail: `${formatSyncPolicyLabel(state.dataPolicy?.syncPolicy || context.syncPolicy)} | ${capturePolicySummary()}`,
+            title: 'Sync and capture',
+            detail: `Workspace sync: ${formatSyncPolicyLabel(state.dataPolicy?.syncPolicy || context.syncPolicy)}`,
             hint: (state.dataPolicy?.syncPolicy || context.syncPolicy) === 'full_sync'
-              ? 'Richer cloud sync is enabled explicitly for this workspace. Raw payload sidecars still stay local.'
-              : 'Metadata-only sync is the normal default. Local capture stays on this machine and debug trails remain off unless you enable them.'
+              ? `Machine capture: ${capturePolicySummary()}. Richer cloud sync is enabled explicitly for this workspace.`
+              : `Machine capture: ${capturePolicySummary()}. Metadata-only sync is the normal default for this workspace.`
           }
         ]
       : [
@@ -193,6 +190,7 @@
     const supportsMutation = methodSupported('setDataPolicy');
     const workspaceResolved = policy.workspaceResolved === true && Boolean(activeContext()?.id);
     const preset = String(policy.preset || 'lean').trim().toLowerCase();
+    const actionHint = dataPolicyActionHint(policy);
 
     document.querySelectorAll('.workspace-policy-preset').forEach((button) => {
       const presetValue = String(button.getAttribute('data-policy-preset') || '').trim().toLowerCase();
@@ -200,7 +198,7 @@
       const requiresWorkspace = presetValue === 'shared';
       button.disabled = !supportsMutation || (requiresWorkspace && !workspaceResolved);
       button.title = requiresWorkspace && !workspaceResolved
-        ? 'Shared requires an active workspace because it opts that workspace into full sync.'
+        ? 'Full sync is available only after a workspace is active.'
         : '';
     });
 
@@ -210,10 +208,9 @@
 
     if (policyDetailList) {
       const detailItems = [
-        { title: 'Workspace sync', detail: formatSyncPolicyLabel(policy.syncPolicy || 'metadata_only') },
-        { title: 'Local capture retention', detail: `${policy.captureRetentionDays || 14} days` },
-        { title: 'Debug retention', detail: `${policy.debugRetentionDays || 7} days` },
-        { title: 'Debug artifacts', detail: policy.debugArtifactsEnabled === true ? 'Enabled explicitly' : 'Off by default' }
+        { title: 'Policy mode', detail: formatDataPolicyPresetLabel(policy.preset || 'lean') },
+        { title: 'Workspace sync (this workspace)', detail: formatSyncPolicyLabel(policy.syncPolicy || 'metadata_only') },
+        { title: 'Machine capture (this machine)', detail: capturePolicySummary() }
       ];
       policyDetailList.innerHTML = detailItems.map((item) => `
         <article>
@@ -225,14 +222,16 @@
 
     if (policyHint) {
       policyHint.textContent = !supportsMutation
-        ? 'Update the local runtime before changing the data policy from the desktop.'
+        ? 'Update the local runtime before changing sync or machine capture defaults from the desktop.'
         : preset === 'custom'
-          ? 'This workspace is using a custom policy. Choose one of the supported presets to return to a standard product path.'
+          ? 'This workspace and this machine are using a custom combination. Choose Lean, Review, or Debug to return machine defaults to a standard product path. Use full sync only as an explicit workspace override.'
           : !workspaceResolved
-            ? 'Lean, Review, and Debug can be applied immediately. Shared requires an active workspace because it opts that workspace into full sync.'
+            ? 'Lean, Review, and Debug change machine capture defaults immediately. Full sync is available only after a workspace is active.'
             : preset === 'shared'
-              ? 'Shared opts this workspace into full sync. Raw payloads still stay local and debug trails remain off unless you explicitly enable them elsewhere.'
-              : 'Lean is the normal default. Review keeps more local capture, Debug temporarily enables debug trails, and Shared opts this workspace into full sync.';
+              ? 'This workspace is explicitly opted into full sync. Machine retention and debug settings remain local machine defaults.'
+              : actionHint
+                ? `Lean is the normal default. Workspace sync stays metadata-only unless you opt this workspace into full sync. ${actionHint}`
+                : 'Lean is the normal default. Review and Debug only change machine capture defaults. Full sync is a separate workspace override.';
     }
   }
 

@@ -5,6 +5,9 @@ type DataPolicyPreset = 'lean' | 'review' | 'debug' | 'shared' | 'custom';
 
 interface DataPolicyPayload {
     workspaceResolved: boolean;
+    syncScope?: 'workspace';
+    captureScope?: 'machine';
+    debugScope?: 'machine';
     syncPolicy: string;
     captureRetentionDays: number;
     debugRetentionDays: number;
@@ -84,14 +87,20 @@ function parsePreset(value: string | null): DataPolicyPreset | null {
 }
 
 function printPolicySummary(payload: DataPolicyPayload, formatSyncPolicyLabel: PolicyCommandDeps['formatSyncPolicyLabel'], formatDebugArtifactsLabel: PolicyCommandDeps['formatDebugArtifactsLabel']): void {
+    const syncPolicy = String(payload.syncPolicy || 'metadata_only').trim().toLowerCase();
+    const normalPath = !payload.workspaceResolved
+        ? 'Needs workspace binding'
+        : syncPolicy === 'full_sync'
+            ? 'Active | richer cloud sync is opt-in for this workspace'
+            : 'Active | lean metadata sync plus local capture';
     console.log(`  Preset:                  ${formatPresetLabel(payload.preset)}`);
+    console.log(`  Normal path:             ${normalPath}`);
     console.log(`  Workspace sync:          ${payload.workspaceResolved ? formatSyncPolicyLabel(payload.syncPolicy) : `${formatSyncPolicyLabel(payload.syncPolicy)} (no workspace resolved)`}`);
-    console.log(`  Local capture retention: ${payload.captureRetentionDays}d`);
-    console.log(`  Debug retention:         ${payload.debugRetentionDays}d`);
-    console.log(`  Debug artifacts:         ${formatDebugArtifactsLabel(payload.debugArtifactsEnabled)}`);
-    console.log(`  Policy:                  ${String(payload.syncPolicy || 'metadata_only').trim().toLowerCase() === 'full_sync'
-        ? 'Richer cloud sync is enabled explicitly for this workspace.'
-        : 'Raw payloads stay local by default and cloud sync remains lean.'}`);
+    console.log(`  Machine capture:         ${payload.captureRetentionDays}d local retention`);
+    console.log(`  Machine debug:           ${payload.debugRetentionDays}d retention; ${formatDebugArtifactsLabel(payload.debugArtifactsEnabled)}`);
+    console.log(`  Policy:                  ${syncPolicy === 'full_sync'
+        ? 'This workspace is opted into richer cloud sync. Machine capture and debug defaults remain local.'
+        : 'This workspace stays on lean sync. Machine capture and debug defaults remain local.'}`);
 }
 
 function printPresetCatalog(
@@ -99,17 +108,60 @@ function printPresetCatalog(
     formatDebugArtifactsLabel: PolicyCommandDeps['formatDebugArtifactsLabel']
 ): void {
     console.log('Preset catalog\n');
-    for (const definition of DATA_POLICY_PRESETS) {
+    const machinePresets = DATA_POLICY_PRESETS.filter((definition) => definition.preset !== 'shared');
+    const workspaceOverrides = DATA_POLICY_PRESETS.filter((definition) => definition.preset === 'shared');
+
+    console.log('Machine presets\n');
+    for (const definition of machinePresets) {
         console.log(`  ${definition.label}`);
-        console.log(`    Sync:              ${formatSyncPolicyLabel(definition.syncPolicy)}`);
-        console.log(`    Capture retention: ${definition.captureRetentionDays}d`);
-        console.log(`    Debug retention:   ${definition.debugRetentionDays}d`);
-        console.log(`    Debug artifacts:   ${formatDebugArtifactsLabel(definition.debugArtifactsEnabled)}`);
+        console.log(`    Workspace sync:    ${formatSyncPolicyLabel(definition.syncPolicy)}`);
+        console.log(`    Machine capture:   ${definition.captureRetentionDays}d`);
+        console.log(`    Machine debug:     ${definition.debugRetentionDays}d; ${formatDebugArtifactsLabel(definition.debugArtifactsEnabled)}`);
         console.log(`    Use when:          ${definition.recommendation}`);
         console.log('');
     }
-    console.log('  Apply with: 0ctx data-policy <lean|review|debug|shared> [--repo-root=<path>] [--json]');
+
+    console.log('Workspace override\n');
+    for (const definition of workspaceOverrides) {
+        console.log(`  ${definition.label}`);
+        console.log(`    Workspace sync:    ${formatSyncPolicyLabel(definition.syncPolicy)}`);
+        console.log(`    Machine capture:   ${definition.captureRetentionDays}d`);
+        console.log(`    Machine debug:     ${definition.debugRetentionDays}d; ${formatDebugArtifactsLabel(definition.debugArtifactsEnabled)}`);
+        console.log(`    Use when:          ${definition.recommendation}`);
+        console.log('');
+    }
+
+    console.log('  Apply machine presets with: 0ctx data-policy <lean|review|debug> [--repo-root=<path>] [--json]');
+    console.log('  Opt a workspace into richer cloud sync with: 0ctx data-policy shared --repo-root=<path> [--json]');
     console.log('');
+}
+
+function printPolicyGuidance(payload: DataPolicyPayload): void {
+    if (payload.preset === 'custom') {
+        console.log('  Next step:               Normalize machine defaults with `0ctx data-policy lean|review|debug`. Use `0ctx data-policy shared --repo-root=<path>` only when a workspace explicitly needs richer cloud sync.');
+        console.log('  Need presets?:           Run `0ctx data-policy presets`.');
+        return;
+    }
+
+    const definition = getPresetDefinition(payload.preset);
+    console.log(`  Recommended for:         ${definition.recommendation}`);
+
+    if (payload.preset === 'shared') {
+        console.log('  Next step:               Keep Shared only for workspaces that explicitly need richer cloud sync, then return to Lean when that is no longer needed.');
+        return;
+    }
+
+    if (payload.preset === 'debug') {
+        console.log('  Next step:               Return to Lean after troubleshooting is complete.');
+        return;
+    }
+
+    if (payload.preset === 'review') {
+        console.log('  Next step:               Return to Lean when the longer local review window is no longer needed.');
+        return;
+    }
+
+    console.log('  Next step:               Stay on Lean unless this machine needs longer local review retention or temporary debug trails.');
 }
 
 export function createDataPolicyCommands(deps: PolicyCommandDeps) {
@@ -139,14 +191,8 @@ export function createDataPolicyCommands(deps: PolicyCommandDeps) {
             console.log('\nData Policy\n');
             printPolicySummary(payload, deps.formatSyncPolicyLabel, deps.formatDebugArtifactsLabel);
             console.log('');
-            if (payload.preset === 'custom') {
-                console.log('  Recommendation:       Use `0ctx data-policy presets` to review the supported presets.');
-            } else {
-                const definition = getPresetDefinition(payload.preset);
-                console.log(`  Recommended for:      ${definition.recommendation}`);
-            }
-            console.log('');
-            printPresetCatalog(deps.formatSyncPolicyLabel, deps.formatDebugArtifactsLabel);
+            printPolicyGuidance(payload);
+            console.log('  Need presets?:           Run `0ctx data-policy presets` for the catalog.');
             console.log('');
         });
     }
@@ -177,6 +223,7 @@ export function createDataPolicyCommands(deps: PolicyCommandDeps) {
 
         if (!preset && !syncPolicy && captureRetentionDays == null && debugRetentionDays == null && debugArtifactsEnabled == null) {
             console.error('Usage: 0ctx data-policy set [--repo-root=<path>] [--preset=<lean|review|debug|shared>] [--sync-policy=<local_only|metadata_only|full_sync>] [--capture-retention-days=<days>] [--debug-retention-days=<days>] [--debug-artifacts=<on|off>] [--json]');
+            console.error('       Use lean|review|debug for normal machine defaults. Use shared only as an explicit workspace override.');
             return 1;
         }
 
@@ -202,6 +249,8 @@ export function createDataPolicyCommands(deps: PolicyCommandDeps) {
             console.log('\nData policy updated\n');
             printPolicySummary(payload, deps.formatSyncPolicyLabel, deps.formatDebugArtifactsLabel);
             console.log('');
+            printPolicyGuidance(payload);
+            console.log('');
         });
     }
 
@@ -225,7 +274,8 @@ export function createDataPolicyCommands(deps: PolicyCommandDeps) {
         console.error('Usage: 0ctx data-policy [--repo-root=<path>] [--json]');
         console.error('   or: 0ctx data-policy presets [--json]');
         console.error('   or: 0ctx data-policy set [--repo-root=<path>] [--preset=<lean|review|debug|shared>] [--sync-policy=<local_only|metadata_only|full_sync>] [--capture-retention-days=<days>] [--debug-retention-days=<days>] [--debug-artifacts=<on|off>] [--json]');
-        console.error('   or: 0ctx data-policy <lean|review|debug|shared> [--repo-root=<path>] [--json]');
+        console.error('   or: 0ctx data-policy <lean|review|debug> [--repo-root=<path>] [--json]');
+        console.error('   or: 0ctx data-policy shared --repo-root=<path> [--json]');
         return 1;
     }
 

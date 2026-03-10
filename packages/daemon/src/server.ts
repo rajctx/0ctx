@@ -13,7 +13,8 @@ import { log } from './logger';
 import { EventRuntime } from './events';
 
 const IS_WIN = os.platform() === 'win32';
-const DEFAULT_SOCKET_PATH = IS_WIN ? '\\\\.\\pipe\\0ctx.sock' : path.join(os.homedir(), '.0ctx', '0ctx.sock');
+const DEFAULT_SOCKET_PATH = process.env.CTX_SOCKET_PATH
+    || (IS_WIN ? '\\\\.\\pipe\\0ctx.sock' : path.join(os.homedir(), '.0ctx', '0ctx.sock'));
 const DEFAULT_PROBE_TIMEOUT_MS = 750;
 
 type StartupProbeResult = 'daemon' | 'stale_endpoint' | 'occupied';

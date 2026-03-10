@@ -96,8 +96,18 @@ export function createEnableCommands(deps: ProductCommandDeps & { commandBootstr
             return 1;
         }
 
-        const hookClients = deps.parseHookClients(flags.clients);
-        const mcpClients = deps.parseEnableMcpClients(flags['mcp-clients'] ?? flags.mcpClients);
+        const detectedHookClients = deps.detectInstalledGaHookClients();
+        const detectedMcpClients = deps.detectInstalledGaMcpClients();
+        const hookClients = flags.clients
+            ? deps.parseHookClients(flags.clients)
+            : detectedHookClients.length > 0
+                ? detectedHookClients
+                : deps.parseHookClients(undefined);
+        const mcpClients = (flags['mcp-clients'] ?? flags.mcpClients)
+            ? deps.parseEnableMcpClients(flags['mcp-clients'] ?? flags.mcpClients)
+            : detectedMcpClients.length > 0
+                ? detectedMcpClients
+                : deps.parseEnableMcpClients(undefined);
         const mcpProfile = deps.parseOptionalStringFlag(flags['mcp-profile'] ?? flags.profile) ?? 'core';
         const p = (!quiet && !asJson) ? await import('@clack/prompts') : null;
         const spinner = p?.spinner() ?? null;
@@ -144,7 +154,12 @@ export function createEnableCommands(deps: ProductCommandDeps & { commandBootstr
         }
 
         await deps.sendToDaemon('switchContext', { contextId });
-        steps.push({ id: 'workspace', status: 'pass', message: created ? `Created and selected workspace '${workspaceName}'.` : 'Selected the workspace bound to this repository.', details: { contextId, repoRoot, created } });
+        steps.push({
+            id: 'workspace',
+            status: 'pass',
+            message: created ? `Created and selected workspace '${workspaceName}'.` : 'Selected the workspace bound to this repository.',
+            details: { contextId, repoRoot, created, detectedHookClients, detectedMcpClients }
+        });
 
         if (dataPolicyPreset) {
             if (spinner) spinner.message('Applying data policy');
@@ -153,6 +168,9 @@ export function createEnableCommands(deps: ProductCommandDeps & { commandBootstr
                 preset: dataPolicyPreset
             }) as {
                 preset?: string;
+                syncScope?: 'workspace';
+                captureScope?: 'machine';
+                debugScope?: 'machine';
                 syncPolicy?: string | null;
                 captureRetentionDays?: number;
                 debugRetentionDays?: number;
@@ -164,6 +182,9 @@ export function createEnableCommands(deps: ProductCommandDeps & { commandBootstr
                 message: `Applied the ${dataPolicyPreset} data policy preset.`,
                 details: {
                     preset: dataPolicy.preset ?? dataPolicyPreset,
+                    syncScope: dataPolicy.syncScope ?? 'workspace',
+                    captureScope: dataPolicy.captureScope ?? 'machine',
+                    debugScope: dataPolicy.debugScope ?? 'machine',
                     syncPolicy: dataPolicy.syncPolicy ?? null,
                     captureRetentionDays: dataPolicy.captureRetentionDays ?? null,
                     debugRetentionDays: dataPolicy.debugRetentionDays ?? null,
@@ -171,12 +192,67 @@ export function createEnableCommands(deps: ProductCommandDeps & { commandBootstr
                 }
             });
         } else {
-            steps.push({
-                id: 'data_policy',
-                status: 'warn',
-                message: 'Using the current data policy. Pass --data-policy to change it during enable.',
-                details: { preset: null }
-            });
+            const currentDataPolicy = await deps.sendToDaemon('getDataPolicy', { contextId }) as {
+                preset?: string | null;
+                syncScope?: 'workspace';
+                captureScope?: 'machine';
+                debugScope?: 'machine';
+                syncPolicy?: string | null;
+                captureRetentionDays?: number;
+                debugRetentionDays?: number;
+                debugArtifactsEnabled?: boolean;
+            };
+            const currentPreset = typeof currentDataPolicy?.preset === 'string' ? currentDataPolicy.preset : 'custom';
+            if (created || currentPreset === 'custom') {
+                if (spinner) spinner.message('Applying default lean data policy');
+                const normalizedDataPolicy = await deps.sendToDaemon('setDataPolicy', {
+                    contextId,
+                    preset: 'lean'
+                }) as {
+                    preset?: string;
+                    syncScope?: 'workspace';
+                    captureScope?: 'machine';
+                    debugScope?: 'machine';
+                    syncPolicy?: string | null;
+                    captureRetentionDays?: number;
+                    debugRetentionDays?: number;
+                    debugArtifactsEnabled?: boolean;
+                };
+                steps.push({
+                    id: 'data_policy',
+                    status: 'pass',
+                    message: created
+                        ? 'Applied the default lean data policy for this new workspace.'
+                        : 'Normalized the current custom data policy to the lean default.',
+                    details: {
+                        preset: normalizedDataPolicy.preset ?? 'lean',
+                        syncScope: normalizedDataPolicy.syncScope ?? 'workspace',
+                        captureScope: normalizedDataPolicy.captureScope ?? 'machine',
+                        debugScope: normalizedDataPolicy.debugScope ?? 'machine',
+                        syncPolicy: normalizedDataPolicy.syncPolicy ?? null,
+                        captureRetentionDays: normalizedDataPolicy.captureRetentionDays ?? null,
+                        debugRetentionDays: normalizedDataPolicy.debugRetentionDays ?? null,
+                        debugArtifactsEnabled: normalizedDataPolicy.debugArtifactsEnabled ?? null,
+                        normalizedFrom: currentPreset
+                    }
+                });
+            } else {
+                steps.push({
+                    id: 'data_policy',
+                    status: 'pass',
+                    message: `Using the current ${currentPreset} data policy.`,
+                    details: {
+                        preset: currentPreset,
+                        syncScope: currentDataPolicy?.syncScope ?? 'workspace',
+                        captureScope: currentDataPolicy?.captureScope ?? 'machine',
+                        debugScope: currentDataPolicy?.debugScope ?? 'machine',
+                        syncPolicy: currentDataPolicy?.syncPolicy ?? null,
+                        captureRetentionDays: currentDataPolicy?.captureRetentionDays ?? null,
+                        debugRetentionDays: currentDataPolicy?.debugRetentionDays ?? null,
+                        debugArtifactsEnabled: currentDataPolicy?.debugArtifactsEnabled ?? null
+                    }
+                });
+            }
         }
 
         let bootstrapResults: BootstrapResult[] = [];
@@ -195,7 +271,14 @@ export function createEnableCommands(deps: ProductCommandDeps & { commandBootstr
                 return 1;
             }
         } else {
-            steps.push({ id: 'mcp', status: 'warn', message: skipBootstrap ? 'Skipped MCP registration.' : 'No MCP clients selected for registration.', details: { clients: mcpClients, profile: mcpProfile } });
+            steps.push({
+                id: 'mcp',
+                status: 'warn',
+                message: skipBootstrap
+                    ? 'Skipped MCP registration.'
+                    : 'No GA MCP registration targets were selected.',
+                details: { clients: mcpClients, profile: mcpProfile, detectedClients: detectedMcpClients }
+            });
         }
 
         let hookSummary: ReturnType<typeof deps.installHooks> | null = null;
@@ -206,7 +289,14 @@ export function createEnableCommands(deps: ProductCommandDeps & { commandBootstr
             steps.push({ id: 'capture', status: 'pass', message: 'Capture integrations installed.', details: { clients: hookClients, changed: hookSummary.changed, statePath: hookSummary.statePath, projectConfigPath: hookSummary.projectConfigPath } });
             hookHealthDetails = (await deps.collectHookHealth()).details;
         } else {
-            steps.push({ id: 'capture', status: 'warn', message: skipHooks ? 'Skipped capture integration installation.' : 'No capture integrations selected for installation.', details: { clients: hookClients } });
+            steps.push({
+                id: 'capture',
+                status: 'warn',
+                message: skipHooks
+                    ? 'Skipped capture integration installation.'
+                    : 'No GA capture integrations were selected for installation.',
+                details: { clients: hookClients, detectedClients: detectedHookClients }
+            });
         }
 
         if (spinner) spinner.stop(color.green('0ctx is enabled for this repository'));
@@ -215,8 +305,13 @@ export function createEnableCommands(deps: ProductCommandDeps & { commandBootstr
         if (asJson) {
             console.log(JSON.stringify({
                 ok: true, repoRoot, contextId, workspaceName, created, hookClients, mcpClients, mcpProfile, dataPolicyPreset, steps, bootstrapResults, hooks: hookSummary, repoReadiness,
+                detectedHookClients,
+                detectedMcpClients,
                 dataPolicy: repoReadiness ? {
                     preset: dataPolicyPreset ?? null,
+                    syncScope: repoReadiness.syncScope,
+                    captureScope: repoReadiness.captureScope,
+                    debugScope: repoReadiness.debugScope,
                     syncPolicy: deps.formatSyncPolicyLabel(repoReadiness.syncPolicy),
                     captureRetentionDays: repoReadiness.captureRetentionDays,
                     debugRetentionDays: repoReadiness.debugRetentionDays,
@@ -231,10 +326,22 @@ export function createEnableCommands(deps: ProductCommandDeps & { commandBootstr
             deps.formatLabelValue('Workspace', repoReadiness.workspaceName ?? workspaceName),
             deps.formatLabelValue('Workstream', repoReadiness.workstream ?? '-'),
             deps.formatLabelValue('Ready', repoReadiness.zeroTouchReady ? 'zero-touch for supported agents' : 'needs one-time setup'),
-            deps.formatLabelValue('Capture', repoReadiness.captureMissingAgents.length === 0 ? `${deps.formatAgentList(repoReadiness.captureReadyAgents)} ready` : `${deps.formatAgentList(repoReadiness.captureReadyAgents)} ready${repoReadiness.captureReadyAgents.length > 0 ? '; ' : ''}${deps.formatAgentList(repoReadiness.captureMissingAgents)} not installed`),
-            deps.formatLabelValue('Context', repoReadiness.autoContextAgents.length > 0 ? `${deps.formatAgentList(repoReadiness.autoContextAgents)} inject current workstream context automatically` : 'No supported context injection integrations installed yet'),
+            deps.formatLabelValue('Capture', repoReadiness.captureReadyAgents.length > 0
+                ? (repoReadiness.captureMissingAgents.length === 0
+                    ? `${deps.formatAgentList(repoReadiness.captureReadyAgents)} ready`
+                    : `${deps.formatAgentList(repoReadiness.captureReadyAgents)} ready${repoReadiness.captureReadyAgents.length > 0 ? '; ' : ''}${deps.formatAgentList(repoReadiness.captureMissingAgents)} not installed`)
+                : (detectedHookClients.length > 0
+                    ? 'Detected supported agents but capture is not installed yet'
+                    : 'No supported capture integrations detected on this machine yet')),
+            deps.formatLabelValue('Context', repoReadiness.autoContextAgents.length > 0
+                ? `${deps.formatAgentList(repoReadiness.autoContextAgents)} inject current workstream context automatically`
+                : (detectedMcpClients.length > 0
+                    ? 'Detected supported agents but automatic context is not enabled yet'
+                    : 'No supported context-enabled agents detected on this machine yet')),
             deps.formatLabelValue('History', repoReadiness.sessionCount === null ? 'No captured workstream history yet' : `${repoReadiness.sessionCount} sessions, ${repoReadiness.checkpointCount ?? 0} checkpoints`),
-            deps.formatLabelValue('Data policy', deps.formatDataPolicyNarrative({ syncPolicy: repoReadiness.syncPolicy, captureRetentionDays: repoReadiness.captureRetentionDays, debugRetentionDays: repoReadiness.debugRetentionDays, debugArtifactsEnabled: repoReadiness.debugArtifactsEnabled })),
+            deps.formatLabelValue('Workspace sync', deps.formatSyncPolicyLabel(repoReadiness.syncPolicy)),
+            deps.formatLabelValue('Machine capture', deps.formatRetentionLabel(repoReadiness)),
+            ...(repoReadiness.dataPolicyActionHint ? [deps.formatLabelValue('Policy step', repoReadiness.dataPolicyActionHint)] : []),
             ...(repoReadiness.nextActionHint ? [deps.formatLabelValue('Next step', repoReadiness.nextActionHint)] : [])
         ] : [deps.formatLabelValue('Repo', repoRoot), deps.formatLabelValue('Workspace', workspaceName)];
 

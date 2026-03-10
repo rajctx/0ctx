@@ -175,6 +175,9 @@
         if (comparison.reconcileStrategySummary) {
           lines.push(`Reconcile: ${comparison.reconcileStrategySummary}`);
         }
+        if (Array.isArray(comparison.reconcileSteps) && comparison.reconcileSteps.length > 0) {
+          lines.push(`Steps: ${comparison.reconcileSteps.map((step, index) => `${index + 1}) ${step}`).join(' ')}`);
+        }
         comparisonSummary.textContent = lines.join(' ');
       }
       if (comparisonMeta) {
@@ -203,6 +206,7 @@
           `<article><span>Hotspots</span><strong>${esc(comparison.changeHotspotSummary || 'none')}</strong></article>`,
           `<article><span>Merge risk</span><strong>${esc(comparison.mergeRiskSummary || 'unknown')}</strong></article>`,
           `<article><span>Reconcile</span><strong>${esc(comparison.reconcileStrategySummary || 'unknown')}</strong></article>`,
+          `<article><span>Reconcile steps</span><strong>${esc(Array.isArray(comparison.reconcileSteps) && comparison.reconcileSteps.length > 0 ? comparison.reconcileSteps.join(' | ') : 'none')}</strong></article>`,
           `<article><span>Blockers</span><strong>${esc(comparison.comparisonBlockers?.length ? comparison.comparisonBlockers.join(' ') : 'none')}</strong></article>`,
           `<article><span>Review</span><strong>${esc(comparison.comparisonReviewItems?.length ? comparison.comparisonReviewItems.join(' ') : 'none')}</strong></article>`,
           `<article><span>Shared agents</span><strong>${esc(comparison.sharedAgents.length > 0 ? comparison.sharedAgents.join(', ') : 'none')}</strong></article>`

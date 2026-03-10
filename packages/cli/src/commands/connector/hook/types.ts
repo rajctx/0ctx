@@ -151,6 +151,7 @@ export interface HookCommandDeps {
         occurredAt: number;
         branch: string | null;
         commitSha: string | null;
+        worktreePath: string | null;
         repositoryRoot: string;
         artifacts: HookArtifactPaths;
         extra?: Record<string, unknown>;
@@ -163,6 +164,7 @@ export interface HookCommandDeps {
         startedAt: number;
         branch: string | null;
         commitSha: string | null;
+        worktreePath: string | null;
         repositoryRoot: string;
         artifacts: HookArtifactPaths;
         sessionTitle?: string | null;

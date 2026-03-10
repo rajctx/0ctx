@@ -72,7 +72,6 @@ import {
 } from './cli-core/daemon';
 import {
     formatAgentList,
-    formatDataPolicyNarrative,
     formatDebugArtifactsLabel,
     formatLabelValue,
     formatRetentionLabel,
@@ -99,6 +98,7 @@ import {
     parseHookClients,
     validateExplicitPreviewSelection
 } from './cli-core/clients';
+import { detectInstalledGaHookClients, detectInstalledGaMcpClients } from './cli-core/detect-clients';
 import { normalizeVersionCommandArgs, printJsonOrValue, resolveCommandOperation } from './cli-core/output';
 import { getCurrentWorkstream, findGitRepoRoot, resolveRepoRoot, safeGitValue } from './cli-core/repo';
 import { createHookHealthCollector, createRepoReadinessCollector } from './cli-core/readiness';
@@ -123,9 +123,9 @@ import { printHelp } from './commands/help';
 
 const DB_PATH = process.env.CTX_DB_PATH || path.join(os.homedir(), '.0ctx', '0ctx.db');
 const KEY_PATH = path.join(os.homedir(), '.0ctx', 'master.key');
-const SOCKET_PATH = os.platform() === 'win32'
+const SOCKET_PATH = process.env.CTX_SOCKET_PATH || (os.platform() === 'win32'
     ? '\\\\.\\pipe\\0ctx.sock'
-    : path.join(os.homedir(), '.0ctx', '0ctx.sock');
+    : path.join(os.homedir(), '.0ctx', '0ctx.sock'));
 
 const SUPPORTED_CLIENTS: SupportedClient[] = ALL_SUPPORTED_CLIENTS;
 const SUPPORTED_HOOK_INSTALL_CLIENTS: HookInstallClient[] = ['claude', 'cursor', 'windsurf', 'codex', 'factory', 'antigravity'];
@@ -278,6 +278,8 @@ const {
     parseClients: raw => parseClients(raw),
     parseHookClients: raw => parseHookClients(raw),
     parseEnableMcpClients: raw => parseEnableMcpClients(raw),
+    detectInstalledGaHookClients,
+    detectInstalledGaMcpClients,
     parseOptionalStringFlag,
     parsePositiveIntegerFlag,
     parseOptionalPositiveNumberFlag,
@@ -301,7 +303,6 @@ const {
     readCliOpsLog,
     startLogsServer,
     formatAgentList,
-    formatDataPolicyNarrative,
     formatLabelValue,
     formatRetentionLabel,
     formatSyncPolicyLabel,
@@ -327,6 +328,13 @@ const { commandConnector } = createConnectorCommands({
     registerConnector,
     registerConnectorInCloud
 });
+
+function resolveDataPolicySubcommand(candidate: string | null | undefined): string | null {
+    if (!candidate) return null;
+    return ['show', 'get', 'presets', 'catalog', 'set', 'lean', 'review', 'debug', 'shared'].includes(candidate)
+        ? candidate
+        : null;
+}
 
 const {
     collectDoctorChecks,
@@ -649,7 +657,7 @@ async function main(): Promise<number> {
                 return 1;
             }
             case 'data-policy':
-                return commandDataPolicy(parsed.subcommand ?? parsed.positionalArgs[0] ?? null, parsed.flags);
+                return commandDataPolicy(resolveDataPolicySubcommand(parsed.subcommand ?? parsed.positionalArgs[0] ?? null), parsed.flags);
             case 'sync': {
                 const sub = parsed.subcommand;
                 if (sub === 'status' || !sub) return commandSyncStatus();

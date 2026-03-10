@@ -22,6 +22,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
         ? rest
         : [maybeSubcommand, ...rest].filter((token): token is string => Boolean(token));
     const flags: Record<string, string | boolean> = {};
+    const consumedArgIndexes = new Set<number>();
 
     for (let i = 0; i < tokens.length; i += 1) {
         const token = tokens[i];
@@ -34,24 +35,28 @@ export function parseArgs(argv: string[]): ParsedArgs {
 
         if (rawValue !== undefined) {
             flags[key] = rawValue;
+            consumedArgIndexes.add(i);
             continue;
         }
 
         const next = tokens[i + 1];
         if (next && !next.startsWith('--')) {
             flags[key] = next;
+            consumedArgIndexes.add(i);
+            consumedArgIndexes.add(i + 1);
             i += 1;
             continue;
         }
 
         flags[key] = true;
+        consumedArgIndexes.add(i);
     }
 
     const sub = hasSubcommand ? maybeSubcommand : undefined;
     const serviceAction = (sub === 'service' && tokens[0] && !tokens[0].startsWith('--'))
         ? tokens[0]
         : undefined;
-    const positionalArgs = tokens.filter(arg => !arg.startsWith('--'));
+    const positionalArgs = tokens.filter((arg, index) => !consumedArgIndexes.has(index) && !arg.startsWith('--'));
     return { command, subcommand: sub, serviceAction, positionalArgs, flags };
 }
 

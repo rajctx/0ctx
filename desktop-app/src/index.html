@@ -181,7 +181,7 @@
                   <div class="policy-preset-grid">
                     <button class="btn tertiary policy-preset-btn workspace-policy-preset" data-policy-preset="lean" type="button">
                       <strong>Lean</strong>
-                      <span>Normal default. Metadata-only sync, short local retention, no debug trails.</span>
+                      <span>Normal default. Metadata-only sync for this workspace, short machine-local retention, no debug trails.</span>
                     </button>
                     <button class="btn tertiary policy-preset-btn workspace-policy-preset" data-policy-preset="review" type="button">
                       <strong>Review</strong>
@@ -191,13 +191,12 @@
                       <strong>Debug</strong>
                       <span>Temporarily enable richer local debugging artifacts for support and diagnosis.</span>
                     </button>
-                    <button class="btn tertiary policy-preset-btn workspace-policy-preset" data-policy-preset="shared" type="button">
-                      <strong>Shared</strong>
-                      <span>Explicitly opt this workspace into full sync while keeping raw payload sidecars local.</span>
-                    </button>
                   </div>
                   <div id="workspacePolicyDetailList" class="info-list compact-info-list"></div>
-                  <p id="workspacePolicyHint" class="page-copy compact-copy">Metadata-only sync is the normal default. Local capture stays on this machine and debug trails remain off unless you explicitly enable them.</p>
+                  <p id="workspacePolicyHint" class="page-copy compact-copy">Metadata-only sync is the normal default for this workspace. Machine-local capture stays on this machine and debug trails remain off unless you explicitly enable them.</p>
+                  <div class="row-actions">
+                    <button class="btn quiet workspace-policy-preset" data-policy-preset="shared" type="button">Opt this workspace into full sync</button>
+                  </div>
                 </section>
 
                 <section class="panel subpanel compare-panel">
@@ -605,13 +604,9 @@
                     <span>Repo enablement</span>
                     <code id="setupCommand">0ctx enable --repo-root "&lt;repo-root&gt;"</code>
                   </article>
-                  <article class="command-card">
-                    <span>Install integrations for this workspace</span>
-                    <code id="hookInstallCommand">0ctx connector hook install --clients=factory,antigravity,claude</code>
-                  </article>
                 </div>
                 <div class="row-actions wrap-row">
-                  <button id="copyHookInstall" class="btn tertiary" type="button">Copy install command</button>
+                  <button id="copyEnableCommand" class="btn tertiary" type="button">Copy enable command</button>
                   <button id="copyShell" class="btn tertiary" type="button">Copy 0ctx shell</button>
                 </div>
               </aside>
@@ -630,8 +625,8 @@
                 <section class="panel subpanel">
                   <div class="section-row small">
                     <div>
-                      <p class="section-label">Data policy</p>
-                      <h4>Sync and retention</h4>
+                      <p class="section-label">Sync and capture policy</p>
+                      <h4>Workspace sync and machine defaults</h4>
                     </div>
                     <span id="policySummaryBadge" class="chip">Default</span>
                   </div>
@@ -649,13 +644,12 @@
                         <strong>Debug</strong>
                         <span>Temporary debug trails</span>
                       </button>
-                      <button class="btn tertiary policy-preset-btn" data-policy-preset="shared" type="button">
-                        <strong>Shared</strong>
-                        <span>Opt into full sync</span>
-                      </button>
                     </div>
                     <div id="policyDetailList" class="info-list compact-info-list"></div>
-                    <p id="policyHint" class="page-copy compact-copy">Metadata-only sync is the normal default. Raw payloads stay local and debug artifacts stay off unless you explicitly enable them.</p>
+                    <p id="policyHint" class="page-copy compact-copy">Metadata-only sync is the normal default for this workspace. Raw payloads stay local and debug artifacts stay off unless you explicitly enable them on this machine.</p>
+                    <div class="row-actions">
+                      <button class="btn quiet" data-policy-preset="shared" type="button">Opt current workspace into full sync</button>
+                    </div>
                   </form>
                 </section>
 

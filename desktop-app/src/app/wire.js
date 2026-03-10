@@ -1,7 +1,7 @@
 (() => {
   window.OctxDesktop = window.OctxDesktop || {};
   const app = window.OctxDesktop;
-  const { state, bindById, setView, renderAll, selectContext, resetBranchScopedState, loadBranches, loadSessions, loadSessionDetail, loadTurns, loadCheckpoints, loadCheckpointDetail, loadHandoff, loadBranchComparisonSafe, loadWorkspaceComparison, loadGraph, refreshAll, setStatus, invoke, copyText, createContext, applyDataPolicyPreset, performHeroAction, createCheckpointFromActiveSession, previewKnowledgeFromActiveSession, extractKnowledgeFromActiveSession, previewKnowledgeFromActiveCheckpoint, extractKnowledgeFromActiveCheckpoint, promoteActiveInsight, rewindActiveCheckpoint, explainActiveCheckpoint, hookInstallCommand, selectKnowledgeCandidates, selectedKnowledgeKeys, setSelectedKnowledgeKeys, syncBranchSelectionFromSession, startBackgroundRefreshLoops, basenameFromPath } = app;
+  const { state, bindById, setView, renderAll, selectContext, resetBranchScopedState, loadBranches, loadSessions, loadSessionDetail, loadTurns, loadCheckpoints, loadCheckpointDetail, loadHandoff, loadBranchComparisonSafe, loadWorkspaceComparison, loadGraph, loadInsights, refreshAll, setStatus, invoke, copyText, createContext, applyDataPolicyPreset, performHeroAction, createCheckpointFromActiveSession, previewKnowledgeFromActiveSession, extractKnowledgeFromActiveSession, previewKnowledgeFromActiveCheckpoint, extractKnowledgeFromActiveCheckpoint, promoteActiveInsight, rewindActiveCheckpoint, explainActiveCheckpoint, enableCommand, selectKnowledgeCandidates, selectedKnowledgeKeys, setSelectedKnowledgeKeys, syncBranchSelectionFromSession, startBackgroundRefreshLoops, basenameFromPath } = app;
 
   function wire() {
     document.querySelectorAll('.nav-btn').forEach((button) => {
@@ -27,6 +27,7 @@
       await loadCheckpointDetail();
       await loadHandoff();
       await loadGraph();
+      await loadInsights();
       renderAll();
     });
 
@@ -65,9 +66,10 @@
       }
     });
     bindById('inclHidden', 'change', async (event) => {
-      state.includeHidden = Boolean(event.target.checked);
-      await loadGraph();
-      renderAll();
+        state.includeHidden = Boolean(event.target.checked);
+        await loadGraph();
+        await loadInsights();
+        renderAll();
     });
     const createCheckpointBtn = document.getElementById('createCheckpointBtn');
     if (createCheckpointBtn) {
@@ -93,7 +95,7 @@
     bindById('rewindCheckpointBtn', 'click', () => void rewindActiveCheckpoint());
     bindById('explainCheckpointBtn', 'click', () => void explainActiveCheckpoint());
 
-    bindById('copyHookInstall', 'click', () => void copyText(hookInstallCommand()));
+    bindById('copyEnableCommand', 'click', () => void copyText(enableCommand()));
     bindById('copyShell', 'click', () => void copyText('0ctx shell'));
     bindById('copyRepair', 'click', () => void copyText('0ctx repair'));
     bindById('copyDoctor', 'click', () => void copyText('0ctx doctor'));
@@ -159,6 +161,7 @@
         await loadCheckpointDetail();
         await loadHandoff();
         await loadBranchComparisonSafe();
+        await loadInsights();
         renderAll();
         return;
       }
@@ -181,6 +184,7 @@
         await loadCheckpointDetail();
         await loadHandoff();
         await loadBranchComparisonSafe();
+        await loadInsights();
         if (sessionTarget.dataset.openView) {
           setView(sessionTarget.dataset.openView);
         }
@@ -232,6 +236,7 @@
         await loadBranchComparisonSafe();
         await loadWorkspaceComparison();
         await loadGraph();
+        await loadInsights();
         renderAll();
       }
     });

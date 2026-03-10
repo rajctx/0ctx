@@ -15,8 +15,12 @@ export interface RepoReadinessSummary {
     captureMissingAgents: string[];
     autoContextAgents: string[];
     syncPolicy: string | null;
+    syncScope: 'workspace';
+    captureScope: 'machine';
+    debugScope: 'machine';
     zeroTouchReady: boolean;
     nextActionHint: string | null;
+    dataPolicyActionHint: string | null;
     captureRetentionDays: number;
     debugRetentionDays: number;
     debugArtifactsEnabled: boolean;
@@ -45,6 +49,8 @@ export interface ProductCommandDeps {
     parseClients: (raw: string | boolean | undefined) => string[];
     parseHookClients: (raw: string | boolean | undefined) => string[];
     parseEnableMcpClients: (raw: string | boolean | undefined) => string[];
+    detectInstalledGaHookClients: () => string[];
+    detectInstalledGaMcpClients: () => string[];
     parseOptionalStringFlag: (value: string | boolean | undefined) => string | null;
     parsePositiveIntegerFlag: (value: string | boolean | undefined, fallback: number) => number;
     parseOptionalPositiveNumberFlag: (value: string | boolean | undefined) => number | null;
@@ -68,7 +74,6 @@ export interface ProductCommandDeps {
     readCliOpsLog: (limit?: number) => unknown[];
     startLogsServer: () => Promise<{ port: number; close: () => Promise<void> }>;
     formatAgentList: (agents: string[]) => string;
-    formatDataPolicyNarrative: (policy: { syncPolicy: string | null | undefined; captureRetentionDays: number; debugRetentionDays: number; debugArtifactsEnabled: boolean }) => string;
     formatLabelValue: (label: string, value: string) => string;
     formatRetentionLabel: (summary: RepoReadinessSummary) => string;
     formatSyncPolicyLabel: (policy: string | null | undefined) => string;

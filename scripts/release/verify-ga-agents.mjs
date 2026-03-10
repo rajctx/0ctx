@@ -35,7 +35,7 @@ function run(command, args, options = {}) {
 }
 
 function getSocketPath(homeDir) {
-  return isWindows ? "\\\\.\\pipe\\0ctx.sock" : path.join(homeDir, ".0ctx", "0ctx.sock");
+  return process.env.CTX_SOCKET_PATH || (isWindows ? "\\\\.\\pipe\\0ctx.sock" : path.join(homeDir, ".0ctx", "0ctx.sock"));
 }
 
 function requestDaemon(homeDir, method, params = {}, options = {}) {
@@ -147,6 +147,12 @@ async function main() {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "0ctx-release-ga-"));
   const fakeHome = path.join(tempRoot, "home");
   const repoDir = path.join(tempRoot, "repo");
+  const socketPath = isWindows
+    ? `\\\\.\\pipe\\0ctx-${randomUUID()}`
+    : path.join(tempRoot, "0ctx.sock");
+  const dbPath = path.join(fakeHome, ".0ctx", "0ctx.db");
+  process.env.CTX_SOCKET_PATH = socketPath;
+  process.env.CTX_DB_PATH = dbPath;
   fs.mkdirSync(fakeHome, { recursive: true });
   fs.mkdirSync(repoDir, { recursive: true });
 
@@ -154,6 +160,8 @@ async function main() {
     ...process.env,
     HOME: fakeHome,
     USERPROFILE: fakeHome,
+    CTX_SOCKET_PATH: socketPath,
+    CTX_DB_PATH: dbPath,
     CTX_SYNC_ENABLED: "false",
     CTX_TELEMETRY_ENABLED: "false",
   };

@@ -314,7 +314,20 @@ describe('Graph context isolation', () => {
             expect(preview.candidateCount).toBeGreaterThan(0);
             expect(preview.createCount).toBe(preview.candidateCount);
             expect(preview.candidates.some(candidate => candidate.type === 'goal')).toBe(true);
+            expect(preview.candidates.some(candidate => candidate.type === 'decision')).toBe(true);
+            expect(preview.candidates.some(candidate => candidate.type === 'constraint')).toBe(true);
             expect(graph.getGraphData(ctx.id).nodes.some(node => node.type !== 'artifact')).toBe(false);
+
+            const first = graph.extractKnowledgeFromSession(ctx.id, 'session-knowledge-1');
+            expect(first.createdCount).toBeGreaterThan(0);
+            expect(first.nodes.some(node => node.type === 'goal')).toBe(true);
+            expect(first.nodes.some(node => node.type === 'decision')).toBe(false);
+            expect(first.nodes.some(node => node.type === 'constraint')).toBe(false);
+
+            const visibleGraph = graph.getGraphData(ctx.id);
+            expect(visibleGraph.nodes.some(node => node.type !== 'artifact')).toBe(true);
+            const extractedEdges = graph.getEdges(first.nodes[0].id);
+            expect(extractedEdges.some(edge => edge.toId === userTurn.id || edge.toId === assistantTurn.id)).toBe(true);
 
             const goalCandidate = preview.candidates.find(candidate => candidate.type === 'goal');
             expect(goalCandidate?.key).toBeTruthy();
@@ -324,17 +337,6 @@ describe('Graph context isolation', () => {
             });
             expect(filtered.nodeCount).toBe(1);
             expect(filtered.nodes[0]?.type).toBe('goal');
-
-            const first = graph.extractKnowledgeFromSession(ctx.id, 'session-knowledge-1');
-            expect(first.createdCount).toBeGreaterThan(0);
-            expect(first.nodes.some(node => node.type === 'goal')).toBe(true);
-            expect(first.nodes.some(node => node.type === 'decision')).toBe(true);
-            expect(first.nodes.some(node => node.type === 'constraint')).toBe(true);
-
-            const visibleGraph = graph.getGraphData(ctx.id);
-            expect(visibleGraph.nodes.some(node => node.type !== 'artifact')).toBe(true);
-            const extractedEdges = graph.getEdges(first.nodes[0].id);
-            expect(extractedEdges.some(edge => edge.toId === userTurn.id || edge.toId === assistantTurn.id)).toBe(true);
 
             const secondPreview = graph.previewKnowledgeFromSession(ctx.id, 'session-knowledge-1');
             expect(secondPreview.reuseCount).toBeGreaterThan(0);
@@ -410,6 +412,136 @@ describe('Graph context isolation', () => {
             expect(Number(repeatedGoal?.confidence || 0)).toBeGreaterThan(0.9);
             expect(String(repeatedGoal?.reason || '')).toContain('repeated-2-times');
             expect(String(repeatedGoal?.reason || '')).toContain('corroborated-across-roles');
+            expect(repeatedGoal?.reviewTier).toBe('strong');
+            expect(String(repeatedGoal?.reviewSummary || '')).toContain('Strong signal');
+            expect(String(repeatedGoal?.evidenceSummary || '')).toContain('Repeated 2 times across user and assistant messages');
+            expect(Array.isArray(repeatedGoal?.evidencePreview)).toBe(true);
+            expect(String(repeatedGoal?.sourceExcerpt || '')).toContain('branch-first desktop workflow');
+        } finally {
+            db.close();
+        }
+    });
+
+    it('does not treat repeated identical user-only statements as distinct corroboration', () => {
+        const { db, graph } = createGraph();
+        try {
+            const ctx = graph.createContext('knowledge-duplicate-user-evidence');
+            graph.addNode({
+                contextId: ctx.id,
+                thread: 'session-duplicate-user-1',
+                type: 'artifact',
+                content: 'duplicate user evidence session',
+                key: 'chat_session:factory:session-duplicate-user-1',
+                tags: ['chat_session', 'agent:factory'],
+                source: 'hook:factory',
+                hidden: true,
+                rawPayload: {
+                    sessionId: 'session-duplicate-user-1',
+                    branch: 'feature/duplicate-user-evidence',
+                    commitSha: 'abc123def456',
+                    agent: 'factory'
+                }
+            });
+
+            for (const [key, createdAt] of [
+                ['user-1', 1700000151000],
+                ['user-2', 1700000152000]
+            ] as const) {
+                graph.addNode({
+                    contextId: ctx.id,
+                    thread: 'session-duplicate-user-1',
+                    type: 'artifact',
+                    content: 'Metadata_only should remain the default sync policy.',
+                    key: `chat_turn:factory:session-duplicate-user-1:${key}`,
+                    tags: ['chat_turn', 'role:user'],
+                    source: 'hook:factory',
+                    hidden: true,
+                    rawPayload: {
+                        sessionId: 'session-duplicate-user-1',
+                        messageId: key,
+                        role: 'user',
+                        branch: 'feature/duplicate-user-evidence',
+                        occurredAt: createdAt
+                    }
+                });
+            }
+
+            const preview = graph.previewKnowledgeFromSession(ctx.id, 'session-duplicate-user-1');
+            const repeatedConstraint = preview.candidates.find((candidate) => candidate.type === 'constraint');
+            expect(repeatedConstraint).toBeTruthy();
+            expect(repeatedConstraint?.evidenceCount).toBe(2);
+            expect(repeatedConstraint?.distinctEvidenceCount).toBe(1);
+            expect(Number(repeatedConstraint?.confidence || 0)).toBeLessThan(0.9);
+            expect(repeatedConstraint?.reviewTier).toBe('review');
+            expect(String(repeatedConstraint?.evidenceSummary || '')).toContain('Distinct supporting statements: 1');
+        } finally {
+            db.close();
+        }
+    });
+
+    it('deduplicates reviewed insights across common boilerplate prefixes', () => {
+        const { db, graph } = createGraph();
+        try {
+            const ctx = graph.createContext('knowledge-canonical-dedupe');
+            graph.addNode({
+                contextId: ctx.id,
+                thread: 'session-canonical-1',
+                type: 'artifact',
+                content: 'canonical dedupe session',
+                key: 'chat_session:factory:session-canonical-1',
+                tags: ['chat_session', 'agent:factory'],
+                source: 'hook:factory',
+                hidden: true,
+                rawPayload: {
+                    sessionId: 'session-canonical-1',
+                    branch: 'feature/canonical-dedupe',
+                    commitSha: '001122334455',
+                    agent: 'factory'
+                }
+            });
+
+            graph.addNode({
+                contextId: ctx.id,
+                thread: 'session-canonical-1',
+                type: 'artifact',
+                content: 'We need to ship a branch-first desktop workflow for local project memory.',
+                key: 'chat_turn:factory:session-canonical-1:user-1',
+                tags: ['chat_turn', 'role:user'],
+                source: 'hook:factory',
+                hidden: true,
+                rawPayload: {
+                    sessionId: 'session-canonical-1',
+                    messageId: 'user-1',
+                    role: 'user',
+                    branch: 'feature/canonical-dedupe',
+                    occurredAt: 1700000201000
+                }
+            });
+
+            graph.addNode({
+                contextId: ctx.id,
+                thread: 'session-canonical-1',
+                type: 'artifact',
+                content: 'Need to ship a branch-first desktop workflow for local project memory.',
+                key: 'chat_turn:factory:session-canonical-1:assistant-1',
+                tags: ['chat_turn', 'role:assistant'],
+                source: 'hook:factory',
+                hidden: true,
+                rawPayload: {
+                    sessionId: 'session-canonical-1',
+                    messageId: 'assistant-1',
+                    role: 'assistant',
+                    branch: 'feature/canonical-dedupe',
+                    occurredAt: 1700000202000
+                }
+            });
+
+            const preview = graph.previewKnowledgeFromSession(ctx.id, 'session-canonical-1');
+            const goalCandidates = preview.candidates.filter((candidate) => candidate.type === 'goal');
+            expect(goalCandidates).toHaveLength(1);
+            expect(goalCandidates[0]?.evidenceCount).toBe(2);
+            expect(goalCandidates[0]?.corroboratedRoles).toContain('user');
+            expect(goalCandidates[0]?.corroboratedRoles).toContain('assistant');
         } finally {
             db.close();
         }
@@ -468,9 +600,12 @@ describe('Graph context isolation', () => {
             expect(preview.candidates.some(candidate => candidate.type === 'decision' && /0ctx enable/i.test(candidate.content))).toBe(true);
 
             const extraction = graph.extractKnowledgeFromSession(ctx.id, 'session-noise-1');
-            expect(extraction.nodeCount).toBe(1);
-            expect(extraction.nodes[0]?.type).toBe('decision');
-            expect(extraction.nodes[0]?.content).toContain('0ctx enable');
+            expect(extraction.nodeCount).toBe(0);
+
+            const permissiveExtraction = graph.extractKnowledgeFromSession(ctx.id, 'session-noise-1', { minConfidence: 0.68 });
+            expect(permissiveExtraction.nodeCount).toBe(1);
+            expect(permissiveExtraction.nodes[0]?.type).toBe('decision');
+            expect(permissiveExtraction.nodes[0]?.content).toContain('0ctx enable');
         } finally {
             db.close();
         }
@@ -588,10 +723,78 @@ describe('Graph context isolation', () => {
             expect(preview.candidates.some(candidate => /keep going on supported-agent retrieval/i.test(candidate.content))).toBe(false);
             expect(preview.candidates.some(candidate => /continue on retention ux/i.test(candidate.content))).toBe(false);
             expect(preview.candidates.some(candidate => /metadata only should remain the default sync policy/i.test(candidate.content))).toBe(true);
+            const constraintCandidate = preview.candidates.find(candidate => /metadata only should remain the default sync policy/i.test(candidate.content));
+            expect(constraintCandidate?.reviewTier).toBe('review');
+            expect(String(constraintCandidate?.evidenceSummary || '')).toContain('Single assistant-only statement');
 
             const extraction = graph.extractKnowledgeFromSession(ctx.id, 'session-planning-1');
-            expect(extraction.nodeCount).toBe(1);
-            expect(extraction.nodes[0]?.type).toBe('constraint');
+            expect(extraction.nodeCount).toBe(0);
+
+            const permissiveExtraction = graph.extractKnowledgeFromSession(ctx.id, 'session-planning-1', { minConfidence: 0.68 });
+            expect(permissiveExtraction.nodeCount).toBe(1);
+            expect(permissiveExtraction.nodes[0]?.type).toBe('constraint');
+        } finally {
+            db.close();
+        }
+    });
+
+    it('filters sequencing chatter even when it mentions durable policy words', () => {
+        const { db, graph } = createGraph();
+        try {
+            const ctx = graph.createContext('knowledge-sequencing-filter');
+            graph.addNode({
+                contextId: ctx.id,
+                thread: 'session-sequencing-1',
+                type: 'artifact',
+                content: 'sequencing filtering session',
+                key: 'chat_session:factory:session-sequencing-1',
+                tags: ['chat_session', 'agent:factory'],
+                source: 'hook:factory',
+                hidden: true,
+                rawPayload: {
+                    sessionId: 'session-sequencing-1',
+                    branch: 'feature/sequencing-filter',
+                    commitSha: '7777abcd9999',
+                    agent: 'factory'
+                }
+            });
+
+            for (const [key, role, content, createdAt] of [
+                ['assistant-1', 'assistant', 'The next step should be making metadata_only the default sync policy everywhere.', 1700000253000],
+                ['assistant-2', 'assistant', 'Then we should finish zero-touch retrieval for supported agents.', 1700000254000],
+                ['assistant-3', 'assistant', 'Metadata_only should remain the default sync policy for new workspaces.', 1700000255000]
+            ] as const) {
+                graph.addNode({
+                    contextId: ctx.id,
+                    thread: 'session-sequencing-1',
+                    type: 'artifact',
+                    content,
+                    key: `chat_turn:factory:session-sequencing-1:${key}`,
+                    tags: ['chat_turn', `role:${role}`],
+                    source: 'hook:factory',
+                    hidden: true,
+                    rawPayload: {
+                        sessionId: 'session-sequencing-1',
+                        messageId: key,
+                        role,
+                        branch: 'feature/sequencing-filter',
+                        commitSha: '7777abcd9999',
+                        occurredAt: createdAt
+                    }
+                });
+            }
+
+            const preview = graph.previewKnowledgeFromSession(ctx.id, 'session-sequencing-1');
+            expect(preview.candidates.some(candidate => /next step should be making metadata only/i.test(candidate.content))).toBe(false);
+            expect(preview.candidates.some(candidate => /finish zero-touch retrieval/i.test(candidate.content))).toBe(false);
+            expect(preview.candidates.some(candidate => /metadata only should remain the default sync policy/i.test(candidate.content))).toBe(true);
+
+            const extraction = graph.extractKnowledgeFromSession(ctx.id, 'session-sequencing-1');
+            expect(extraction.nodeCount).toBe(0);
+
+            const permissiveExtraction = graph.extractKnowledgeFromSession(ctx.id, 'session-sequencing-1', { minConfidence: 0.68 });
+            expect(permissiveExtraction.nodeCount).toBe(1);
+            expect(permissiveExtraction.nodes[0]?.content).toContain('Metadata only should remain the default sync policy');
         } finally {
             db.close();
         }
@@ -650,12 +853,19 @@ describe('Graph context isolation', () => {
 
             const highConfidence = graph.previewKnowledgeFromSession(ctx.id, 'session-support-1', { minConfidence: 0.8 });
             expect(highConfidence.candidates.some(candidate => candidate.type === 'assumption')).toBe(false);
-            expect(highConfidence.candidates.some(candidate => candidate.type === 'decision')).toBe(true);
+            expect(highConfidence.candidates.some(candidate => candidate.type === 'decision')).toBe(false);
+            const decisionCandidate = preview.candidates.find(candidate => candidate.type === 'decision');
+            expect(decisionCandidate?.reviewTier).toBe('review');
+            expect(String(decisionCandidate?.evidenceSummary || '')).toContain('Single assistant-only statement');
+            expect(String(decisionCandidate?.reviewSummary || '')).toContain('Review before promoting');
 
-            const extracted = graph.extractKnowledgeFromSession(ctx.id, 'session-support-1', { minConfidence: 0.8 });
-            expect(extracted.nodeCount).toBe(1);
-            expect(extracted.nodes[0]?.type).toBe('decision');
-            expect(extracted.nodes[0]?.content).toContain('reviewed insights');
+            const extracted = graph.extractKnowledgeFromSession(ctx.id, 'session-support-1');
+            expect(extracted.nodeCount).toBe(0);
+
+            const permissiveExtraction = graph.extractKnowledgeFromSession(ctx.id, 'session-support-1', { minConfidence: 0.67 });
+            expect(permissiveExtraction.nodeCount).toBe(1);
+            expect(permissiveExtraction.nodes[0]?.type).toBe('decision');
+            expect(permissiveExtraction.nodes[0]?.content).toContain('reviewed insights');
         } finally {
             db.close();
         }
@@ -711,11 +921,80 @@ describe('Graph context isolation', () => {
             expect(preview.candidates.some(candidate => /desktop app now shows/i.test(candidate.content))).toBe(false);
             expect(preview.candidates.some(candidate => /daemon now returns/i.test(candidate.content))).toBe(false);
             expect(preview.candidates.some(candidate => /workstream compare explicit/i.test(candidate.content))).toBe(true);
+            const decisionCandidate = preview.candidates.find(candidate => /workstream compare explicit/i.test(candidate.content));
+            expect(decisionCandidate?.reviewTier).toBe('review');
+            expect(String(decisionCandidate?.evidenceSummary || '')).toContain('Single assistant-only statement');
 
             const extraction = graph.extractKnowledgeFromSession(ctx.id, 'session-implementation-1');
-            expect(extraction.nodeCount).toBe(1);
-            expect(extraction.nodes[0]?.type).toBe('decision');
-            expect(extraction.nodes[0]?.content).toContain('workstream compare explicit');
+            expect(extraction.nodeCount).toBe(0);
+
+            const permissiveExtraction = graph.extractKnowledgeFromSession(ctx.id, 'session-implementation-1', { minConfidence: 0.66 });
+            expect(permissiveExtraction.nodeCount).toBe(1);
+            expect(permissiveExtraction.nodes[0]?.type).toBe('decision');
+            expect(permissiveExtraction.nodes[0]?.content).toContain('workstream compare explicit');
+        } finally {
+            db.close();
+        }
+    });
+
+    it('filters low-level design and layout churn out of reviewed insights', () => {
+        const { db, graph } = createGraph();
+        try {
+            const ctx = graph.createContext('knowledge-design-filter');
+            graph.addNode({
+                contextId: ctx.id,
+                thread: 'session-design-1',
+                type: 'artifact',
+                content: 'design filtering session',
+                key: 'chat_session:factory:session-design-1',
+                tags: ['chat_session', 'agent:factory'],
+                source: 'hook:factory',
+                hidden: true,
+                rawPayload: {
+                    sessionId: 'session-design-1',
+                    branch: 'feature/design-filter',
+                    commitSha: 'dd11cc22bb33',
+                    agent: 'factory'
+                }
+            });
+
+            for (const [key, role, content, createdAt] of [
+                ['assistant-1', 'assistant', 'We decided to move setup into the utility dock and simplify the sidebar chrome.', 1700000450000],
+                ['assistant-2', 'assistant', 'The topbar was tightened and the reader body spacing was reduced for a calmer layout.', 1700000451000],
+                ['assistant-3', 'assistant', 'The normal path should stay focused on workspaces, workstreams, sessions, and checkpoints.', 1700000452000]
+            ] as const) {
+                graph.addNode({
+                    contextId: ctx.id,
+                    thread: 'session-design-1',
+                    type: 'artifact',
+                    content,
+                    key: `chat_turn:factory:session-design-1:${key}`,
+                    tags: ['chat_turn', `role:${role}`],
+                    source: 'hook:factory',
+                    hidden: true,
+                    rawPayload: {
+                        sessionId: 'session-design-1',
+                        messageId: key,
+                        role,
+                        branch: 'feature/design-filter',
+                        commitSha: 'dd11cc22bb33',
+                        occurredAt: createdAt
+                    }
+                });
+            }
+
+            const preview = graph.previewKnowledgeFromSession(ctx.id, 'session-design-1');
+            expect(preview.candidates.some(candidate => /utility dock/i.test(candidate.content))).toBe(false);
+            expect(preview.candidates.some(candidate => /reader body spacing/i.test(candidate.content))).toBe(false);
+            expect(preview.candidates.some(candidate => /normal path should stay focused/i.test(candidate.content))).toBe(true);
+
+            const extraction = graph.extractKnowledgeFromSession(ctx.id, 'session-design-1');
+            expect(extraction.nodeCount).toBe(0);
+
+            const permissiveExtraction = graph.extractKnowledgeFromSession(ctx.id, 'session-design-1', { minConfidence: 0.68 });
+            expect(permissiveExtraction.nodeCount).toBe(1);
+            expect(permissiveExtraction.nodes[0]?.type).toBe('constraint');
+            expect(permissiveExtraction.nodes[0]?.content).toContain('normal path should stay focused');
         } finally {
             db.close();
         }
@@ -763,6 +1042,9 @@ describe('Graph context isolation', () => {
 
             const preview = graph.previewKnowledgeFromSession(ctx.id, 'session-threshold-1');
             expect(preview.candidates.some(candidate => candidate.type === 'assumption')).toBe(true);
+            const assumptionCandidate = preview.candidates.find(candidate => candidate.type === 'assumption');
+            expect(assumptionCandidate?.reviewTier).toBe('weak');
+            expect(String(assumptionCandidate?.reviewSummary || '')).toContain('Tentative signal');
 
             const extraction = graph.extractKnowledgeFromSession(ctx.id, 'session-threshold-1');
             expect(extraction.nodeCount).toBe(0);
@@ -817,11 +1099,14 @@ describe('Graph context isolation', () => {
 
             const preview = graph.previewKnowledgeFromSession(ctx.id, 'session-assistant-goal-1');
             expect(preview.candidates.some(candidate => candidate.type === 'goal')).toBe(true);
+            const goalCandidate = preview.candidates.find(candidate => candidate.type === 'goal');
+            expect(goalCandidate?.reviewTier).toBe('review');
+            expect(String(goalCandidate?.evidenceSummary || '')).toContain('Single assistant-only statement');
 
             const extraction = graph.extractKnowledgeFromSession(ctx.id, 'session-assistant-goal-1');
             expect(extraction.nodeCount).toBe(0);
 
-            const permissiveExtraction = graph.extractKnowledgeFromSession(ctx.id, 'session-assistant-goal-1', { minConfidence: 0.65 });
+            const permissiveExtraction = graph.extractKnowledgeFromSession(ctx.id, 'session-assistant-goal-1', { minConfidence: 0.64 });
             expect(permissiveExtraction.nodeCount).toBe(1);
             expect(permissiveExtraction.nodes[0]?.type).toBe('goal');
         } finally {
@@ -856,6 +1141,25 @@ describe('Graph context isolation', () => {
                 contextId: ctx.id,
                 thread: 'session-knowledge-a',
                 type: 'artifact',
+                content: 'We need to keep hidden session nodes out of the default graph.',
+                key: 'chat_turn:factory:session-knowledge-a:user-1',
+                tags: ['chat_turn', 'role:user'],
+                source: 'hook:factory',
+                hidden: true,
+                rawPayload: {
+                    sessionId: 'session-knowledge-a',
+                    messageId: 'user-1',
+                    role: 'user',
+                    branch: 'feature/shared-memory',
+                    commitSha: 'abc123def456',
+                    occurredAt: 1700000001500
+                }
+            });
+
+            graph.addNode({
+                contextId: ctx.id,
+                thread: 'session-knowledge-a',
+                type: 'artifact',
                 content: 'We decided to keep hidden session nodes out of the default graph.',
                 key: 'chat_turn:factory:session-knowledge-a:assistant-1',
                 tags: ['chat_turn', 'role:assistant'],
@@ -868,6 +1172,25 @@ describe('Graph context isolation', () => {
                     branch: 'feature/shared-memory',
                     commitSha: 'abc123def456',
                     occurredAt: 1700000002000
+                }
+            });
+
+            graph.addNode({
+                contextId: ctx.id,
+                thread: 'session-knowledge-b',
+                type: 'artifact',
+                content: 'We need to keep hidden session nodes out of the default graph.',
+                key: 'chat_turn:factory:session-knowledge-b:user-1',
+                tags: ['chat_turn', 'role:user'],
+                source: 'hook:factory',
+                hidden: true,
+                rawPayload: {
+                    sessionId: 'session-knowledge-b',
+                    messageId: 'user-1',
+                    role: 'user',
+                    branch: 'feature/shared-memory',
+                    commitSha: 'abc123def456',
+                    occurredAt: 1700000002500
                 }
             });
 
@@ -904,9 +1227,9 @@ describe('Graph context isolation', () => {
         }
     });
 
-    it('lists reviewed insights scoped to the selected workstream', () => {
-        const { db, graph } = createGraph();
-        try {
+      it('lists reviewed insights scoped to the selected workstream', () => {
+          const { db, graph } = createGraph();
+          try {
             const ctx = graph.createContext('knowledge-workstream-insights');
             graph.addNode({
                 contextId: ctx.id,
@@ -941,14 +1264,86 @@ describe('Graph context isolation', () => {
             expect(branchScoped[0]?.type).toBe('decision');
             expect(branchScoped[0]?.content).toContain('current branch');
 
-            const mainScoped = graph.listWorkstreamInsights(ctx.id, { branch: 'main' });
-            expect(mainScoped).toHaveLength(1);
-            expect(mainScoped[0]?.type).toBe('constraint');
-        } finally {
-            db.close();
-        }
-    });
-});
+              const mainScoped = graph.listWorkstreamInsights(ctx.id, { branch: 'main' });
+              expect(mainScoped).toHaveLength(1);
+              expect(mainScoped[0]?.type).toBe('constraint');
+          } finally {
+              db.close();
+          }
+      });
+
+      it('adds trust metadata to reviewed insights from linked evidence', () => {
+          const { db, graph } = createGraph();
+          try {
+              const ctx = graph.createContext('knowledge-evidence-summary');
+              const userTurn = graph.addNode({
+                  contextId: ctx.id,
+                  thread: 'session-evidence-1',
+                  type: 'artifact',
+                  content: 'We should keep repo routing strict for capture.',
+                  key: 'chat_turn:factory:session-evidence-1:user-1',
+                  tags: ['chat_turn', 'role:user', 'branch:feature/evidence'],
+                  source: 'hook:factory',
+                  hidden: true
+              });
+              const assistantTurn = graph.addNode({
+                  contextId: ctx.id,
+                  thread: 'session-evidence-1',
+                  type: 'artifact',
+                  content: 'Agreed. Strict repo routing avoids writing to the wrong workspace.',
+                  key: 'chat_turn:factory:session-evidence-1:assistant-1',
+                  tags: ['chat_turn', 'role:assistant', 'branch:feature/evidence'],
+                  source: 'hook:factory',
+                  hidden: true
+              });
+              const insight = graph.addNode({
+                  contextId: ctx.id,
+                  type: 'decision',
+                  content: 'Keep repo routing strict for capture.',
+                  key: 'knowledge:decision:feature-evidence-routing',
+                  tags: ['knowledge', 'branch:feature/evidence'],
+                  source: 'extractor:session'
+              });
+              graph.addEdge(insight.id, userTurn.id, 'caused_by');
+              graph.addEdge(insight.id, assistantTurn.id, 'caused_by');
+
+              const insights = graph.listWorkstreamInsights(ctx.id, { branch: 'feature/evidence' });
+              expect(insights).toHaveLength(1);
+              expect(insights[0]?.evidenceCount).toBe(2);
+              expect(insights[0]?.corroboratedRoles).toEqual(['assistant', 'user']);
+              expect(insights[0]?.trustTier).toBe('strong');
+              expect(insights[0]?.trustSummary).toMatch(/Repeated 2 times/i);
+              expect(insights[0]?.latestEvidenceAt).toBeGreaterThan(0);
+          } finally {
+              db.close();
+          }
+      });
+
+      it('marks promoted insights without local evidence as review-tier memory', () => {
+          const { db, graph } = createGraph();
+          try {
+              const ctx = graph.createContext('knowledge-promoted-summary');
+              graph.addNode({
+                  contextId: ctx.id,
+                  type: 'goal',
+                  content: 'Keep promotion explicit across workspaces.',
+                  key: 'knowledge:goal:promotion-review',
+                  tags: ['knowledge', 'promoted', 'origin_context:source-workspace', 'origin_node:source-node-1'],
+                  source: 'promotion'
+              });
+
+              const insights = graph.listWorkstreamInsights(ctx.id);
+              expect(insights).toHaveLength(1);
+              expect(insights[0]?.evidenceCount).toBe(0);
+              expect(insights[0]?.trustTier).toBe('review');
+              expect(insights[0]?.trustSummary).toMatch(/No local corroboration yet/i);
+              expect(insights[0]?.originContextId).toBe('source-workspace');
+              expect(insights[0]?.originNodeId).toBe('source-node-1');
+          } finally {
+              db.close();
+          }
+      });
+  });
 
 describe('Graph checkpoints', () => {
     it('rewinds nodes added after the checkpoint', () => {

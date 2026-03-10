@@ -160,10 +160,11 @@ describe('daemon request handling', () => {
                     debugRetentionDays: number;
                     debugArtifactsEnabled: boolean;
                 };
-                agents: Array<{ agent: string; notes: string | null }>;
+                agents: Array<{ agent: string; notes: string | null; sessionStartInstalled: boolean }>;
             };
 
             const byAgent = new Map(hookHealth.agents.map((agent) => [agent.agent, agent.notes]));
+            const sessionStartByAgent = new Map(hookHealth.agents.map((agent) => [agent.agent, agent.sessionStartInstalled]));
             expect(hookHealth.capturePolicy.captureRetentionDays).toBe(14);
             expect(hookHealth.capturePolicy.debugRetentionDays).toBe(7);
             expect(hookHealth.capturePolicy.debugArtifactsEnabled).toBe(false);
@@ -173,6 +174,9 @@ describe('daemon request handling', () => {
             expect(byAgent.get('codex')).toBe('preview-notify-archive');
             expect(byAgent.get('cursor')).toBe('preview-hook');
             expect(byAgent.get('windsurf')).toBe('preview-hook');
+            expect(sessionStartByAgent.get('claude')).toBe(false);
+            expect(sessionStartByAgent.get('factory')).toBe(false);
+            expect(sessionStartByAgent.get('antigravity')).toBe(false);
         } finally {
             if (previousHookStatePath === undefined) {
                 delete process.env.CTX_HOOK_STATE_PATH;
@@ -232,6 +236,9 @@ describe('daemon request handling', () => {
             }, runtime()) as {
                 workspaceResolved: boolean;
                 contextId: string | null;
+                syncScope: string;
+                captureScope: string;
+                debugScope: string;
                 syncPolicy: string;
                 captureRetentionDays: number;
                 debugRetentionDays: number;
@@ -251,6 +258,9 @@ describe('daemon request handling', () => {
             }, runtime()) as {
                 workspaceResolved: boolean;
                 contextId: string | null;
+                syncScope: string;
+                captureScope: string;
+                debugScope: string;
                 syncPolicy: string;
                 captureRetentionDays: number;
                 debugRetentionDays: number;
@@ -259,6 +269,9 @@ describe('daemon request handling', () => {
 
             expect(defaultPolicy.workspaceResolved).toBe(false);
             expect(defaultPolicy.contextId).toBeNull();
+            expect(defaultPolicy.syncScope).toBe('workspace');
+            expect(defaultPolicy.captureScope).toBe('machine');
+            expect(defaultPolicy.debugScope).toBe('machine');
             expect(defaultPolicy.syncPolicy).toBe('metadata_only');
             expect(defaultPolicy.captureRetentionDays).toBe(14);
             expect(defaultPolicy.debugRetentionDays).toBe(7);
@@ -266,6 +279,9 @@ describe('daemon request handling', () => {
 
             expect(resolvedPolicy.workspaceResolved).toBe(true);
             expect(resolvedPolicy.contextId).toBe(context.id);
+            expect(resolvedPolicy.syncScope).toBe('workspace');
+            expect(resolvedPolicy.captureScope).toBe('machine');
+            expect(resolvedPolicy.debugScope).toBe('machine');
             expect(resolvedPolicy.syncPolicy).toBe('full_sync');
             expect(resolvedPolicy.captureRetentionDays).toBe(14);
             expect(resolvedPolicy.debugRetentionDays).toBe(7);
@@ -300,6 +316,9 @@ describe('daemon request handling', () => {
                 }
             }, runtime()) as {
                 contextId: string | null;
+                syncScope: string;
+                captureScope: string;
+                debugScope: string;
                 syncPolicy: string;
                 captureRetentionDays: number;
                 debugRetentionDays: number;
@@ -310,6 +329,9 @@ describe('daemon request handling', () => {
             const audits = graph.listAuditEvents(context.id, 20);
 
             expect(result.contextId).toBe(context.id);
+            expect(result.syncScope).toBe('workspace');
+            expect(result.captureScope).toBe('machine');
+            expect(result.debugScope).toBe('machine');
             expect(result.syncPolicy).toBe('full_sync');
             expect(result.captureRetentionDays).toBe(21);
             expect(result.debugRetentionDays).toBe(5);
@@ -346,6 +368,9 @@ describe('daemon request handling', () => {
                 sessionToken: session.sessionToken,
                 params: { preset: 'debug' }
             }, runtime()) as {
+                syncScope: string;
+                captureScope: string;
+                debugScope: string;
                 syncPolicy: string;
                 captureRetentionDays: number;
                 debugRetentionDays: number;
@@ -359,6 +384,9 @@ describe('daemon request handling', () => {
                 params: { contextId: context.id, preset: 'shared' }
             }, runtime()) as {
                 contextId: string | null;
+                syncScope: string;
+                captureScope: string;
+                debugScope: string;
                 syncPolicy: string;
                 captureRetentionDays: number;
                 debugRetentionDays: number;
@@ -367,12 +395,18 @@ describe('daemon request handling', () => {
             };
 
             expect(debugPolicy.syncPolicy).toBe('metadata_only');
+            expect(debugPolicy.syncScope).toBe('workspace');
+            expect(debugPolicy.captureScope).toBe('machine');
+            expect(debugPolicy.debugScope).toBe('machine');
             expect(debugPolicy.captureRetentionDays).toBe(30);
             expect(debugPolicy.debugRetentionDays).toBe(14);
             expect(debugPolicy.debugArtifactsEnabled).toBe(true);
             expect(debugPolicy.preset).toBe('debug');
 
             expect(sharedPolicy.contextId).toBe(context.id);
+            expect(sharedPolicy.syncScope).toBe('workspace');
+            expect(sharedPolicy.captureScope).toBe('machine');
+            expect(sharedPolicy.debugScope).toBe('machine');
             expect(sharedPolicy.syncPolicy).toBe('full_sync');
             expect(sharedPolicy.captureRetentionDays).toBe(14);
             expect(sharedPolicy.debugRetentionDays).toBe(7);
@@ -1484,6 +1518,7 @@ describe('daemon request handling', () => {
                 comparisonActionHint: string | null;
                 reconcileStrategy: string;
                 reconcileStrategySummary: string;
+                reconcileSteps: string[];
                 sourceChangedFileCount: number | null;
                 targetChangedFileCount: number | null;
                 sharedChangedFileCount: number | null;
@@ -1522,6 +1557,11 @@ describe('daemon request handling', () => {
             expect(comparison.comparisonActionHint).toContain('Update or compare main');
             expect(comparison.reconcileStrategy).toBe('fast_forward_source_to_target');
             expect(comparison.reconcileStrategySummary).toContain('Fast-forward main to feature/runtime-compare');
+            expect(comparison.reconcileSteps).toEqual([
+                'Open main.',
+                'Fast-forward it to feature/runtime-compare.',
+                'Create a checkpoint after the update before handing the workstream to another agent.'
+            ]);
             expect(comparison.sourceChangedFileCount).toBe(0);
             expect(comparison.targetChangedFileCount).toBe(1);
             expect(comparison.sharedChangedFileCount).toBe(0);
@@ -1540,6 +1580,7 @@ describe('daemon request handling', () => {
             expect(comparison.comparisonText).toContain('Recommended next step:');
             expect(comparison.comparisonText).toContain('Changed files:');
             expect(comparison.comparisonText).toContain('Reconcile: Fast-forward main to feature/runtime-compare.');
+            expect(comparison.comparisonText).toContain('Reconcile steps: 1) Open main. 2) Fast-forward it to feature/runtime-compare.');
         } finally {
             db.close();
         }
@@ -1655,6 +1696,7 @@ describe('daemon request handling', () => {
                 mergeRiskSummary: string;
                 reconcileStrategy: string;
                 reconcileStrategySummary: string;
+                reconcileSteps: string[];
                 comparisonText: string;
             };
 
@@ -1678,6 +1720,9 @@ describe('daemon request handling', () => {
             expect(comparison.mergeRiskSummary).toContain('High merge risk');
             expect(comparison.reconcileStrategy).toBe('manual_conflict_resolution');
             expect(comparison.reconcileStrategySummary).toContain('Manual reconcile is recommended');
+            expect(comparison.reconcileSteps).toContain('Review the shared changed files before choosing merge or rebase.');
+            expect(comparison.reconcileSteps.some((step) => step.includes('Resolve likely conflicts in'))).toBe(true);
+            expect(comparison.reconcileSteps).toContain('Create a checkpoint after reconciliation and before handoff.');
             expect(comparison.comparisonBlockers).toEqual([]);
             expect(comparison.comparisonReviewItems).toContain('Both workstreams have diverged and need explicit reconciliation before handoff.');
             expect(comparison.comparisonReviewItems).toContain('Both workstreams touch overlapping line ranges in shared files; resolve those conflicts before handoff or merge.');
@@ -1689,6 +1734,7 @@ describe('daemon request handling', () => {
             expect(comparison.comparisonText).toContain('Hotspots: Shared change hotspots:');
             expect(comparison.comparisonText).toContain('Merge risk: High merge risk');
             expect(comparison.comparisonText).toContain('Reconcile: Manual reconcile is recommended.');
+            expect(comparison.comparisonText).toContain('Reconcile steps: 1) Review the shared changed files before choosing merge or rebase.');
             expect(comparison.comparisonText).toContain('Review:');
         } finally {
             db.close();

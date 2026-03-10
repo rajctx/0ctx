@@ -174,6 +174,7 @@ describe('hook dump persistence', () => {
         fs.utimesSync(stableDump, new Date('2024-01-07T00:00:00Z'), new Date('2024-01-07T00:00:00Z'));
 
         const result = pruneHookDumps({
+            debugArtifactsEnabled: true,
             now: Date.parse('2024-01-10T00:00:00Z')
         });
 
@@ -186,6 +187,33 @@ describe('hook dump persistence', () => {
         expect(fs.existsSync(oldFile)).toBe(false);
         expect(fs.existsSync(oldTranscriptHistory)).toBe(false);
         expect(fs.existsSync(freshFile)).toBe(true);
+        expect(fs.existsSync(stableDump)).toBe(true);
+    });
+
+    it('purges all debug-heavy artifacts immediately when debug artifacts are disabled', () => {
+        const dumpRoot = createTempDir();
+        process.env.CTX_HOOK_DUMP_DIR = dumpRoot;
+
+        const eventLog = path.join(dumpRoot, 'factory', 'events', 'session.ndjson');
+        const historyLog = path.join(dumpRoot, 'factory', 'transcript-history', 'session', 'snapshot.jsonl');
+        const stableDump = path.join(dumpRoot, 'factory', 'transcripts', 'session.jsonl');
+        fs.mkdirSync(path.dirname(eventLog), { recursive: true });
+        fs.mkdirSync(path.dirname(historyLog), { recursive: true });
+        fs.mkdirSync(path.dirname(stableDump), { recursive: true });
+        fs.writeFileSync(eventLog, '{"event":1}\n', 'utf8');
+        fs.writeFileSync(historyLog, '{"history":1}\n', 'utf8');
+        fs.writeFileSync(stableDump, '{"latest":1}\n', 'utf8');
+
+        const result = pruneHookDumps({
+            debugArtifactsEnabled: false,
+            now: Date.parse('2024-01-10T00:00:00Z')
+        });
+
+        expect(result.debugArtifactsEnabled).toBe(false);
+        expect(result.prunedPaths).toContain(eventLog);
+        expect(result.prunedPaths).toContain(historyLog);
+        expect(fs.existsSync(eventLog)).toBe(false);
+        expect(fs.existsSync(historyLog)).toBe(false);
         expect(fs.existsSync(stableDump)).toBe(true);
     });
 });

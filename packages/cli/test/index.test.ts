@@ -104,8 +104,10 @@ describe('@0ctx/cli build artifact source', () => {
         expect(policySource).toContain("Usage: 0ctx data-policy set [--repo-root=<path>] [--preset=<lean|review|debug|shared>] [--sync-policy=<local_only|metadata_only|full_sync>]");
         expect(policySource).toContain("commandDataPolicyPresets");
         expect(policySource).toContain("Preset catalog");
-        expect(policySource).toContain("Apply with: 0ctx data-policy <lean|review|debug|shared> [--repo-root=<path>] [--json]");
-        expect(policySource).toContain("0ctx data-policy <lean|review|debug|shared> [--repo-root=<path>] [--json]");
+        expect(policySource).toContain("Apply machine presets with: 0ctx data-policy <lean|review|debug> [--repo-root=<path>] [--json]");
+        expect(policySource).toContain("Opt a workspace into richer cloud sync with: 0ctx data-policy shared --repo-root=<path> [--json]");
+        expect(policySource).toContain("0ctx data-policy <lean|review|debug> [--repo-root=<path>] [--json]");
+        expect(policySource).toContain("0ctx data-policy shared --repo-root=<path> [--json]");
         expect(policySource).toContain("formatPresetLabel");
         expect(cliSurface).toContain("Support overrides:");
         expect(cliSurface).toContain("Advanced utilities:");
@@ -127,7 +129,8 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("reason: 'repo_entrypoint'");
         expect(source).toContain("'cli.workstreams.current'");
         expect(cliSurface).toContain("0ctx connector hook ingest --agent=claude|factory|antigravity [--repo-root=<path>]");
-        expect(cliSurface).toContain("0ctx connector hook ingest --agent=codex|cursor|windsurf [--repo-root=<path>]");
+        expect(cliSurface).not.toContain("Preview replay utilities:");
+        expect(cliSurface).not.toContain("Preview-only replay flows stay out of the normal help surface.");
         expect(cliSurface).toContain('0ctx hook install|status|prune|session-start|ingest  Alias for "0ctx connector hook ..."');
         expect(cliSurface).toContain("0ctx connector queue status [--json]");
         expect(cliSurface).toContain("0ctx sync policy get [--repo-root=<path>] [--json]");
@@ -141,7 +144,9 @@ describe('@0ctx/cli build artifact source', () => {
         expect(source).toContain("return commandMcp(parsed.subcommand, parsed.flags);");
         expect(productSurface).toContain("const mcpProfile = deps.parseOptionalStringFlag(flags['mcp-profile'] ?? flags.profile) ?? 'core';");
         expect(productSurface).toContain("const requestedDataPolicy = deps.parseOptionalStringFlag(flags['data-policy'] ?? flags.dataPolicy);");
-        expect(productSurface).toContain("message: 'Using the current data policy. Pass --data-policy to change it during enable.'");
+        expect(productSurface).toContain("? 'Applied the default lean data policy for this new workspace.'");
+        expect(productSurface).toContain(": 'Normalized the current custom data policy to the lean default.'");
+        expect(productSurface).toContain(": `Using the current ${currentPreset} data policy.`");
         expect(productSurface).toContain("deps.formatLabelValue('Ready', repoReadiness.zeroTouchReady ? 'zero-touch for supported agents' : 'needs one-time setup')");
         expect(productSurface).toContain("...(repoReadiness.nextActionHint ? [deps.formatLabelValue('Next step', repoReadiness.nextActionHint)] : [])");
         expect(productSurface).toContain("if (!nextFlags.clients) nextFlags.clients = 'ga';");

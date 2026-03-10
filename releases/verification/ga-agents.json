@@ -1,0 +1,36 @@
+{
+  "ok": true,
+  "tempRoot": "C:\\Users\\Rajesh\\AppData\\Local\\Temp\\0ctx-release-ga-sn4gbf",
+  "contextId": "7ad896ab-8d51-44c1-9a4f-7e5df5cb6675",
+  "branch": "main",
+  "sessionCount": 3,
+  "handoffCount": 3,
+  "checkpointId": "4b14435a-f857-4f63-a200-bb80d69742a5",
+  "agents": {
+    "factory": {
+      "insertedCount": 2,
+      "summary": "review the branch lane timeline -> The branch lane timeline is captured and ready for a checkpoint."
+    },
+    "antigravity": {
+      "insertedCount": 2,
+      "summary": "summarize the release readiness -> Release readiness looks good after the latest validation pass."
+    },
+    "codex": {
+      "insertedCount": 2,
+      "messageIds": [
+        "codex-turn-e2e:assistant",
+        "codex-turn-e2e:user"
+      ]
+    }
+  },
+  "transcripts": {
+    "factory": {
+      "path": "C:\\Users\\Rajesh\\AppData\\Local\\Temp\\0ctx-release-ga-sn4gbf\\home\\factory-session.jsonl",
+      "sha256": "759759e954f462dfc3ebc0f9b8f8b52361d87bf317512a1e564b3b933bf12e25"
+    },
+    "antigravity": {
+      "path": "C:\\Users\\Rajesh\\AppData\\Local\\Temp\\0ctx-release-ga-sn4gbf\\home\\antigravity-session.jsonl",
+      "sha256": "ad5c94865b34a88c0d2d924c1c7dde7af00728baf67b98408d9a4d6b829f3f9c"
+    }
+  }
+}

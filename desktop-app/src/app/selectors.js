@@ -55,7 +55,9 @@
   }
 
   function activeInsightNode() {
-    return state.graphNodes.find((node) => node.id === state.activeInsightNodeId) || null;
+    return state.insights.find((node) => (node.nodeId || node.id) === state.activeInsightNodeId)
+      || state.graphNodes.find((node) => node.id === state.activeInsightNodeId)
+      || null;
   }
 
   function contextById(contextId) {
@@ -84,12 +86,19 @@
         worktreePath: null,
         originContextId: null,
         originNodeId: null,
-        createdAt: null
+        createdAt: null,
+        evidenceCount: 0,
+        distinctEvidenceCount: 0,
+        corroboratedRoles: [],
+        latestEvidenceAt: null,
+        trustTier: 'weak',
+        trustSummary: 'No reviewed insight selected.'
       };
     }
+    const nodeId = node.nodeId || node.id || '';
     const combined = cleanConversationText(node.content || '');
     return {
-      title: short(node.key || combined || node.id || 'Insight', 80),
+      title: short(node.key || combined || nodeId || 'Insight', 80),
       summary: short(combined || 'No insight text is stored for this node yet.', 220),
       key: node.key || '',
       type: node.type || 'artifact',
@@ -98,7 +107,13 @@
       worktreePath: extractTagValue(node.tags, 'worktree:'),
       originContextId: extractTagValue(node.tags, 'origin_context:'),
       originNodeId: extractTagValue(node.tags, 'origin_node:'),
-      createdAt: node.createdAt || null
+      createdAt: node.createdAt || null,
+      evidenceCount: Number(node.evidenceCount || 0),
+      distinctEvidenceCount: Number(node.distinctEvidenceCount || node.evidenceCount || 0),
+      corroboratedRoles: Array.isArray(node.corroboratedRoles) ? node.corroboratedRoles : [],
+      latestEvidenceAt: node.latestEvidenceAt || null,
+      trustTier: node.trustTier || 'weak',
+      trustSummary: node.trustSummary || 'No linked evidence messages yet.'
     };
   }
 
@@ -112,9 +127,9 @@
       state.activeInsightNodeId = null;
       return null;
     }
-    const exists = available.find((node) => node.id === state.activeInsightNodeId);
+    const exists = available.find((node) => (node.nodeId || node.id) === state.activeInsightNodeId);
     if (exists) return exists;
-    state.activeInsightNodeId = available[0].id;
+    state.activeInsightNodeId = available[0].nodeId || available[0].id;
     return available[0];
   }
 
@@ -161,13 +176,12 @@
     return installedAgents().filter((agent) => isGaIntegration(agent.agent));
   }
 
-  function integrationType(agent) {
-    return agent === 'codex' ? 'notify' : 'hook';
+  function autoContextGaAgents() {
+    return installedGaAgents().filter((agent) => agent.sessionStartInstalled === true);
   }
 
   function integrationLabel(agent) {
-    const base = humanizeLabel(agent);
-    return agent === 'codex' ? `${base} notify` : `${base} hook`;
+    return humanizeLabel(agent);
   }
 
   function formatIntegrationNote(note) {
@@ -176,11 +190,7 @@
     if (value === 'installed') return 'Installed';
     if (value === 'supported') return 'Supported';
     if (value === 'not-selected') return 'Not selected';
-    if (value === 'preview-installed') return 'Installed explicitly';
-    if (value === 'preview-not-selected') return 'Not in the normal path';
-    if (value === 'preview-hook') return 'Preview hook';
-    if (value === 'preview-notify-archive') return 'Preview notify/archive';
-    return humanizeLabel(value);
+    return '';
   }
 
   function methodSupported(method) {
@@ -246,15 +256,86 @@
         className: 'badge degraded',
         detail: `GA integrations installed for ${integrationListText(gaHooks)}`
       };
-    }    return {
+    }
+    return {
       label: 'Not ready',
       className: 'badge offline',
-      detail: 'No installed integrations found'
+      detail: 'No GA integrations installed'
+    };
+  }
+
+  function zeroTouchState() {
+    const context = activeContext();
+    const repoBound = Array.isArray(context?.paths) && context.paths.some((value) => String(value || '').trim().length > 0);
+    const gaHooks = installedGaAgents();
+    const autoContextHooks = autoContextGaAgents();
+    const runtimeReady = !state.runtimeIssue;
+    const signedIn = state.auth.authenticated === true;
+    const syncPolicy = String(state.dataPolicy?.syncPolicy || context?.syncPolicy || 'metadata_only').trim().toLowerCase();
+
+    if (!repoBound) {
+      return {
+        label: 'Needs one-time setup',
+        className: 'badge offline',
+        detail: 'Bind this repo to a workspace first.',
+        nextAction: 'Choose a repository folder and create or select the matching workspace.',
+        ready: false
+      };
+    }
+
+    if (!signedIn) {
+      return {
+        label: 'Needs one-time setup',
+        className: 'badge degraded',
+        detail: 'Sign in on this machine.',
+        nextAction: 'Run 0ctx enable in this repo to restore the normal capture path.',
+        ready: false
+      };
+    }
+
+    if (!runtimeReady) {
+      return {
+        label: 'Needs one-time setup',
+        className: 'badge degraded',
+        detail: 'Local runtime needs attention.',
+        nextAction: state.runtimeIssue?.detail || 'Repair or restart the local runtime, then rerun 0ctx enable in this repo.',
+        ready: false
+      };
+    }
+
+    if (gaHooks.length === 0) {
+      return {
+        label: 'Needs one-time setup',
+        className: 'badge degraded',
+        detail: 'No GA integration is installed for this repo.',
+        nextAction: 'Run 0ctx enable in this repo to install the supported integrations you actually use.',
+        ready: false
+      };
+    }
+
+    if (autoContextHooks.length === 0) {
+      return {
+        label: 'Needs one-time setup',
+        className: 'badge degraded',
+        detail: 'Capture is installed, but automatic workstream context injection is missing.',
+        nextAction: `Repair ${integrationListText(gaHooks)} to restore SessionStart context injection.`,
+        ready: false
+      };
+    }
+
+    return {
+      label: 'Ready for zero-touch',
+      className: 'badge connected',
+      detail: `${integrationListText(autoContextHooks)} will capture and receive workstream context automatically.`,
+      nextAction: syncPolicy === 'full_sync'
+        ? 'This workspace is opted into richer cloud sync. Return to Lean when that is no longer needed.'
+        : 'Use the supported agent normally. 0ctx will inject the current workstream and capture new sessions automatically.',
+      ready: true
     };
   }
 
   function automaticContextState() {
-    const gaHooks = installedGaAgents();
+    const gaHooks = autoContextGaAgents();
     if (gaHooks.length > 0) {
       return `${integrationListText(gaHooks)} inject the current workstream automatically at session start`;
     }
@@ -271,6 +352,29 @@
     return `${captureDays}d local capture kept; debug trails off by default (${debugDays}d if enabled)`;
   }
 
+  function dataPolicyActionHint(policyInput) {
+    const policy = policyInput || state.dataPolicy || state.hook?.capturePolicy || {};
+    const preset = String(policy.preset || '').trim().toLowerCase();
+    const syncPolicy = String(policy.syncPolicy || '').trim().toLowerCase();
+    const captureDays = Number.isFinite(policy.captureRetentionDays) ? policy.captureRetentionDays : 14;
+    const debugDays = Number.isFinite(policy.debugRetentionDays) ? policy.debugRetentionDays : 7;
+    const debugEnabled = policy.debugArtifactsEnabled === true;
+
+    if (preset === 'custom') {
+      return 'Choose Lean, Review, or Debug to return machine defaults to a supported path. Use Shared only when a workspace explicitly needs richer cloud sync.';
+    }
+    if (preset === 'shared' || syncPolicy === 'full_sync') {
+      return 'Return this workspace to Lean when it no longer needs richer cloud sync.';
+    }
+    if (preset === 'debug' || debugEnabled) {
+      return 'Return this machine to Lean when troubleshooting is complete.';
+    }
+    if (preset === 'review' || captureDays > 14 || debugDays > 7) {
+      return 'Return this machine to Lean when the longer local review window is no longer needed.';
+    }
+    return '';
+  }
+
   function debugArtifactsEnabled() {
     const policy = state.dataPolicy || state.hook?.capturePolicy || {};
     return policy.debugArtifactsEnabled === true;
@@ -280,23 +384,6 @@
     const context = activeContext();
     const fromContext = Array.isArray(context?.paths) ? context.paths.find((value) => String(value || '').trim().length > 0) : null;
     return fromContext || state.hook?.projectRoot || '<repo-root>';
-  }
-
-  function preferredClients() {
-    const agents = installedGaAgents().map((agent) => agent.agent);
-    if (agents.length > 0) {
-      return [...new Set(agents)].join(',');
-    }
-    return 'factory,antigravity,claude';
-  }
-
-  function preferredAgent() {
-    const installed = installedGaAgents();
-    return (installed[0] || { agent: 'factory' }).agent;
-  }
-
-  function hookInstallCommand() {
-    return `0ctx connector hook install --clients=${preferredClients()} --repo-root "${currentRepoRoot()}"`;
   }
 
   function enableCommand() {
@@ -384,6 +471,6 @@
     document.getElementById('statusTime').textContent = `Updated ${new Date().toLocaleTimeString()}`;
   }
 
-  Object.assign(app, { bindById, matches, activeContext, selectedTurn, branchKey, normalizeBranch, activeBranch, comparisonTargetBranch, activeSession, selectedCheckpoint, activeInsightNode, contextById, workspaceComparisonTargetContext, extractTagValue, insightSummary, insightTargetContexts, syncInsightSelection, syncPromotionTargetSelection, workspaceComparisonTargets, syncWorkspaceComparisonTargetSelection, installedAgents, isGaIntegration, installedGaAgents, integrationType, integrationLabel, formatIntegrationNote, methodSupported, missingRequiredMethods, integrationListText, hasLocalRuntimeData, formatPosture, postureClass, formatSyncPolicyLabel, formatDataPolicyPresetLabel, captureState, automaticContextState, capturePolicySummary, debugArtifactsEnabled, currentRepoRoot, preferredClients, preferredAgent, hookInstallCommand, enableCommand, describeBranchLane, syncComparisonTargetSelection, describeCheckpoint, syncBranchSelectionFromSession, resetBranchScopedState, setStatus });
+  Object.assign(app, { bindById, matches, activeContext, selectedTurn, branchKey, normalizeBranch, activeBranch, comparisonTargetBranch, activeSession, selectedCheckpoint, activeInsightNode, contextById, workspaceComparisonTargetContext, extractTagValue, insightSummary, insightTargetContexts, syncInsightSelection, syncPromotionTargetSelection, workspaceComparisonTargets, syncWorkspaceComparisonTargetSelection, installedAgents, isGaIntegration, installedGaAgents, autoContextGaAgents, integrationLabel, formatIntegrationNote, methodSupported, missingRequiredMethods, integrationListText, hasLocalRuntimeData, formatPosture, postureClass, formatSyncPolicyLabel, formatDataPolicyPresetLabel, captureState, zeroTouchState, automaticContextState, capturePolicySummary, dataPolicyActionHint, debugArtifactsEnabled, currentRepoRoot, enableCommand, describeBranchLane, syncComparisonTargetSelection, describeCheckpoint, syncBranchSelectionFromSession, resetBranchScopedState, setStatus });
 })();
 

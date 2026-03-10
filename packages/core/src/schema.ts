@@ -306,6 +306,7 @@ export interface WorkstreamComparison {
         | 'blocked'
         | 'unknown';
     reconcileStrategySummary: string;
+    reconcileSteps: string[];
     comparisonBlockers: string[];
     comparisonReviewItems: string[];
     sharedAgents: string[];
@@ -385,6 +386,9 @@ export type DataPolicyPreset = 'lean' | 'review' | 'debug' | 'shared' | 'custom'
 export interface DataPolicySummary {
     contextId: string | null;
     workspaceResolved: boolean;
+    syncScope: 'workspace';
+    captureScope: 'machine';
+    debugScope: 'machine';
     syncPolicy: SyncPolicy;
     captureRetentionDays: number;
     debugRetentionDays: number;
@@ -401,6 +405,15 @@ export interface InsightSummary {
     branch: string | null;
     worktreePath: string | null;
     source: string | null;
+    key: string | null;
+    evidenceCount: number;
+    distinctEvidenceCount: number;
+    corroboratedRoles: string[];
+    latestEvidenceAt: number | null;
+    trustTier: 'strong' | 'review' | 'weak';
+    trustSummary: string;
+    originContextId: string | null;
+    originNodeId: string | null;
 }
 
 export interface SessionDetail {
@@ -446,6 +459,13 @@ export interface KnowledgeCandidate {
     confidence?: number;
     reason?: string | null;
     evidenceCount?: number;
+    distinctEvidenceCount?: number;
+    evidenceSummary?: string | null;
+    sourceExcerpt?: string | null;
+    evidencePreview?: string[];
+    corroboratedRoles?: string[];
+    reviewTier?: 'strong' | 'review' | 'weak';
+    reviewSummary?: string | null;
 }
 
 export interface KnowledgePreviewResult {

@@ -12,6 +12,7 @@ export function createHookPruneCommand(deps: HookCommandDeps) {
             console.log('\nHook Dump Prune\n');
             console.log(`  root:           ${result.rootDir}`);
             console.log(`  retention_days: ${result.maxAgeDays}`);
+            console.log(`  debug_policy:   ${result.debugArtifactsEnabled ? `${result.debugMaxAgeDays}d retention` : 'disabled (all debug trails purged)'}`);
             console.log(`  deleted_files:  ${result.deletedFiles}`);
             console.log(`  deleted_dirs:   ${result.deletedDirs}`);
             console.log(`  reclaimed:      ${result.reclaimedBytes} bytes`);

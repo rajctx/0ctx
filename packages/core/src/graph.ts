@@ -187,6 +187,7 @@ export class Graph {
         const worktreePath =
             this.extractString(payload, ['worktreePath'])
             ?? this.extractString(payload, ['git', 'worktreePath'])
+            ?? this.extractString(payload, ['meta', 'worktreePath'])
             ?? this.extractString(payload, ['meta', 'git', 'worktreePath'])
             ?? this.extractString(payload, ['cwd']);
         const repositoryRoot =
@@ -237,6 +238,58 @@ export class Graph {
             .filter(part => part.length >= 24 && part.length <= 280);
 
         return Array.from(new Set(rough));
+    }
+
+    private sourceExcerpt(text: string): string {
+        return this.cleanupExtractionText(text)
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 160);
+    }
+
+    private canonicalizeKnowledgeCandidateText(
+        type: Exclude<NodeType, 'artifact'>,
+        text: string
+    ): string {
+        let normalized = this.cleanupExtractionText(text).toLowerCase().trim();
+        normalized = normalized.replace(/[.?!;:,]+$/g, '').trim();
+
+        switch (type) {
+            case 'goal':
+                normalized = normalized.replace(
+                    /^(?:we|i)\s+(?:need|want|must|should)\s+to\s+/,
+                    ''
+                );
+                normalized = normalized.replace(
+                    /^(?:need|want|must|should)\s+to\s+/,
+                    ''
+                );
+                normalized = normalized.replace(
+                    /^(?:the\s+)?(?:goal|objective|aim)\s+is\s+to\s+/,
+                    ''
+                );
+                break;
+            case 'decision':
+                normalized = normalized.replace(
+                    /^(?:we\s+)?(?:decided|choose|chose)\s+to\s+/,
+                    ''
+                );
+                normalized = normalized.replace(
+                    /^(?:we\s+are\s+going\s+with|going\s+with|default\s+to|standardize\s+on|adopt(?:ed)?(?:\s+on)?)\s+/,
+                    ''
+                );
+                break;
+            case 'assumption':
+                normalized = normalized.replace(
+                    /^(?:we\s+)?(?:assume|assuming|likely|probably|maybe|hypothesis(?:\s+is)?)(?:\s+that)?\s+/,
+                    ''
+                );
+                break;
+            default:
+                break;
+        }
+
+        return normalized.replace(/\s+/g, ' ').trim();
     }
 
     private isExtractionNoise(text: string): boolean {
@@ -345,6 +398,40 @@ export class Graph {
         return false;
     }
 
+    private isDesignOrLayoutChatter(text: string): boolean {
+        const normalized = text.toLowerCase().trim();
+        if (!normalized) return false;
+
+        const hasUiSurface =
+            /\b(sidebar|topbar|toolbar|breadcrumb|header|footer|rail|drawer|modal|dialog|panel|card|grid|layout|shell|reader body|reader header|hero|accent|gradient|spacing|typography|chrome|button|search bar|search strip|empty state|utility dock|setup screen)\b/.test(normalized);
+        const hasDesignVerb =
+            /\b(move|moved|remove|removed|rewrite|rewrote|redesign|redesigned|restyle|restyled|flatten|flattened|tighten|tightened|shrink|shrunk|reduce|reduced|demote|demoted|simplify|simplified|rename|renamed|split|split out|quiet|quieter|tune|tuned|align|aligned)\b/.test(normalized);
+        const hasProductPolicy =
+            /\b(default|policy|must|should|need to|required|local-first|metadata_only|full_sync|workspace|workstream|session|checkpoint|insight|capture|retrieval|agent context|project memory)\b/.test(normalized);
+
+        return hasUiSurface && hasDesignVerb && !hasProductPolicy;
+    }
+
+    private isExecutionPlanningChatter(text: string): boolean {
+        const normalized = text.toLowerCase().trim();
+        if (!normalized) return false;
+
+        const startsWithSequencing =
+            /^(?:the\s+)?(?:next|best next|first|then|after that|afterwards|finally|follow[- ]on)\b/.test(normalized);
+        const hasSequencingPhrase =
+            /\b(next step|next move|next slice|execution target|execution order|follow[- ]on work|remaining work|remaining items?|after that|then finalize|then tighten|then improve|then validate|continue (with|on)|keep going on)\b/.test(normalized);
+        const hasPlanningVerb =
+            /\b(should|need to|must|continue|finish|finalize|tighten|improve|validate|review|check|keep)\b/.test(normalized);
+        const hasDurablePolicyClaim =
+            /\b(should remain|must remain|default sync policy|required by default|disabled by default|local-first|strict repo routing|explicit promotion|workspace isolation)\b/.test(normalized);
+
+        if (hasDurablePolicyClaim && !startsWithSequencing) {
+            return false;
+        }
+
+        return (startsWithSequencing || hasSequencingPhrase) && hasPlanningVerb;
+    }
+
     private scoreKnowledgeCandidate(
         text: string,
         role: string | null | undefined
@@ -357,6 +444,8 @@ export class Graph {
         if (!normalized || this.isExtractionNoise(text)) return null;
         if (this.isOperationalProcedure(text)) return null;
         if (this.isImplementationStatus(text)) return null;
+        if (this.isDesignOrLayoutChatter(text)) return null;
+        if (this.isExecutionPlanningChatter(text)) return null;
 
         const wordCount = normalized.split(/\s+/).filter(Boolean).length;
         if (wordCount < 5) return null;
@@ -377,7 +466,7 @@ export class Graph {
             };
         }
 
-        if (/\b(we need to|need to build|need to create|need to support|want to|goal is to|aim is to|objective is to|build a|build an|create a|create an|implement a|implement an|add support for)\b/.test(normalized)) {
+        if (/\b(we need to|need to|we want to|want to|goal is to|aim is to|objective is to|build a|build an|create a|create an|implement a|implement an|add support for)\b/.test(normalized)) {
             if (/\b(test|tests|smoke|refresh|restart|rerun|validate|repair|debug|click|open|copy|paste|command|button|screen|reload|review|check|verify|inspect)\b/.test(normalized)) {
                 return null;
             }
@@ -445,23 +534,40 @@ export class Graph {
         return null;
     }
 
-    private boostKnowledgeCandidateConfidence(baseConfidence: number, evidenceCount: number, roles: Set<string>): number {
+    private boostKnowledgeCandidateConfidence(
+        type: Exclude<NodeType, 'artifact'> | null | undefined,
+        baseConfidence: number,
+        evidenceCount: number,
+        distinctEvidenceCount: number,
+        roles: Set<string>
+    ): number {
+        const assistantOnlySingle = distinctEvidenceCount === 1 && roles.size === 1 && roles.has('assistant');
         let adjusted = baseConfidence;
-        if (evidenceCount > 1) {
-            adjusted += Math.min(0.12, (evidenceCount - 1) * 0.04);
+
+        if (assistantOnlySingle) {
+            if (type === 'goal') adjusted = Math.min(adjusted, 0.64);
+            if (type === 'decision') adjusted = Math.min(adjusted, 0.68);
+            if (type === 'constraint') adjusted = Math.min(adjusted, 0.69);
+        }
+
+        if (distinctEvidenceCount > 1) {
+            adjusted += Math.min(0.12, (distinctEvidenceCount - 1) * 0.04);
         }
         if (roles.has('assistant') && roles.has('user')) {
             adjusted += 0.04;
-        } else if (roles.has('assistant')) {
+        } else if (roles.has('assistant') && !assistantOnlySingle) {
             adjusted += 0.02;
         }
         return Math.min(0.98, adjusted);
     }
 
-    private buildKnowledgeEvidenceReason(baseReason: string, evidenceCount: number, roles: Set<string>): string {
+    private buildKnowledgeEvidenceReason(baseReason: string, evidenceCount: number, distinctEvidenceCount: number, roles: Set<string>): string {
         const reasonParts = [baseReason];
         if (evidenceCount > 1) {
             reasonParts.push(`repeated-${evidenceCount}-times`);
+        }
+        if (evidenceCount > distinctEvidenceCount) {
+            reasonParts.push(`distinct-${distinctEvidenceCount}`);
         }
         if (roles.has('assistant') && roles.has('user')) {
             reasonParts.push('corroborated-across-roles');
@@ -469,6 +575,78 @@ export class Graph {
             reasonParts.push('assistant-confirmed');
         }
         return reasonParts.join(', ');
+    }
+
+    private buildKnowledgeEvidenceSummary(evidenceCount: number, distinctEvidenceCount: number, roles: Set<string>): string {
+        const crossRole = roles.has('assistant') && roles.has('user');
+        const assistantOnly = roles.size === 1 && roles.has('assistant');
+        const userOnly = roles.size === 1 && roles.has('user');
+
+        let summary = 'Single captured mention.';
+        if (evidenceCount > 1 && crossRole) {
+            summary = `Repeated ${evidenceCount} times across user and assistant messages.`;
+        } else if (evidenceCount > 1) {
+            summary = `Repeated ${evidenceCount} times in captured messages.`;
+        } else if (crossRole) {
+            summary = 'Backed by both user and assistant messages.';
+        } else if (assistantOnly) {
+            summary = 'Single assistant-only statement.';
+        } else if (userOnly) {
+            summary = 'Single user-stated signal.';
+        }
+
+        if (distinctEvidenceCount > 0 && evidenceCount > distinctEvidenceCount) {
+            summary += ` Distinct supporting statements: ${distinctEvidenceCount}.`;
+        }
+        return summary;
+    }
+
+    private classifyKnowledgeReviewTier(
+        type: Exclude<NodeType, 'artifact'> | null | undefined,
+        confidence: number,
+        evidenceCount: number,
+        distinctEvidenceCount: number,
+        roles: Set<string>
+    ): {
+        reviewTier: 'strong' | 'review' | 'weak';
+        reviewSummary: string;
+    } {
+        const crossRole = roles.has('assistant') && roles.has('user');
+        const assistantOnlySingle = distinctEvidenceCount === 1 && roles.size === 1 && roles.has('assistant');
+        if (confidence >= 0.8 && distinctEvidenceCount >= 2 && crossRole) {
+            return {
+                reviewTier: 'strong',
+                reviewSummary: 'Strong signal backed by repeated cross-role evidence.'
+            };
+        }
+        if (confidence >= 0.9 && (distinctEvidenceCount >= 2 || crossRole)) {
+            return {
+                reviewTier: 'strong',
+                reviewSummary: 'Strong signal backed by repeated or cross-role evidence.'
+            };
+        }
+        if (
+            assistantOnlySingle
+            && (
+                ((type === 'goal' || type === 'decision' || type === 'constraint') && confidence >= 0.64)
+                || confidence >= 0.8
+            )
+        ) {
+            return {
+                reviewTier: 'review',
+                reviewSummary: 'Single assistant-only signal. Review before promoting it into shared memory.'
+            };
+        }
+        if (confidence >= 0.78 || distinctEvidenceCount >= 2 || crossRole) {
+            return {
+                reviewTier: 'review',
+                reviewSummary: 'Good candidate. Review before promoting it into shared memory.'
+            };
+        }
+        return {
+            reviewTier: 'weak',
+            reviewSummary: 'Tentative signal. Keep in review until more evidence appears.'
+        };
     }
 
     private ensureEdge(fromId: string, toId: string, relation: EdgeType): void {
@@ -497,7 +675,8 @@ export class Graph {
                 ? `branch:${normalizedBranch.toLowerCase()}`
                 : `workspace:${contextId}`;
         const scopeDigest = createHash('sha1').update(scope).digest('hex').slice(0, 12);
-        const digest = createHash('sha1').update(`${type}\n${content.toLowerCase()}`).digest('hex').slice(0, 16);
+        const canonical = this.canonicalizeKnowledgeCandidateText(type, content) || content.toLowerCase();
+        const digest = createHash('sha1').update(`${type}\n${canonical}`).digest('hex').slice(0, 16);
         return `knowledge:${type}:${scopeDigest}:${digest}`;
     }
 
@@ -1450,6 +1629,69 @@ export class Graph {
         }));
     }
 
+    private getInsightEvidence(nodeId: string): {
+        evidenceCount: number;
+        distinctEvidenceCount: number;
+        corroboratedRoles: string[];
+        latestEvidenceAt: number | null;
+        trustTier: 'strong' | 'review' | 'weak';
+        trustSummary: string;
+    } {
+        const insight = this.getNode(nodeId);
+        const insightType = insight?.type && insight.type !== 'artifact' ? insight.type : undefined;
+        const edges = this.db.prepare(`
+      SELECT toId
+      FROM edges
+      WHERE fromId = ? AND relation = 'caused_by'
+    `).all(nodeId) as Array<{ toId: string }>;
+
+        const roles = new Set<string>();
+        const distinctEvidence = new Set<string>();
+        let latestEvidenceAt: number | null = null;
+        let evidenceCount = 0;
+
+        for (const edge of edges) {
+            const sourceNode = this.getNode(edge.toId);
+            if (!sourceNode) continue;
+            evidenceCount += 1;
+            if (latestEvidenceAt === null || sourceNode.createdAt > latestEvidenceAt) {
+                latestEvidenceAt = sourceNode.createdAt;
+            }
+            const role = this.extractTagValue(sourceNode.tags, 'role:');
+            if (role) {
+                roles.add(role);
+            }
+            const excerpt = this.sourceExcerpt(sourceNode.content);
+            const distinctKey = `${(role ?? 'unknown').toLowerCase()}:${excerpt || sourceNode.id}`;
+            distinctEvidence.add(distinctKey);
+        }
+
+        const distinctEvidenceCount = distinctEvidence.size;
+
+        if (evidenceCount === 0) {
+            return {
+                evidenceCount: 0,
+                distinctEvidenceCount: 0,
+                corroboratedRoles: [],
+                latestEvidenceAt: null,
+                trustTier: 'weak',
+                trustSummary: 'No linked evidence messages yet.'
+            };
+        }
+
+        const confidence = this.boostKnowledgeCandidateConfidence(insightType, 0.72, evidenceCount, distinctEvidenceCount, roles);
+        const review = this.classifyKnowledgeReviewTier(insightType, confidence, evidenceCount, distinctEvidenceCount, roles);
+        const evidenceSummary = this.buildKnowledgeEvidenceSummary(evidenceCount, distinctEvidenceCount, roles);
+        return {
+            evidenceCount,
+            distinctEvidenceCount,
+            corroboratedRoles: Array.from(roles).sort(),
+            latestEvidenceAt,
+            trustTier: review.reviewTier,
+            trustSummary: `${review.reviewSummary} ${evidenceSummary}`.trim()
+        };
+    }
+
     listWorkstreamInsights(
         contextId: string,
         options: {
@@ -1458,7 +1700,7 @@ export class Graph {
             limit?: number;
         } = {}
     ): InsightSummary[] {
-        const safeLimit = Math.max(1, Math.min(options.limit ?? 5, 50));
+        const safeLimit = Math.max(1, Math.min(options.limit ?? 25, 500));
         const targetBranch = this.normalizeBranch(options.branch);
         const targetWorktree = this.normalizeWorktreePath(options.worktreePath);
         const rows = this.db.prepare(`
@@ -1480,6 +1722,16 @@ export class Graph {
                 if (this.normalizeBranch(branch) !== targetBranch) continue;
             }
 
+            const originContextId = this.extractTagValue(node.tags, 'origin_context:');
+            const originNodeId = this.extractTagValue(node.tags, 'origin_node:');
+            const evidence = this.getInsightEvidence(node.id);
+            const trustSummary = evidence.evidenceCount === 0 && (originContextId || originNodeId)
+                ? 'Promoted from another workspace. No local corroboration yet.'
+                : evidence.trustSummary;
+            const trustTier = evidence.evidenceCount === 0 && (originContextId || originNodeId)
+                ? 'review'
+                : evidence.trustTier;
+
             results.push({
                 contextId,
                 nodeId: node.id,
@@ -1488,7 +1740,16 @@ export class Graph {
                 createdAt: node.createdAt,
                 branch: branch ?? null,
                 worktreePath: worktreePath ?? null,
-                source: node.source ?? null
+                source: node.source ?? null,
+                key: node.key ?? null,
+                evidenceCount: evidence.evidenceCount,
+                distinctEvidenceCount: evidence.distinctEvidenceCount,
+                corroboratedRoles: evidence.corroboratedRoles,
+                latestEvidenceAt: evidence.latestEvidenceAt,
+                trustTier,
+                trustSummary,
+                originContextId: originContextId ?? null,
+                originNodeId: originNodeId ?? null
             });
 
             if (results.length >= safeLimit) break;
@@ -1608,7 +1869,9 @@ export class Graph {
             bestConfidence: number;
             bestReason: string;
             evidenceCount: number;
+            distinctEvidenceKeys: Set<string>;
             roles: Set<string>;
+            evidencePreview: string[];
         }>();
 
         for (const message of detail.messages) {
@@ -1617,12 +1880,15 @@ export class Graph {
                 const classified = this.scoreKnowledgeCandidate(candidateText, message.role);
                 if (!classified) continue;
                 const type = classified.type;
-                const dedupeKey = `${type}:${candidateText.toLowerCase()}`;
+                const canonicalText = this.canonicalizeKnowledgeCandidateText(type, candidateText) || candidateText.toLowerCase();
+                const dedupeKey = `${type}:${canonicalText}`;
                 const key = this.buildKnowledgeKey(contextId, type, candidateText, {
                     branch: session.branch,
                     worktreePath: session.worktreePath
                 });
                 if (allowedKeys && !allowedKeys.has(key)) continue;
+                const excerpt = this.sourceExcerpt(message.content);
+                const distinctEvidenceKey = `${(message.role ?? 'unknown').toLowerCase()}:${excerpt || canonicalText}`;
 
                 const existing = aggregated.get(dedupeKey);
                 if (!existing) {
@@ -1637,13 +1903,19 @@ export class Graph {
                         bestConfidence: classified.confidence,
                         bestReason: classified.reason,
                         evidenceCount: 1,
-                        roles: new Set((message.role ?? '').trim() ? [(message.role ?? '').toLowerCase()] : [])
+                        distinctEvidenceKeys: new Set([distinctEvidenceKey]),
+                        roles: new Set((message.role ?? '').trim() ? [(message.role ?? '').toLowerCase()] : []),
+                        evidencePreview: excerpt ? [excerpt] : []
                     });
                     continue;
                 }
 
                 existing.evidenceCount += 1;
+                existing.distinctEvidenceKeys.add(distinctEvidenceKey);
                 if ((message.role ?? '').trim()) existing.roles.add((message.role ?? '').toLowerCase());
+                if (excerpt && !existing.evidencePreview.includes(excerpt) && existing.evidencePreview.length < 2) {
+                    existing.evidencePreview.push(excerpt);
+                }
                 if (classified.confidence > existing.bestConfidence) {
                     existing.bestConfidence = classified.confidence;
                     existing.bestReason = classified.reason;
@@ -1657,8 +1929,11 @@ export class Graph {
 
         const ranked = Array.from(aggregated.values())
             .map((candidate) => {
-                const confidence = this.boostKnowledgeCandidateConfidence(candidate.bestConfidence, candidate.evidenceCount, candidate.roles);
+                const distinctEvidenceCount = candidate.distinctEvidenceKeys.size;
+                const confidence = this.boostKnowledgeCandidateConfidence(candidate.type, candidate.bestConfidence, candidate.evidenceCount, distinctEvidenceCount, candidate.roles);
                 const existingNode = this.getByKey(contextId, candidate.key, { includeHidden: true });
+                const review = this.classifyKnowledgeReviewTier(candidate.type, confidence, candidate.evidenceCount, distinctEvidenceCount, candidate.roles);
+                const evidenceSummary = this.buildKnowledgeEvidenceSummary(candidate.evidenceCount, distinctEvidenceCount, candidate.roles);
                 return {
                     contextId,
                     source,
@@ -1674,8 +1949,15 @@ export class Graph {
                     role: candidate.role,
                     createdAt: candidate.createdAt,
                     confidence,
-                    reason: this.buildKnowledgeEvidenceReason(candidate.bestReason, candidate.evidenceCount, candidate.roles),
+                    reason: this.buildKnowledgeEvidenceReason(candidate.bestReason, candidate.evidenceCount, distinctEvidenceCount, candidate.roles),
                     evidenceCount: candidate.evidenceCount,
+                    distinctEvidenceCount,
+                    evidenceSummary,
+                    sourceExcerpt: candidate.evidencePreview[0] ?? null,
+                    evidencePreview: candidate.evidencePreview,
+                    corroboratedRoles: Array.from(candidate.roles),
+                    reviewTier: review.reviewTier,
+                    reviewSummary: review.reviewSummary,
                     existingNode
                 };
             })
@@ -1830,6 +2112,8 @@ export class Graph {
             worktreePath: checkpoint.worktreePath
         });
         const existingNode = this.getByKey(checkpoint.contextId, key, { includeHidden: true });
+        const roles = new Set<string>(['assistant']);
+        const review = this.classifyKnowledgeReviewTier(classified.type, classified.confidence, 1, 1, roles);
         return {
             contextId: checkpoint.contextId,
             source: 'checkpoint',
@@ -1854,7 +2138,12 @@ export class Graph {
                 createdAt: checkpoint.createdAt,
                 confidence: classified.confidence,
                 reason: classified.reason,
-                evidenceCount: 1
+                evidenceCount: 1,
+                distinctEvidenceCount: 1,
+                evidenceSummary: this.buildKnowledgeEvidenceSummary(1, 1, roles),
+                corroboratedRoles: ['assistant'],
+                reviewTier: review.reviewTier,
+                reviewSummary: review.reviewSummary
             }]
         };
     }

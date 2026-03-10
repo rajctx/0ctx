@@ -141,9 +141,11 @@ export function createStatusCommands(deps: ProductCommandDeps) {
         }
 
         const captureLine = repoReadiness.captureManagedForRepo
-            ? (repoReadiness.captureMissingAgents.length === 0
-                ? `${deps.formatAgentList(repoReadiness.captureReadyAgents)} ready`
-                : `${deps.formatAgentList(repoReadiness.captureReadyAgents)} ready${repoReadiness.captureReadyAgents.length > 0 ? '; ' : ''}${deps.formatAgentList(repoReadiness.captureMissingAgents)} not installed`)
+            ? (repoReadiness.captureReadyAgents.length > 0
+                ? (repoReadiness.captureMissingAgents.length === 0
+                    ? `${deps.formatAgentList(repoReadiness.captureReadyAgents)} ready`
+                    : `${deps.formatAgentList(repoReadiness.captureReadyAgents)} ready${repoReadiness.captureReadyAgents.length > 0 ? '; ' : ''}${deps.formatAgentList(repoReadiness.captureMissingAgents)} not installed`)
+                : 'Run 0ctx enable to install supported capture integrations')
             : 'Run 0ctx enable to install supported capture integrations';
         const historySummary = repoReadiness.sessionCount === null
             ? 'No workstream history yet'
@@ -160,8 +162,9 @@ export function createStatusCommands(deps: ProductCommandDeps) {
             deps.formatLabelValue('Capture', captureLine),
             deps.formatLabelValue('Context', autoContextLine),
             deps.formatLabelValue('History', historySummary),
-            deps.formatLabelValue('Sync', deps.formatSyncPolicyLabel(repoReadiness.syncPolicy)),
-            deps.formatLabelValue('Retention', deps.formatRetentionLabel(repoReadiness)),
+            deps.formatLabelValue('Workspace sync', deps.formatSyncPolicyLabel(repoReadiness.syncPolicy)),
+            deps.formatLabelValue('Machine capture', deps.formatRetentionLabel(repoReadiness)),
+            ...(repoReadiness.dataPolicyActionHint ? [deps.formatLabelValue('Policy step', repoReadiness.dataPolicyActionHint)] : []),
             ...(repoReadiness.nextActionHint ? [deps.formatLabelValue('Next step', repoReadiness.nextActionHint)] : [])
         ].join('\n'), 'Repo Readiness');
         p.outro(color.green('Use a supported agent normally in this repo. 0ctx will inject context and route capture automatically.'));

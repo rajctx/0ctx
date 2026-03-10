@@ -52,6 +52,7 @@ export interface HookDumpPruneResult {
     rootDir: string;
     maxAgeDays: number;
     debugMaxAgeDays: number;
+    debugArtifactsEnabled: boolean;
     deletedFiles: number;
     deletedDirs: number;
     reclaimedBytes: number;
@@ -112,11 +113,13 @@ export function pruneHookDumps(options: {
     rootDir?: string;
     maxAgeDays?: number;
     debugMaxAgeDays?: number;
+    debugArtifactsEnabled?: boolean;
     now?: number;
 } = {}): HookDumpPruneResult {
     const rootDir = path.resolve(options.rootDir ?? getHookDumpDir());
     const maxAgeDays = options.maxAgeDays ?? getHookDumpRetentionDays();
     const debugMaxAgeDays = options.debugMaxAgeDays ?? getHookDebugRetentionDays();
+    const debugArtifactsEnabled = options.debugArtifactsEnabled ?? isHookDebugArtifactsEnabled();
     const now = options.now ?? Date.now();
     const cutoffMs = now - (maxAgeDays * 24 * 60 * 60 * 1000);
     const debugCutoffMs = now - (debugMaxAgeDays * 24 * 60 * 60 * 1000);
@@ -124,6 +127,7 @@ export function pruneHookDumps(options: {
         rootDir,
         maxAgeDays,
         debugMaxAgeDays,
+        debugArtifactsEnabled,
         deletedFiles: 0,
         deletedDirs: 0,
         reclaimedBytes: 0,
@@ -136,7 +140,16 @@ export function pruneHookDumps(options: {
         const isDebugArtifact = relativePath.includes('/events/')
             || relativePath.includes('/transcript-history/')
             || relativePath.endsWith('.ndjson');
-        const fileCutoffMs = isDebugArtifact ? debugCutoffMs : cutoffMs;
+        const fileCutoffMs = isDebugArtifact
+            ? (debugArtifactsEnabled ? debugCutoffMs : Number.POSITIVE_INFINITY)
+            : cutoffMs;
+        if (isDebugArtifact && !debugArtifactsEnabled) {
+            fs.rmSync(filePath, { force: true });
+            result.deletedFiles += 1;
+            result.reclaimedBytes += stat.size;
+            result.prunedPaths.push(filePath);
+            continue;
+        }
         if (stat.mtimeMs > fileCutoffMs) continue;
         fs.rmSync(filePath, { force: true });
         result.deletedFiles += 1;

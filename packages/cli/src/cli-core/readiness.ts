@@ -22,6 +22,54 @@ function isHookCommandPresent(agent: HookSupportedAgent, configContent: string, 
         && configContent.includes(expectedCommand.replace(/\s+/g, ' ').trim().split(' ').slice(0, 4).join(' '));
 }
 
+function isSessionStartCommandPresent(agent: HookSupportedAgent, configContent: string): boolean {
+    if (agent !== 'claude' && agent !== 'factory' && agent !== 'antigravity') {
+        return false;
+    }
+
+    return configContent.includes('SessionStart')
+        && configContent.includes('0ctx connector hook session-start')
+        && configContent.includes(`--agent=${agent}`);
+}
+
+function normalizeRepoIdentity(input: string | null | undefined): string | null {
+    if (typeof input !== 'string' || input.trim().length === 0) {
+        return null;
+    }
+    const normalized = path.normalize(path.resolve(input));
+    return process.platform === 'win32'
+        ? normalized.toLowerCase()
+        : normalized;
+}
+
+function buildDataPolicyActionHint(policy: {
+    syncPolicy?: string | null;
+    captureRetentionDays?: number;
+    debugRetentionDays?: number;
+    debugArtifactsEnabled?: boolean;
+    preset?: string | null;
+} | null | undefined): string | null {
+    const syncPolicy = String(policy?.syncPolicy || '').trim().toLowerCase();
+    const preset = String(policy?.preset || '').trim().toLowerCase();
+    const captureRetentionDays = typeof policy?.captureRetentionDays === 'number' ? policy.captureRetentionDays : 14;
+    const debugRetentionDays = typeof policy?.debugRetentionDays === 'number' ? policy.debugRetentionDays : 7;
+    const debugArtifactsEnabled = policy?.debugArtifactsEnabled === true;
+
+    if (preset === 'custom') {
+        return 'Normalize workspace sync and machine capture with 0ctx data-policy lean, review, debug, or shared.';
+    }
+    if (preset === 'shared' || syncPolicy === 'full_sync') {
+        return 'Return this workspace to Lean when it no longer needs richer cloud sync.';
+    }
+    if (preset === 'debug' || debugArtifactsEnabled) {
+        return 'Return this machine to Lean when troubleshooting is complete.';
+    }
+    if (preset === 'review' || captureRetentionDays > 14 || debugRetentionDays > 7) {
+        return 'Return this machine to Lean when the longer local review window is no longer needed.';
+    }
+    return null;
+}
+
 export function createHookHealthCollector(deps: {
     getHookDumpDir: () => string;
     getHookDumpRetentionDays: () => number;
@@ -70,6 +118,7 @@ export function createHookHealthCollector(deps: {
                 configPath,
                 configExists,
                 commandPresent: configExists && isHookCommandPresent(agentState.agent, content, agentState.command ?? null),
+                sessionStartPresent: configExists && isSessionStartCommandPresent(agentState.agent, content),
                 command: agentState.command ?? null
             };
         });
@@ -197,12 +246,16 @@ export function createRepoReadinessCollector(deps: {
                 sessionCount: null,
                 checkpointCount: null,
                 syncPolicy: null,
+                syncScope: 'workspace',
+                captureScope: 'machine',
+                debugScope: 'machine',
                 captureReadyAgents: [],
                 autoContextAgents: [],
                 captureMissingAgents: [...deps.defaultHookInstallClients],
                 captureManagedForRepo: false,
                 zeroTouchReady: false,
                 nextActionHint: 'Run 0ctx enable in this repo.',
+                dataPolicyActionHint: buildDataPolicyActionHint(policy),
                 captureRetentionDays: typeof policy?.captureRetentionDays === 'number' ? policy.captureRetentionDays : 14,
                 debugRetentionDays: typeof policy?.debugRetentionDays === 'number' ? policy.debugRetentionDays : 7,
                 debugArtifactsEnabled: policy?.debugArtifactsEnabled === true
@@ -230,8 +283,11 @@ export function createRepoReadinessCollector(deps: {
         const syncPolicy = typeof dataPolicy?.syncPolicy === 'string' ? dataPolicy.syncPolicy : null;
 
         const hookDetails = options.hookDetails ?? (await deps.collectHookHealth()).details;
-        const hookProjectRoot = hookDetails.projectRoot ? path.resolve(hookDetails.projectRoot) : null;
-        const captureManagedForRepo = hookProjectRoot === repoRoot;
+        const hookProjectRoot = normalizeRepoIdentity(hookDetails.projectRoot);
+        const normalizedRepoRoot = normalizeRepoIdentity(repoRoot);
+        const captureManagedForRepo = hookProjectRoot !== null
+            && normalizedRepoRoot !== null
+            && hookProjectRoot === normalizedRepoRoot;
         const configuredAgents = captureManagedForRepo
             ? hookDetails.agents
                 .filter(agent => agent.configExists && agent.commandPresent)
@@ -239,10 +295,21 @@ export function createRepoReadinessCollector(deps: {
                 .filter((agent): agent is HookSupportedAgent => Boolean(agent))
             : [];
         const captureReadyAgents = configuredAgents.filter(deps.isGaHookAgent);
-        const autoContextAgents = captureReadyAgents.filter(agent => deps.sessionStartAgents.includes(agent));
+        const autoContextAgents = captureManagedForRepo
+            ? hookDetails.agents
+                .filter(agent =>
+                    deps.isGaHookAgent(agent.agent)
+                    && agent.configExists
+                    && agent.commandPresent
+                    && agent.sessionStartPresent
+                    && deps.sessionStartAgents.includes(agent.agent)
+                )
+                .map(agent => agent.agent)
+            : [];
         const captureMissingAgents = deps.defaultHookInstallClients.filter(
             agent => !captureReadyAgents.includes(agent as Extract<HookSupportedAgent, 'claude' | 'factory' | 'antigravity'>)
         );
+        const autoContextMissingAgents = captureReadyAgents.filter(agent => !autoContextAgents.includes(agent));
         const zeroTouchReady = captureManagedForRepo && autoContextAgents.length > 0;
         let nextActionHint: string | null = null;
 
@@ -250,6 +317,8 @@ export function createRepoReadinessCollector(deps: {
             nextActionHint = 'Run 0ctx enable to install supported capture integrations.';
         } else if (autoContextAgents.length === 0) {
             nextActionHint = 'Install a GA integration with automatic context injection (claude, factory, or antigravity).';
+        } else if (autoContextMissingAgents.length > 0) {
+            nextActionHint = `Repair ${autoContextMissingAgents.join(', ')} to restore automatic workstream context injection.`;
         }
 
         return {
@@ -264,12 +333,23 @@ export function createRepoReadinessCollector(deps: {
             sessionCount: typeof pack?.workstream?.sessionCount === 'number' ? pack.workstream.sessionCount : null,
             checkpointCount: typeof pack?.workstream?.checkpointCount === 'number' ? pack.workstream.checkpointCount : null,
             syncPolicy,
+            syncScope: 'workspace',
+            captureScope: 'machine',
+            debugScope: 'machine',
             captureReadyAgents,
             autoContextAgents,
             captureMissingAgents,
             captureManagedForRepo,
             zeroTouchReady,
             nextActionHint,
+            dataPolicyActionHint: buildDataPolicyActionHint({
+                ...dataPolicy,
+                syncPolicy,
+                captureRetentionDays: typeof dataPolicy?.captureRetentionDays === 'number' ? dataPolicy.captureRetentionDays : 14,
+                debugRetentionDays: typeof dataPolicy?.debugRetentionDays === 'number' ? dataPolicy.debugRetentionDays : 7,
+                debugArtifactsEnabled: dataPolicy?.debugArtifactsEnabled === true,
+                preset: (dataPolicy as { preset?: string | null } | null | undefined)?.preset ?? null
+            }),
             captureRetentionDays: typeof dataPolicy?.captureRetentionDays === 'number' ? dataPolicy.captureRetentionDays : 14,
             debugRetentionDays: typeof dataPolicy?.debugRetentionDays === 'number' ? dataPolicy.debugRetentionDays : 7,
             debugArtifactsEnabled: dataPolicy?.debugArtifactsEnabled === true

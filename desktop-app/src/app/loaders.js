@@ -224,6 +224,21 @@
     state.graphEdges = Array.isArray(graph?.edges) ? graph.edges : [];
   }
 
+  async function loadInsights() {
+    if (!state.activeContextId) {
+      state.insights = [];
+      return;
+    }
+    const lane = activeBranch();
+    const insights = await daemon('listWorkstreamInsights', {
+      contextId: state.activeContextId,
+      branch: lane?.branch || null,
+      worktreePath: lane?.worktreePath || null,
+      limit: 400
+    });
+    state.insights = Array.isArray(insights) ? insights : [];
+  }
+
   async function loadHook() {
     try {
       state.hook = await daemon('getHookHealth', {});
@@ -340,6 +355,9 @@
         state.graphNodes = [];
         state.graphEdges = [];
       });
+      await safeLoad('insights', loadInsights, () => {
+        state.insights = [];
+      });
       await ensureEventSubscription();
       renderAll();
       if (issues.length > 0) {
@@ -365,5 +383,5 @@
     }
   }
 
-  Object.assign(app, { loadBranchComparison, selectContext, loadBranches, loadSessions, loadSessionDetail, getSessionDetailWithFallback, loadTurns, loadCheckpoints, loadCheckpointDetail, loadHandoff, loadBranchComparisonSafe, loadWorkspaceComparison, loadGraph, loadHook, loadDataPolicy, refreshAll });
+  Object.assign(app, { loadBranchComparison, selectContext, loadBranches, loadSessions, loadSessionDetail, getSessionDetailWithFallback, loadTurns, loadCheckpoints, loadCheckpointDetail, loadHandoff, loadBranchComparisonSafe, loadWorkspaceComparison, loadGraph, loadInsights, loadHook, loadDataPolicy, refreshAll });
 })();

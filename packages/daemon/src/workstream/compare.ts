@@ -367,6 +367,99 @@ function deriveReconcileStrategy(options: {
     }
 }
 
+function summarizeReconcileFocus(options: {
+    sharedConflictLikelyFiles: string[];
+    sharedChangedAreas: string[];
+}): string | null {
+    if (options.sharedConflictLikelyFiles.length > 0) {
+        const sample = options.sharedConflictLikelyFiles.slice(0, 3).join(', ');
+        const suffix = options.sharedConflictLikelyFiles.length > 3
+            ? ` (+${options.sharedConflictLikelyFiles.length - 3} more)`
+            : '';
+        return `Resolve likely conflicts in ${sample}${suffix}.`;
+    }
+
+    if (options.sharedChangedAreas.length > 0) {
+        const sample = options.sharedChangedAreas.slice(0, 3).join(', ');
+        const suffix = options.sharedChangedAreas.length > 3
+            ? ` (+${options.sharedChangedAreas.length - 3} more)`
+            : '';
+        return `Focus review on ${sample}${suffix}.`;
+    }
+
+    return null;
+}
+
+function deriveReconcileSteps(options: {
+    sameRepository: boolean;
+    comparable: boolean;
+    reconcileStrategy: WorkstreamComparison['reconcileStrategy'];
+    sourceLabel: string;
+    targetLabel: string;
+    comparisonBlockers: string[];
+    sharedConflictLikelyFiles: string[];
+    sharedChangedAreas: string[];
+}): string[] {
+    const focus = summarizeReconcileFocus({
+        sharedConflictLikelyFiles: options.sharedConflictLikelyFiles,
+        sharedChangedAreas: options.sharedChangedAreas
+    });
+
+    if (options.reconcileStrategy === 'blocked') {
+        return [
+            ...options.comparisonBlockers,
+            'Re-run the comparison after the blocked workstream is open, attached to a named branch, and clean enough for handoff.'
+        ].filter(Boolean);
+    }
+
+    if (!options.sameRepository || !options.comparable || options.reconcileStrategy === 'unknown') {
+        return [
+            'Compare only branches in the same repository before choosing a reconcile direction.',
+            'Open both workstreams locally and refresh 0ctx after git state is available.'
+        ];
+    }
+
+    switch (options.reconcileStrategy) {
+        case 'none':
+            return ['No git reconcile is required. Keep working on either side normally.'];
+        case 'fast_forward_target_to_source':
+            return [
+                `Open ${options.targetLabel}.`,
+                `Fast-forward it to ${options.sourceLabel}.`,
+                'Create a checkpoint after the update before handing the workstream to another agent.'
+            ];
+        case 'fast_forward_source_to_target':
+            return [
+                `Open ${options.sourceLabel}.`,
+                `Fast-forward it to ${options.targetLabel}.`,
+                'Create a checkpoint after the update before handing the workstream to another agent.'
+            ];
+        case 'rebase_target_on_source':
+            return [
+                `Open ${options.targetLabel}.`,
+                `Rebase it onto ${options.sourceLabel}.`,
+                focus ?? 'Review the shared areas after the rebase completes.',
+                'Create a checkpoint before handing the workstream to another agent.'
+            ];
+        case 'rebase_source_on_target':
+            return [
+                `Open ${options.sourceLabel}.`,
+                `Rebase it onto ${options.targetLabel}.`,
+                focus ?? 'Review the shared areas after the rebase completes.',
+                'Create a checkpoint before handing the workstream to another agent.'
+            ];
+        case 'manual_conflict_resolution':
+            return [
+                'Review the shared changed files before choosing merge or rebase.',
+                focus ?? 'Review the shared hotspots before reconciling the workstreams.',
+                'Resolve conflicts manually and verify the resulting branch state.',
+                'Create a checkpoint after reconciliation and before handoff.'
+            ];
+        default:
+            return [];
+    }
+}
+
 export function compareWorkstreams(
     graph: Graph,
     contextId: string,
@@ -503,6 +596,16 @@ export function compareWorkstreams(
             ? [`Focus review on: ${hotspots.sharedChangedAreas.slice(0, 3).join(', ')}${hotspots.sharedChangedAreas.length > 3 ? ` (+${hotspots.sharedChangedAreas.length - 3} more)` : ''}.`]
             : [])
     ];
+    const reconcileSteps = deriveReconcileSteps({
+        sameRepository,
+        comparable,
+        reconcileStrategy: reconcile.reconcileStrategy,
+        sourceLabel: source.branch ?? 'source workstream',
+        targetLabel: target.branch ?? 'target workstream',
+        comparisonBlockers,
+        sharedConflictLikelyFiles: changedLines.sharedConflictLikelyFiles,
+        sharedChangedAreas: hotspots.sharedChangedAreas
+    });
 
     const lines = [
         `Workstream comparison for ${source.workspaceName}`,
@@ -530,6 +633,7 @@ export function compareWorkstreams(
     if (changedFiles.sharedChangedFiles.length > 0) lines.push(`Shared files: ${changedFiles.sharedChangedFiles.slice(0, 5).join(', ')}${changedFiles.sharedChangedFiles.length > 5 ? ` (+${changedFiles.sharedChangedFiles.length - 5} more)` : ''}.`);
     if (changedLines.sharedConflictLikelyFiles.length > 0) lines.push(`Likely conflict files: ${changedLines.sharedConflictLikelyFiles.slice(0, 5).join(', ')}${changedLines.sharedConflictLikelyFiles.length > 5 ? ` (+${changedLines.sharedConflictLikelyFiles.length - 5} more)` : ''}.`);
     if (hotspots.sharedChangedAreas.length > 0) lines.push(hotspots.changeHotspotSummary);
+    if (reconcileSteps.length > 0) lines.push(`Reconcile steps: ${reconcileSteps.map((step, idx) => `${idx + 1}) ${step}`).join(' ')}`);
     if (newerSide === 'source') lines.push(`${source.branch ?? 'Source'} has the newer captured activity.`);
     else if (newerSide === 'target') lines.push(`${target.branch ?? 'Target'} has the newer captured activity.`);
 
@@ -550,6 +654,7 @@ export function compareWorkstreams(
         comparisonActionHint: comparisonState.actionHint,
         reconcileStrategy: reconcile.reconcileStrategy,
         reconcileStrategySummary: reconcile.reconcileStrategySummary,
+        reconcileSteps,
         comparisonBlockers,
         comparisonReviewItems,
         sharedAgents,

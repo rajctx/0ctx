@@ -1,0 +1,81 @@
+{
+  "ok": true,
+  "tempRoot": "C:\\Users\\Rajesh\\AppData\\Local\\Temp\\0ctx-daily-flow-lLoq7B",
+  "contextId": "5ee064f8-1732-4a9d-8d47-eccc8fd809a4",
+  "repoRoot": "C:\\Users\\Rajesh\\AppData\\Local\\Temp\\0ctx-daily-flow-lLoq7B\\repo",
+  "readiness": {
+    "repoRoot": "C:/Users/Rajesh/AppData/Local/Temp/0ctx-daily-flow-lLoq7B/repo",
+    "contextId": "5ee064f8-1732-4a9d-8d47-eccc8fd809a4",
+    "workspaceName": "repo",
+    "workstream": "main",
+    "sessionCount": 0,
+    "checkpointCount": 0,
+    "syncPolicy": "metadata_only",
+    "syncScope": "workspace",
+    "captureScope": "machine",
+    "debugScope": "machine",
+    "captureReadyAgents": [
+      "claude",
+      "factory",
+      "antigravity"
+    ],
+    "autoContextAgents": [
+      "claude",
+      "factory",
+      "antigravity"
+    ],
+    "captureMissingAgents": [],
+    "captureManagedForRepo": true,
+    "zeroTouchReady": true,
+    "nextActionHint": null,
+    "dataPolicyActionHint": null,
+    "captureRetentionDays": 14,
+    "debugRetentionDays": 7,
+    "debugArtifactsEnabled": false
+  },
+  "dataPolicy": {
+    "preset": null,
+    "syncScope": "workspace",
+    "captureScope": "machine",
+    "debugScope": "machine",
+    "syncPolicy": "metadata_only (default)",
+    "captureRetentionDays": 14,
+    "debugRetentionDays": 7,
+    "debugArtifactsEnabled": false
+  },
+  "sessionStart": {
+    "claude": {
+      "injected": true,
+      "branch": "main"
+    },
+    "factory": {
+      "injected": true,
+      "branch": "main"
+    },
+    "antigravity": {
+      "injected": true,
+      "branch": "main"
+    }
+  },
+  "capture": {
+    "claude": {
+      "insertedCount": 2,
+      "transcriptSha256": "6b6bc6723107d5630975d85cf69ecb40d250ea70d9c9755dcb3a86c18552f4c5"
+    },
+    "factory": {
+      "insertedCount": 2,
+      "transcriptSha256": "34b54452421a814b47900e0e2d91b9da9d951cfa4ab4209074d6acb93dafd92e"
+    },
+    "antigravity": {
+      "insertedCount": 2,
+      "transcriptSha256": "b6d357d84b17173bff423a25698319b2808d036b61c5af0b157d249d59d87ae9"
+    }
+  },
+  "workstream": {
+    "branch": "main",
+    "sessionCount": 3,
+    "checkpointCount": 1,
+    "stateSummary": "Working tree has local uncommitted changes."
+  },
+  "checkpointId": "97dfa20f-5866-4ed3-88bd-0850edeeb34a"
+}

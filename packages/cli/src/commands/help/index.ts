@@ -152,9 +152,6 @@ Connector:
                                      [--input-file=<path>|--payload='<json>'|stdin] [--json]
   0ctx connector hook ingest --agent=claude|factory|antigravity [--repo-root=<path>]
                               [--input-file=<path>|--payload='<json>'|stdin]
-  Explicit replay / utility only:
-  0ctx connector hook ingest --agent=codex|cursor|windsurf [--repo-root=<path>]
-                              [--input-file=<path>|--payload='<json>'|stdin]
   0ctx hook install|status|prune|session-start|ingest  Alias for "0ctx connector hook ..."
   0ctx connector queue status [--json]
   0ctx connector queue drain [--max-batches=10] [--batch-size=200] [--wait] [--strict|--fail-on-retry] [--timeout-ms=120000] [--poll-ms=1000] [--json]

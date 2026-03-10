@@ -6,16 +6,15 @@
     activeContext,
     isGaIntegration,
     integrationLabel,
-    integrationType,
     integrationListText,
     formatIntegrationNote,
-    automaticContextState,
+    zeroTouchState,
     formatPosture,
     formatSyncPolicyLabel,
     formatDataPolicyPresetLabel,
     enableCommand,
-    hookInstallCommand,
     capturePolicySummary,
+    dataPolicyActionHint,
     matches,
     esc,
     renderMetaLine,
@@ -25,7 +24,6 @@
 
   function renderSetup() {
     document.getElementById('setupCommand').textContent = enableCommand();
-    document.getElementById('hookInstallCommand').textContent = hookInstallCommand();
 
     const hooks = Array.isArray(state.hook?.agents) ? state.hook.agents : [];
     const gaHooks = hooks.filter((hook) => isGaIntegration(hook.agent));
@@ -37,7 +35,7 @@
         ? state.runtimeIssue.detail
         : installedGa.length > 0
           ? `${installedGa.length} GA integration${installedGa.length === 1 ? '' : 's'} ${installedGa.length === 1 ? 'is' : 'are'} installed on this machine. Use this screen only to enable another repo, add another GA agent, or repair the runtime when something is off.`
-          : 'Enable the repo, install the integrations you actually use, then leave this screen. Daily work should happen in workstreams, sessions, and checkpoints.';
+          : 'No GA integrations are installed on this machine yet. Use this screen to add a supported integration for the normal product path.';
     }
 
     document.getElementById('hookSummary').textContent = `${installedGa.length} GA installed / ${gaHooks.length}`;
@@ -45,10 +43,10 @@
       ? filteredHooks.map((hook) => `
             <article class="list-item">
               <h4>${esc(integrationLabel(hook.agent))}</h4>
-              <p>${esc(`${hook.status} | ${hook.installed ? `${integrationType(hook.agent)} installed` : `${integrationType(hook.agent)} not installed`}`)}</p>
+              <p>${esc(`${hook.status} | ${hook.installed ? 'Installed' : 'Not installed'}`)}</p>
               ${renderMetaLine([
                 hook.notes ? formatIntegrationNote(hook.notes) : '',
-                hook.command ? `${integrationType(hook.agent)} command ready` : ''
+                hook.command ? 'Command ready' : ''
               ])}
               ${hook.command ? `<p>${esc(short(hook.command, 180))}</p>` : ''}
             </article>
@@ -57,7 +55,13 @@
         ? '<div class="empty-state">No GA integrations match the current filter.</div>'
         : '<div class="empty-state">GA integration health is unavailable until the daemon can read local setup state.</div>';
 
+    const zeroTouch = zeroTouchState();
     const supportItems = [
+      {
+        title: 'Normal path',
+        detail: `${zeroTouch.label} | ${zeroTouch.detail}`,
+        hint: zeroTouch.nextAction
+      },
       {
         title: 'Runtime posture',
         detail: formatPosture(state.health?.status || 'offline'),
@@ -66,24 +70,18 @@
           : 'Desktop and local runtime are aligned.'
       },
       {
-        title: 'Machine session',
-        detail: state.auth.authenticated ? 'Signed in' : 'Login required',
-        hint: `provider: ${state.auth.provider || 'unknown'}`
-      },
-      {
         title: 'GA integrations',
-        detail: installedGa.length > 0 ? integrationListText(installedGa) : 'No GA integrations installed',
-        hint: 'Install only the GA agents you actually use on this machine.'
+        detail: installedGa.length > 0
+          ? integrationListText(installedGa)
+          : 'No GA integrations installed',
+        hint: installedGa.length > 0
+          ? 'Install only the GA agents you actually use on this machine.'
+          : 'Install only the GA agents you actually use on this machine.'
       },
       {
-        title: 'Automatic context',
-        detail: automaticContextState(),
-        hint: 'Supported agents get the current workstream automatically at session start.'
-      },
-      {
-        title: 'Data policy',
-        detail: `${formatDataPolicyPresetLabel(state.dataPolicy?.preset || 'lean')} | ${capturePolicySummary()}`,
-        hint: 'Metadata-only sync is the normal default. Local capture stays on this machine and debug trails remain off unless you explicitly enable them.'
+        title: 'Sync and capture',
+        detail: `Workspace sync: ${formatSyncPolicyLabel(state.dataPolicy?.syncPolicy || 'metadata_only')}`,
+        hint: `Machine capture: ${capturePolicySummary()}`
       }
     ];
     document.getElementById('setupSupportList').innerHTML = supportItems.map((item) => `
@@ -95,7 +93,9 @@
     `).join('');
     document.getElementById('setupSupportCopy').textContent = state.runtimeIssue
       ? state.runtimeIssue.detail
-      : 'Use utilities only when you need to enable a repo, install GA integrations, check updates, or repair the local runtime.';
+      : zeroTouch.ready
+        ? 'The supported path is active. Use utilities only when enabling another repo, adding another GA integration, or repairing the local runtime.'
+        : 'Use utilities to reach the supported path once, then use the agent normally from the bound repo.';
 
     const policy = state.dataPolicy || {
       contextId: null,
@@ -112,6 +112,7 @@
     const supportsMutation = methodSupported('setDataPolicy');
     const workspaceResolved = policy.workspaceResolved === true && Boolean(activeContext()?.id);
     const preset = String(policy.preset || 'lean').trim().toLowerCase();
+    const actionHint = dataPolicyActionHint(policy);
 
     document.querySelectorAll('#dataPolicyForm [data-policy-preset]').forEach((button) => {
       const presetValue = String(button.getAttribute('data-policy-preset') || '').trim().toLowerCase();
@@ -119,7 +120,7 @@
       const requiresWorkspace = presetValue === 'shared';
       button.disabled = !supportsMutation || (requiresWorkspace && !workspaceResolved);
       button.title = requiresWorkspace && !workspaceResolved
-        ? 'Shared requires an active workspace because it opts that workspace into full sync.'
+        ? 'Full sync is available only after a workspace is active.'
         : '';
     });
 
@@ -129,10 +130,9 @@
 
     if (detailList) {
       const detailItems = [
-        { title: 'Workspace sync', detail: formatSyncPolicyLabel(policy.syncPolicy || 'metadata_only') },
-        { title: 'Local capture retention', detail: `${policy.captureRetentionDays || 14} days` },
-        { title: 'Debug retention', detail: `${policy.debugRetentionDays || 7} days` },
-        { title: 'Debug artifacts', detail: policy.debugArtifactsEnabled === true ? 'Enabled explicitly' : 'Off by default' }
+        { title: 'Policy mode', detail: formatDataPolicyPresetLabel(policy.preset || 'lean') },
+        { title: 'Workspace sync (this workspace)', detail: formatSyncPolicyLabel(policy.syncPolicy || 'metadata_only') },
+        { title: 'Machine capture (this machine)', detail: capturePolicySummary() }
       ];
       detailList.innerHTML = detailItems.map((item) => `
         <article>
@@ -144,15 +144,17 @@
 
     if (hint) {
       hint.textContent = !supportsMutation
-        ? 'Update the local runtime before changing the data policy from the desktop.'
+        ? 'Update the local runtime before changing sync or machine capture defaults from the desktop.'
         : preset === 'custom'
-          ? 'This workspace is using a custom policy. Choose one of the supported presets to return to a standard product path.'
+          ? 'This workspace and this machine are using a custom combination. Choose Lean, Review, or Debug to return machine defaults to a standard product path. Use full sync only as an explicit workspace override.'
           : !workspaceResolved
-            ? 'Lean, Review, and Debug can be applied immediately. Shared requires an active workspace because it opts that workspace into full sync.'
+            ? 'Lean, Review, and Debug change machine capture defaults immediately. Full sync is available only after a workspace is active.'
             : preset === 'shared'
-              ? 'Shared opts this workspace into full sync. Raw payloads still stay local and debug trails remain off unless you explicitly enable them elsewhere.'
-              : 'Lean is the normal default. Review keeps more local capture, Debug temporarily enables debug trails, and Shared opts this workspace into full sync.';
-    }
+              ? 'This workspace is explicitly opted into full sync. Machine retention and debug settings remain local machine defaults.'
+              : actionHint
+                ? `Lean is the normal default. Workspace sync stays metadata-only unless you opt this workspace into full sync. ${actionHint}`
+                : 'Lean is the normal default. Review and Debug only change machine capture defaults. Full sync is a separate workspace override.';
+  }
   }
 
   Object.assign(app, { renderSetup });

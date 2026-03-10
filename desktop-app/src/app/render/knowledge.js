@@ -5,10 +5,12 @@
 
   function renderKnowledge() {
       document.getElementById('inclHidden').checked = state.includeHidden;
-      document.getElementById('knowledgeNodeCount').textContent = String(state.graphNodes.length);
+      document.getElementById('knowledgeNodeCount').textContent = String(state.insights.length);
       document.getElementById('knowledgeEdgeCount').textContent = String(state.graphEdges.length);
       document.getElementById('knowledgeContext').textContent = `Workspace: ${activeContext()?.name || 'none'}`;
-      const nodes = state.graphNodes.filter((node) => matches(`${node.type || ''} ${node.content || ''} ${node.key || ''}`));
+      const nodes = state.insights.filter((node) =>
+        matches(`${node.type || ''} ${node.content || ''} ${node.key || ''} ${node.trustSummary || ''} ${Array.isArray(node.corroboratedRoles) ? node.corroboratedRoles.join(' ') : ''}`)
+      );
       const selectedNode = syncInsightSelection(nodes);
       const selectedInsight = insightSummary(selectedNode);
       const targetContexts = insightTargetContexts();
@@ -18,8 +20,8 @@
       if (knowledgePageMeta) {
         const context = activeContext();
         knowledgePageMeta.textContent = context
-          ? `${context.name} currently exposes ${nodes.length} visible node${nodes.length === 1 ? '' : 's'} in the structured graph${state.includeHidden ? ', including hidden capture records.' : ', plus reviewed insights.'}`
-          : 'Inspect the visible graph and reviewed insights stored in SQLite when you need durable project memory, not the raw conversation.';
+          ? `${context.name} currently has ${nodes.length} reviewed insight${nodes.length === 1 ? '' : 's'} and ${state.graphNodes.length} total graph node${state.graphNodes.length === 1 ? '' : 's'} in SQLite${state.includeHidden ? ', including hidden capture records.' : '.'}`
+          : 'Inspect reviewed insights when you need durable project memory. Use the graph utility only when you need the broader node and edge structure.';
       }
 
       const explainer = [
@@ -55,6 +57,11 @@
         document.getElementById('selectedInsightCopy').textContent = selectedInsight.summary;
         const meta = [
           { label: 'Type', value: humanizeLabel(selectedInsight.type) },
+          { label: 'Trust', value: humanizeLabel(selectedInsight.trustTier) },
+          { label: 'Evidence', value: String(selectedInsight.evidenceCount) },
+          { label: 'Distinct evidence', value: String(selectedInsight.distinctEvidenceCount || selectedInsight.evidenceCount || 0) },
+          { label: 'Corroborated roles', value: selectedInsight.corroboratedRoles.length > 0 ? selectedInsight.corroboratedRoles.map((role) => humanizeLabel(role)).join(', ') : 'none' },
+          { label: 'Latest evidence', value: selectedInsight.latestEvidenceAt ? formatTime(selectedInsight.latestEvidenceAt) : 'none' },
           { label: 'Source', value: selectedInsight.source },
           { label: 'Created', value: formatTime(selectedInsight.createdAt) },
           { label: 'Key', value: selectedInsight.key || 'none' },
@@ -66,6 +73,11 @@
         document.getElementById('selectedInsightMeta').innerHTML = meta
           .map((item) => `<article><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong></article>`)
           .join('');
+        const selectedInsightCopy = document.getElementById('selectedInsightCopy');
+        selectedInsightCopy.textContent = selectedInsight.summary;
+        if (selectedInsight.trustSummary) {
+          selectedInsightCopy.insertAdjacentHTML('beforeend', `<div class="preview-footnote">${esc(selectedInsight.trustSummary)}</div>`);
+        }
       }
 
       const targetSelect = document.getElementById('insightTargetContext');
@@ -100,7 +112,7 @@
         promotionMeta.push({ title: 'Target workstream tag', detail: selectedInsight.branch });
       }
       const promotion = state.lastInsightPromotion;
-      if (promotion && promotion.sourceNodeId === selectedNode?.id) {
+      if (promotion && promotion.sourceNodeId === (selectedNode?.nodeId || selectedNode?.id)) {
         promotionMeta.push({
           title: promotion.created ? 'Last promotion' : 'Last promotion reused',
           detail: `${contextById(promotion.targetContextId)?.name || promotion.targetContextId} · ${short(promotion.targetNodeId || 'target node', 18)}`
@@ -112,22 +124,26 @@
 
       document.getElementById('knowledgeTable').innerHTML = nodes.length > 0
         ? nodes.slice(0, 400).map((node) => {
-            const active = node.id === state.activeInsightNodeId ? ' class="active"' : '';
+            const nodeKey = node.nodeId || node.id;
+            const active = nodeKey === state.activeInsightNodeId ? ' class="active"' : '';
             const summary = insightSummary(node);
             const metaLine = [
-              summary.source,
+              `${humanizeLabel(summary.trustTier)} trust`,
+              summary.distinctEvidenceCount > 0
+                ? `${summary.distinctEvidenceCount} distinct / ${summary.evidenceCount} total`
+                : (summary.evidenceCount > 0 ? `${summary.evidenceCount} evidence` : 'no evidence'),
               summary.branch || null,
               summary.originContextId ? 'Promoted insight' : null
             ].filter(Boolean).join(' · ');
             return `
-              <tr data-insight-id="${esc(node.id)}"${active}>
+              <tr data-insight-id="${esc(nodeKey)}"${active}>
                 <td>${renderChip(node.type || 'artifact', 'beige')}</td>
                 <td>
                   <strong>${esc(short(summary.title, 72))}</strong>
                   ${metaLine ? `<div class="item-meta-line">${esc(metaLine)}</div>` : ''}
                 </td>
-                <td>${esc(node.key || '-')}</td>
-                <td>${esc(formatTime(node.createdAt))}</td>
+                <td>${esc(summary.key || '-')}</td>
+                <td>${esc(formatTime(summary.createdAt))}</td>
               </tr>
             `;
           }).join('')

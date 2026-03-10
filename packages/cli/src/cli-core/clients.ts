@@ -67,7 +67,7 @@ export function validateExplicitPreviewSelection(
     if (!raw || typeof raw !== 'string') return null;
     const normalized = raw.trim().toLowerCase();
     if (normalized === 'preview' || normalized === 'all') {
-        return `Preview integrations must be named explicitly. Use --clients=${gaExample} for the normal path or --clients=${previewExample} to opt into preview integrations.`;
+        return `Preview integrations stay outside the normal product path. Use --clients=${gaExample} for the supported path or name preview integrations explicitly with --clients=${previewExample}.`;
     }
     return null;
 }

@@ -32,27 +32,8 @@ function buildWorkspaceSide(graph: Graph, context: Context): WorkspaceComparison
     const workstreams = graph.listBranchLanes(context.id, 200);
     const sessions = graph.listChatSessions(context.id, 5000) as AgentSessionSummary[];
     const checkpoints = graph.listCheckpoints(context.id);
-    const graphData = graph.getGraphData(context.id, { includeHidden: false });
-    const insights = graphData.nodes
-        .flatMap((node): InsightSummary[] => {
-            if (node.type === 'artifact') {
-                return [];
-            }
-            return [{
-                contextId: context.id,
-                nodeId: node.id,
-                type: node.type,
-                content: node.content,
-                createdAt: node.createdAt,
-                branch: Array.isArray(node.tags)
-                    ? (node.tags.find((tag) => tag.startsWith('branch:'))?.slice('branch:'.length) ?? null)
-                    : null,
-                worktreePath: Array.isArray(node.tags)
-                    ? (node.tags.find((tag) => tag.startsWith('worktree:'))?.slice('worktree:'.length) ?? null)
-                    : null,
-                source: node.source ?? null
-            }];
-        })
+    const insights = graph
+        .listWorkstreamInsights(context.id, { limit: 500 })
         .sort((a, b) => b.createdAt - a.createdAt);
 
     const agents = new Set<string>();

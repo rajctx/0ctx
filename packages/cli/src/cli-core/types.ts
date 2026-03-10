@@ -27,6 +27,7 @@ export interface HookHealthAgentCheck {
     configPath: string;
     configExists: boolean;
     commandPresent: boolean;
+    sessionStartPresent: boolean;
     command: string | null;
 }
 
@@ -50,12 +51,16 @@ export interface RepoReadinessSummary {
     sessionCount: number | null;
     checkpointCount: number | null;
     syncPolicy: string | null;
+    syncScope: 'workspace';
+    captureScope: 'machine';
+    debugScope: 'machine';
     captureReadyAgents: HookSupportedAgent[];
     autoContextAgents: HookSupportedAgent[];
     captureMissingAgents: HookInstallClient[];
     captureManagedForRepo: boolean;
     zeroTouchReady: boolean;
     nextActionHint: string | null;
+    dataPolicyActionHint: string | null;
     captureRetentionDays: number;
     debugRetentionDays: number;
     debugArtifactsEnabled: boolean;

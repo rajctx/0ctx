@@ -1,7 +1,7 @@
 (() => {
   window.OctxDesktop = window.OctxDesktop || {};
   const app = window.OctxDesktop;
-  const { state, activeBranch, activeInsightNode, activeSessionKnowledgePreview, activeCheckpointKnowledgePreview, selectedKnowledgeKeys, setSelectedKnowledgeKeys, extractTagValue, contextById, basenameFromPath, setStatus, setView, daemon, loadGraph, loadBranches, loadCheckpoints, loadCheckpointDetail, loadBranchComparisonSafe, loadDataPolicy, refreshAll, renderAll, enableCommand, hookInstallCommand, methodSupported, resetBranchScopedState } = app;
+  const { state, activeBranch, activeInsightNode, activeSessionKnowledgePreview, activeCheckpointKnowledgePreview, selectedKnowledgeKeys, setSelectedKnowledgeKeys, extractTagValue, contextById, basenameFromPath, setStatus, setView, daemon, loadGraph, loadInsights, loadBranches, loadCheckpoints, loadCheckpointDetail, loadBranchComparisonSafe, loadDataPolicy, refreshAll, renderAll, enableCommand, methodSupported, resetBranchScopedState } = app;
 
   async function createContext(event) {
     event.preventDefault();
@@ -51,7 +51,7 @@
       return;
     }
     if (normalized === 'shared' && !state.activeContextId) {
-      setStatus('Shared requires an active workspace because it opts that workspace into full sync.');
+      setStatus('Full sync requires an active workspace because it is an explicit workspace override.');
       return;
     }
 
@@ -145,6 +145,7 @@
       state.sessionKnowledgePreview = null;
       state.sessionKnowledgeSelectedKeys = [];
       await loadGraph();
+      await loadInsights();
       renderAll();
       const nodeCount = Number(result?.nodeCount || 0);
       if (nodeCount > 0) {
@@ -202,6 +203,7 @@
       state.checkpointKnowledgePreview = null;
       state.checkpointKnowledgeSelectedKeys = [];
       await loadGraph();
+      await loadInsights();
       renderAll();
       const nodeCount = Number(result?.nodeCount || 0);
       if (nodeCount > 0) {
@@ -231,15 +233,15 @@
     }
 
     const activeLane = activeBranch();
-    const branch = extractTagValue(node.tags, 'branch:') || activeLane?.branch || undefined;
-    const worktreePath = extractTagValue(node.tags, 'worktree:') || activeLane?.worktreePath || undefined;
+    const branch = extractTagValue(node.tags, 'branch:') || node.branch || activeLane?.branch || undefined;
+    const worktreePath = extractTagValue(node.tags, 'worktree:') || node.worktreePath || activeLane?.worktreePath || undefined;
     const targetContext = contextById(targetContextId);
 
     try {
       const result = await daemon('promoteInsight', {
         contextId: targetContextId,
         sourceContextId: sourceContext,
-        nodeId: node.id,
+        nodeId: node.nodeId || node.id,
         branch,
         worktreePath
       });
@@ -308,9 +310,6 @@
         return;
         case 'copy-enable':
           await copyText(enableCommand());
-          return;
-        case 'copy-install':
-          await copyText(hookInstallCommand());
           return;
       case 'create-checkpoint':
         await createCheckpointFromActiveSession();

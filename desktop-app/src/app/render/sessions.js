@@ -131,7 +131,6 @@
       { label: 'Parent id', value: turn.parentId || 'none' },
       { label: 'Branch', value: turn.branch || 'none' },
       { label: 'Commit', value: turn.commitSha || 'none' },
-      { label: 'Debug bytes', value: turn.payloadBytes != null ? String(turn.payloadBytes) : 'none' },
       { label: 'Visibility', value: turn.hidden ? 'Hidden by default' : 'Visible in insights view' }
     ];
     document.getElementById('turnTechnical').innerHTML = technical.map((item) => {
