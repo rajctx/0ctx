@@ -2,6 +2,7 @@ import type { AgentSessionSummary, BranchLaneSummary, CheckpointSummary, Graph, 
 import path from 'path';
 import { formatRelativeAge, humanizeLabel, parsePositiveInt, truncateBriefLine } from './format';
 import { getGitHeadState, getWorkingTreeState } from './git';
+import { resolveGitInspectionPath } from './inspection-path';
 import { compareAgainstBaselineBranch, enrichWorkstreamLane, resolveCurrentWorkstreamFromContextPaths } from './lanes';
 import { deriveHandoffReadiness, deriveWorkstreamState } from './state';
 
@@ -57,14 +58,15 @@ export function buildWorkstreamBrief(
     }
 
     const repositoryRoot = lane?.repositoryRoot ?? inferredCurrent.repositoryRoot ?? contextPaths[0] ?? null;
-    const gitHead = getGitHeadState(repositoryRoot);
-    const workingTreeState = getWorkingTreeState(repositoryRoot);
-    const baseline = compareAgainstBaselineBranch(repositoryRoot, branch);
+    const gitInspectionPath = resolveGitInspectionPath(repositoryRoot, worktreePath);
+    const gitHead = getGitHeadState(gitInspectionPath);
+    const workingTreeState = getWorkingTreeState(gitInspectionPath);
+    const baseline = compareAgainstBaselineBranch(gitInspectionPath, branch);
     const currentHeadSha = lane?.currentHeadSha ?? gitHead?.headSha ?? inferredCurrent.currentHeadSha ?? null;
     const currentHeadRef = lane?.currentHeadRef ?? gitHead?.headRef ?? inferredCurrent.currentHeadRef ?? null;
     const isDetachedHead = lane?.isDetachedHead ?? gitHead?.detached ?? inferredCurrent.isDetachedHead ?? null;
     const headDiffersFromCaptured = lane?.headDiffersFromCaptured ?? (currentHeadSha && lane?.lastCommitSha ? currentHeadSha !== lane.lastCommitSha : null);
-    const isCurrent = lane?.isCurrent ?? (repositoryRoot ? Boolean(branch && gitHead?.branch === branch && (!worktreePath || path.resolve(repositoryRoot) === path.resolve(worktreePath))) : null);
+    const isCurrent = lane?.isCurrent ?? (gitInspectionPath ? Boolean(branch && gitHead?.branch === branch && (!worktreePath || path.resolve(gitInspectionPath) === path.resolve(worktreePath))) : null);
     const checkoutState = lane
         ? { checkedOutWorktreePaths: lane.checkedOutWorktreePaths ?? [], checkedOutHere: lane.checkedOutHere ?? null, checkedOutElsewhere: lane.checkedOutElsewhere ?? null }
         : { checkedOutWorktreePaths: [], checkedOutHere: null, checkedOutElsewhere: null };

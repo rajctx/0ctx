@@ -1,6 +1,7 @@
 import type { BranchLaneSummary, Graph, WorkstreamBaselineComparison } from '@0ctx/core';
 import path from 'path';
 import { getGitHeadState, getWorkingTreeState, listGitWorktrees, safeGit, safeGitDefaultBranch } from './git';
+import { resolveGitInspectionPath } from './inspection-path';
 import { deriveHandoffReadiness, deriveWorkstreamState } from './state';
 
 function resolveWorkstreamCheckoutState(
@@ -165,18 +166,19 @@ export function enrichWorkstreamLane(
         };
     }
 
-    const gitHead = getGitHeadState(repositoryRoot);
+    const gitInspectionPath = resolveGitInspectionPath(repositoryRoot, lane.worktreePath);
+    const gitHead = getGitHeadState(gitInspectionPath ?? repositoryRoot);
     const currentBranch = gitHead?.branch ?? null;
-    const currentRoot = safeGit(repositoryRoot, ['rev-parse', '--show-toplevel']);
-    const upstream = safeGit(repositoryRoot, ['rev-parse', '--abbrev-ref', `${lane.branch}@{upstream}`]);
-    const countText = upstream ? safeGit(repositoryRoot, ['rev-list', '--left-right', '--count', `${lane.branch}...${upstream}`]) : null;
+    const currentRoot = safeGit(gitInspectionPath ?? repositoryRoot, ['rev-parse', '--show-toplevel']);
+    const upstream = safeGit(gitInspectionPath ?? repositoryRoot, ['rev-parse', '--abbrev-ref', `${lane.branch}@{upstream}`]);
+    const countText = upstream ? safeGit(gitInspectionPath ?? repositoryRoot, ['rev-list', '--left-right', '--count', `${lane.branch}...${upstream}`]) : null;
     const counts = countText ? countText.split(/\s+/).map((entry) => Number(entry)).filter((entry) => Number.isFinite(entry)) : [];
-    const mergeBaseSha = upstream ? safeGit(repositoryRoot, ['merge-base', lane.branch, upstream]) : null;
+    const mergeBaseSha = upstream ? safeGit(gitInspectionPath ?? repositoryRoot, ['merge-base', lane.branch, upstream]) : null;
     const normalizedWorktree = lane.worktreePath ? path.resolve(lane.worktreePath) : null;
     const normalizedCurrentRoot = currentRoot ? path.resolve(currentRoot) : null;
-    const workingTreeState = getWorkingTreeState(repositoryRoot);
+    const workingTreeState = getWorkingTreeState(gitInspectionPath ?? repositoryRoot);
     const checkoutState = resolveWorkstreamCheckoutState(repositoryRoot, lane.branch, normalizedWorktree, normalizedCurrentRoot);
-    const baseline = compareAgainstBaselineBranch(repositoryRoot, lane.branch);
+    const baseline = compareAgainstBaselineBranch(gitInspectionPath ?? repositoryRoot, lane.branch);
     const state = deriveWorkstreamState({
         branch: lane.branch,
         isDetachedHead: gitHead?.detached ?? null,
@@ -217,8 +219,8 @@ export function enrichWorkstreamLane(
         stateActionHint: state.actionHint,
         handoffReadiness: handoff.readiness,
         handoffSummary: handoff.summary
-    };
-}
+        };
+    }
 
 export function resolveCurrentWorkstreamFromContextPaths(contextPaths: string[]): {
     branch: string | null;

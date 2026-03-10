@@ -90,6 +90,7 @@ describe('commandEnable', () => {
                 debugScope: 'machine',
                 zeroTouchReady: true,
                 nextActionHint: null,
+                dataPolicyPreset: 'lean',
                 dataPolicyActionHint: null,
                 captureRetentionDays: 14,
                 debugRetentionDays: 7,
@@ -117,6 +118,7 @@ describe('commandEnable', () => {
         const payload = JSON.parse(String(consoleSpy.mock.calls[0]?.[0] ?? '{}'));
         expect(payload.hookClients).toEqual(['claude', 'factory']);
         expect(payload.mcpClients).toEqual(['claude']);
+        expect(payload.dataPolicy?.preset).toBe('lean');
         expect(payload.steps.find((step: { id: string }) => step.id === 'data_policy')).toMatchObject({
             status: 'pass',
             message: 'Applied the default lean data policy for this new workspace.'
@@ -192,6 +194,7 @@ describe('commandEnable', () => {
                 debugScope: 'machine',
                 zeroTouchReady: true,
                 nextActionHint: null,
+                dataPolicyPreset: 'lean',
                 dataPolicyActionHint: null,
                 captureRetentionDays: 14,
                 debugRetentionDays: 7,
@@ -290,6 +293,7 @@ describe('commandEnable', () => {
                 debugScope: 'machine',
                 zeroTouchReady: true,
                 nextActionHint: null,
+                dataPolicyPreset: 'lean',
                 dataPolicyActionHint: null,
                 captureRetentionDays: 14,
                 debugRetentionDays: 7,

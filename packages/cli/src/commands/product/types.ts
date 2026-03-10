@@ -20,6 +20,7 @@ export interface RepoReadinessSummary {
     debugScope: 'machine';
     zeroTouchReady: boolean;
     nextActionHint: string | null;
+    dataPolicyPreset: string | null;
     dataPolicyActionHint: string | null;
     captureRetentionDays: number;
     debugRetentionDays: number;

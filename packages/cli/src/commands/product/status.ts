@@ -1,6 +1,7 @@
 import fs from 'fs';
 import color from 'picocolors';
 import type { ProductCommandDeps, FlagMap } from './types';
+import { buildRepoReadinessLines } from './repo-readiness-display';
 
 export function createStatusCommands(deps: ProductCommandDeps) {
     async function commandStatus(flags: FlagMap = {}): Promise<number> {
@@ -140,33 +141,14 @@ export function createStatusCommands(deps: ProductCommandDeps) {
             return 1;
         }
 
-        const captureLine = repoReadiness.captureManagedForRepo
-            ? (repoReadiness.captureReadyAgents.length > 0
-                ? (repoReadiness.captureMissingAgents.length === 0
-                    ? `${deps.formatAgentList(repoReadiness.captureReadyAgents)} ready`
-                    : `${deps.formatAgentList(repoReadiness.captureReadyAgents)} ready${repoReadiness.captureReadyAgents.length > 0 ? '; ' : ''}${deps.formatAgentList(repoReadiness.captureMissingAgents)} not installed`)
-                : 'Run 0ctx enable to install supported capture integrations')
-            : 'Run 0ctx enable to install supported capture integrations';
-        const historySummary = repoReadiness.sessionCount === null
-            ? 'No workstream history yet'
-            : `${repoReadiness.sessionCount} sessions, ${repoReadiness.checkpointCount ?? 0} checkpoints`;
-        const autoContextLine = repoReadiness.autoContextAgents.length > 0
-            ? `${deps.formatAgentList(repoReadiness.autoContextAgents)} inject current workstream context automatically`
-            : 'Run 0ctx enable to install automatic context injection for supported agents';
-
-        p.note([
-            deps.formatLabelValue('Repo', repoReadiness.repoRoot),
-            deps.formatLabelValue('Workspace', repoReadiness.workspaceName),
-            deps.formatLabelValue('Workstream', repoReadiness.workstream ?? '-'),
-            deps.formatLabelValue('Ready', repoReadiness.zeroTouchReady ? 'zero-touch for supported agents' : 'needs one-time setup'),
-            deps.formatLabelValue('Capture', captureLine),
-            deps.formatLabelValue('Context', autoContextLine),
-            deps.formatLabelValue('History', historySummary),
-            deps.formatLabelValue('Workspace sync', deps.formatSyncPolicyLabel(repoReadiness.syncPolicy)),
-            deps.formatLabelValue('Machine capture', deps.formatRetentionLabel(repoReadiness)),
-            ...(repoReadiness.dataPolicyActionHint ? [deps.formatLabelValue('Policy step', repoReadiness.dataPolicyActionHint)] : []),
-            ...(repoReadiness.nextActionHint ? [deps.formatLabelValue('Next step', repoReadiness.nextActionHint)] : [])
-        ].join('\n'), 'Repo Readiness');
+        p.note(buildRepoReadinessLines({
+            mode: 'status',
+            repoReadiness,
+            formatAgentList: deps.formatAgentList,
+            formatLabelValue: deps.formatLabelValue,
+            formatRetentionLabel: deps.formatRetentionLabel,
+            formatSyncPolicyLabel: deps.formatSyncPolicyLabel
+        }).join('\n'), 'Repo Readiness');
         p.outro(color.green('Use a supported agent normally in this repo. 0ctx will inject context and route capture automatically.'));
         return payload.ok ? 0 : 1;
     }

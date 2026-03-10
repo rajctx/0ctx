@@ -1,7 +1,7 @@
 (() => {
   window.OctxDesktop = window.OctxDesktop || {};
   const app = window.OctxDesktop;
-  const { state, matches, activeContext, zeroTouchState, formatSyncPolicyLabel, formatDataPolicyPresetLabel, capturePolicySummary, dataPolicyActionHint, esc, formatRelativeTime, renderChip, renderMetaLine, short, humanizeLabel, methodSupported, contextById, syncWorkspaceComparisonTargetSelection, workspaceComparisonTargetContext } = app;
+  const { state, matches, activeContext, zeroTouchState, formatSyncPolicyLabel, formatDataPolicyPresetLabel, describeWorkspaceSyncDisplay, describeDesktopPolicyHint, capturePolicySummary, dataPolicyActionHint, esc, formatRelativeTime, renderChip, renderMetaLine, short, humanizeLabel, methodSupported, contextById, syncWorkspaceComparisonTargetSelection, workspaceComparisonTargetContext } = app;
 
   function renderWorkspaces() {
     const contexts = state.contexts.filter((context) => matches(`${context.name || ''} ${(context.paths || []).join(' ')}`));
@@ -152,10 +152,22 @@
           },
           {
             title: 'Sync and capture',
-            detail: `Workspace sync: ${formatSyncPolicyLabel(state.dataPolicy?.syncPolicy || context.syncPolicy)}`,
-            hint: (state.dataPolicy?.syncPolicy || context.syncPolicy) === 'full_sync'
-              ? `Machine capture: ${capturePolicySummary()}. Richer cloud sync is enabled explicitly for this workspace.`
-              : `Machine capture: ${capturePolicySummary()}. Metadata-only sync is the normal default for this workspace.`
+            detail: (() => {
+              const workspaceSync = describeWorkspaceSyncDisplay({
+                policy: state.dataPolicy || context,
+                hasActiveWorkspace: Boolean(context?.id),
+                formatSyncPolicyLabel
+              });
+              return `Workspace sync: ${workspaceSync.detail}`;
+            })(),
+            hint: (() => {
+              const workspaceSync = describeWorkspaceSyncDisplay({
+                policy: state.dataPolicy || context,
+                hasActiveWorkspace: Boolean(context?.id),
+                formatSyncPolicyLabel
+              });
+              return `Machine capture: ${capturePolicySummary()}${workspaceSync.hint ? `. ${workspaceSync.hint}` : ''}`;
+            })()
           }
         ]
       : [
@@ -188,9 +200,14 @@
     const policyHint = document.getElementById('workspacePolicyHint');
     const policyDetailList = document.getElementById('workspacePolicyDetailList');
     const supportsMutation = methodSupported('setDataPolicy');
-    const workspaceResolved = policy.workspaceResolved === true && Boolean(activeContext()?.id);
     const preset = String(policy.preset || 'lean').trim().toLowerCase();
     const actionHint = dataPolicyActionHint(policy);
+    const workspaceSync = describeWorkspaceSyncDisplay({
+      policy,
+      hasActiveWorkspace: Boolean(activeContext()?.id),
+      formatSyncPolicyLabel
+    });
+    const workspaceResolved = workspaceSync.workspaceResolved;
 
     document.querySelectorAll('.workspace-policy-preset').forEach((button) => {
       const presetValue = String(button.getAttribute('data-policy-preset') || '').trim().toLowerCase();
@@ -209,7 +226,7 @@
     if (policyDetailList) {
       const detailItems = [
         { title: 'Policy mode', detail: formatDataPolicyPresetLabel(policy.preset || 'lean') },
-        { title: 'Workspace sync (this workspace)', detail: formatSyncPolicyLabel(policy.syncPolicy || 'metadata_only') },
+        { title: 'Workspace sync (this workspace)', detail: workspaceSync.detail },
         { title: 'Machine capture (this machine)', detail: capturePolicySummary() }
       ];
       policyDetailList.innerHTML = detailItems.map((item) => `
@@ -221,17 +238,13 @@
     }
 
     if (policyHint) {
-      policyHint.textContent = !supportsMutation
-        ? 'Update the local runtime before changing sync or machine capture defaults from the desktop.'
-        : preset === 'custom'
-          ? 'This workspace and this machine are using a custom combination. Choose Lean, Review, or Debug to return machine defaults to a standard product path. Use full sync only as an explicit workspace override.'
-          : !workspaceResolved
-            ? 'Lean, Review, and Debug change machine capture defaults immediately. Full sync is available only after a workspace is active.'
-            : preset === 'shared'
-              ? 'This workspace is explicitly opted into full sync. Machine retention and debug settings remain local machine defaults.'
-              : actionHint
-                ? `Lean is the normal default. Workspace sync stays metadata-only unless you opt this workspace into full sync. ${actionHint}`
-                : 'Lean is the normal default. Review and Debug only change machine capture defaults. Full sync is a separate workspace override.';
+      policyHint.textContent = describeDesktopPolicyHint({
+        supportsMutation,
+        policy,
+        workspaceResolved,
+        actionHint,
+        workspaceHint: workspaceSync.hint
+      });
     }
   }
 

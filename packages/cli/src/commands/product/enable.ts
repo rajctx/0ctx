@@ -1,6 +1,8 @@
 import path from 'path';
 import color from 'picocolors';
 import type { ProductCommandDeps, FlagMap, CheckStatus, BootstrapResult } from './types';
+import { createInstallCommand } from './install';
+import { buildRepoReadinessLines } from './repo-readiness-display';
 
 type DataPolicyPreset = 'lean' | 'review' | 'debug' | 'shared';
 
@@ -12,64 +14,7 @@ function parseDataPolicyPreset(value: string | null): DataPolicyPreset | null {
 }
 
 export function createEnableCommands(deps: ProductCommandDeps & { commandBootstrap: (flags: FlagMap) => Promise<number> }) {
-    async function commandInstall(flags: FlagMap): Promise<number> {
-        const p = await import('@clack/prompts');
-        const quiet = Boolean(flags.quiet);
-        const asJson = Boolean(flags.json);
-        const skipBootstrap = Boolean(flags['skip-bootstrap']);
-        const previewError = deps.validateExplicitPreviewSelection(flags.clients, 'codex,cursor,windsurf');
-        if (previewError) {
-            console.error(previewError);
-            return 1;
-        }
-
-        if (!quiet && !asJson) p.intro(color.bgBlue(color.black(' 0ctx install ')));
-        const spinner = p.spinner();
-        if (!quiet && !asJson) spinner.start('Checking daemon status');
-
-        const daemonStatus = await deps.isDaemonReachable();
-        if (!daemonStatus.ok) {
-            if (!quiet && !asJson) spinner.message('Starting background service...');
-            try {
-                deps.startDaemonDetached();
-            } catch (error) {
-                if (!quiet && !asJson) spinner.stop(color.red('Failed to start daemon'));
-                console.error(error instanceof Error ? error.message : String(error));
-                if (!quiet && !asJson) p.outro(color.red('Install failed'));
-                return 1;
-            }
-        }
-
-        if (!quiet && !asJson) spinner.message('Waiting for daemon to become ready...');
-        const ready = await deps.waitForDaemon();
-        if (!ready) {
-            if (!quiet && !asJson) spinner.stop(color.red('Daemon start timeout'));
-            console.error('Unable to reach daemon health endpoint.');
-            if (!quiet && !asJson) p.outro(color.red('Install failed'));
-            return 1;
-        }
-
-        if (!quiet && !asJson) spinner.stop(color.green('Daemon is ready'));
-
-        if (!skipBootstrap) {
-            const bootstrapCode = await deps.commandBootstrap({ ...flags, quiet: (quiet || asJson), json: false });
-            if (bootstrapCode !== 0) {
-                if (!quiet && !asJson) p.outro(color.yellow('Install partial (bootstrap failed)'));
-                return bootstrapCode;
-            }
-        }
-
-        if (quiet || asJson) {
-            if (asJson) {
-                console.log(JSON.stringify({ ok: true, daemonRunning: true, bootstrap: skipBootstrap ? 'skipped' : 'ok' }, null, 2));
-            }
-            return 0;
-        }
-
-        const checks = await deps.isDaemonReachable();
-        p.outro(color.green(`Installation complete! Daemon is ${checks.ok ? 'running' : 'degraded'}.`));
-        return checks.ok ? 0 : 1;
-    }
+    const commandInstall = createInstallCommand(deps);
 
     async function commandEnable(flags: FlagMap): Promise<number> {
         const quiet = Boolean(flags.quiet);
@@ -308,7 +253,7 @@ export function createEnableCommands(deps: ProductCommandDeps & { commandBootstr
                 detectedHookClients,
                 detectedMcpClients,
                 dataPolicy: repoReadiness ? {
-                    preset: dataPolicyPreset ?? null,
+                    preset: repoReadiness.dataPolicyPreset ?? dataPolicyPreset ?? null,
                     syncScope: repoReadiness.syncScope,
                     captureScope: repoReadiness.captureScope,
                     debugScope: repoReadiness.debugScope,
@@ -321,29 +266,21 @@ export function createEnableCommands(deps: ProductCommandDeps & { commandBootstr
             return 0;
         }
 
-        const info = repoReadiness ? [
-            deps.formatLabelValue('Repo', repoReadiness.repoRoot),
-            deps.formatLabelValue('Workspace', repoReadiness.workspaceName ?? workspaceName),
-            deps.formatLabelValue('Workstream', repoReadiness.workstream ?? '-'),
-            deps.formatLabelValue('Ready', repoReadiness.zeroTouchReady ? 'zero-touch for supported agents' : 'needs one-time setup'),
-            deps.formatLabelValue('Capture', repoReadiness.captureReadyAgents.length > 0
-                ? (repoReadiness.captureMissingAgents.length === 0
-                    ? `${deps.formatAgentList(repoReadiness.captureReadyAgents)} ready`
-                    : `${deps.formatAgentList(repoReadiness.captureReadyAgents)} ready${repoReadiness.captureReadyAgents.length > 0 ? '; ' : ''}${deps.formatAgentList(repoReadiness.captureMissingAgents)} not installed`)
-                : (detectedHookClients.length > 0
-                    ? 'Detected supported agents but capture is not installed yet'
-                    : 'No supported capture integrations detected on this machine yet')),
-            deps.formatLabelValue('Context', repoReadiness.autoContextAgents.length > 0
-                ? `${deps.formatAgentList(repoReadiness.autoContextAgents)} inject current workstream context automatically`
-                : (detectedMcpClients.length > 0
-                    ? 'Detected supported agents but automatic context is not enabled yet'
-                    : 'No supported context-enabled agents detected on this machine yet')),
-            deps.formatLabelValue('History', repoReadiness.sessionCount === null ? 'No captured workstream history yet' : `${repoReadiness.sessionCount} sessions, ${repoReadiness.checkpointCount ?? 0} checkpoints`),
-            deps.formatLabelValue('Workspace sync', deps.formatSyncPolicyLabel(repoReadiness.syncPolicy)),
-            deps.formatLabelValue('Machine capture', deps.formatRetentionLabel(repoReadiness)),
-            ...(repoReadiness.dataPolicyActionHint ? [deps.formatLabelValue('Policy step', repoReadiness.dataPolicyActionHint)] : []),
-            ...(repoReadiness.nextActionHint ? [deps.formatLabelValue('Next step', repoReadiness.nextActionHint)] : [])
-        ] : [deps.formatLabelValue('Repo', repoRoot), deps.formatLabelValue('Workspace', workspaceName)];
+        const info = repoReadiness
+            ? buildRepoReadinessLines({
+                mode: 'enable',
+                repoReadiness: {
+                    ...repoReadiness,
+                    workspaceName: repoReadiness.workspaceName ?? workspaceName
+                },
+                formatAgentList: deps.formatAgentList,
+                formatLabelValue: deps.formatLabelValue,
+                formatRetentionLabel: deps.formatRetentionLabel,
+                formatSyncPolicyLabel: deps.formatSyncPolicyLabel,
+                detectedHookClients,
+                detectedMcpClients
+            })
+            : [deps.formatLabelValue('Repo', repoRoot), deps.formatLabelValue('Workspace', workspaceName)];
 
         p?.note(info.join('\n'), 'Repo Readiness');
         p?.outro(color.green('Use a supported agent normally in this repo. 0ctx will inject current context and route capture automatically.'));

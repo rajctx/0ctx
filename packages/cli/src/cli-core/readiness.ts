@@ -180,6 +180,7 @@ export function createRepoReadinessCollector(deps: {
 
         if (!matchedContextId || !matchedContext) {
             const policy = await deps.sendToDaemon<{
+                preset?: string | null;
                 captureRetentionDays?: number;
                 debugRetentionDays?: number;
                 debugArtifactsEnabled?: boolean;
@@ -201,6 +202,7 @@ export function createRepoReadinessCollector(deps: {
                 captureManagedForRepo: false,
                 zeroTouchReady: false,
                 nextActionHint: 'Run 0ctx enable in this repo.',
+                dataPolicyPreset: typeof policy?.preset === 'string' ? policy.preset : null,
                 dataPolicyActionHint: buildDataPolicyActionHint(policy),
                 captureRetentionDays: typeof policy?.captureRetentionDays === 'number' ? policy.captureRetentionDays : 14,
                 debugRetentionDays: typeof policy?.debugRetentionDays === 'number' ? policy.debugRetentionDays : 7,
@@ -221,6 +223,7 @@ export function createRepoReadinessCollector(deps: {
             handoffLimit: 3
         });
         const dataPolicy = await deps.sendToDaemon<{
+            preset?: string | null;
             syncPolicy?: string | null;
             captureRetentionDays?: number;
             debugRetentionDays?: number;
@@ -291,6 +294,7 @@ export function createRepoReadinessCollector(deps: {
             captureManagedForRepo,
             zeroTouchReady,
             nextActionHint,
+            dataPolicyPreset: typeof dataPolicy?.preset === 'string' ? dataPolicy.preset : null,
             dataPolicyActionHint: buildDataPolicyActionHint({
                 ...dataPolicy,
                 syncPolicy,

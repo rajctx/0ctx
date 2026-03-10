@@ -60,6 +60,7 @@ export interface RepoReadinessSummary {
     captureManagedForRepo: boolean;
     zeroTouchReady: boolean;
     nextActionHint: string | null;
+    dataPolicyPreset: string | null;
     dataPolicyActionHint: string | null;
     captureRetentionDays: number;
     debugRetentionDays: number;
