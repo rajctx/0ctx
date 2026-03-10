@@ -3,7 +3,22 @@
   const app = window.OctxDesktop;
   const { state, activeContext, activeInsightNode, syncInsightSelection, insightSummary, insightTargetContexts, syncPromotionTargetSelection, contextById, methodSupported, matches, esc, formatTime, renderChip, basenameFromPath, humanizeLabel, short } = app;
 
+  function setText(selector, text) {
+    if (typeof document?.querySelector !== 'function') {
+      return;
+    }
+    const element = document.querySelector(selector);
+    if (element) {
+      element.textContent = text;
+    }
+  }
+
+  function applyKnowledgeCopy() {
+    setText('section[data-view="knowledge"] .page-kicker', 'Reviewed memory');
+  }
+
   function renderKnowledge() {
+      applyKnowledgeCopy();
       document.getElementById('inclHidden').checked = state.includeHidden;
       document.getElementById('knowledgeNodeCount').textContent = String(state.insights.length);
       document.getElementById('knowledgeEdgeCount').textContent = String(state.graphEdges.length);
@@ -21,7 +36,7 @@
         const context = activeContext();
         knowledgePageMeta.textContent = context
           ? `${context.name} currently has ${nodes.length} reviewed insight${nodes.length === 1 ? '' : 's'} and ${state.graphNodes.length} total graph node${state.graphNodes.length === 1 ? '' : 's'} in SQLite${state.includeHidden ? ', including hidden capture records.' : '.'}`
-          : 'Inspect reviewed insights when you need durable project memory. Use the graph utility only when you need the broader node and edge structure.';
+          : 'Inspect reviewed insights when you need durable project memory. Use the broader graph view only when you need node and edge structure.';
       }
 
       const explainer = [
@@ -150,5 +165,5 @@
         : '<tr><td colspan="4"><div class="empty-state">No insight nodes match the current filter.</div></td></tr>';
   }
 
-  Object.assign(app, { renderKnowledge });
+  Object.assign(app, { applyKnowledgeCopy, renderKnowledge });
 })();

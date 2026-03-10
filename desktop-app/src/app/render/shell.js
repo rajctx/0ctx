@@ -3,7 +3,23 @@
   const app = window.OctxDesktop;
   const { state, VIEW_META, SEARCH_HINTS, activeContext, formatPosture, postureClass, short } = app;
 
+  function setText(selector, text) {
+    if (typeof document?.querySelector !== 'function') {
+      return;
+    }
+    const element = document.querySelector(selector);
+    if (element) {
+      element.textContent = text;
+    }
+  }
+
+  function applyShellCopy() {
+    setText('.nav-btn[data-view="setup"] span:last-child', 'Setup');
+    setText('#runtimeBannerSetup', 'Open setup');
+  }
+
   function renderChrome() {
+    applyShellCopy();
     const posture = String(state.health?.status || 'offline').toLowerCase();
     const postureText = formatPosture(posture);
     document.body.dataset.view = state.view;
@@ -86,5 +102,5 @@
     banner.classList.remove('hidden');
   }
 
-  Object.assign(app, { renderChrome, renderHero, renderRuntimeBanner });
+  Object.assign(app, { applyShellCopy, renderChrome, renderHero, renderRuntimeBanner });
 })();

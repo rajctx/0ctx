@@ -31,16 +31,16 @@
       primaryAction: 'focus-create'
     },
     knowledge: {
-      eyebrow: 'Insights utility',
+      eyebrow: 'Reviewed memory',
       title: 'Reviewed insights',
       summary: 'Inspect the visible graph and reviewed insight nodes when you need durable project memory, not the raw conversation.',
       primaryLabel: 'Toggle hidden records',
       primaryAction: 'toggle-hidden'
     },
     setup: {
-      eyebrow: 'Utilities',
-      title: 'Enable and repair',
-      summary: 'Enable this repo, install the integrations you actually use, or repair the local runtime when something is off.',
+      eyebrow: 'Setup',
+      title: 'Repo setup and support',
+      summary: 'Enable this repo, install the integrations you actually use, and open runtime support only when something is off.',
       primaryLabel: 'Copy enable command',
       primaryAction: 'copy-enable'
     }
@@ -52,7 +52,7 @@
     checkpoints: 'Filter checkpoints, sessions, or commits',
     workspaces: 'Filter projects by name or repository path',
     knowledge: 'Filter reviewed insights and graph nodes',
-    setup: 'Filter agent integrations and utility actions'
+    setup: 'Filter repo setup, integrations, or support actions'
   };
 
   const REQUIRED_RUNTIME_METHODS = [

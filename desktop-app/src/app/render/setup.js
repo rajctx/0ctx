@@ -24,7 +24,34 @@
     methodSupported
   } = app;
 
+  function setText(selector, text) {
+    if (typeof document?.querySelector !== 'function') {
+      return;
+    }
+    const element = document.querySelector(selector);
+    if (element) {
+      element.textContent = text;
+    }
+  }
+
+  function applySetupCopy() {
+    setText('section[data-view="setup"] .page-kicker', 'Setup');
+    setText('section[data-view="setup"] h1', 'Enable repo and agents');
+    const labels = Array.from(document.querySelectorAll?.('section[data-view="setup"] .section-label') || []);
+    if (labels[0]) {
+      labels[0].textContent = 'Setup commands';
+    }
+    if (labels[3]) {
+      labels[3].textContent = 'Support actions';
+    }
+    const headings = Array.from(document.querySelectorAll?.('section[data-view="setup"] h4') || []);
+    if (headings[2]) {
+      headings[2].textContent = 'Runtime support';
+    }
+  }
+
   function renderSetup() {
+    applySetupCopy();
     document.getElementById('setupCommand').textContent = enableCommand();
 
     const hooks = Array.isArray(state.hook?.agents) ? state.hook.agents : [];
@@ -36,8 +63,8 @@
       setupPageMeta.textContent = state.runtimeIssue
         ? state.runtimeIssue.detail
         : installedGa.length > 0
-          ? `${installedGa.length} GA integration${installedGa.length === 1 ? '' : 's'} ${installedGa.length === 1 ? 'is' : 'are'} installed on this machine. Use this screen only to enable another repo, add another GA agent, or repair the runtime when something is off.`
-          : 'No GA integrations are installed on this machine yet. Use this screen to add a supported integration for the normal product path.';
+          ? `${installedGa.length} GA integration${installedGa.length === 1 ? '' : 's'} ${installedGa.length === 1 ? 'is' : 'are'} installed on this machine. Use this screen only to enable another repo, add another GA agent, or open runtime support when something is off.`
+          : 'No GA integrations are installed on this machine yet. Use this screen to add a supported integration for the normal repo-first path.';
     }
 
     document.getElementById('hookSummary').textContent = `${installedGa.length} GA installed / ${gaHooks.length}`;
@@ -110,8 +137,8 @@
     document.getElementById('setupSupportCopy').textContent = state.runtimeIssue
       ? state.runtimeIssue.detail
       : zeroTouch.ready
-        ? 'The supported path is active. Use utilities only when enabling another repo, adding another GA integration, or repairing the local runtime.'
-        : 'Use utilities to reach the supported path once, then use the agent normally from the bound repo.';
+        ? 'The supported path is active. Use setup only when enabling another repo, adding another GA integration, or opening runtime support.'
+        : 'Use setup once to reach the supported path, then work from the bound repo in the agent.';
 
     const policy = state.dataPolicy || {
       contextId: null,
@@ -174,5 +201,5 @@
     }
   }
 
-  Object.assign(app, { renderSetup });
+  Object.assign(app, { applySetupCopy, renderSetup });
 })();
