@@ -27,6 +27,7 @@ export function splitExtractionCandidates(text: string): string[] {
     const rough = withoutCode
         .split(/\r?\n+/)
         .flatMap((part) => part.split(/(?<=[.?!])\s+/))
+        .filter((part) => !isQuotedExcerpt(part))
         .map((part) => cleanupExtractionText(part))
         .map((part) => part.replace(/^[\-\u2022•\d.)\s]+/, '').trim())
         .filter((part) => part.length >= 24 && part.length <= 280);
@@ -138,6 +139,15 @@ function isExecutionPlanningChatter(text: string): boolean {
     return (startsWithSequencing || hasSequencingPhrase) && hasPlanningVerb;
 }
 
+function isQuotedExcerpt(text: string): boolean {
+    const raw = String(text ?? '').trim().replace(/^[\-\u2022•\d.)\s]+/, '');
+    const normalized = cleanupExtractionText(raw);
+    if (!normalized || normalized.length < 24) return false;
+    if (/^(?:>\s*)+/.test(raw)) return true;
+    if (/^(?:quote|quoted|excerpt)\s*:\s*["“][^"”]{24,}["”][.?!;:]*$/i.test(normalized)) return true;
+    return /^["“][^"”]{24,}["”][.?!;:]*$/.test(normalized);
+}
+
 function isSourceAttributedKnowledgeCandidate(text: string): boolean {
     const normalized = cleanupExtractionText(text).toLowerCase();
     if (!normalized) return false;
@@ -158,6 +168,7 @@ export function scoreKnowledgeCandidate(
     if (isImplementationStatus(text)) return null;
     if (isDesignOrLayoutChatter(text)) return null;
     if (isExecutionPlanningChatter(text)) return null;
+    if (isQuotedExcerpt(text)) return null;
     if (isSourceAttributedKnowledgeCandidate(text)) return null;
 
     const wordCount = normalized.split(/\s+/).filter(Boolean).length;

@@ -28,8 +28,16 @@ export function buildAgentContextPack(
         '0ctx workstream context',
         `Workspace: ${workstream.workspaceName}`,
         `Workstream: ${workstreamLabel}`,
+        `Tool binding: Always set contextId to ${contextId} on 0ctx tool calls in this chat.`,
         `State: ${workstream.stateSummary ?? 'Current local workstream.'}`
     ];
+
+    if (workstream.worktreePath) {
+        lines.push(`Worktree binding: When a 0ctx tool accepts worktreePath, pass ${workstream.worktreePath}.`);
+    }
+    if (workstream.branch) {
+        lines.push(`Branch binding: When a 0ctx tool accepts branch, use ${workstream.branch}.`);
+    }
 
     if (workstream.stateActionHint) lines.push(`Next: ${workstream.stateActionHint}`);
     if (workstream.handoffSummary) lines.push(`Handoff: ${workstream.handoffSummary}`);
