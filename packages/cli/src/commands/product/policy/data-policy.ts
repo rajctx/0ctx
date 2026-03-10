@@ -1,5 +1,10 @@
 import { sendToDaemon } from '@0ctx/mcp/dist/client';
 import type { FlagMap, PolicyCommandDeps } from './types';
+import {
+    describeDataPolicyScope,
+    describePolicyNormalPath,
+    formatScopedDataPolicyPresetLabel
+} from '../../../cli-core/data-policy-display';
 
 type DataPolicyPreset = 'lean' | 'review' | 'debug' | 'shared' | 'custom';
 
@@ -17,7 +22,6 @@ interface DataPolicyPayload {
 
 interface DataPolicyPresetDefinition {
     preset: Exclude<DataPolicyPreset, 'custom'>;
-    label: string;
     syncPolicy: 'metadata_only' | 'full_sync';
     captureRetentionDays: number;
     debugRetentionDays: number;
@@ -28,7 +32,6 @@ interface DataPolicyPresetDefinition {
 const DATA_POLICY_PRESETS: DataPolicyPresetDefinition[] = [
     {
         preset: 'lean',
-        label: 'Lean (default)',
         syncPolicy: 'metadata_only',
         captureRetentionDays: 14,
         debugRetentionDays: 7,
@@ -37,7 +40,6 @@ const DATA_POLICY_PRESETS: DataPolicyPresetDefinition[] = [
     },
     {
         preset: 'review',
-        label: 'Review',
         syncPolicy: 'metadata_only',
         captureRetentionDays: 30,
         debugRetentionDays: 7,
@@ -46,7 +48,6 @@ const DATA_POLICY_PRESETS: DataPolicyPresetDefinition[] = [
     },
     {
         preset: 'debug',
-        label: 'Debug',
         syncPolicy: 'metadata_only',
         captureRetentionDays: 30,
         debugRetentionDays: 14,
@@ -55,7 +56,6 @@ const DATA_POLICY_PRESETS: DataPolicyPresetDefinition[] = [
     },
     {
         preset: 'shared',
-        label: 'Shared (opt-in)',
         syncPolicy: 'full_sync',
         captureRetentionDays: 14,
         debugRetentionDays: 7,
@@ -63,16 +63,6 @@ const DATA_POLICY_PRESETS: DataPolicyPresetDefinition[] = [
         recommendation: 'Use only when you explicitly want richer cloud sync for this workspace.'
     }
 ];
-
-function formatPresetLabel(preset: DataPolicyPreset): string {
-    switch (preset) {
-        case 'lean': return 'Lean (default)';
-        case 'review': return 'Review';
-        case 'debug': return 'Debug';
-        case 'shared': return 'Shared (opt-in)';
-        default: return 'Custom';
-    }
-}
 
 function getPresetDefinition(preset: Exclude<DataPolicyPreset, 'custom'>): DataPolicyPresetDefinition {
     return DATA_POLICY_PRESETS.find((definition) => definition.preset === preset)!;
@@ -87,20 +77,12 @@ function parsePreset(value: string | null): DataPolicyPreset | null {
 }
 
 function printPolicySummary(payload: DataPolicyPayload, formatSyncPolicyLabel: PolicyCommandDeps['formatSyncPolicyLabel'], formatDebugArtifactsLabel: PolicyCommandDeps['formatDebugArtifactsLabel']): void {
-    const syncPolicy = String(payload.syncPolicy || 'metadata_only').trim().toLowerCase();
-    const normalPath = !payload.workspaceResolved
-        ? 'Needs workspace binding'
-        : syncPolicy === 'full_sync'
-            ? 'Active | richer cloud sync is opt-in for this workspace'
-            : 'Active | lean metadata sync plus local capture';
-    console.log(`  Preset:                  ${formatPresetLabel(payload.preset)}`);
-    console.log(`  Normal path:             ${normalPath}`);
+    console.log(`  Policy mode:             ${formatScopedDataPolicyPresetLabel(payload.preset)}`);
+    console.log(`  Normal path:             ${describePolicyNormalPath(payload)}`);
     console.log(`  Workspace sync:          ${payload.workspaceResolved ? formatSyncPolicyLabel(payload.syncPolicy) : `${formatSyncPolicyLabel(payload.syncPolicy)} (no workspace resolved)`}`);
     console.log(`  Machine capture:         ${payload.captureRetentionDays}d local retention`);
     console.log(`  Machine debug:           ${payload.debugRetentionDays}d retention; ${formatDebugArtifactsLabel(payload.debugArtifactsEnabled)}`);
-    console.log(`  Policy:                  ${syncPolicy === 'full_sync'
-        ? 'This workspace is opted into richer cloud sync. Machine capture and debug defaults remain local.'
-        : 'This workspace stays on lean sync. Machine capture and debug defaults remain local.'}`);
+    console.log(`  Scope:                   ${describeDataPolicyScope(payload)}`);
 }
 
 function printPresetCatalog(
@@ -113,7 +95,7 @@ function printPresetCatalog(
 
     console.log('Machine presets\n');
     for (const definition of machinePresets) {
-        console.log(`  ${definition.label}`);
+        console.log(`  ${formatScopedDataPolicyPresetLabel(definition.preset)}`);
         console.log(`    Workspace sync:    ${formatSyncPolicyLabel(definition.syncPolicy)}`);
         console.log(`    Machine capture:   ${definition.captureRetentionDays}d`);
         console.log(`    Machine debug:     ${definition.debugRetentionDays}d; ${formatDebugArtifactsLabel(definition.debugArtifactsEnabled)}`);
@@ -123,7 +105,7 @@ function printPresetCatalog(
 
     console.log('Workspace override\n');
     for (const definition of workspaceOverrides) {
-        console.log(`  ${definition.label}`);
+        console.log(`  ${formatScopedDataPolicyPresetLabel(definition.preset)}`);
         console.log(`    Workspace sync:    ${formatSyncPolicyLabel(definition.syncPolicy)}`);
         console.log(`    Machine capture:   ${definition.captureRetentionDays}d`);
         console.log(`    Machine debug:     ${definition.debugRetentionDays}d; ${formatDebugArtifactsLabel(definition.debugArtifactsEnabled)}`);
@@ -147,17 +129,17 @@ function printPolicyGuidance(payload: DataPolicyPayload): void {
     console.log(`  Recommended for:         ${definition.recommendation}`);
 
     if (payload.preset === 'shared') {
-        console.log('  Next step:               Keep Shared only for workspaces that explicitly need richer cloud sync, then return to Lean when that is no longer needed.');
+        console.log('  Next step:               Keep Shared only for workspaces that explicitly need richer cloud sync, then return this workspace to Lean when that is no longer needed.');
         return;
     }
 
     if (payload.preset === 'debug') {
-        console.log('  Next step:               Return to Lean after troubleshooting is complete.');
+        console.log('  Next step:               Return this machine to Lean after troubleshooting is complete.');
         return;
     }
 
     if (payload.preset === 'review') {
-        console.log('  Next step:               Return to Lean when the longer local review window is no longer needed.');
+        console.log('  Next step:               Return this machine to Lean when the longer local review window is no longer needed.');
         return;
     }
 

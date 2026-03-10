@@ -1,4 +1,5 @@
 import type { RepoReadinessSummary } from './types';
+import { formatScopedDataPolicyPresetLabel } from '../../cli-core/data-policy-display';
 
 type DisplayMode = 'enable' | 'status';
 
@@ -24,7 +25,7 @@ export function buildRepoReadinessLines(options: {
         options.formatLabelValue('Workspace', repoReadiness.workspaceName ?? '-'),
         options.formatLabelValue('Workstream', repoReadiness.workstream ?? '-'),
         options.formatLabelValue('Ready', repoReadiness.zeroTouchReady ? 'zero-touch for supported agents' : 'needs one-time setup'),
-        options.formatLabelValue('Policy mode', formatDataPolicyPresetLabel(repoReadiness.dataPolicyPreset)),
+        options.formatLabelValue('Policy mode', formatScopedDataPolicyPresetLabel(repoReadiness.dataPolicyPreset)),
         options.formatLabelValue('Capture', captureLine),
         options.formatLabelValue('Context', autoContextLine),
         options.formatLabelValue('History', historySummary),
@@ -91,21 +92,4 @@ function buildAutoContextSetupGaps(options: {
         parts.push(`${options.formatAgentList(options.repoReadiness.mcpRegistrationMissingAgents)} need 0ctx MCP registration`);
     }
     return parts;
-}
-
-function formatDataPolicyPresetLabel(preset: string | null | undefined): string {
-    switch (String(preset || '').trim().toLowerCase()) {
-        case 'lean':
-            return 'Lean (default)';
-        case 'review':
-            return 'Review';
-        case 'debug':
-            return 'Debug';
-        case 'shared':
-            return 'Shared (opt-in)';
-        case 'custom':
-            return 'Custom';
-        default:
-            return 'Unknown';
-    }
 }
