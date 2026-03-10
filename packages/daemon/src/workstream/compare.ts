@@ -9,7 +9,9 @@ import {
     parseChangedFiles,
     summarizeChangedAreas
 } from './change-overlap';
+import { alignBriefToReferenceWorktree } from './comparison-reference';
 import { safeGit } from './git';
+import { resolveCurrentWorkstreamFromContextPaths } from './lanes';
 import { deriveMergeRisk, deriveReconcileSteps, deriveReconcileStrategy } from './reconcile';
 import { deriveWorkstreamComparisonState } from './state';
 
@@ -38,18 +40,26 @@ export function compareWorkstreams(
         checkpointLimit?: number;
     }
 ): WorkstreamComparison {
-    const source = buildWorkstreamBrief(graph, contextId, {
+    const context = graph.getContext(contextId);
+    const contextPaths = Array.isArray(context?.paths)
+        ? context.paths.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+        : [];
+    const referenceWorktreePath = resolveCurrentWorkstreamFromContextPaths(contextPaths).worktreePath
+        ?? contextPaths[0]
+        ?? null;
+
+    const source = alignBriefToReferenceWorktree(buildWorkstreamBrief(graph, contextId, {
         branch: options.sourceBranch,
         worktreePath: options.sourceWorktreePath ?? null,
         sessionLimit: options.sessionLimit,
         checkpointLimit: options.checkpointLimit
-    });
-    const target = buildWorkstreamBrief(graph, contextId, {
+    }), options.sourceWorktreePath ?? referenceWorktreePath);
+    const target = alignBriefToReferenceWorktree(buildWorkstreamBrief(graph, contextId, {
         branch: options.targetBranch,
         worktreePath: options.targetWorktreePath ?? null,
         sessionLimit: options.sessionLimit,
         checkpointLimit: options.checkpointLimit
-    });
+    }), options.targetWorktreePath ?? referenceWorktreePath);
 
     const sameRepository = Boolean(
         source.repositoryRoot && target.repositoryRoot && path.resolve(source.repositoryRoot) === path.resolve(target.repositoryRoot)
