@@ -1,12 +1,12 @@
 # 0ctx
 
-0ctx is a local-first project memory runtime for AI workflows. It captures work by repo, keeps workstreams and checkpoints attached to the right project, and exposes the same memory through a local daemon plus MCP.
+0ctx is a local-first project memory runtime for AI workflows. It captures work by repo, keeps workstreams and checkpoints attached to the right project, and makes the same memory available to supported agents through the local runtime.
 
 ## Why this exists
 
 - Most AI workflows lose context between sessions, tools, and branches.
 - 0ctx keeps one durable workspace per repo and groups activity into workstreams, sessions, checkpoints, and reviewed insights.
-- The daemon is the source of truth. MCP is the agent-facing retrieval layer.
+- The daemon is the source of truth. Supported agents retrieve through the local runtime after `0ctx enable`.
 
 ## Packages
 
@@ -54,7 +54,7 @@ cd <repo>
 0ctx version
 0ctx --version
 
-# Bootstrap MCP registrations for the supported path
+# Repair automatic retrieval for supported agents (advanced)
 0ctx bootstrap --clients=ga
 0ctx bootstrap --clients=ga --json
 0ctx bootstrap --clients=ga --dry-run
@@ -121,7 +121,7 @@ cd <repo>
 0ctx enable
 ```
 
-That binds the repo, starts or verifies the local runtime, installs supported capture integrations, and bootstraps MCP where needed.
+That binds the repo, starts or verifies the local runtime, installs supported capture integrations, and turns on automatic retrieval for supported agents.
 
 ## Documentation
 

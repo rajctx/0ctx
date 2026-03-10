@@ -62,7 +62,7 @@ describe('@0ctx/cli build artifact source', () => {
         expect(cliSurface).toContain("0ctx --version | -v");
         expect(cliSurface).toContain("0ctx                    Auto-enable inside a repo. Outside a repo, show readiness/help.");
         expect(cliSurface).toContain("0ctx enable [--repo-root=<path>] [--name=<workspace>] [--data-policy=<lean|review|debug|shared>] [--json]");
-        expect(cliSurface).toContain("[--clients=ga|claude,factory,antigravity] [--mcp-clients=none|ga|claude,antigravity]");
+        expect(cliSurface).toContain("[--clients=ga|claude,factory,antigravity]");
         expect(cliSurface).toContain("Daily use:");
         expect(cliSurface).toContain("0ctx help --advanced");
         expect(cliSurface).toContain("Recommended daily flow:");
@@ -98,7 +98,7 @@ describe('@0ctx/cli build artifact source', () => {
         expect(cliSurface).toContain("0ctx bootstrap [--dry-run] [--clients=ga|<explicit-list>] [--entrypoint=/path/to/mcp-server.js]");
         expect(cliSurface).toContain("[--mcp-profile=all|core|recall|ops] [--json]");
         expect(cliSurface).toContain("0ctx mcp [bootstrap]");
-        expect(cliSurface).toContain("0ctx mcp                     Interactive MCP bootstrap for GA clients");
+        expect(cliSurface).toContain("0ctx mcp                     Interactive supported-agent retrieval bootstrap");
         expect(cliSurface).toContain("0ctx install [--clients=ga|<explicit-list>] [--json] [--skip-bootstrap] [--mcp-profile=all|core|recall|ops]");
         expect(clientsSource).toContain("export const DEFAULT_MCP_CLIENTS: SupportedClient[] = ['claude', 'antigravity'];");
         expect(registrySource).toContain("const defaultEnableMcpClients: SupportedClient[] = DEFAULT_MCP_CLIENTS;");
@@ -161,11 +161,11 @@ describe('@0ctx/cli build artifact source', () => {
         expect(policySource).toContain("sendToDaemon('setDataPolicy'");
         expect(entrySurface).not.toContain("{ value: 'cursor', label: 'Cursor (Preview)' }");
         expect(entrySurface).not.toContain("{ value: 'windsurf', label: 'Windsurf (Preview)' }");
-        expect(productSurface).toContain("is deprecated. Use \\`0ctx bootstrap\\` for MCP registration or \\`0ctx setup\\` for advanced machine management.");
+        expect(productSurface).toContain("is deprecated. Use \\`0ctx bootstrap\\` to repair supported-agent retrieval or \\`0ctx setup\\` for advanced machine management.");
         expect(daemonSource).toContain("path.resolve(__dirname, 'daemon.js')");
         expect(daemonSource).toContain("reinstall/repair the CLI package");
         expect(platformSource).toContain("result.status === 'failed'");
-        expect(productSurface).toContain("Restart your AI client app so it reloads MCP config changes.");
+        expect(productSurface).toContain("Restart your AI client app so it picks up automatic retrieval config changes.");
         expect(lifecycleSource).toContain("ops_log_writable");
         expect(dispatchSource).toContain("parsed.subcommand === 'service'");
         expect(dispatchSource).toContain("parsed.subcommand === 'queue'");

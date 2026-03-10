@@ -12,6 +12,7 @@ export function createHookHealthCollector(deps: {
     getHookDumpDir: () => string;
     getHookDumpRetentionDays: () => number;
     getHookDebugRetentionDays: () => number;
+    isHookDebugArtifactsEnabled: () => boolean;
     getHookStatePath: () => string;
     getHookConfigPath: (projectRoot: string, agent: HookSupportedAgent) => string;
     readHookInstallState: () => {
@@ -116,7 +117,9 @@ export function createHookHealthCollector(deps: {
                 id: 'hook_dump_dir',
                 status: dumpDirWritable ? 'pass' : 'warn',
                 message: dumpDirWritable
-                    ? `Hook dump directory is writable (dump retention ${deps.getHookDumpRetentionDays()} days, debug retention ${deps.getHookDebugRetentionDays()} days).`
+                    ? deps.isHookDebugArtifactsEnabled()
+                        ? `Support dump directory is writable (debug artifacts enabled; raw dumps kept ${deps.getHookDumpRetentionDays()} days, debug trails kept ${deps.getHookDebugRetentionDays()} days).`
+                        : `Support dump directory is writable (raw dumps and debug trails are off by default; kept locally for ${deps.getHookDebugRetentionDays()} days only when debug artifacts are enabled).`
                     : 'Hook dump directory is not writable.',
                 details: {
                     path: dumpDir,

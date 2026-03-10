@@ -86,10 +86,10 @@ function buildAutoContextSetupGaps(options: {
 }): string[] {
     const parts: string[] = [];
     if (options.repoReadiness.sessionStartMissingAgents.length > 0) {
-        parts.push(`${options.formatAgentList(options.repoReadiness.sessionStartMissingAgents)} need SessionStart injection`);
+        parts.push(`${options.formatAgentList(options.repoReadiness.sessionStartMissingAgents)} need automatic context injection`);
     }
     if (options.repoReadiness.mcpRegistrationMissingAgents.length > 0) {
-        parts.push(`${options.formatAgentList(options.repoReadiness.mcpRegistrationMissingAgents)} need 0ctx MCP registration`);
+        parts.push(`${options.formatAgentList(options.repoReadiness.mcpRegistrationMissingAgents)} need automatic retrieval setup`);
     }
     return parts;
 }

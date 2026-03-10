@@ -121,7 +121,7 @@ describe('repo readiness display', () => {
         expect(lines.some((line) => line.includes('not installed'))).toBe(false);
     });
 
-    it('does not claim automatic retrieval when Claude still needs MCP registration', () => {
+    it('does not claim automatic retrieval when Claude still needs automatic retrieval setup', () => {
         const lines = buildRepoReadinessLines({
             mode: 'status',
             repoReadiness: {
@@ -143,7 +143,7 @@ describe('repo readiness display', () => {
                 captureScope: 'machine',
                 debugScope: 'machine',
                 zeroTouchReady: false,
-                nextActionHint: 'Register the 0ctx MCP server for claude.',
+                nextActionHint: 'Finish automatic retrieval setup for claude.',
                 dataPolicyPreset: 'lean',
                 dataPolicyActionHint: null,
                 captureRetentionDays: 14,
@@ -156,7 +156,7 @@ describe('repo readiness display', () => {
             formatSyncPolicyLabel: (policy) => String(policy ?? '')
         });
 
-        expect(lines).toContain('Context: claude need 0ctx MCP registration');
+        expect(lines).toContain('Context: claude need automatic retrieval setup');
         expect(lines.some((line) => line.includes('inject current workstream context automatically'))).toBe(false);
     });
 });

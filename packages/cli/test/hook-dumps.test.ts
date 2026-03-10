@@ -132,6 +132,11 @@ describe('hook dump persistence', () => {
         const transcriptDir = createTempDir();
         const transcriptPath = path.join(transcriptDir, 'session.jsonl');
         fs.writeFileSync(transcriptPath, '{"type":"session_start"}\n', 'utf8');
+        const transcriptSnapshotPath = persistHookTranscriptSnapshot({
+            agent: 'factory',
+            sessionId: 'demo-session',
+            transcriptPath
+        });
 
         const transcriptHistoryPath = persistHookTranscriptHistory({
             agent: 'factory',
@@ -144,11 +149,32 @@ describe('hook dump persistence', () => {
             sessionId: 'demo-session',
             rawText: '{"session_id":"demo-session"}'
         });
+        const dumpPath = persistHookDump({
+            agent: 'factory',
+            contextId: 'ctx-1',
+            rawText: '{"session_id":"demo-session"}',
+            parsedPayload: { session_id: 'demo-session' },
+            normalized: {
+                agent: 'factory',
+                sessionId: 'demo-session',
+                turnId: 'turn-1',
+                role: 'assistant',
+                summary: 'demo summary',
+                occurredAt: 1700000000000,
+                raw: { session_id: 'demo-session' }
+            },
+            repositoryRoot: 'C:\\repo',
+            now: 1700000000000
+        });
 
+        expect(transcriptSnapshotPath).toBeNull();
         expect(transcriptHistoryPath).toBeNull();
         expect(eventLogPath).toBeNull();
+        expect(dumpPath).toBeNull();
+        expect(fs.existsSync(path.join(dumpRoot, 'factory', 'transcripts'))).toBe(false);
         expect(fs.existsSync(path.join(dumpRoot, 'factory', 'events'))).toBe(false);
         expect(fs.existsSync(path.join(dumpRoot, 'factory', 'transcript-history'))).toBe(false);
+        expect(fs.existsSync(path.join(dumpRoot, 'factory', '2023-11-14T22-13-20-000Z-demo-session-turn-1.json'))).toBe(false);
     });
 
     it('prunes old hook dump files using the configured retention window', () => {

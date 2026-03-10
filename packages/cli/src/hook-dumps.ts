@@ -183,6 +183,10 @@ export function persistHookTranscriptSnapshot(options: {
     sessionId: string;
     transcriptPath: string | null;
 }): string | null {
+    if (!isHookDebugArtifactsEnabled()) {
+        return null;
+    }
+
     if (!options.transcriptPath || options.transcriptPath.trim().length === 0) {
         return null;
     }
@@ -257,7 +261,11 @@ export function persistHookDump(options: {
     transcriptSnapshotPath?: string | null;
     transcriptHistoryPath?: string | null;
     now?: number;
-}): string {
+}): string | null {
+    if (!isHookDebugArtifactsEnabled()) {
+        return null;
+    }
+
     const now = options.now ?? Date.now();
     const stamp = new Date(now).toISOString().replace(/[:.]/g, '-');
     const baseName = `${stamp}-${sanitizeSegment(options.normalized.sessionId)}-${sanitizeSegment(options.normalized.turnId)}`;

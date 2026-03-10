@@ -142,7 +142,7 @@ export interface HookCommandDeps {
         transcriptSnapshotPath?: string | null;
         transcriptHistoryPath?: string | null;
         now?: number;
-    }) => string;
+    }) => string | null;
     buildHookCaptureMeta: (options: {
         agent: HookSupportedAgent;
         sessionId: string;

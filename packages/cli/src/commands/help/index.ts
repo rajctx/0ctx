@@ -5,8 +5,7 @@ export function printHelp(showAdvanced = false): void {
 Usage:
   0ctx                    Auto-enable inside a repo. Outside a repo, show readiness/help.
   0ctx enable [--repo-root=<path>] [--name=<workspace>] [--data-policy=<lean|review|debug|shared>] [--json]
-              [--clients=ga|claude,factory,antigravity] [--mcp-clients=none|ga|claude,antigravity]
-              [--skip-bootstrap] [--skip-hooks] [--mcp-profile=core|recall|ops]
+              [--clients=ga|claude,factory,antigravity]
 
 Daily use:
   0ctx workstreams [--repo-root=<path>] [--limit=100] [--json]
@@ -69,7 +68,7 @@ Advanced / machine management:
   0ctx bootstrap [--dry-run] [--clients=ga|<explicit-list>] [--entrypoint=/path/to/mcp-server.js]
                  [--mcp-profile=all|core|recall|ops] [--json]
   0ctx mcp [bootstrap]
-  0ctx mcp                     Interactive MCP bootstrap for GA clients
+  0ctx mcp                     Interactive supported-agent retrieval bootstrap
   0ctx mcp bootstrap [--dry-run] [--clients=ga|<explicit-list>] [--mcp-profile=all|core|recall|ops]
   0ctx doctor [--json] [--clients=...]
   0ctx status [--json] [--compact]

@@ -8,7 +8,7 @@ import { getConnectorStatePath, readConnectorState, registerConnector, writeConn
 import { getConnectorQueuePath, getConnectorQueueStats, getReadyConnectorEvents, listQueuedConnectorEvents, markConnectorEventsDelivered, markConnectorEventsFailed, purgeConnectorQueue } from '../connector-queue';
 import { drainConnectorQueue } from '../connector-queue-drain';
 import { runConnectorRuntime } from '../connector-runtime';
-import { appendHookEventLog, getHookDebugRetentionDays, getHookDumpDir, getHookDumpRetentionDays, persistHookDump, persistHookTranscriptHistory, persistHookTranscriptSnapshot, pruneHookDumps } from '../hook-dumps';
+import { appendHookEventLog, getHookDebugRetentionDays, getHookDumpDir, getHookDumpRetentionDays, isHookDebugArtifactsEnabled, persistHookDump, persistHookTranscriptHistory, persistHookTranscriptSnapshot, pruneHookDumps } from '../hook-dumps';
 import { getHookConfigPath, getHookStatePath, installHooks, matchesHookCaptureRoot, normalizeHookPayload, readCodexArchiveCapture, readCodexCapture, readHookInstallState, readInlineHookCapture, readTranscriptCapture, resolveCodexSessionArchivePath, resolveHookCaptureRoot, resolveHookTranscriptPath, selectHookContextId } from '../hooks';
 import { startLogsServer } from '../logs-server';
 import { appendCliOpsLogEntry, clearCliOpsLog, getCliOpsLogPath, readCliOpsLog } from '../ops-log';
@@ -57,6 +57,7 @@ export function createCliRegistry() {
         getHookDumpDir,
         getHookDumpRetentionDays,
         getHookDebugRetentionDays,
+        isHookDebugArtifactsEnabled,
         getHookStatePath,
         getHookConfigPath,
         readHookInstallState,

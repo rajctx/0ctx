@@ -26,7 +26,7 @@ export function createBootstrapCommands(deps: ProductCommandDeps) {
         if (!Boolean(flags.quiet) && !Boolean(flags.json)) {
             spinner.stop('Bootstrap complete');
             await deps.printBootstrapResults(results, dryRun);
-            p.log.info('Restart your AI client app so it reloads MCP config changes.');
+            p.log.info('Restart your AI client app so it picks up automatic retrieval config changes.');
             p.outro(results.some(r => r.status === 'failed') ? color.yellow('Bootstrap finished with errors') : color.green('Bootstrap successful'));
         }
 
@@ -43,7 +43,7 @@ export function createBootstrapCommands(deps: ProductCommandDeps) {
             return commandBootstrap(flags);
         }
         if (action === 'setup' || action === 'validate') {
-            console.error(`0ctx mcp ${action} is deprecated. Use \`0ctx bootstrap\` for MCP registration or \`0ctx setup\` for advanced machine management.`);
+            console.error(`0ctx mcp ${action} is deprecated. Use \`0ctx bootstrap\` to repair supported-agent retrieval or \`0ctx setup\` for advanced machine management.`);
             return 1;
         }
         if (action && action !== 'wizard') {

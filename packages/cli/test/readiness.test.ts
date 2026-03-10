@@ -186,10 +186,10 @@ describe('repo readiness', () => {
         expect(readiness?.autoContextAgents).toEqual([]);
         expect(readiness?.sessionStartMissingAgents).toEqual(['claude']);
         expect(readiness?.zeroTouchReady).toBe(false);
-        expect(readiness?.nextActionHint).toContain('SessionStart injection');
+        expect(readiness?.nextActionHint).toContain('automatic context injection');
     });
 
-    it('does not claim zero-touch retrieval when Claude capture exists without MCP registration', async () => {
+    it('does not claim zero-touch retrieval when Claude capture exists without automatic retrieval setup', async () => {
         const collectRepoReadiness = createRepoReadinessCollector({
             ensureDaemonCapabilities: async () => ({ ok: true, missingMethods: [] }),
             resolveRepoRoot: (repoRoot) => repoRoot ?? 'C:\\repo',
@@ -245,6 +245,6 @@ describe('repo readiness', () => {
         expect(readiness?.autoContextAgents).toEqual([]);
         expect(readiness?.mcpRegistrationMissingAgents).toEqual(['claude']);
         expect(readiness?.zeroTouchReady).toBe(false);
-        expect(readiness?.nextActionHint).toContain('Register the 0ctx MCP server for claude');
+        expect(readiness?.nextActionHint).toContain('Finish automatic retrieval setup for claude');
     });
 });

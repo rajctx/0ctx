@@ -55,10 +55,10 @@ export function buildGaAutoContextActionHint(options: {
 }): string | null {
     const parts: string[] = [];
     if (options.sessionStartMissingAgents.length > 0) {
-        parts.push(`Install SessionStart injection for ${options.sessionStartMissingAgents.join(', ')}.`);
+        parts.push(`Install automatic context injection for ${options.sessionStartMissingAgents.join(', ')}.`);
     }
     if (options.mcpRegistrationMissingAgents.length > 0) {
-        parts.push(`Register the 0ctx MCP server for ${options.mcpRegistrationMissingAgents.join(', ')}.`);
+        parts.push(`Finish automatic retrieval setup for ${options.mcpRegistrationMissingAgents.join(', ')}.`);
     }
     return parts.length > 0 ? parts.join(' ') : null;
 }

@@ -202,12 +202,17 @@ export function createEnableCommands(deps: ProductCommandDeps & { commandBootstr
 
         let bootstrapResults: BootstrapResult[] = [];
         if (!skipBootstrap && mcpClients.length > 0) {
-            if (spinner) spinner.message('Registering MCP clients');
+            if (spinner) spinner.message('Enabling automatic retrieval');
             bootstrapResults = deps.runBootstrap(mcpClients, false, undefined, mcpProfile);
             const failedBootstrap = bootstrapResults.some(result => result.status === 'failed');
-            steps.push({ id: 'mcp', status: failedBootstrap ? 'fail' : 'pass', message: failedBootstrap ? 'One or more MCP registrations failed.' : 'MCP registration completed.', details: { clients: mcpClients, profile: mcpProfile, results: bootstrapResults } });
+            steps.push({
+                id: 'mcp',
+                status: failedBootstrap ? 'fail' : 'pass',
+                message: failedBootstrap ? 'One or more automatic retrieval setup steps failed.' : 'Automatic retrieval setup completed.',
+                details: { clients: mcpClients, profile: mcpProfile, results: bootstrapResults }
+            });
             if (failedBootstrap) {
-                if (spinner) spinner.stop(color.red('MCP registration failed'));
+                if (spinner) spinner.stop(color.red('Automatic retrieval setup failed'));
                 if (asJson) console.log(JSON.stringify({ ok: false, repoRoot, contextId, steps }, null, 2));
                 else {
                     await deps.printBootstrapResults(bootstrapResults, false);
@@ -220,8 +225,8 @@ export function createEnableCommands(deps: ProductCommandDeps & { commandBootstr
                 id: 'mcp',
                 status: 'warn',
                 message: skipBootstrap
-                    ? 'Skipped MCP registration.'
-                    : 'No GA MCP registration targets were selected.',
+                    ? 'Skipped automatic retrieval setup.'
+                    : 'No supported automatic retrieval targets were selected.',
                 details: { clients: mcpClients, profile: mcpProfile, detectedClients: detectedMcpClients }
             });
         }
