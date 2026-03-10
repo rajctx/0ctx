@@ -1,153 +1,39 @@
 import { randomUUID } from 'crypto';
+import { evaluateCompletionState } from './events/completion';
+import { getMutationEventType } from './events/mutations';
+import {
+    clampLimit,
+    isOwner,
+    normalizeLeaseMs,
+    ownerKey,
+    parseTypes,
+    requireOwnedSubscription
+} from './events/shared';
+import {
+    MAX_EVENTS_PER_CONTEXT,
+    type AckParams,
+    type BlackboardEvent,
+    type BlackboardStateParams,
+    type ClaimTaskParams,
+    type CompletionEvaluation,
+    type EvaluateCompletionParams,
+    type EventSubscription,
+    type OwnerIdentity,
+    type PollParams,
+    type QualityGate,
+    type ReleaseTaskParams,
+    type ResolveGateParams,
+    type SubscribeParams,
+    type TaskLease
+} from './events/types';
 
-const MAX_EVENTS_PER_CONTEXT = 2000;
-const MAX_EVENT_RESULTS = 500;
-const MIN_LEASE_MS = 1_000;
-const MAX_LEASE_MS = 60 * 60 * 1_000;
-const DEFAULT_LEASE_MS = 60_000;
-const DEFAULT_STABILIZATION_COOLDOWN_MS = 30_000;
-const MAX_STABILIZATION_COOLDOWN_MS = 5 * 60 * 1_000;
-const DEFAULT_REQUIRED_GATES = ['typecheck', 'test', 'lint', 'security'];
-const BLOCKING_EVENT_TYPES = new Set(['GateRaised', 'TaskClaimed']);
-
-export interface BlackboardEvent {
-    eventId: string;
-    sequence: number;
-    contextId: string | null;
-    type: string;
-    timestamp: number;
-    source: string;
-    payload: Record<string, unknown>;
-}
-
-export interface EventSubscription {
-    subscriptionId: string;
-    connectionId: string;
-    sessionToken: string | null;
-    contextId: string | null;
-    types: string[];
-    createdAt: number;
-    lastAckedSequence: number;
-}
-
-export interface TaskLease {
-    taskId: string;
-    holder: string;
-    contextId: string | null;
-    createdAt: number;
-    updatedAt: number;
-    expiresAt: number;
-}
-
-export interface QualityGate {
-    gateId: string;
-    contextId: string | null;
-    severity: string | null;
-    status: 'open' | 'resolved';
-    message: string | null;
-    updatedBy: string;
-    createdAt: number;
-    updatedAt: number;
-    resolvedAt: number | null;
-}
-
-interface OwnerIdentity {
-    connectionId: string;
-    sessionToken?: string;
-}
-
-interface SubscribeParams {
-    contextId?: string;
-    types?: unknown;
-    afterSequence?: number;
-}
-
-interface PollParams {
-    subscriptionId: string;
-    afterSequence?: number;
-    limit?: number;
-}
-
-interface AckParams {
-    subscriptionId: string;
-    eventId?: string;
-    sequence?: number;
-}
-
-interface ClaimTaskParams {
-    taskId: string;
-    contextId?: string;
-    leaseMs?: number;
-}
-
-interface ReleaseTaskParams {
-    taskId: string;
-}
-
-interface ResolveGateParams {
-    gateId: string;
-    contextId?: string;
-    severity?: string;
-    status?: 'open' | 'resolved';
-    message?: string;
-}
-
-interface BlackboardStateParams {
-    contextId?: string;
-    limit?: number;
-}
-
-interface EvaluateCompletionParams {
-    contextId?: string;
-    cooldownMs?: number;
-    requiredGates?: unknown;
-}
-
-export interface CompletionEvaluation {
-    contextId: string | null;
-    complete: boolean;
-    evaluatedAt: number;
-    stabilizationCooldownMs: number;
-    stabilizationWindowStartedAt: number;
-    openGates: Array<{ gateId: string; severity: string | null; message: string | null }>;
-    unresolvedRequiredGates: string[];
-    activeLeases: Array<{ taskId: string; holder: string; expiresAt: number }>;
-    recentBlockingEvents: Array<{ eventId: string; type: string; sequence: number; timestamp: number }>;
-    reasons: string[];
-}
-
-function ownerKey(identity: OwnerIdentity): string {
-    return identity.sessionToken ?? identity.connectionId;
-}
-
-function parseTypes(raw: unknown): string[] {
-    if (!Array.isArray(raw)) return [];
-    return [...new Set(raw.filter((item): item is string => typeof item === 'string' && item.length > 0))];
-}
-
-function clampLimit(limit: number | undefined, fallback: number): number {
-    if (typeof limit !== 'number' || !Number.isFinite(limit)) return fallback;
-    return Math.max(1, Math.min(MAX_EVENT_RESULTS, Math.floor(limit)));
-}
-
-function normalizeLeaseMs(value: number | undefined): number {
-    if (typeof value !== 'number' || !Number.isFinite(value)) return DEFAULT_LEASE_MS;
-    return Math.max(MIN_LEASE_MS, Math.min(MAX_LEASE_MS, Math.floor(value)));
-}
-
-function normalizeCooldownMs(value: number | undefined): number {
-    if (typeof value !== 'number' || !Number.isFinite(value)) return DEFAULT_STABILIZATION_COOLDOWN_MS;
-    return Math.max(0, Math.min(MAX_STABILIZATION_COOLDOWN_MS, Math.floor(value)));
-}
-
-function parseRequiredGates(raw: unknown): string[] {
-    if (!Array.isArray(raw)) return [...DEFAULT_REQUIRED_GATES];
-    const parsed = raw
-        .filter((item): item is string => typeof item === 'string')
-        .map(item => item.trim())
-        .filter(item => item.length > 0);
-    return parsed.length > 0 ? [...new Set(parsed)] : [...DEFAULT_REQUIRED_GATES];
-}
+export type {
+    BlackboardEvent,
+    EventSubscription,
+    TaskLease,
+    QualityGate,
+    CompletionEvaluation
+} from './events/types';
 
 export class EventRuntime {
     private globalSequence = 0;
@@ -207,12 +93,12 @@ export class EventRuntime {
 
     listSubscriptions(identity: OwnerIdentity): EventSubscription[] {
         return [...this.subscriptions.values()]
-            .filter(subscription => this.isOwner(subscription, identity))
+            .filter(subscription => isOwner(subscription, identity))
             .sort((a, b) => a.createdAt - b.createdAt);
     }
 
     unsubscribe(subscriptionId: string, identity: OwnerIdentity): { removed: boolean } {
-        const subscription = this.requireOwnedSubscription(subscriptionId, identity);
+        const subscription = requireOwnedSubscription(this.subscriptions, subscriptionId, identity);
         this.subscriptions.delete(subscription.subscriptionId);
         return { removed: true };
     }
@@ -223,7 +109,7 @@ export class EventRuntime {
         events: BlackboardEvent[];
         hasMore: boolean;
     } {
-        const subscription = this.requireOwnedSubscription(params.subscriptionId, identity);
+        const subscription = requireOwnedSubscription(this.subscriptions, params.subscriptionId, identity);
         const limit = clampLimit(params.limit, 100);
         const cursor = typeof params.afterSequence === 'number'
             ? Math.max(0, Math.floor(params.afterSequence))
@@ -249,7 +135,7 @@ export class EventRuntime {
     }
 
     ack(params: AckParams, identity: OwnerIdentity): { subscriptionId: string; lastAckedSequence: number } {
-        const subscription = this.requireOwnedSubscription(params.subscriptionId, identity);
+        const subscription = requireOwnedSubscription(this.subscriptions, params.subscriptionId, identity);
         let sequence = subscription.lastAckedSequence;
 
         if (typeof params.sequence === 'number' && Number.isFinite(params.sequence)) {
@@ -417,66 +303,12 @@ export class EventRuntime {
     }
 
     evaluateCompletion(params: EvaluateCompletionParams = {}): CompletionEvaluation {
-        const now = Date.now();
-        const contextId = typeof params.contextId === 'string' && params.contextId.length > 0 ? params.contextId : null;
-        const cooldownMs = normalizeCooldownMs(params.cooldownMs);
-        const stabilizationWindowStartedAt = now - cooldownMs;
-        const requiredGates = parseRequiredGates(params.requiredGates);
-
-        const gates = [...this.gates.values()].filter(gate => !contextId || gate.contextId === contextId);
-        const openGates = gates
-            .filter(gate => gate.status === 'open')
-            .map(gate => ({
-                gateId: gate.gateId,
-                severity: gate.severity,
-                message: gate.message
-            }));
-
-        const unresolvedRequiredGates = requiredGates.filter((gateId) => {
-            const gate = gates.find(item => item.gateId === gateId);
-            return !gate || gate.status !== 'resolved';
-        });
-
-        const activeLeases = [...this.taskLeases.values()]
-            .filter(lease => (!contextId || lease.contextId === contextId) && lease.expiresAt > now)
-            .map(lease => ({
-                taskId: lease.taskId,
-                holder: lease.holder,
-                expiresAt: lease.expiresAt
-            }));
-
-        const recentBlockingEvents = this.eventStream
-            .filter(event =>
-                (!contextId || event.contextId === contextId)
-                && event.timestamp > stabilizationWindowStartedAt
-                && BLOCKING_EVENT_TYPES.has(event.type)
-            )
-            .slice(-100)
-            .map(event => ({
-                eventId: event.eventId,
-                type: event.type,
-                sequence: event.sequence,
-                timestamp: event.timestamp
-            }));
-
-        const reasons: string[] = [];
-        if (openGates.length > 0) reasons.push('open_gates');
-        if (unresolvedRequiredGates.length > 0) reasons.push('required_gates_unresolved');
-        if (activeLeases.length > 0) reasons.push('active_leases');
-        if (recentBlockingEvents.length > 0) reasons.push('stabilization_window_active');
-
-        return {
-            contextId,
-            complete: reasons.length === 0,
-            evaluatedAt: now,
-            stabilizationCooldownMs: cooldownMs,
-            stabilizationWindowStartedAt,
-            openGates,
-            unresolvedRequiredGates,
-            activeLeases,
-            recentBlockingEvents,
-            reasons
-        };
+        return evaluateCompletionState(
+            params,
+            this.eventStream,
+            this.taskLeases.values(),
+            this.gates.values()
+        );
     }
 
     emitMutation(params: {
@@ -485,23 +317,8 @@ export class EventRuntime {
         source: string;
         payload: Record<string, unknown>;
     }): BlackboardEvent {
-        const methodToType: Record<string, string> = {
-            createContext: 'ContextCreated',
-            deleteContext: 'ContextDeleted',
-            switchContext: 'ContextSwitched',
-            addNode: 'NodeAdded',
-            updateNode: 'NodeUpdated',
-            deleteNode: 'NodeDeleted',
-            addEdge: 'EdgeAdded',
-            saveCheckpoint: 'CheckpointSaved',
-            rewind: 'CheckpointRewound',
-            createBackup: 'BackupCreated',
-            restoreBackup: 'BackupRestored'
-        };
-
-        const type = methodToType[params.method] ?? 'Mutation';
         return this.emit({
-            type,
+            type: getMutationEventType(params.method),
             contextId: params.contextId,
             source: params.source,
             payload: {
@@ -509,23 +326,5 @@ export class EventRuntime {
                 ...params.payload
             }
         });
-    }
-
-    private isOwner(subscription: EventSubscription, identity: OwnerIdentity): boolean {
-        if (identity.sessionToken) {
-            return subscription.sessionToken === identity.sessionToken;
-        }
-        return subscription.connectionId === identity.connectionId;
-    }
-
-    private requireOwnedSubscription(subscriptionId: string, identity: OwnerIdentity): EventSubscription {
-        const subscription = this.subscriptions.get(subscriptionId);
-        if (!subscription) {
-            throw new Error(`Subscription '${subscriptionId}' not found`);
-        }
-        if (!this.isOwner(subscription, identity)) {
-            throw new Error(`Subscription '${subscriptionId}' is not owned by this session`);
-        }
-        return subscription;
     }
 }
