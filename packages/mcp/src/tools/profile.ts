@@ -12,7 +12,7 @@ const PROFILE_SCOPE_EXPANSION: Record<ToolScope, ToolScope[]> = {
 export function resolveMcpToolProfile(raw: string | null | undefined): ResolvedMcpToolProfile {
     const requested = (raw ?? '').trim();
     if (requested.length === 0) {
-        return { requested: 'all', all: true, profiles: [], scopes: [...ALL_TOOL_SCOPES], normalized: 'all', invalidTokens: [] };
+        return { requested: 'core', all: false, profiles: ['core'], scopes: ['core'], normalized: 'core', invalidTokens: [] };
     }
 
     const tokens = requested
@@ -38,13 +38,24 @@ export function resolveMcpToolProfile(raw: string | null | undefined): ResolvedM
         invalidTokens.push(token);
     }
 
-    if (all || profiles.size === 0) {
+    if (all) {
         return {
             requested,
             all: true,
             profiles: [],
             scopes: [...ALL_TOOL_SCOPES],
             normalized: 'all',
+            invalidTokens
+        };
+    }
+
+    if (profiles.size === 0) {
+        return {
+            requested,
+            all: false,
+            profiles: ['core'],
+            scopes: ['core'],
+            normalized: 'core',
             invalidTokens
         };
     }

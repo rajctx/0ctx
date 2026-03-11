@@ -1,8 +1,8 @@
 import type { BranchLaneSummary, Graph, WorkstreamBaselineComparison } from '@0ctx/core';
 import path from 'path';
-import { getGitHeadState, getWorkingTreeState, listGitWorktrees, safeGit, safeGitDefaultBranch } from './git';
+import { compareGitRefs, getGitHeadState, getWorkingTreeState, listGitWorktrees, safeGit, safeGitDefaultBranch } from './git';
 import { resolveGitInspectionPath } from './inspection-path';
-import { deriveHandoffReadiness, deriveWorkstreamState } from './state';
+import { deriveCaptureDrift, deriveHandoffReadiness, deriveWorkstreamState } from './state';
 
 function resolveWorkstreamCheckoutState(
     repositoryRoot: string | null,
@@ -153,6 +153,7 @@ export function enrichWorkstreamLane(
             checkedOutWorktreePaths: [],
             checkedOutHere: null,
             checkedOutElsewhere: null,
+            captureDrift: null,
             hasUncommittedChanges: null,
             stagedChangeCount: null,
             unstagedChangeCount: null,
@@ -177,12 +178,22 @@ export function enrichWorkstreamLane(
     const normalizedWorktree = lane.worktreePath ? path.resolve(lane.worktreePath) : null;
     const normalizedCurrentRoot = currentRoot ? path.resolve(currentRoot) : null;
     const workingTreeState = getWorkingTreeState(gitInspectionPath ?? repositoryRoot);
+    const capturedComparison = compareGitRefs(gitInspectionPath ?? repositoryRoot, gitHead?.headSha ?? null, lane.lastCommitSha ?? null);
+    const captureDrift = deriveCaptureDrift({
+        headDiffersFromCaptured: gitHead?.headSha && lane.lastCommitSha ? gitHead.headSha !== lane.lastCommitSha : null,
+        currentHeadSha: gitHead?.headSha ?? null,
+        lastCapturedCommitSha: lane.lastCommitSha ?? null,
+        currentAheadCount: capturedComparison?.leftAheadCount ?? null,
+        currentBehindCount: capturedComparison?.rightAheadCount ?? null,
+        mergeBaseSha: capturedComparison?.mergeBaseSha ?? null
+    });
     const checkoutState = resolveWorkstreamCheckoutState(repositoryRoot, lane.branch, normalizedWorktree, normalizedCurrentRoot);
     const baseline = compareAgainstBaselineBranch(gitInspectionPath ?? repositoryRoot, lane.branch);
     const state = deriveWorkstreamState({
         branch: lane.branch,
         isDetachedHead: gitHead?.detached ?? null,
         headDiffersFromCaptured: gitHead?.headSha && lane.lastCommitSha ? gitHead.headSha !== lane.lastCommitSha : null,
+        captureDrift,
         checkedOutHere: checkoutState.checkedOutHere,
         checkedOutElsewhere: checkoutState.checkedOutElsewhere,
         hasUncommittedChanges: workingTreeState?.hasUncommittedChanges ?? null,
@@ -209,6 +220,7 @@ export function enrichWorkstreamLane(
         checkedOutWorktreePaths: checkoutState.checkedOutWorktreePaths,
         checkedOutHere: checkoutState.checkedOutHere,
         checkedOutElsewhere: checkoutState.checkedOutElsewhere,
+        captureDrift,
         hasUncommittedChanges: workingTreeState?.hasUncommittedChanges ?? null,
         stagedChangeCount: workingTreeState?.stagedChangeCount ?? null,
         unstagedChangeCount: workingTreeState?.unstagedChangeCount ?? null,

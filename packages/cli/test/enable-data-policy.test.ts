@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createEnableCommands } from '../src/commands/product/enable';
-import { parseEnableMcpClients, parseHookClients, validateExplicitPreviewSelection } from '../src/cli-core/clients';
+import { parseEnableMcpClients, parseHookClients, validateExplicitPreviewSelection, validatePreviewOptIn } from '../src/cli-core/clients';
 import { parseOptionalStringFlag, parsePositiveIntegerFlag, parsePositiveNumberFlag } from '../src/cli-core/args';
 
 describe('commandEnable data policy output', () => {
@@ -36,6 +36,7 @@ describe('commandEnable data policy output', () => {
 
         const deps = {
             validateExplicitPreviewSelection,
+            validatePreviewOptIn,
             parseHookClients,
             parseEnableMcpClients,
             parseOptionalStringFlag,

@@ -31,6 +31,12 @@ export function buildRepoReadinessLines(options: {
         options.formatLabelValue('History', historySummary),
         options.formatLabelValue('Workspace sync', options.formatSyncPolicyLabel(repoReadiness.syncPolicy)),
         options.formatLabelValue('Machine capture', options.formatRetentionLabel(repoReadiness)),
+        options.formatLabelValue(
+            'Utility debug',
+            repoReadiness.debugArtifactsEnabled
+                ? `enabled (${repoReadiness.debugRetentionDays}d retention)`
+                : `off in the normal path (${repoReadiness.debugRetentionDays}d retention if enabled)`
+        ),
         ...(repoReadiness.dataPolicyActionHint ? [options.formatLabelValue('Policy step', repoReadiness.dataPolicyActionHint)] : []),
         ...(repoReadiness.nextActionHint ? [options.formatLabelValue('Next step', repoReadiness.nextActionHint)] : [])
     ];

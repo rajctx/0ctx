@@ -9,9 +9,15 @@ export function createInstallCommand(
         const quiet = Boolean(flags.quiet);
         const asJson = Boolean(flags.json);
         const skipBootstrap = Boolean(flags['skip-bootstrap']);
+        const allowPreview = Boolean(flags['allow-preview']) || Boolean(flags.allowPreview);
         const previewError = deps.validateExplicitPreviewSelection(flags.clients, 'codex,cursor,windsurf');
         if (previewError) {
             console.error(previewError);
+            return 1;
+        }
+        const previewOptInError = deps.validatePreviewOptIn(flags.clients, allowPreview, 'codex,cursor,windsurf');
+        if (previewOptInError) {
+            console.error(previewOptInError);
             return 1;
         }
 

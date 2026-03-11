@@ -1,6 +1,7 @@
 import { sendToDaemon } from '@0ctx/mcp/dist/client';
 import type { FlagMap } from './types';
 import type { WorkstreamCommandContext } from './shared';
+import { renderExtractionResultLines } from './insights-display';
 
 export function createInsightCommands(ctx: WorkstreamCommandContext) {
     async function commandExtract(positionalArgs: string[], flags: FlagMap): Promise<number> {
@@ -122,29 +123,8 @@ function renderExtractionResult(
     result: unknown
 ): number {
     return ctx.printJsonOrValue(asJson, result, () => {
-        const extraction = result as {
-            createdCount?: number;
-            reusedCount?: number;
-            nodeCount?: number;
-            createCount?: number;
-            reuseCount?: number;
-            candidateCount?: number;
-            nodes?: Array<{ type?: string; content?: string }>;
-            candidates?: Array<{ type?: string; content?: string; action?: string }>;
-        };
-        const preview = heading.includes('Preview');
-        console.log(heading);
-        console.log(subjectLine);
-        console.log(`  Created: ${String(extraction.createdCount ?? extraction.createCount ?? 0)}`);
-        console.log(`  Reused: ${String(extraction.reusedCount ?? extraction.reuseCount ?? 0)}`);
-        console.log(`  ${preview ? 'Candidates' : 'Nodes'}: ${String(extraction.nodeCount ?? extraction.candidateCount ?? 0)}`);
-        const items: Array<{ type?: string; content?: string; action?: string }> = preview
-            ? (extraction.candidates ?? [])
-            : (extraction.nodes ?? []);
-        for (const node of items.slice(0, 8)) {
-            const actionLabel = preview && node.action ? ` ${String(node.action).toUpperCase()}` : '';
-            console.log(`    - [${String(node.type ?? 'node')}${actionLabel}] ${String(node.content ?? '-')}`);
+        for (const line of renderExtractionResultLines(heading, subjectLine, result as Record<string, unknown>)) {
+            console.log(line);
         }
-        console.log('');
     });
 }

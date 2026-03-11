@@ -43,12 +43,12 @@
       return `No active workspace yet. Lean, Review, and Debug change machine capture defaults immediately. Full sync is available only after a workspace is active. ${options.workspaceHint}`.trim();
     }
     if (preset === 'shared' || syncPolicy === 'full_sync') {
-      return 'This workspace is explicitly opted into full sync. Machine retention remains local, and utility debug trails stay off unless you explicitly enable them.';
+      return 'This workspace is explicitly opted into full sync after confirmation. Machine retention remains local, and utility debug trails stay off unless you explicitly enable them.';
     }
     if (options.actionHint) {
-      return `Lean is the normal default. Workspace sync stays metadata-only unless you opt this workspace into full sync. Utility debug trails stay off unless you explicitly enable them. ${options.actionHint}`;
+      return `Lean is the normal default. Workspace sync stays metadata-only unless you explicitly confirm full sync for this workspace. Utility debug trails stay off unless you explicitly enable them. ${options.actionHint}`;
     }
-    return 'Lean is the normal default. Review and Debug only change machine-local retention. Full sync is a separate workspace override.';
+    return 'Lean is the normal default. Review and Debug only change machine-local retention. Full sync is a separate workspace override and requires explicit confirmation.';
   }
 
   return {

@@ -196,6 +196,7 @@
                   <p id="workspacePolicyHint" class="page-copy compact-copy">Metadata-only sync is the normal default for this workspace. Machine-local capture stays on this machine and debug trails remain off unless you explicitly enable them.</p>
                   <div class="row-actions">
                     <button class="btn quiet workspace-policy-preset" data-policy-preset="shared" type="button">Opt this workspace into full sync</button>
+                    <button id="copyPolicyCleanup" class="btn quiet" type="button">Copy lean cleanup</button>
                   </div>
                 </section>
 
@@ -660,6 +661,7 @@
                       <h4>Recover the local runtime</h4>
                     </div>
                     <div class="row-actions wrap-row">
+                      <button id="copyPolicyCleanupSetup" class="btn quiet" type="button">Copy lean cleanup</button>
                       <button id="checkUpdates" class="btn quiet" type="button">Check updates</button>
                       <button id="copyRepair" class="btn quiet" type="button">Copy 0ctx repair</button>
                       <button id="copyDoctor" class="btn quiet" type="button">Copy 0ctx doctor</button>

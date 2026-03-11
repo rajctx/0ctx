@@ -126,6 +126,7 @@ export interface KnowledgeCandidate {
     reason?: string | null;
     evidenceCount?: number;
     distinctEvidenceCount?: number;
+    distinctSessionCount?: number;
     evidenceSummary?: string | null;
     sourceExcerpt?: string | null;
     evidencePreview?: string[];
@@ -133,6 +134,9 @@ export interface KnowledgeCandidate {
     trustFlags?: string[];
     reviewTier?: 'strong' | 'review' | 'weak';
     reviewSummary?: string | null;
+    trustSummary?: string | null;
+    promotionState?: 'ready' | 'review' | 'blocked';
+    promotionSummary?: string | null;
     autoPersist?: boolean;
     autoPersistSummary?: string | null;
 }

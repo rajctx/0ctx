@@ -21,4 +21,20 @@ export interface PolicyCommandDeps {
     formatSyncPolicyLabel: (policy: string | null | undefined) => string;
     formatDebugArtifactsLabel: (enabled: boolean) => string;
     printJsonOrValue: (asJson: boolean, value: unknown, human: () => void) => number;
+    pruneHookDumps: (options?: {
+        rootDir?: string;
+        maxAgeDays?: number;
+        debugMaxAgeDays?: number;
+        debugArtifactsEnabled?: boolean;
+        now?: number;
+    }) => {
+        rootDir: string;
+        maxAgeDays: number;
+        debugMaxAgeDays: number;
+        debugArtifactsEnabled: boolean;
+        deletedFiles: number;
+        deletedDirs: number;
+        reclaimedBytes: number;
+        prunedPaths: string[];
+    };
 }

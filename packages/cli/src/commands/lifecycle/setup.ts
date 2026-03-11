@@ -167,9 +167,15 @@ export function createSetupCommands(
         const createContextName = deps.parseOptionalStringFlag(flags['create-context']);
         const dashboardQueryInput = flags['dashboard-query'];
         const steps: SetupStep[] = [];
+        const allowPreview = Boolean(flags['allow-preview']) || Boolean(flags.allowPreview);
         const previewError = deps.validateExplicitPreviewSelection(flags.clients, 'codex,cursor,windsurf');
         if (previewError) {
             console.error(previewError);
+            return 1;
+        }
+        const previewOptInError = deps.validatePreviewOptIn(flags.clients, allowPreview, 'codex,cursor,windsurf');
+        if (previewOptInError) {
+            console.error(previewOptInError);
             return 1;
         }
 

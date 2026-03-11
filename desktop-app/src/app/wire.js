@@ -1,7 +1,7 @@
 (() => {
   window.OctxDesktop = window.OctxDesktop || {};
   const app = window.OctxDesktop;
-  const { state, bindById, setView, renderAll, selectContext, resetBranchScopedState, loadBranches, loadSessions, loadSessionDetail, loadTurns, loadCheckpoints, loadCheckpointDetail, loadHandoff, loadBranchComparisonSafe, loadWorkspaceComparison, loadGraph, loadInsights, refreshAll, setStatus, invoke, copyText, createContext, applyDataPolicyPreset, performHeroAction, createCheckpointFromActiveSession, previewKnowledgeFromActiveSession, extractKnowledgeFromActiveSession, previewKnowledgeFromActiveCheckpoint, extractKnowledgeFromActiveCheckpoint, promoteActiveInsight, rewindActiveCheckpoint, explainActiveCheckpoint, enableCommand, selectKnowledgeCandidates, selectedKnowledgeKeys, setSelectedKnowledgeKeys, syncBranchSelectionFromSession, startBackgroundRefreshLoops, basenameFromPath } = app;
+  const { state, bindById, setView, renderAll, selectContext, resetBranchScopedState, loadBranches, loadSessions, loadSessionDetail, loadTurns, loadCheckpoints, loadCheckpointDetail, loadHandoff, loadBranchComparisonSafe, loadWorkspaceComparison, loadGraph, loadInsights, refreshAll, setStatus, invoke, copyText, createContext, applyDataPolicyPreset, performHeroAction, createCheckpointFromActiveSession, previewKnowledgeFromActiveSession, extractKnowledgeFromActiveSession, previewKnowledgeFromActiveCheckpoint, extractKnowledgeFromActiveCheckpoint, promoteActiveInsight, rewindActiveCheckpoint, explainActiveCheckpoint, enableCommand, policyCleanupCommand, selectKnowledgeCandidates, selectedKnowledgeKeys, setSelectedKnowledgeKeys, syncBranchSelectionFromSession, startBackgroundRefreshLoops, basenameFromPath } = app;
 
   function wire() {
     document.querySelectorAll('.nav-btn').forEach((button) => {
@@ -96,6 +96,8 @@
     bindById('explainCheckpointBtn', 'click', () => void explainActiveCheckpoint());
 
     bindById('copyEnableCommand', 'click', () => void copyText(enableCommand()));
+    bindById('copyPolicyCleanup', 'click', () => void copyText(policyCleanupCommand()));
+    bindById('copyPolicyCleanupSetup', 'click', () => void copyText(policyCleanupCommand()));
     bindById('copyShell', 'click', () => void copyText('0ctx shell'));
     bindById('copyRepair', 'click', () => void copyText('0ctx repair'));
     bindById('copyDoctor', 'click', () => void copyText('0ctx doctor'));

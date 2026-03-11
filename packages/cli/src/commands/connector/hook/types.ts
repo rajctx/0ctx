@@ -79,6 +79,7 @@ export interface HookCommandDeps {
     parseOptionalStringFlag: (value: string | boolean | undefined) => string | null;
     resolveContextIdForHookIngest: (repoRoot: string, explicitContextId: string | null) => Promise<string | null>;
     validateExplicitPreviewSelection: (rawClients: string | boolean | undefined, explicitPreviewList: string) => string | null;
+    validatePreviewOptIn: (rawClients: string | boolean | undefined, allowPreview: boolean, explicitPreviewList: string, gaExample?: string) => string | null;
     parseHookClients: (raw: string | boolean | undefined) => HookInstallClient[];
     installHooks: (options: {
         projectRoot: string;

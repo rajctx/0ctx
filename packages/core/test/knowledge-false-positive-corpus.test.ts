@@ -92,4 +92,90 @@ describe('Reviewed insight false-positive corpus', () => {
             db.close();
         }
     });
+
+    it('skips repo-readiness and automatic-retrieval status chatter during session preview', () => {
+        const { db, graph } = createGraph();
+        try {
+            const context = graph.createContext('knowledge-false-positive-readiness');
+            addSession(graph, context.id, 'session-corpus-3');
+            addTurn(graph, context.id, 'session-corpus-3', 'assistant-1', 'assistant', 'Ready: zero-touch for supported agents.', 1700001211000);
+            addTurn(graph, context.id, 'session-corpus-3', 'assistant-2', 'assistant', 'Next step: Register MCP retrieval for Claude and Antigravity.', 1700001212000);
+            addTurn(graph, context.id, 'session-corpus-3', 'assistant-3', 'assistant', 'Automatic context is ready once supported integrations are installed.', 1700001213000);
+
+            const preview = graph.previewKnowledgeFromSession(context.id, 'session-corpus-3');
+
+            expect(preview.candidateCount).toBe(0);
+            expect(preview.candidates).toEqual([]);
+        } finally {
+            db.close();
+        }
+    });
+
+    it('skips workstream reconcile steps and git action hints during session preview', () => {
+        const { db, graph } = createGraph();
+        try {
+            const context = graph.createContext('knowledge-false-positive-workstream-actions');
+            addSession(graph, context.id, 'session-corpus-4');
+            addTurn(graph, context.id, 'session-corpus-4', 'assistant-1', 'assistant', 'Commit or checkpoint local changes before handing this workstream to another agent.', 1700001214000);
+            addTurn(graph, context.id, 'session-corpus-4', 'assistant-2', 'assistant', 'Open the checked-out worktree before continuing on this workstream.', 1700001215000);
+            addTurn(graph, context.id, 'session-corpus-4', 'assistant-3', 'assistant', 'Rebase onto main before relying on this workstream for handoff.', 1700001216000);
+            addTurn(graph, context.id, 'session-corpus-4', 'assistant-4', 'assistant', 'The daemon must remain the source of truth for context state.', 1700001217000);
+
+            const preview = graph.previewKnowledgeFromSession(context.id, 'session-corpus-4');
+            const contents = preview.candidates.map((candidate) => candidate.content);
+
+            expect(contents).not.toContain('Commit or checkpoint local changes before handing this workstream to another agent.');
+            expect(contents).not.toContain('Open the checked-out worktree before continuing on this workstream.');
+            expect(contents).not.toContain('Rebase onto main before relying on this workstream for handoff.');
+            expect(contents).toContain('The daemon must remain the source of truth for context state.');
+        } finally {
+            db.close();
+        }
+    });
+
+    it('skips system-generated workstream context and readiness summaries during session preview', () => {
+        const { db, graph } = createGraph();
+        try {
+            const context = graph.createContext('knowledge-false-positive-system-context');
+            addSession(graph, context.id, 'session-corpus-5');
+            addTurn(graph, context.id, 'session-corpus-5', 'assistant-1', 'assistant', 'Workspace: 0ctx-dev', 1700001218000);
+            addTurn(graph, context.id, 'session-corpus-5', 'assistant-2', 'assistant', 'Current workstream: feat/v1', 1700001219000);
+            addTurn(graph, context.id, 'session-corpus-5', 'assistant-3', 'assistant', 'No captured sessions or checkpoints for this workstream yet.', 1700001220000);
+            addTurn(graph, context.id, 'session-corpus-5', 'assistant-4', 'assistant', 'Checked out elsewhere (feature-worktree)', 1700001221000);
+            addTurn(graph, context.id, 'session-corpus-5', 'assistant-5', 'assistant', 'Working tree has local uncommitted changes.', 1700001222000);
+            addTurn(graph, context.id, 'session-corpus-5', 'assistant-6', 'assistant', 'The daemon must remain the source of truth for project state.', 1700001223000);
+
+            const preview = graph.previewKnowledgeFromSession(context.id, 'session-corpus-5');
+            const contents = preview.candidates.map((candidate) => candidate.content);
+
+            expect(contents).not.toContain('Workspace: 0ctx-dev');
+            expect(contents).not.toContain('Current workstream: feat/v1');
+            expect(contents).not.toContain('No captured sessions or checkpoints for this workstream yet.');
+            expect(contents).not.toContain('Checked out elsewhere (feature-worktree)');
+            expect(contents).not.toContain('Working tree has local uncommitted changes.');
+            expect(contents).toContain('The daemon must remain the source of truth for project state.');
+        } finally {
+            db.close();
+        }
+    });
+
+    it('skips progress and coordination chatter while preserving durable architectural questions', () => {
+        const { db, graph } = createGraph();
+        try {
+            const context = graph.createContext('knowledge-false-positive-progress');
+            addSession(graph, context.id, 'session-corpus-6');
+            addTurn(graph, context.id, 'session-corpus-6', 'user-1', 'user', 'How much of work is remaining now, and are we done?', 1700001224000);
+            addTurn(graph, context.id, 'session-corpus-6', 'user-2', 'user', 'Please continue and update Linear with the child tasks.', 1700001225000);
+            addTurn(graph, context.id, 'session-corpus-6', 'user-3', 'user', 'How should cross-context retrieval work for agents when two workspaces share reviewed insights?', 1700001226000);
+
+            const preview = graph.previewKnowledgeFromSession(context.id, 'session-corpus-6');
+            const contents = preview.candidates.map((candidate) => candidate.content);
+
+            expect(contents).not.toContain('How much of work is remaining now, and are we done?');
+            expect(contents).not.toContain('Please continue and update Linear with the child tasks.');
+            expect(contents).toContain('How should cross-context retrieval work for agents when two workspaces share reviewed insights?');
+        } finally {
+            db.close();
+        }
+    });
 });

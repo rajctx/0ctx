@@ -26,21 +26,18 @@ export function createEnableCommands(deps: ProductCommandDeps & { commandBootstr
         const requestedDataPolicy = deps.parseOptionalStringFlag(flags['data-policy'] ?? flags.dataPolicy);
         const dataPolicyPreset = parseDataPolicyPreset(requestedDataPolicy);
         const workspaceName = requestedName ?? (path.basename(repoRoot) || 'Workspace');
-        const allowPreview = Boolean(flags['allow-preview']) || Boolean(flags.allowPreview);
-        const hookPreviewError = deps.validateExplicitPreviewSelection(flags.clients, 'codex,cursor,windsurf');
-        if (hookPreviewError) {
-            console.error(hookPreviewError);
+        const selectedPreviewHooks = deps.detectPreviewSelections(flags.clients, 'codex,cursor,windsurf');
+        if (selectedPreviewHooks.length > 0) {
+            console.error(`0ctx enable supports only GA capture integrations. Use --clients=ga for the normal path, or use advanced commands like \`0ctx setup --allow-preview\` or \`0ctx connector hook install --allow-preview\` if you intentionally need preview integrations (${selectedPreviewHooks.join(', ')}).`);
             return 1;
         }
         if (requestedDataPolicy && !dataPolicyPreset) {
             console.error('Invalid data policy. Use lean, review, debug, or shared.');
             return 1;
         }
-        const mcpPreviewError = !allowPreview
-            ? deps.validateExplicitPreviewSelection(flags['mcp-clients'] ?? flags.mcpClients, 'codex', 'claude,antigravity')
-            : null;
-        if (mcpPreviewError) {
-            console.error(`MCP clients: ${mcpPreviewError}`);
+        const selectedPreviewMcp = deps.detectPreviewSelections(flags['mcp-clients'] ?? flags.mcpClients, 'codex');
+        if (selectedPreviewMcp.length > 0) {
+            console.error(`MCP clients: 0ctx enable supports only GA automatic retrieval targets. Use --mcp-clients=ga for the normal path, or use \`0ctx bootstrap --allow-preview\` only when you intentionally need preview retrieval (${selectedPreviewMcp.join(', ')}).`);
             return 1;
         }
 

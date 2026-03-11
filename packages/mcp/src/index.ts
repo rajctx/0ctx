@@ -33,7 +33,7 @@ const requestedToolProfile =
     parseArgValue('--profile')
     ?? parseArgValue('--mcp-profile')
     ?? process.env.CTX_MCP_PROFILE
-    ?? 'all';
+    ?? 'core';
 const resolvedToolProfile = resolveMcpToolProfile(requestedToolProfile);
 const activeTools = getToolsForProfile(resolvedToolProfile);
 

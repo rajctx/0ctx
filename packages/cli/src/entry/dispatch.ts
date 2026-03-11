@@ -3,7 +3,7 @@ import type { CliRegistry } from './registry';
 
 export function resolveDataPolicySubcommand(candidate: string | null | undefined): string | null {
     if (!candidate) return null;
-    return ['show', 'get', 'presets', 'catalog', 'set', 'lean', 'review', 'debug', 'shared'].includes(candidate)
+    return ['show', 'get', 'presets', 'catalog', 'set', 'cleanup', 'lean', 'review', 'debug', 'shared'].includes(candidate)
         ? candidate
         : null;
 }

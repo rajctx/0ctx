@@ -2,6 +2,16 @@ import { createHash } from 'crypto';
 import type { NodeType } from '../schema';
 import { canonicalizeKnowledgeCandidateText } from '../knowledge-scoring';
 
+export function buildKnowledgeTrustSummary(
+    reviewSummary: string | null | undefined,
+    evidenceSummary: string | null | undefined
+): string {
+    return [String(reviewSummary || '').trim(), String(evidenceSummary || '').trim()]
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+}
+
 export function boostKnowledgeCandidateConfidence(
     type: Exclude<NodeType, 'artifact'> | null | undefined,
     baseConfidence: number,
@@ -255,6 +265,55 @@ export function classifyKnowledgeAutoPersist(
     return {
         autoPersist: false,
         autoPersistSummary: 'Keep this reviewed manually until corroboration broadens.'
+    };
+}
+
+export function describeKnowledgePromotionState(input: {
+    trustTier: 'strong' | 'review' | 'weak';
+    evidenceCount: number;
+    distinctEvidenceCount: number;
+    distinctSessionCount: number;
+    originContextId: string | null;
+    originNodeId: string | null;
+}): {
+    promotionState: 'ready' | 'review' | 'blocked';
+    promotionSummary: string;
+} {
+    const importedWithoutLocalEvidence = input.evidenceCount === 0 && (input.originContextId || input.originNodeId);
+    if (importedWithoutLocalEvidence) {
+        return {
+            promotionState: 'blocked',
+            promotionSummary: 'Blocked: promoted insight has no local corroboration yet. Reconfirm it in this workspace before promoting it onward.'
+        };
+    }
+    if (input.trustTier === 'weak') {
+        return {
+            promotionState: 'blocked',
+            promotionSummary: 'Blocked: weak insight candidates need more corroboration before they can be promoted.'
+        };
+    }
+    if (input.distinctSessionCount <= 1 && input.evidenceCount > 1) {
+        return {
+            promotionState: 'review',
+            promotionSummary: 'Review before promoting: corroboration comes from a single session. Reconfirm it in another run before using it across workspaces.'
+        };
+    }
+    if (input.trustTier === 'review') {
+        const evidenceLabel = input.distinctSessionCount > 1
+            ? `${input.distinctSessionCount} corroborating sessions`
+            : input.distinctEvidenceCount > 1
+                ? `${input.distinctEvidenceCount} distinct supporting statements`
+                : `${Math.max(input.evidenceCount, 1)} supporting mention`;
+        return {
+            promotionState: 'review',
+            promotionSummary: `Review before promoting: ${evidenceLabel}. This insight is usable, but still needs human judgment.`
+        };
+    }
+    return {
+        promotionState: 'ready',
+        promotionSummary: input.distinctSessionCount > 1
+            ? `Ready to promote: corroborated across ${input.distinctSessionCount} sessions with enough evidence to move across workspaces.`
+            : 'Ready to promote: corroborated insight with enough evidence to move across workspaces.'
     };
 }
 

@@ -134,7 +134,7 @@
         { label: 'Recommended next step', value: describeWorkstreamActionHint(lane) || 'Continue normally' },
         { label: 'Blockers', value: lane.handoffBlockers?.length ? lane.handoffBlockers.join(' ') : 'none' },
         { label: 'Review before handoff', value: lane.handoffReviewItems?.length ? lane.handoffReviewItems.join(' ') : 'none' },
-        { label: 'Capture drift', value: lane.headDiffersFromCaptured === true ? 'yes' : lane.headDiffersFromCaptured === false ? 'no' : 'unknown' },
+        { label: 'Capture drift', value: lane.captureDrift?.summary || (lane.headDiffersFromCaptured === true ? 'drift detected' : lane.headDiffersFromCaptured === false ? 'none' : 'unknown') },
         { label: 'Baseline', value: lane.baseline?.summary || 'No default-branch baseline available' },
         { label: 'Upstream', value: lane.upstream || 'not configured' },
         { label: 'Agents on workstream', value: lane.agentSet?.length ? lane.agentSet.join(', ') : 'none' },

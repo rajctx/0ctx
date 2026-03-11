@@ -12,6 +12,11 @@ export function createBootstrapCommands(deps: ProductCommandDeps) {
             console.error(previewError);
             return 1;
         }
+        const previewOptInError = deps.validatePreviewOptIn(flags.clients, allowPreview, 'codex,cursor,windsurf');
+        if (previewOptInError) {
+            console.error(previewOptInError);
+            return 1;
+        }
         const clients = deps.parseClients(flags.clients);
         const dryRun = Boolean(flags['dry-run']);
         const entrypoint = deps.parseOptionalStringFlag(flags.entrypoint) ?? undefined;

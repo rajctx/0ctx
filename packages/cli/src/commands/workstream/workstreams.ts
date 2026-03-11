@@ -62,8 +62,8 @@ export function createBranchCommands(ctx: WorkstreamCommandContext) {
                         console.log('  Git: current local workstream');
                     }
                     if (result.mergeBaseSha) console.log(`  Merge base: ${String(result.mergeBaseSha).slice(0, 12)}`);
-                    if (result.headDiffersFromCaptured && result.lastCommitSha && result.currentHeadSha) {
-                        console.log(`  Capture drift: ${String(result.lastCommitSha).slice(0, 12)} -> ${String(result.currentHeadSha).slice(0, 12)}`);
+                    if (result.headDiffersFromCaptured && result.captureDrift?.summary) {
+                        console.log(`  Capture drift: ${result.captureDrift.summary}`);
                     }
                     if (result.hasUncommittedChanges) {
                         console.log(`  Local changes: staged ${result.stagedChangeCount ?? 0} | unstaged ${result.unstagedChangeCount ?? 0} | untracked ${result.untrackedCount ?? 0}`);
@@ -208,8 +208,8 @@ export function createBranchCommands(ctx: WorkstreamCommandContext) {
                     }
                     const checkoutState = ctx.describeCheckoutStateHuman(lane);
                     if (checkoutState) console.log(`    Checkout: ${checkoutState}`);
-                    if (lane.headDiffersFromCaptured && lane.lastCommitSha && lane.currentHeadSha) {
-                        console.log(`    Capture drift: ${String(lane.lastCommitSha).slice(0, 12)} -> ${String(lane.currentHeadSha).slice(0, 12)}`);
+                    if (lane.headDiffersFromCaptured && lane.captureDrift?.summary) {
+                        console.log(`    Capture drift: ${lane.captureDrift.summary}`);
                     }
                     if (lane.baseline?.summary) console.log(`    Baseline: ${lane.baseline.summary}`);
                     if (lane.upstream) {

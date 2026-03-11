@@ -59,6 +59,7 @@ export interface SetupCommandDeps {
     parsePositiveIntegerFlag: (value: string | boolean | undefined, fallback: number) => number;
     parseOptionalStringFlag: (value: string | boolean | undefined) => string | null | undefined;
     validateExplicitPreviewSelection: (raw: string | boolean | undefined, previewList: string) => string | null;
+    validatePreviewOptIn: (raw: string | boolean | undefined, allowPreview: boolean, previewList: string, gaExample?: string) => string | null;
     commandAuthLogin: (flags: FlagMap) => Promise<number>;
     commandInstall: (flags: FlagMap) => Promise<number>;
     commandConnectorHook: (action: string, flags: FlagMap) => Promise<number>;

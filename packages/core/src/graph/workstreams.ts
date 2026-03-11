@@ -137,6 +137,7 @@ export function listBranchLanesRecord(
         mergeBaseSha: null,
         isCurrent: null,
         hasUncommittedChanges: null,
+        captureDrift: null,
         stagedChangeCount: null,
         unstagedChangeCount: null,
         untrackedCount: null,

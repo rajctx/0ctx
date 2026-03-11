@@ -55,21 +55,21 @@ Usage:
 Recommended daily flow:
   0ctx enable [--repo-root=<path>] [--name=<workspace>] [--data-policy=<lean|review|debug|shared>] [--json]
               [--clients=ga|claude,factory,antigravity] [--mcp-clients=none|ga|claude,antigravity]
-              [--skip-bootstrap] [--skip-hooks] [--mcp-profile=core|recall|ops] [--allow-preview]
+              [--skip-bootstrap] [--skip-hooks] [--mcp-profile=core|recall|ops]
 
 Advanced / machine management:
-  0ctx setup [--clients=ga|<explicit-list>] [--no-open] [--json] [--validate]
+  0ctx setup [--clients=ga|claude,factory,antigravity] [--no-open] [--json] [--validate]
              [--require-cloud] [--wait-cloud-ready]
              [--cloud-wait-timeout-ms=60000] [--cloud-wait-interval-ms=2000]
              [--create-context=<name>] [--dashboard-query[=k=v&...]]
-             [--skip-service] [--skip-bootstrap] [--skip-hooks] [--hooks-dry-run]
+             [--skip-service] [--skip-bootstrap] [--skip-hooks] [--hooks-dry-run] [--allow-preview]
              [--mcp-profile=all|core|recall|ops]
-  0ctx install [--clients=ga|<explicit-list>] [--json] [--skip-bootstrap] [--mcp-profile=all|core|recall|ops] [--allow-preview]
-  0ctx bootstrap [--dry-run] [--clients=ga|<explicit-list>] [--entrypoint=/path/to/mcp-server.js]
+  0ctx install [--clients=ga|claude,factory,antigravity] [--json] [--skip-bootstrap] [--mcp-profile=all|core|recall|ops] [--allow-preview]
+  0ctx bootstrap [--dry-run] [--clients=ga|claude,antigravity] [--entrypoint=/path/to/mcp-server.js]
                  [--mcp-profile=all|core|recall|ops] [--allow-preview] [--json]
   0ctx mcp [bootstrap]
   0ctx mcp                     Interactive supported-agent retrieval bootstrap
-  0ctx mcp bootstrap [--dry-run] [--clients=ga|<explicit-list>] [--mcp-profile=all|core|recall|ops]
+  0ctx mcp bootstrap [--dry-run] [--clients=ga|claude,antigravity] [--mcp-profile=all|core|recall|ops]
   0ctx doctor [--json] [--clients=...]
   0ctx status [--json] [--compact]
   0ctx repair [--clients=...] [--deep] [--json]
@@ -109,7 +109,7 @@ Capture support:
 
 Client scope defaults:
   ga      Supported-by-default product path
-  Name non-GA integrations directly only when you intentionally opt into them.
+  Preview integrations: codex, cursor, windsurf (name them explicitly only when you opt in).
   Preview MCP retrieval also requires --allow-preview.
 
 Authentication:
@@ -124,9 +124,11 @@ Configuration:
   0ctx config set <key> <value> Set a specific setting
   0ctx data-policy [--repo-root=<path>] [--json]
   0ctx data-policy presets [--json]
+  0ctx data-policy cleanup [--repo-root=<path>] [--json]
   0ctx data-policy set [--repo-root=<path>] [--sync-policy=<local_only|metadata_only|full_sync>]
                        [--capture-retention-days=<days>] [--debug-retention-days=<days>]
-                       [--debug-artifacts=<on|off>] [--json]
+                       [--debug-artifacts=<on|off>] [--confirm-full-sync] [--json]
+  0ctx data-policy shared --repo-root=<path> --confirm-full-sync [--json]
 
   Config keys: auth.server, sync.enabled, sync.endpoint, ui.url,
                capture.retentionDays, capture.debugRetentionDays, capture.debugArtifacts,
@@ -135,7 +137,7 @@ Configuration:
 Sync:
   0ctx sync status   Show sync engine health and queue
   0ctx sync policy get [--repo-root=<path>] [--json]
-  0ctx sync policy set <local_only|metadata_only|full_sync> [--repo-root=<path>] [--json]
+  0ctx sync policy set <local_only|metadata_only|full_sync> [--repo-root=<path>] [--confirm-full-sync] [--json]
                     metadata_only is the normal default; full_sync is explicit opt-in
 
 Connector:
@@ -145,7 +147,7 @@ Connector:
   0ctx connector verify [--require-cloud] [--json]
   0ctx connector register [--force] [--local-only] [--require-cloud] [--json]
   0ctx connector run [--once] [--interval-ms=5000] [--no-daemon-autostart]
-  0ctx connector hook install [--clients=ga|<explicit-list>] [--repo-root=<path>] [--global]
+  0ctx connector hook install [--clients=ga|claude,factory,antigravity] [--repo-root=<path>] [--global] [--allow-preview]
   0ctx connector hook status [--json] [--include-explicit]
   0ctx connector hook prune [--days=14] [--json]
   0ctx connector hook session-start --agent=claude|factory|antigravity [--repo-root=<path>]

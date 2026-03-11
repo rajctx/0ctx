@@ -1,10 +1,10 @@
 import type { AgentSessionSummary, BranchLaneSummary, CheckpointSummary, Graph, InsightSummary, WorkstreamBrief } from '@0ctx/core';
 import path from 'path';
 import { formatRelativeAge, humanizeLabel, parsePositiveInt, truncateBriefLine } from './format';
-import { getGitHeadState, getWorkingTreeState } from './git';
+import { compareGitRefs, getGitHeadState, getWorkingTreeState } from './git';
 import { resolveGitInspectionPath } from './inspection-path';
 import { compareAgainstBaselineBranch, enrichWorkstreamLane, resolveCurrentWorkstreamFromContextPaths } from './lanes';
-import { deriveHandoffReadiness, deriveWorkstreamState } from './state';
+import { deriveCaptureDrift, deriveHandoffReadiness, deriveWorkstreamState } from './state';
 
 export function buildWorkstreamBrief(
     graph: Graph,
@@ -74,10 +74,20 @@ export function buildWorkstreamBrief(
     const stagedChangeCount = lane?.stagedChangeCount ?? workingTreeState?.stagedChangeCount ?? null;
     const unstagedChangeCount = lane?.unstagedChangeCount ?? workingTreeState?.unstagedChangeCount ?? null;
     const untrackedCount = lane?.untrackedCount ?? workingTreeState?.untrackedCount ?? null;
+    const capturedComparison = compareGitRefs(gitInspectionPath, currentHeadSha ?? null, lane?.lastCommitSha ?? null);
+    const captureDrift = lane?.captureDrift ?? deriveCaptureDrift({
+        headDiffersFromCaptured,
+        currentHeadSha: currentHeadSha ?? null,
+        lastCapturedCommitSha: lane?.lastCommitSha ?? null,
+        currentAheadCount: capturedComparison?.leftAheadCount ?? null,
+        currentBehindCount: capturedComparison?.rightAheadCount ?? null,
+        mergeBaseSha: capturedComparison?.mergeBaseSha ?? null
+    });
     const state = deriveWorkstreamState({
         branch,
         isDetachedHead,
         headDiffersFromCaptured,
+        captureDrift,
         checkedOutHere: checkoutState.checkedOutHere,
         checkedOutElsewhere: checkoutState.checkedOutElsewhere,
         hasUncommittedChanges,
@@ -144,8 +154,8 @@ export function buildWorkstreamBrief(
 
     if (!lane && isDetachedHead && currentHeadSha) lines.push(`Git state: detached HEAD at ${currentHeadSha.slice(0, 12)}.`);
     if (currentHeadRef) lines.push(`Checked-out ref: ${currentHeadRef}.`);
-    if (headDiffersFromCaptured && lane?.lastCommitSha && currentHeadSha) {
-        lines.push(`Capture drift: last captured commit ${lane.lastCommitSha.slice(0, 12)} differs from checked-out HEAD ${currentHeadSha.slice(0, 12)}.`);
+    if (headDiffersFromCaptured && captureDrift?.summary) {
+        lines.push(`Capture drift: ${captureDrift.summary}`);
     }
 
     if (hasUncommittedChanges) {
@@ -205,6 +215,7 @@ export function buildWorkstreamBrief(
         checkedOutWorktreePaths: checkoutState.checkedOutWorktreePaths,
         checkedOutHere: checkoutState.checkedOutHere,
         checkedOutElsewhere: checkoutState.checkedOutElsewhere,
+        captureDrift,
         hasUncommittedChanges,
         stagedChangeCount,
         unstagedChangeCount,

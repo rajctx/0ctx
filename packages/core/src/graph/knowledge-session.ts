@@ -72,6 +72,21 @@ type KnowledgeSessionDeps = {
             distinctSessionCount?: number;
         }
     ) => string[];
+    buildKnowledgeTrustSummary: (
+        reviewSummary: string | null | undefined,
+        evidenceSummary: string | null | undefined
+    ) => string;
+    describeKnowledgePromotionState: (input: {
+        trustTier: 'strong' | 'review' | 'weak';
+        evidenceCount: number;
+        distinctEvidenceCount: number;
+        distinctSessionCount: number;
+        originContextId: string | null;
+        originNodeId: string | null;
+    }) => {
+        promotionState: 'ready' | 'review' | 'blocked';
+        promotionSummary: string;
+    };
     buildKnowledgeEvidenceReason: (
         baseReason: string,
         evidenceCount: number,
@@ -249,6 +264,20 @@ function collectSessionKnowledgeCandidates(
                 mergedEvidence.roles,
                 { distinctSessionCount: mergedEvidence.distinctSessionCount }
             );
+            const evidenceSummary = deps.buildKnowledgeEvidenceSummary(
+                mergedEvidence.evidenceCount,
+                mergedEvidence.distinctEvidenceCount,
+                mergedEvidence.roles,
+                { distinctSessionCount: mergedEvidence.distinctSessionCount }
+            );
+            const promotion = deps.describeKnowledgePromotionState({
+                trustTier: review.reviewTier,
+                evidenceCount: mergedEvidence.evidenceCount,
+                distinctEvidenceCount: mergedEvidence.distinctEvidenceCount,
+                distinctSessionCount: mergedEvidence.distinctSessionCount,
+                originContextId: null,
+                originNodeId: null
+            });
             return {
                 contextId,
                 source,
@@ -267,9 +296,8 @@ function collectSessionKnowledgeCandidates(
                 reason: deps.buildKnowledgeEvidenceReason(mergedEvidence.reason, mergedEvidence.evidenceCount, mergedEvidence.distinctEvidenceCount, mergedEvidence.roles),
                 evidenceCount: mergedEvidence.evidenceCount,
                 distinctEvidenceCount: mergedEvidence.distinctEvidenceCount,
-                evidenceSummary: deps.buildKnowledgeEvidenceSummary(mergedEvidence.evidenceCount, mergedEvidence.distinctEvidenceCount, mergedEvidence.roles, {
-                    distinctSessionCount: mergedEvidence.distinctSessionCount
-                }),
+                distinctSessionCount: mergedEvidence.distinctSessionCount,
+                evidenceSummary,
                 trustFlags: deps.buildKnowledgeTrustFlags(mergedEvidence.evidenceCount, mergedEvidence.distinctEvidenceCount, mergedEvidence.roles, {
                     distinctSessionCount: mergedEvidence.distinctSessionCount
                 }),
@@ -278,6 +306,9 @@ function collectSessionKnowledgeCandidates(
                 corroboratedRoles: Array.from(mergedEvidence.roles),
                 reviewTier: review.reviewTier,
                 reviewSummary: review.reviewSummary,
+                trustSummary: deps.buildKnowledgeTrustSummary(review.reviewSummary, evidenceSummary),
+                promotionState: promotion.promotionState,
+                promotionSummary: promotion.promotionSummary,
                 autoPersist: autoPersist.autoPersist,
                 autoPersistSummary: autoPersist.autoPersistSummary,
                 existingNode

@@ -23,6 +23,8 @@ export interface ProductCommandDeps {
     findGitRepoRoot: (input: string | null) => string | null;
     collectRepoReadiness: (opts: { repoRoot: string; contextId?: string | null }) => Promise<RepoReadinessSummary | null>;
     validateExplicitPreviewSelection: (raw: string | boolean | undefined, previewExample: string, gaExample?: string) => string | null;
+    validatePreviewOptIn: (raw: string | boolean | undefined, allowPreview: boolean, previewExample: string, gaExample?: string) => string | null;
+    detectPreviewSelections: (raw: string | boolean | undefined, previewList: string) => string[];
     parseClients: (raw: string | boolean | undefined) => string[];
     parseHookClients: (raw: string | boolean | undefined) => string[];
     parseEnableMcpClients: (raw: string | boolean | undefined) => string[];

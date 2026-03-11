@@ -6,6 +6,7 @@ import type {
     NodeType
 } from '../schema';
 import { sourceExcerpt } from '../knowledge-scoring';
+import { buildKnowledgeTrustSummary, describeKnowledgePromotionState } from './knowledge';
 
 type AddNodeInput = Omit<ContextNode, 'id' | 'createdAt'> & {
     rawPayload?: unknown;
@@ -70,55 +71,6 @@ type InsightDeps = {
         }
     ) => string[];
 };
-
-function describeInsightPromotionState(input: {
-    trustTier: 'strong' | 'review' | 'weak';
-    evidenceCount: number;
-    distinctEvidenceCount: number;
-    distinctSessionCount: number;
-    originContextId: string | null;
-    originNodeId: string | null;
-}): {
-    promotionState: 'ready' | 'review' | 'blocked';
-    promotionSummary: string;
-} {
-    const importedWithoutLocalEvidence = input.evidenceCount === 0 && (input.originContextId || input.originNodeId);
-    if (importedWithoutLocalEvidence) {
-        return {
-            promotionState: 'blocked',
-            promotionSummary: 'Blocked: promoted insight has no local corroboration yet. Reconfirm it in this workspace before promoting it onward.'
-        };
-    }
-    if (input.trustTier === 'weak') {
-        return {
-            promotionState: 'blocked',
-            promotionSummary: 'Blocked: weak insight candidates need more corroboration before they can be promoted.'
-        };
-    }
-    if (input.distinctSessionCount <= 1 && input.evidenceCount > 1) {
-        return {
-            promotionState: 'review',
-            promotionSummary: 'Review before promoting: corroboration comes from a single session. Reconfirm it in another run before using it across workspaces.'
-        };
-    }
-    if (input.trustTier === 'review') {
-        const evidenceLabel = input.distinctSessionCount > 1
-            ? `${input.distinctSessionCount} corroborating sessions`
-            : input.distinctEvidenceCount > 1
-                ? `${input.distinctEvidenceCount} distinct supporting statements`
-                : `${Math.max(input.evidenceCount, 1)} supporting mention`;
-        return {
-            promotionState: 'review',
-            promotionSummary: `Review before promoting: ${evidenceLabel}. This insight is usable, but still needs human judgment.`
-        };
-    }
-    return {
-        promotionState: 'ready',
-        promotionSummary: input.distinctSessionCount > 1
-            ? `Ready to promote: corroborated across ${input.distinctSessionCount} sessions with enough evidence to move across workspaces.`
-            : 'Ready to promote: corroborated insight with enough evidence to move across workspaces.'
-    };
-}
 
 function getInsightEvidence(deps: InsightDeps, nodeId: string) {
     const insight = deps.getNode(nodeId);
@@ -186,9 +138,12 @@ function getInsightEvidence(deps: InsightDeps, nodeId: string) {
         latestEvidenceAt,
         evidencePreview,
         trustTier: review.reviewTier,
-        trustSummary: `${review.reviewSummary} ${deps.buildKnowledgeEvidenceSummary(evidenceCount, distinctEvidenceCount, roles, {
-            distinctSessionCount
-        })}`.trim()
+        trustSummary: buildKnowledgeTrustSummary(
+            review.reviewSummary,
+            deps.buildKnowledgeEvidenceSummary(evidenceCount, distinctEvidenceCount, roles, {
+                distinctSessionCount
+            })
+        )
     };
 }
 
@@ -216,7 +171,7 @@ function buildInsightSummaryRecord(
             new Set(evidence.corroboratedRoles),
             { promoted: Boolean(originContextId || originNodeId), distinctSessionCount: evidence.distinctSessionCount }
         );
-    const promotion = describeInsightPromotionState({
+    const promotion = describeKnowledgePromotionState({
         trustTier: promotedWithoutLocalEvidence ? 'review' : evidence.trustTier,
         evidenceCount: evidence.evidenceCount,
         distinctEvidenceCount: evidence.distinctEvidenceCount,
@@ -327,7 +282,7 @@ export function promoteInsightNodeRecord(
     const sourceOriginContextId = deps.extractTagValue(sourceNode.tags, 'origin_context:') ?? null;
     const sourceOriginNodeId = deps.extractTagValue(sourceNode.tags, 'origin_node:') ?? null;
     const sourceEvidence = getInsightEvidence(deps, sourceNode.id);
-    const sourcePromotion = describeInsightPromotionState({
+    const sourcePromotion = describeKnowledgePromotionState({
         trustTier: sourceEvidence.evidenceCount === 0 && (sourceOriginContextId || sourceOriginNodeId)
             ? 'review'
             : sourceEvidence.trustTier,

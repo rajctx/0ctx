@@ -6,12 +6,18 @@ export function createHookInstallCommand(deps: HookCommandDeps) {
         const quiet = Boolean(flags.quiet) || asJson;
         const dryRun = Boolean(flags['dry-run']) || Boolean(flags['hooks-dry-run']);
         const installClaudeGlobal = Boolean(flags.global);
+        const allowPreview = Boolean(flags['allow-preview']) || Boolean(flags.allowPreview);
         const repoRoot = deps.resolveRepoRoot(deps.parseOptionalStringFlag(flags['repo-root']));
         const requestedContextId = deps.parseOptionalStringFlag(flags['context-id'] ?? flags.contextId);
         const contextId = await deps.resolveContextIdForHookIngest(repoRoot, requestedContextId);
         const previewError = deps.validateExplicitPreviewSelection(flags.clients, 'codex,cursor,windsurf');
         if (previewError) {
             console.error(previewError);
+            return 1;
+        }
+        const previewOptInError = deps.validatePreviewOptIn(flags.clients, allowPreview, 'codex,cursor,windsurf');
+        if (previewOptInError) {
+            console.error(previewOptInError);
             return 1;
         }
 

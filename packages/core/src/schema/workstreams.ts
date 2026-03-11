@@ -29,6 +29,7 @@ export interface BranchLaneSummary {
     checkedOutWorktreePaths?: string[];
     checkedOutHere?: boolean | null;
     checkedOutElsewhere?: boolean | null;
+    captureDrift: WorkstreamCaptureDrift | null;
     hasUncommittedChanges: boolean | null;
     stagedChangeCount: number | null;
     unstagedChangeCount: number | null;
@@ -52,6 +53,16 @@ export interface WorkstreamBaselineComparison {
     behindCount: number | null;
     mergeBaseSha: string | null;
     summary: string;
+}
+
+export interface WorkstreamCaptureDrift {
+    comparable: boolean;
+    kind: 'same' | 'ahead' | 'behind' | 'diverged' | 'unknown';
+    currentAheadCount: number | null;
+    currentBehindCount: number | null;
+    mergeBaseSha: string | null;
+    summary: string | null;
+    actionHint: string | null;
 }
 
 export interface WorkstreamBrief {
@@ -78,6 +89,7 @@ export interface WorkstreamBrief {
     checkedOutWorktreePaths?: string[];
     checkedOutHere?: boolean | null;
     checkedOutElsewhere?: boolean | null;
+    captureDrift: WorkstreamCaptureDrift | null;
     hasUncommittedChanges: boolean | null;
     stagedChangeCount: number | null;
     unstagedChangeCount: number | null;

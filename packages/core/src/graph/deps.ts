@@ -17,11 +17,13 @@ import { previewKnowledgeFromSessionRecord } from './knowledge-session';
 import {
     buildKnowledgeEvidenceReason,
     buildKnowledgeEvidenceSummary,
+    buildKnowledgeTrustSummary,
     buildKnowledgeTrustFlags,
     buildKnowledgeKey,
     boostKnowledgeCandidateConfidence,
     classifyKnowledgeAutoPersist,
     classifyKnowledgeReviewTier,
+    describeKnowledgePromotionState,
     sanitizePromotedInsightTags
 } from './knowledge';
 import { parseCheckpointRow, parseNodeRow, toCheckpointSummary } from './helpers';
@@ -109,6 +111,8 @@ export function buildKnowledgeSessionDeps(
         buildKnowledgeEvidenceSummary,
         buildKnowledgeEvidenceReason,
         buildKnowledgeTrustFlags,
+        buildKnowledgeTrustSummary,
+        describeKnowledgePromotionState,
         addNode: ops.addNode,
         ensureEdge: ops.ensureEdge
     };
@@ -141,6 +145,8 @@ export function buildKnowledgeCheckpointDeps(
         classifyKnowledgeReviewTier,
         buildKnowledgeEvidenceSummary,
         buildKnowledgeTrustFlags,
+        buildKnowledgeTrustSummary,
+        describeKnowledgePromotionState,
         addNode: ops.addNode
     };
 }

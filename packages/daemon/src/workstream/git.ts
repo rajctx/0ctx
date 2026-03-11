@@ -22,6 +22,13 @@ export interface GitWorktreeEntry {
     detached: boolean;
 }
 
+export interface GitRefComparison {
+    comparable: boolean;
+    leftAheadCount: number | null;
+    rightAheadCount: number | null;
+    mergeBaseSha: string | null;
+}
+
 export function safeGit(repoRoot: string, args: string[]): string | null {
     const result = spawnSync('git', ['-C', repoRoot, ...args], {
         encoding: 'utf8',
@@ -81,6 +88,23 @@ export function safeGitDefaultBranch(repoRoot: string): string | null {
         }
     }
     return null;
+}
+
+export function compareGitRefs(repoRoot: string | null, leftRef: string | null, rightRef: string | null): GitRefComparison | null {
+    if (!repoRoot || !leftRef || !rightRef) {
+        return null;
+    }
+    const countText = safeGit(repoRoot, ['rev-list', '--left-right', '--count', `${leftRef}...${rightRef}`]);
+    const counts = countText
+        ? countText.split(/\s+/).map((entry) => Number(entry)).filter((entry) => Number.isFinite(entry))
+        : [];
+    const mergeBaseSha = safeGit(repoRoot, ['merge-base', leftRef, rightRef]);
+    return {
+        comparable: counts.length >= 2,
+        leftAheadCount: counts.length >= 2 ? counts[0] : null,
+        rightAheadCount: counts.length >= 2 ? counts[1] : null,
+        mergeBaseSha
+    };
 }
 
 export function getWorkingTreeState(repositoryRoot: string | null): WorkingTreeState | null {

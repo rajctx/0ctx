@@ -96,8 +96,9 @@ function isExtractionNoise(text: string): boolean {
 function isOperationalProcedure(text: string): boolean {
     const normalized = text.toLowerCase().trim();
     if (!normalized) return false;
-    if (/^(please\s+)?(run|open|click|choose|select|copy|paste|refresh|restart|reinstall|install|debug|repair|check|verify|review|inspect|show|switch|reopen)\b/.test(normalized)) return true;
+    if (/^(please\s+)?(run|open|click|choose|select|copy|paste|refresh|restart|reinstall|install|debug|repair|check|verify|review|inspect|show|switch|reopen|commit|checkpoint|merge|rebase|stash|create)\b/.test(normalized)) return true;
     if (/\b(if the issue remains|if needed|then refresh|then reopen|then rerun|before handing|before continuing|after reinstall)\b/.test(normalized)) return true;
+    if (/\b(before relying on this workstream|before handing this workstream|open the checked-out worktree|resolve conflicts before|rebase onto|merge main before|checkpoint local changes before|commit local changes before)\b/.test(normalized)) return true;
     return /\b(connector|daemon|runtime|payload|debug payload|install command|smoke test|utilities|setup screen|desktop app)\b/.test(normalized)
         && /\b(refresh|restart|repair|rerun|copy|open|show|check|inspect|review|reinstall|install)\b/.test(normalized);
 }
@@ -139,6 +140,63 @@ function isExecutionPlanningChatter(text: string): boolean {
     return (startsWithSequencing || hasSequencingPhrase) && hasPlanningVerb;
 }
 
+function isProgressOrCoordinationChatter(text: string): boolean {
+    const normalized = text.toLowerCase().trim();
+    if (!normalized) return false;
+
+    if (/^(please\s+)?continue\b/.test(normalized)) return true;
+    if (/^(please\s+)?go ahead\b/.test(normalized)) return true;
+    if (/^(please\s+)?keep going\b/.test(normalized)) return true;
+    if (/^(are we done|is it done|is this done|how much .*remain|how much .*remaining|what remains|what is remaining|what's remaining)\b/.test(normalized)) return true;
+    if (/^(can you|could you|please)\s+(update|track|split|plan|create)\b.*\b(linear|backlog|issues?|tasks?|child tasks?)\b/.test(normalized)) return true;
+    if (/\b(update|track|split|plan|create)\b.*\b(linear|backlog|issues?|tasks?|child tasks?)\b/.test(normalized)) return true;
+    if (/\b(progress|status)\b/.test(normalized) && /\b(remaining|done|complete|completed|in progress)\b/.test(normalized)) return true;
+    if (/\b(thank you|thanks)\b/.test(normalized) && /\b(please continue|continue|go ahead|keep going)\b/.test(normalized)) return true;
+    return false;
+}
+
+function isReadinessOrStatusChatter(text: string): boolean {
+    const normalized = text.toLowerCase().trim();
+    if (!normalized) return false;
+    if (/^(ready|next step|capture readiness|automatic context|context retrieval|mcp retrieval|repo readiness)\s*[:\-]/.test(normalized)) {
+        return true;
+    }
+    if (/\b(zero-touch|one-time setup|automatic context is ready|capture is ready|retrieval is ready|mcp registration)\b/.test(normalized)) {
+        return true;
+    }
+    if (/\b(register mcp retrieval|register automatic context|install supported integrations)\b/.test(normalized)) {
+        return true;
+    }
+    return false;
+}
+
+function isSystemContextChatter(text: string): boolean {
+    const normalized = cleanupExtractionText(text).toLowerCase().trim();
+    if (!normalized) return false;
+
+    if (/^(workspace|current workstream|recent sessions|latest checkpoints?|capture readiness|automatic context|sync policy|debug artifacts|capture retention|debug retention)\s*:/i.test(text)) {
+        return true;
+    }
+
+    if (/^no captured sessions or checkpoints for this workstream yet\b/.test(normalized)) return true;
+    if (/^checked out here\b/.test(normalized)) return true;
+    if (/^checked out elsewhere\b/.test(normalized)) return true;
+    if (/^not checked out in a known worktree\b/.test(normalized)) return true;
+    if (/^working tree has local uncommitted changes\b/.test(normalized)) return true;
+    if (/^detached head\b/.test(normalized)) return true;
+    if (/^in sync with\b/.test(normalized)) return true;
+    if (/^\d+\s+ahead of\b/.test(normalized)) return true;
+    if (/^\d+\s+behind\b/.test(normalized)) return true;
+    if (/^\d+\s+ahead\s*\/\s*\d+\s+behind\b/.test(normalized)) return true;
+
+    if (/\b(current checkout|active repo path|workstream compare|capture drift|head ref|checked-out head)\b/.test(normalized)
+        && !/\b(must|should|need to|default|policy|decision|decided|decide|constraint|goal)\b/.test(normalized)) {
+        return true;
+    }
+
+    return false;
+}
+
 function isQuotedExcerpt(text: string): boolean {
     const raw = String(text ?? '').trim().replace(/^[\-\u2022•\d.)\s]+/, '');
     const normalized = cleanupExtractionText(raw);
@@ -168,6 +226,9 @@ export function scoreKnowledgeCandidate(
     if (isImplementationStatus(text)) return null;
     if (isDesignOrLayoutChatter(text)) return null;
     if (isExecutionPlanningChatter(text)) return null;
+    if (isProgressOrCoordinationChatter(text)) return null;
+    if (isReadinessOrStatusChatter(text)) return null;
+    if (isSystemContextChatter(text)) return null;
     if (isQuotedExcerpt(text)) return null;
     if (isSourceAttributedKnowledgeCandidate(text)) return null;
 

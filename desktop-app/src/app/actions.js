@@ -39,6 +39,18 @@
     }
   }
 
+  function confirmFullSyncOptIn() {
+    if (typeof window === 'undefined' || typeof window.confirm !== 'function') {
+      return true;
+    }
+    return window.confirm(
+      'Full sync is an explicit workspace override.\n\n'
+      + 'This workspace will send richer metadata to the cloud.\n'
+      + 'Local raw payloads still stay on this machine.\n\n'
+      + 'Use this only when the workspace should opt into fuller remote sync.'
+    );
+  }
+
   async function applyDataPolicyPreset(preset) {
     if (!methodSupported('setDataPolicy')) {
       setStatus('Update the local runtime before changing data policy from the desktop.');
@@ -52,6 +64,10 @@
     }
     if (normalized === 'shared' && !state.activeContextId) {
       setStatus('Full sync requires an active workspace because it is an explicit workspace override.');
+      return;
+    }
+    if (normalized === 'shared' && !confirmFullSyncOptIn()) {
+      setStatus('Full sync change canceled.');
       return;
     }
 

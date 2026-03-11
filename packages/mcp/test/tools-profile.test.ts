@@ -6,10 +6,11 @@ import {
 } from '../src/tools';
 
 describe('MCP tool profile resolution', () => {
-    it('defaults to all tools when profile is unset', () => {
+    it('defaults to the core tool surface when profile is unset', () => {
         const resolved = resolveMcpToolProfile(undefined);
-        expect(resolved.all).toBe(true);
-        expect(resolved.normalized).toBe('all');
+        expect(resolved.all).toBe(false);
+        expect(resolved.normalized).toBe('core');
+        expect(resolved.scopes).toEqual(['core']);
     });
 
     it('expands recall profile to include core scope', () => {
@@ -20,9 +21,11 @@ describe('MCP tool profile resolution', () => {
         expect(resolved.scopes).toContain('recall');
     });
 
-    it('falls back to all for invalid profile tokens', () => {
+    it('falls back to core for invalid profile tokens', () => {
         const resolved = resolveMcpToolProfile('bad-token');
-        expect(resolved.all).toBe(true);
+        expect(resolved.all).toBe(false);
+        expect(resolved.normalized).toBe('core');
+        expect(resolved.scopes).toEqual(['core']);
         expect(resolved.invalidTokens).toEqual(['bad-token']);
     });
 });

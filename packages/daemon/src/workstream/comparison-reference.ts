@@ -32,6 +32,7 @@ export function alignBriefToReferenceWorktree(
         branch: brief.branch,
         isDetachedHead: brief.isDetachedHead,
         headDiffersFromCaptured: brief.headDiffersFromCaptured,
+        captureDrift: brief.captureDrift,
         checkedOutHere,
         checkedOutElsewhere,
         hasUncommittedChanges: brief.hasUncommittedChanges,

@@ -243,8 +243,8 @@
     let summary = '';
     if (lane.isDetachedHead === true && lane.currentHeadSha) {
       summary = `Detached HEAD at ${commitShort(lane.currentHeadSha)}`;
-    } else if (lane.headDiffersFromCaptured === true && lane.lastCommitSha && lane.currentHeadSha) {
-      summary = `Capture drift: ${commitShort(lane.lastCommitSha)} -> ${commitShort(lane.currentHeadSha)}`;
+    } else if (lane.headDiffersFromCaptured === true && lane.captureDrift?.summary) {
+      summary = lane.captureDrift.summary;
     } else if (lane.baseline && typeof lane.baseline.summary === 'string' && lane.baseline.summary.trim()) {
       summary = lane.baseline.summary;
     } else if (typeof lane.aheadCount === 'number' && typeof lane.behindCount === 'number' && lane.upstream) {
@@ -500,6 +500,9 @@
               ${formatEvidenceSummary(candidate.evidenceSummary) ? `<span>${esc(formatEvidenceSummary(candidate.evidenceSummary))}</span>` : ''}
               ${formatReason(candidate.reason) ? `<span>Why: ${esc(formatReason(candidate.reason))}</span>` : ''}
               ${candidate.reviewSummary ? `<span>${esc(candidate.reviewSummary)}</span>` : ''}
+              ${candidate.trustSummary ? `<span>${esc(candidate.trustSummary)}</span>` : ''}
+              ${typeof candidate.distinctSessionCount === 'number' && candidate.distinctSessionCount > 0 ? `<span>${esc(`${candidate.distinctSessionCount} session${candidate.distinctSessionCount === 1 ? '' : 's'}`)}</span>` : ''}
+              ${candidate.promotionSummary ? `<span>${esc(candidate.promotionSummary)}</span>` : ''}
               ${candidate.autoPersistSummary ? `<span>${esc(candidate.autoPersistSummary)}</span>` : ''}
             </div>
           </div>

@@ -1,10 +1,92 @@
-import type { WorkstreamBaselineComparison } from '@0ctx/core';
+import type { WorkstreamBaselineComparison, WorkstreamCaptureDrift } from '@0ctx/core';
+
+export function deriveCaptureDrift(options: {
+    headDiffersFromCaptured: boolean | null;
+    currentHeadSha?: string | null;
+    lastCapturedCommitSha?: string | null;
+    currentAheadCount?: number | null;
+    currentBehindCount?: number | null;
+    mergeBaseSha?: string | null;
+}): WorkstreamCaptureDrift | null {
+    const {
+        headDiffersFromCaptured,
+        currentHeadSha,
+        lastCapturedCommitSha,
+        currentAheadCount,
+        currentBehindCount,
+        mergeBaseSha
+    } = options;
+
+    if (!currentHeadSha || !lastCapturedCommitSha) {
+        return null;
+    }
+
+    const sameCommit = currentHeadSha === lastCapturedCommitSha;
+    if (sameCommit || headDiffersFromCaptured === false) {
+        return {
+            comparable: true,
+            kind: 'same',
+            currentAheadCount: 0,
+            currentBehindCount: 0,
+            mergeBaseSha: mergeBaseSha ?? null,
+            summary: 'Current HEAD matches the last captured commit.',
+            actionHint: null
+        };
+    }
+
+    if (typeof currentAheadCount === 'number' && typeof currentBehindCount === 'number') {
+        if (currentAheadCount > 0 && currentBehindCount === 0) {
+            return {
+                comparable: true,
+                kind: 'ahead',
+                currentAheadCount,
+                currentBehindCount,
+                mergeBaseSha: mergeBaseSha ?? null,
+                summary: `Current HEAD is ${currentAheadCount} commit${currentAheadCount === 1 ? '' : 's'} ahead of the last captured commit.`,
+                actionHint: 'Capture a fresh session or checkpoint so project memory matches the current HEAD before handoff.'
+            };
+        }
+        if (currentAheadCount === 0 && currentBehindCount > 0) {
+            return {
+                comparable: true,
+                kind: 'behind',
+                currentAheadCount,
+                currentBehindCount,
+                mergeBaseSha: mergeBaseSha ?? null,
+                summary: `Current HEAD is ${currentBehindCount} commit${currentBehindCount === 1 ? '' : 's'} behind the last captured commit.`,
+                actionHint: 'Switch back to the captured commit or capture this older checkout deliberately before relying on memory.'
+            };
+        }
+        if (currentAheadCount > 0 && currentBehindCount > 0) {
+            return {
+                comparable: true,
+                kind: 'diverged',
+                currentAheadCount,
+                currentBehindCount,
+                mergeBaseSha: mergeBaseSha ?? null,
+                summary: `Current HEAD diverged from the last captured commit (${currentAheadCount} ahead / ${currentBehindCount} behind).`,
+                actionHint: 'Compare the current HEAD against the last captured commit and capture a fresh session or checkpoint before handoff.'
+            };
+        }
+    }
+
+    return {
+        comparable: false,
+        kind: 'unknown',
+        currentAheadCount: currentAheadCount ?? null,
+        currentBehindCount: currentBehindCount ?? null,
+        mergeBaseSha: mergeBaseSha ?? null,
+        summary: 'Current HEAD differs from the last captured commit.',
+        actionHint: 'Capture a fresh session or checkpoint so project memory matches the current HEAD before handoff.'
+    };
+}
 
 export function deriveWorkstreamState(
     data: {
         branch: string | null;
         isDetachedHead: boolean | null;
         headDiffersFromCaptured: boolean | null;
+        captureDrift?: WorkstreamCaptureDrift | null;
         checkedOutHere?: boolean | null;
         checkedOutElsewhere?: boolean | null;
         hasUncommittedChanges: boolean | null;
@@ -26,7 +108,11 @@ export function deriveWorkstreamState(
         return { kind: 'elsewhere', summary: 'Checked out in another worktree, not in the current checkout.', actionHint: 'Open the checked-out worktree before continuing on this workstream.' };
     }
     if (data.headDiffersFromCaptured) {
-        return { kind: 'drifted', summary: 'Current HEAD differs from the last captured commit.', actionHint: 'Capture a fresh session or checkpoint so memory matches the current HEAD.' };
+        return {
+            kind: 'drifted',
+            summary: data.captureDrift?.summary ?? 'Current HEAD differs from the last captured commit.',
+            actionHint: data.captureDrift?.actionHint ?? 'Capture a fresh session or checkpoint so memory matches the current HEAD.'
+        };
     }
     if (data.hasUncommittedChanges) {
         return { kind: 'dirty', summary: 'Working tree has local uncommitted changes.', actionHint: 'Commit or checkpoint local changes before handing this workstream to another agent.' };

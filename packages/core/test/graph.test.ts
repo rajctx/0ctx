@@ -416,7 +416,11 @@ describe('Graph context isolation', () => {
             expect(String(repeatedGoal?.reviewSummary || '')).toContain('one session');
             expect(repeatedGoal?.autoPersist).toBe(false);
             expect(String(repeatedGoal?.autoPersistSummary || '')).toContain('Single-session corroboration stays manual');
+            expect(repeatedGoal?.distinctSessionCount).toBe(1);
             expect(String(repeatedGoal?.evidenceSummary || '')).toContain('Repeated 2 times across user and assistant messages');
+            expect(String(repeatedGoal?.trustSummary || '')).toContain('Repeated within one session only');
+            expect(repeatedGoal?.promotionState).toBe('review');
+            expect(String(repeatedGoal?.promotionSummary || '')).toContain('single session');
             expect(repeatedGoal?.trustFlags).toEqual(expect.arrayContaining(['repeated', 'distinct_support', 'cross_role', 'same_session_only']));
             expect(Array.isArray(repeatedGoal?.evidencePreview)).toBe(true);
             expect(String(repeatedGoal?.sourceExcerpt || '')).toContain('branch-first desktop workflow');

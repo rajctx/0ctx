@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createEnableCommands } from '../src/commands/product/enable';
-import { parseEnableMcpClients, parseHookClients, validateExplicitPreviewSelection } from '../src/cli-core/clients';
+import { detectPreviewSelections, parseEnableMcpClients, parseHookClients, validateExplicitPreviewSelection, validatePreviewOptIn } from '../src/cli-core/clients';
 import { parseOptionalStringFlag, parsePositiveIntegerFlag, parsePositiveNumberFlag } from '../src/cli-core/args';
 
 describe('commandEnable', () => {
@@ -25,6 +25,8 @@ describe('commandEnable', () => {
 
         const deps = {
             validateExplicitPreviewSelection,
+            validatePreviewOptIn,
+            detectPreviewSelections,
             parseHookClients,
             parseEnableMcpClients,
             parseOptionalStringFlag,
@@ -139,6 +141,8 @@ describe('commandEnable', () => {
 
         const deps = {
             validateExplicitPreviewSelection,
+            validatePreviewOptIn,
+            detectPreviewSelections,
             parseHookClients,
             parseEnableMcpClients,
             parseOptionalStringFlag,
@@ -261,6 +265,8 @@ describe('commandEnable', () => {
 
         const deps = {
             validateExplicitPreviewSelection,
+            validatePreviewOptIn,
+            detectPreviewSelections,
             parseHookClients,
             parseEnableMcpClients,
             parseOptionalStringFlag,
@@ -318,5 +324,47 @@ describe('commandEnable', () => {
             status: 'pass',
             message: 'Normalized the current custom data policy to the lean default.'
         });
+    });
+
+    it('rejects preview capture integrations on the enable path', async () => {
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const deps = {
+            validateExplicitPreviewSelection,
+            validatePreviewOptIn,
+            detectPreviewSelections,
+            parseHookClients,
+            parseEnableMcpClients,
+            parseOptionalStringFlag,
+            parsePositiveIntegerFlag,
+            parsePositiveNumberFlag,
+            resolveRepoRoot: () => 'C:\\repo'
+        };
+
+        const { commandEnable } = createEnableCommands(deps as never);
+        const exitCode = await commandEnable({ clients: 'codex', json: true });
+
+        expect(exitCode).toBe(1);
+        expect(String(consoleError.mock.calls[0]?.[0] ?? '')).toContain('supports only GA capture integrations');
+    });
+
+    it('rejects preview MCP integrations on the enable path', async () => {
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const deps = {
+            validateExplicitPreviewSelection,
+            validatePreviewOptIn,
+            detectPreviewSelections,
+            parseHookClients,
+            parseEnableMcpClients,
+            parseOptionalStringFlag,
+            parsePositiveIntegerFlag,
+            parsePositiveNumberFlag,
+            resolveRepoRoot: () => 'C:\\repo'
+        };
+
+        const { commandEnable } = createEnableCommands(deps as never);
+        const exitCode = await commandEnable({ 'mcp-clients': 'codex', json: true });
+
+        expect(exitCode).toBe(1);
+        expect(String(consoleError.mock.calls[0]?.[0] ?? '')).toContain('supports only GA automatic retrieval targets');
     });
 });

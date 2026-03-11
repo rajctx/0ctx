@@ -48,6 +48,11 @@ export function createStatusCommands(deps: ProductCommandDeps) {
         }
 
         const methodNames = Array.isArray(capabilities?.methods) ? capabilities.methods : [];
+        const repoRootHint = deps.findGitRepoRoot(null);
+        const repoReadiness = daemon.ok && repoRootHint
+            ? await deps.collectRepoReadiness({ repoRoot: repoRootHint }).catch(() => null)
+            : null;
+
         const payload = {
             ok: daemon.ok && missingFeatures.length === 0,
             daemon: {
@@ -68,7 +73,12 @@ export function createStatusCommands(deps: ProductCommandDeps) {
                 methods: methodNames,
                 missingFeatures
             } : null,
-            apiError
+            apiError,
+            repo: {
+                insideRepo: Boolean(repoRootHint),
+                repoRoot: repoRootHint,
+                readiness: repoReadiness
+            }
         };
 
         if (asJson) {
@@ -81,7 +91,10 @@ export function createStatusCommands(deps: ProductCommandDeps) {
             const sync = payload.daemon.health?.sync as { enabled?: boolean; running?: boolean } | null | undefined;
             const syncState = sync ? `enabled=${Boolean(sync.enabled)} running=${Boolean(sync.running)}` : 'enabled=false running=false';
             const reason = payload.daemon.running ? (missing.length > 0 ? `missing=${missing.join(',')}` : 'healthy') : `error=${payload.daemon.error ?? 'unknown'}`;
-            console.log(`status=${payload.ok ? 'ok' : 'degraded'} daemon=${payload.daemon.running ? 'running' : 'offline'} methods=${methodCount} sync="${syncState}" reason=${reason}`);
+            const repoState = repoReadiness
+                ? ` repo="${repoReadiness.repoRoot}" workspace="${repoReadiness.workspaceName ?? '-'}" zero_touch=${repoReadiness.zeroTouchReady} policy="${deps.formatSyncPolicyLabel(repoReadiness.syncPolicy)}" capture="${repoReadiness.captureRetentionDays}d" debug="${repoReadiness.debugArtifactsEnabled ? 'on' : 'off'}:${repoReadiness.debugRetentionDays}d"`
+                : '';
+            console.log(`status=${payload.ok ? 'ok' : 'degraded'} daemon=${payload.daemon.running ? 'running' : 'offline'} methods=${methodCount} sync="${syncState}" reason=${reason}${repoState}`);
             return payload.ok ? 0 : 1;
         }
         if (!p) return payload.ok ? 0 : 1;
@@ -108,7 +121,6 @@ export function createStatusCommands(deps: ProductCommandDeps) {
             return 1;
         }
 
-        const repoRootHint = deps.findGitRepoRoot(null);
         if (!repoRootHint) {
             p.note([
                 deps.formatLabelValue('Runtime', color.green('ready')),
@@ -119,7 +131,6 @@ export function createStatusCommands(deps: ProductCommandDeps) {
             return 0;
         }
 
-        const repoReadiness = await deps.collectRepoReadiness({ repoRoot: repoRootHint }).catch(() => null);
         if (!repoReadiness) {
             p.note([
                 deps.formatLabelValue('Runtime', color.green('ready')),

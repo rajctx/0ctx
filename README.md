@@ -73,7 +73,7 @@ cd <repo>
 0ctx sync policy get --repo-root=.
 0ctx sync policy set metadata_only --repo-root=.
 # Opt in to richer cloud sync explicitly
-0ctx sync policy set full_sync --repo-root=.
+0ctx sync policy set full_sync --repo-root=. --confirm-full-sync
 
 # Run connector control loop in foreground (service target mode)
 0ctx connector run --interval-ms=5000

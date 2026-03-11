@@ -69,6 +69,11 @@ export function createSyncCommands(deps: PolicyCommandDeps) {
             console.error('Invalid policy. Expected one of: local_only, metadata_only, full_sync.');
             return 1;
         }
+        const confirmFullSync = Boolean(flags['confirm-full-sync']) || Boolean(flags.confirmFullSync);
+        if (policy === 'full_sync' && !confirmFullSync) {
+            console.error('full_sync requires explicit confirmation. Re-run with --confirm-full-sync if this workspace should send richer metadata to the cloud.');
+            return 1;
+        }
 
         try {
             const result = await sendToDaemon('setSyncPolicy', { contextId, syncPolicy: policy }) as { contextId: string; syncPolicy: string };

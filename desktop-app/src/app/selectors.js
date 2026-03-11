@@ -459,6 +459,14 @@
     return `0ctx enable --repo-root "${currentRepoRoot()}"`;
   }
 
+  function policyCleanupCommand() {
+    const repoRoot = currentRepoRoot();
+    if (!repoRoot || repoRoot === '<repo-root>') {
+      return '0ctx data-policy cleanup';
+    }
+    return `0ctx data-policy cleanup --repo-root "${repoRoot}"`;
+  }
+
   function describeBranchLane(lane) {
     const title = lane?.isDetachedHead && lane?.currentHeadSha
       ? `detached HEAD @ ${commitShort(lane.currentHeadSha)}`
@@ -540,6 +548,6 @@
     document.getElementById('statusTime').textContent = `Updated ${new Date().toLocaleTimeString()}`;
   }
 
-  Object.assign(app, { bindById, matches, activeContext, selectedTurn, branchKey, normalizeBranch, activeBranch, comparisonTargetBranch, activeSession, selectedCheckpoint, activeInsightNode, contextById, workspaceComparisonTargetContext, extractTagValue, insightSummary, insightTargetContexts, syncInsightSelection, syncPromotionTargetSelection, workspaceComparisonTargets, syncWorkspaceComparisonTargetSelection, installedAgents, isGaIntegration, installedGaAgents, autoContextGaAgents, currentRepoReadiness, integrationLabel, formatIntegrationNote, methodSupported, missingRequiredMethods, integrationListText, hasLocalRuntimeData, formatPosture, postureClass, formatSyncPolicyLabel, formatDataPolicyPresetLabel, captureState, zeroTouchState, automaticContextState, capturePolicySummary, dataPolicyActionHint, debugArtifactsEnabled, currentRepoRoot, enableCommand, describeBranchLane, syncComparisonTargetSelection, describeCheckpoint, syncBranchSelectionFromSession, resetBranchScopedState, setStatus });
+  Object.assign(app, { bindById, matches, activeContext, selectedTurn, branchKey, normalizeBranch, activeBranch, comparisonTargetBranch, activeSession, selectedCheckpoint, activeInsightNode, contextById, workspaceComparisonTargetContext, extractTagValue, insightSummary, insightTargetContexts, syncInsightSelection, syncPromotionTargetSelection, workspaceComparisonTargets, syncWorkspaceComparisonTargetSelection, installedAgents, isGaIntegration, installedGaAgents, autoContextGaAgents, currentRepoReadiness, integrationLabel, formatIntegrationNote, methodSupported, missingRequiredMethods, integrationListText, hasLocalRuntimeData, formatPosture, postureClass, formatSyncPolicyLabel, formatDataPolicyPresetLabel, captureState, zeroTouchState, automaticContextState, capturePolicySummary, dataPolicyActionHint, debugArtifactsEnabled, currentRepoRoot, enableCommand, policyCleanupCommand, describeBranchLane, syncComparisonTargetSelection, describeCheckpoint, syncBranchSelectionFromSession, resetBranchScopedState, setStatus });
 })();
 

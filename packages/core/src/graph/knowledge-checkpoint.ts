@@ -77,6 +77,21 @@ type KnowledgeCheckpointDeps = {
             distinctSessionCount?: number;
         }
     ) => string[];
+    buildKnowledgeTrustSummary: (
+        reviewSummary: string | null | undefined,
+        evidenceSummary: string | null | undefined
+    ) => string;
+    describeKnowledgePromotionState: (input: {
+        trustTier: 'strong' | 'review' | 'weak';
+        evidenceCount: number;
+        distinctEvidenceCount: number;
+        distinctSessionCount: number;
+        originContextId: string | null;
+        originNodeId: string | null;
+    }) => {
+        promotionState: 'ready' | 'review' | 'blocked';
+        promotionSummary: string;
+    };
     addNode: (params: AddNodeInput) => ContextNode;
 };
 
@@ -130,6 +145,17 @@ export function previewKnowledgeFromCheckpointRecord(
     const autoPersist = deps.classifyKnowledgeAutoPersist(review.reviewTier, 1, 1, roles, {
         distinctSessionCount: 1
     });
+    const evidenceSummary = deps.buildKnowledgeEvidenceSummary(1, 1, roles, {
+        distinctSessionCount: 1
+    });
+    const promotion = deps.describeKnowledgePromotionState({
+        trustTier: review.reviewTier,
+        evidenceCount: 1,
+        distinctEvidenceCount: 1,
+        distinctSessionCount: 1,
+        originContextId: null,
+        originNodeId: null
+    });
     if (options.autoPersistOnly && !autoPersist.autoPersist) {
         return {
             contextId: checkpoint.contextId,
@@ -168,15 +194,17 @@ export function previewKnowledgeFromCheckpointRecord(
             reason: classified.reason,
             evidenceCount: 1,
             distinctEvidenceCount: 1,
-            evidenceSummary: deps.buildKnowledgeEvidenceSummary(1, 1, roles, {
-                distinctSessionCount: 1
-            }),
+            distinctSessionCount: 1,
+            evidenceSummary,
             trustFlags: deps.buildKnowledgeTrustFlags(1, 1, roles, {
                 distinctSessionCount: 1
             }),
             corroboratedRoles: ['assistant'],
             reviewTier: review.reviewTier,
             reviewSummary: review.reviewSummary,
+            trustSummary: deps.buildKnowledgeTrustSummary(review.reviewSummary, evidenceSummary),
+            promotionState: promotion.promotionState,
+            promotionSummary: promotion.promotionSummary,
             autoPersist: autoPersist.autoPersist,
             autoPersistSummary: autoPersist.autoPersistSummary
         }]

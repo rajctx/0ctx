@@ -71,3 +71,56 @@ export function validateExplicitPreviewSelection(
     }
     return null;
 }
+
+export function validatePreviewOptIn(
+    raw: string | boolean | undefined,
+    allowPreview: boolean,
+    previewList: string,
+    gaExample = 'ga'
+): string | null {
+    if (!raw || typeof raw !== 'string') return null;
+    if (allowPreview) return null;
+
+    const normalized = raw.trim().toLowerCase();
+    if (!normalized || normalized === 'ga' || normalized === 'none') return null;
+
+    const previewClients = new Set(
+        previewList
+            .split(/[,\s]+/)
+            .map(item => item.trim().toLowerCase())
+            .filter(Boolean)
+    );
+    const selectedPreviewClients = normalized
+        .split(/[,\s]+/)
+        .map(item => item.trim().toLowerCase())
+        .filter(item => previewClients.has(item));
+
+    if (selectedPreviewClients.length === 0) return null;
+
+    const explicitPreview = Array.from(new Set(selectedPreviewClients)).join(',');
+    return `Preview integrations require explicit opt-in. Use --allow-preview with --clients=${explicitPreview} or stay on --clients=${gaExample}.`;
+}
+
+export function detectPreviewSelections(
+    raw: string | boolean | undefined,
+    previewList: string
+): string[] {
+    if (!raw || typeof raw !== 'string') return [];
+
+    const normalized = raw.trim().toLowerCase();
+    if (!normalized || normalized === 'ga' || normalized === 'none') return [];
+
+    const previewClients = new Set(
+        previewList
+            .split(/[,\s]+/)
+            .map(item => item.trim().toLowerCase())
+            .filter(Boolean)
+    );
+
+    return Array.from(new Set(
+        normalized
+            .split(/[,\s]+/)
+            .map(item => item.trim().toLowerCase())
+            .filter(item => previewClients.has(item))
+    ));
+}
