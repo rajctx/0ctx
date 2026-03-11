@@ -37,6 +37,7 @@ describe('commandEnable data policy output', () => {
         const deps = {
             validateExplicitPreviewSelection,
             validatePreviewOptIn,
+            detectPreviewSelections: vi.fn(() => []),
             parseHookClients,
             parseEnableMcpClients,
             parseOptionalStringFlag,

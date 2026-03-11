@@ -121,7 +121,7 @@ describe('repo readiness display', () => {
         expect(lines.some((line) => line.includes('not installed'))).toBe(false);
     });
 
-    it('keeps zero-touch context ready when session-start works but deeper retrieval is still optional', () => {
+    it('marks zero-touch as incomplete when MCP retrieval registration is still missing', () => {
         const lines = buildRepoReadinessLines({
             mode: 'status',
             repoReadiness: {
@@ -142,8 +142,8 @@ describe('repo readiness display', () => {
                 syncScope: 'workspace',
                 captureScope: 'machine',
                 debugScope: 'machine',
-                zeroTouchReady: true,
-                nextActionHint: null,
+                zeroTouchReady: false,
+                nextActionHint: 'Register MCP retrieval for claude.',
                 dataPolicyPreset: 'lean',
                 dataPolicyActionHint: null,
                 captureRetentionDays: 14,
@@ -156,8 +156,8 @@ describe('repo readiness display', () => {
             formatSyncPolicyLabel: (policy) => String(policy ?? '')
         });
 
-        expect(lines).toContain('Ready: zero-touch for supported agents');
-        expect(lines).toContain('Context: claude inject current workstream context automatically');
-        expect(lines.some((line) => line.includes('need automatic retrieval setup'))).toBe(false);
+        expect(lines).toContain('Ready: needs one-time setup');
+        expect(lines).toContain('Context: claude inject current workstream context automatically; claude need MCP retrieval registration');
+        expect(lines).toContain('Next step: Register MCP retrieval for claude.');
     });
 });
