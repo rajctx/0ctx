@@ -69,10 +69,15 @@ export interface InsightSummary {
     key: string | null;
     evidenceCount: number;
     distinctEvidenceCount: number;
+    distinctSessionCount: number;
     corroboratedRoles: string[];
+    trustFlags: string[];
     latestEvidenceAt: number | null;
+    evidencePreview: string[];
     trustTier: 'strong' | 'review' | 'weak';
     trustSummary: string;
+    promotionState: 'ready' | 'review' | 'blocked';
+    promotionSummary: string;
     originContextId: string | null;
     originNodeId: string | null;
 }
@@ -125,8 +130,11 @@ export interface KnowledgeCandidate {
     sourceExcerpt?: string | null;
     evidencePreview?: string[];
     corroboratedRoles?: string[];
+    trustFlags?: string[];
     reviewTier?: 'strong' | 'review' | 'weak';
     reviewSummary?: string | null;
+    autoPersist?: boolean;
+    autoPersistSummary?: string | null;
 }
 
 export interface KnowledgePreviewResult {

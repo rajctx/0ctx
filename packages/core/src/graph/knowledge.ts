@@ -53,15 +53,23 @@ export function buildKnowledgeEvidenceReason(
 export function buildKnowledgeEvidenceSummary(
     evidenceCount: number,
     distinctEvidenceCount: number,
-    roles: Set<string>
+    roles: Set<string>,
+    options: {
+        distinctSessionCount?: number;
+    } = {}
 ): string {
     const crossRole = roles.has('assistant') && roles.has('user');
     const assistantOnly = roles.size === 1 && roles.has('assistant');
     const userOnly = roles.size === 1 && roles.has('user');
+    const distinctSessionCount = Math.max(0, Number(options.distinctSessionCount || 0));
 
     let summary = 'Single captured mention.';
-    if (evidenceCount > 1 && crossRole) {
+    if (evidenceCount > 1 && crossRole && distinctSessionCount > 1) {
+        summary = `Repeated ${evidenceCount} times across user and assistant messages in ${distinctSessionCount} sessions.`;
+    } else if (evidenceCount > 1 && crossRole) {
         summary = `Repeated ${evidenceCount} times across user and assistant messages.`;
+    } else if (evidenceCount > 1 && distinctSessionCount > 1) {
+        summary = `Repeated ${evidenceCount} times across ${distinctSessionCount} sessions.`;
     } else if (evidenceCount > 1) {
         summary = `Repeated ${evidenceCount} times in captured messages.`;
     } else if (crossRole) {
@@ -75,7 +83,40 @@ export function buildKnowledgeEvidenceSummary(
     if (distinctEvidenceCount > 0 && evidenceCount > distinctEvidenceCount) {
         summary += ` Distinct supporting statements: ${distinctEvidenceCount}.`;
     }
+    if (evidenceCount > 1 && distinctSessionCount === 1) {
+        summary += ' All corroboration comes from one session.';
+    }
     return summary;
+}
+
+export function buildKnowledgeTrustFlags(
+    evidenceCount: number,
+    distinctEvidenceCount: number,
+    roles: Set<string>,
+    options: {
+        promoted?: boolean;
+        noLocalEvidence?: boolean;
+        distinctSessionCount?: number;
+    } = {}
+): string[] {
+    const flags = new Set<string>();
+    const crossRole = roles.has('assistant') && roles.has('user');
+    const assistantOnly = roles.size === 1 && roles.has('assistant');
+    const userOnly = roles.size === 1 && roles.has('user');
+    const distinctSessionCount = Math.max(0, Number(options.distinctSessionCount || 0));
+
+    if (evidenceCount > 1) flags.add('repeated');
+    if (distinctEvidenceCount > 1) flags.add('distinct_support');
+    if (evidenceCount > 1 && distinctSessionCount === 1) flags.add('same_session_only');
+    if (distinctSessionCount > 1) flags.add('cross_session');
+    if (crossRole) flags.add('cross_role');
+    if (assistantOnly) flags.add('assistant_only');
+    if (userOnly) flags.add('user_only');
+    if (evidenceCount > distinctEvidenceCount && distinctEvidenceCount <= 1) flags.add('duplicate_only');
+    if (options.promoted) flags.add('promoted');
+    if (options.noLocalEvidence) flags.add('no_local_evidence');
+
+    return Array.from(flags);
 }
 
 export function classifyKnowledgeReviewTier(
@@ -83,23 +124,52 @@ export function classifyKnowledgeReviewTier(
     confidence: number,
     evidenceCount: number,
     distinctEvidenceCount: number,
-    roles: Set<string>
+    roles: Set<string>,
+    options: {
+        distinctSessionCount?: number;
+    } = {}
 ): {
     reviewTier: 'strong' | 'review' | 'weak';
     reviewSummary: string;
 } {
     const crossRole = roles.has('assistant') && roles.has('user');
+    const singleRoleOnly = roles.size === 1;
     const assistantOnlySingle = distinctEvidenceCount === 1 && roles.size === 1 && roles.has('assistant');
-    if (confidence >= 0.8 && distinctEvidenceCount >= 2 && crossRole) {
+    const distinctSessionCount = Math.max(0, Number(options.distinctSessionCount || 0));
+    const sameSessionOnly = distinctSessionCount <= 1 && evidenceCount > 1;
+
+    if (sameSessionOnly && crossRole && confidence >= 0.8) {
         return {
-            reviewTier: 'strong',
-            reviewSummary: 'Strong signal backed by repeated cross-role evidence.'
+            reviewTier: 'review',
+            reviewSummary: 'Repeated within one session only. Review before treating it as durable project memory.'
         };
     }
-    if (confidence >= 0.9 && (distinctEvidenceCount >= 2 || crossRole)) {
+    if (confidence >= 0.8 && distinctEvidenceCount >= 2 && crossRole) {
+        if (distinctSessionCount <= 1) {
+            return {
+                reviewTier: 'review',
+                reviewSummary: 'Strong wording, but the corroboration still comes from one session. Review before promoting it into shared memory.'
+            };
+        }
         return {
             reviewTier: 'strong',
-            reviewSummary: 'Strong signal backed by repeated or cross-role evidence.'
+            reviewSummary: distinctSessionCount > 1
+                ? 'Strong signal corroborated across sessions and roles.'
+                : 'Strong signal backed by repeated cross-role evidence.'
+        };
+    }
+    if (confidence >= 0.9 && crossRole) {
+        if (distinctSessionCount <= 1) {
+            return {
+                reviewTier: 'review',
+                reviewSummary: 'High-confidence signal, but it only appears inside one session. Review before promoting it beyond this run.'
+            };
+        }
+        return {
+            reviewTier: 'strong',
+            reviewSummary: distinctSessionCount > 1
+                ? 'Strong signal backed by repeated or cross-role evidence across sessions.'
+                : 'Strong signal backed by repeated or cross-role evidence.'
         };
     }
     if (
@@ -117,12 +187,74 @@ export function classifyKnowledgeReviewTier(
     if (confidence >= 0.78 || distinctEvidenceCount >= 2 || crossRole) {
         return {
             reviewTier: 'review',
-            reviewSummary: 'Good candidate. Review before promoting it into shared memory.'
+            reviewSummary: singleRoleOnly && distinctEvidenceCount >= 2
+                ? 'Repeated single-role signal. Review before promoting it into shared memory.'
+                : distinctSessionCount === 1 && evidenceCount > 1
+                    ? 'Single-session signal. Review before promoting it beyond this workstream.'
+                    : 'Good candidate. Review before promoting it into shared memory.'
         };
     }
     return {
         reviewTier: 'weak',
         reviewSummary: 'Tentative signal. Keep in review until more evidence appears.'
+    };
+}
+
+export function classifyKnowledgeAutoPersist(
+    reviewTier: 'strong' | 'review' | 'weak',
+    evidenceCount: number,
+    distinctEvidenceCount: number,
+    roles: Set<string>,
+    options: {
+        distinctSessionCount?: number;
+    } = {}
+): {
+    autoPersist: boolean;
+    autoPersistSummary: string;
+} {
+    const crossRole = roles.has('assistant') && roles.has('user');
+    const assistantOnly = roles.size === 1 && roles.has('assistant');
+    const distinctSessionCount = Math.max(0, Number(options.distinctSessionCount || 0));
+    const sameSessionOnly = distinctSessionCount <= 1 && evidenceCount > 1;
+
+    if (assistantOnly) {
+        return {
+            autoPersist: false,
+            autoPersistSummary: 'Assistant-only signals stay out of automatic checkpoint extraction until they are corroborated.'
+        };
+    }
+
+    if (sameSessionOnly) {
+        return {
+            autoPersist: false,
+            autoPersistSummary: 'Single-session corroboration stays manual until another session confirms the same signal.'
+        };
+    }
+
+    if (reviewTier !== 'strong') {
+        return {
+            autoPersist: false,
+            autoPersistSummary: 'Review-only candidate. Keep it manual until corroboration is stronger.'
+        };
+    }
+
+    if (!crossRole && distinctSessionCount <= 1 && distinctEvidenceCount < 3) {
+        return {
+            autoPersist: false,
+            autoPersistSummary: 'Strong wording, but still too narrow in source coverage for automatic writing.'
+        };
+    }
+
+    if (evidenceCount >= 2 && (crossRole || distinctSessionCount > 1 || distinctEvidenceCount >= 3)) {
+        return {
+            autoPersist: true,
+            autoPersistSummary: 'Auto-persistable. Evidence is strong enough for checkpoint-time writing.'
+        };
+    }
+
+    return {
+        autoPersist: false,
+        autoPersistSummary: 'Keep this reviewed manually until corroboration broadens.'
     };
 }
 

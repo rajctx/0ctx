@@ -1,5 +1,6 @@
 import { readAuthState } from '../auth';
 import { listBackups } from '../backup';
+import { buildRepoReadinessSummary } from '../readiness/repo-readiness';
 import { createSession, touchSession } from '../resolver';
 import { readHookHealth } from './hook-health';
 import { getContextIdFromParams, resolveContextId } from './shared';
@@ -32,13 +33,13 @@ export function dispatchRuntimeRequest(context: HandlerMethodContext): MethodDis
     if (req.method === 'getCapabilities') {
         return handled({
             apiVersion: '2',
-            features: ['sessions', 'workstream_briefs', 'health', 'capabilities', 'audit_logs', 'audit_verify', 'metrics', 'backup_restore', 'auth', 'sync', 'sync_policies', 'data_policy', 'blackboard_events', 'task_leases', 'quality_gates', 'recall', 'recall_feedback', 'chat_payloads', 'hook_health'],
+            features: ['sessions', 'workstream_briefs', 'health', 'capabilities', 'audit_logs', 'audit_verify', 'metrics', 'backup_restore', 'auth', 'sync', 'sync_policies', 'data_policy', 'blackboard_events', 'task_leases', 'quality_gates', 'recall', 'recall_feedback', 'chat_payloads', 'hook_health', 'repo_readiness'],
             methods: [
                 'listContexts', 'createContext', 'deleteContext', 'switchContext', 'getActiveContext',
                 'addNode', 'getNode', 'updateNode', 'getByKey', 'deleteNode',
                 'addEdge', 'getSubgraph', 'search', 'getGraphData',
                 'listChatSessions', 'listChatTurns', 'getNodePayload', 'getHookHealth',
-                'listBranchLanes', 'getWorkstreamBrief', 'getAgentContextPack', 'compareWorkstreams', 'compareWorkspaces', 'listBranchSessions', 'listSessionMessages',
+                'listBranchLanes', 'getWorkstreamBrief', 'getAgentContextPack', 'getRepoReadiness', 'compareWorkstreams', 'compareWorkspaces', 'listBranchSessions', 'listSessionMessages',
                 'listBranchCheckpoints', 'getSessionDetail', 'getCheckpointDetail',
                 'getHandoffTimeline', 'previewSessionKnowledge', 'previewCheckpointKnowledge',
                 'extractSessionKnowledge', 'extractCheckpointKnowledge', 'promoteInsight',
@@ -94,6 +95,13 @@ export function dispatchRuntimeRequest(context: HandlerMethodContext): MethodDis
 
     if (req.method === 'getHookHealth') {
         return handled(readHookHealth());
+    }
+
+    if (req.method === 'getRepoReadiness') {
+        return handled(buildRepoReadinessSummary(graph, {
+            repoRoot: typeof params.repoRoot === 'string' ? params.repoRoot : null,
+            contextId: getContextIdFromParams(params)
+        }));
     }
 
     if (req.method === 'getActiveContext') {

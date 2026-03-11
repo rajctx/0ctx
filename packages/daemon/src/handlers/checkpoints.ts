@@ -9,7 +9,7 @@ export function dispatchCheckpointRequest(context: HandlerMethodContext): Method
             const result = graph.saveCheckpoint(contextId!, params.name as string);
             recordMutationAudit(graph, req, 'save_checkpoint', contextId, params, { id: result.id }, auditMetadata);
             recordMutationEvent(runtime, connectionId, req, contextId, params, { id: result.id });
-            const extracted = graph.extractKnowledgeFromCheckpoint(result.id, { minConfidence: 0.84 });
+            const extracted = graph.extractKnowledgeFromCheckpoint(result.id, { minConfidence: 0.84, autoPersistOnly: true });
             if (extracted.nodeCount > 0) {
                 const autoParams = { checkpointId: result.id, source: 'checkpoint:auto' };
                 const autoResult = {
@@ -35,7 +35,7 @@ export function dispatchCheckpointRequest(context: HandlerMethodContext): Method
             });
             recordMutationAudit(graph, req, 'save_checkpoint', contextId, params, { id: result.id }, auditMetadata);
             recordMutationEvent(runtime, connectionId, req, contextId, params, { id: result.id });
-            const extracted = graph.extractKnowledgeFromCheckpoint(result.id, { minConfidence: 0.84 });
+            const extracted = graph.extractKnowledgeFromCheckpoint(result.id, { minConfidence: 0.84, autoPersistOnly: true });
             if (extracted.nodeCount > 0) {
                 const autoParams = { checkpointId: result.id, sessionId, source: 'checkpoint:auto' };
                 const autoResult = {

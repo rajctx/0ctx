@@ -11,14 +11,16 @@ import type {
 } from '../schema';
 import { getCheckpointDetailRecord, saveCheckpointRecord } from './checkpoints';
 import { exportContextDumpRecord } from './dump';
-import { listWorkstreamInsightsRecord } from './insights';
+import { getInsightSummaryRecord, listWorkstreamInsightsRecord } from './insights';
 import { previewKnowledgeFromCheckpointRecord } from './knowledge-checkpoint';
 import { previewKnowledgeFromSessionRecord } from './knowledge-session';
 import {
     buildKnowledgeEvidenceReason,
     buildKnowledgeEvidenceSummary,
+    buildKnowledgeTrustFlags,
     buildKnowledgeKey,
     boostKnowledgeCandidateConfidence,
+    classifyKnowledgeAutoPersist,
     classifyKnowledgeReviewTier,
     sanitizePromotedInsightTags
 } from './knowledge';
@@ -77,7 +79,8 @@ export function buildInsightDeps(
         sanitizePromotedInsightTags,
         boostKnowledgeCandidateConfidence,
         classifyKnowledgeReviewTier,
-        buildKnowledgeEvidenceSummary
+        buildKnowledgeEvidenceSummary,
+        buildKnowledgeTrustFlags
     };
 }
 
@@ -85,6 +88,7 @@ export function buildKnowledgeSessionDeps(
     ops: {
         getSessionDetail: (contextId: string, sessionId: string) => ReturnType<typeof import('./sessions').getSessionDetailRecord>;
         getByKey: (contextId: string, key: string, options?: { includeHidden?: boolean }) => ContextNode | null;
+        getInsightSummary: (nodeId: string) => ReturnType<typeof getInsightSummaryRecord>;
         addNode: (params: Omit<ContextNode, 'id' | 'createdAt'> & { rawPayload?: unknown; payloadContentType?: string; createdAtOverride?: number }) => ContextNode;
         ensureEdge: (fromId: string, toId: string, relation: 'caused_by') => void;
     }
@@ -92,6 +96,7 @@ export function buildKnowledgeSessionDeps(
     return {
         getSessionDetail: ops.getSessionDetail,
         getByKey: ops.getByKey,
+        getInsightSummary: ops.getInsightSummary,
         buildKnowledgeKey: (contextId, type, content, options) => buildKnowledgeKey(contextId, type, content, {
             branch: options?.branch,
             worktreePath: options?.worktreePath,
@@ -99,9 +104,11 @@ export function buildKnowledgeSessionDeps(
             normalizeWorktreePath
         }),
         boostKnowledgeCandidateConfidence,
+        classifyKnowledgeAutoPersist,
         classifyKnowledgeReviewTier,
         buildKnowledgeEvidenceSummary,
         buildKnowledgeEvidenceReason,
+        buildKnowledgeTrustFlags,
         addNode: ops.addNode,
         ensureEdge: ops.ensureEdge
     };
@@ -110,8 +117,8 @@ export function buildKnowledgeSessionDeps(
 export function buildKnowledgeCheckpointDeps(
     db: Database.Database,
     ops: {
-        previewKnowledgeFromSession: (contextId: string, sessionId: string, options?: { checkpointId?: string | null; maxNodes?: number; source?: 'session' | 'checkpoint'; minConfidence?: number }) => ReturnType<typeof previewKnowledgeFromSessionRecord>;
-        extractKnowledgeFromSession: (contextId: string, sessionId: string, options?: { checkpointId?: string | null; maxNodes?: number; source?: 'session' | 'checkpoint'; allowedKeys?: string[] | null; minConfidence?: number }) => ReturnType<typeof import('./knowledge-session').extractKnowledgeFromSessionRecord>;
+        previewKnowledgeFromSession: (contextId: string, sessionId: string, options?: { checkpointId?: string | null; maxNodes?: number; source?: 'session' | 'checkpoint'; minConfidence?: number; autoPersistOnly?: boolean }) => ReturnType<typeof previewKnowledgeFromSessionRecord>;
+        extractKnowledgeFromSession: (contextId: string, sessionId: string, options?: { checkpointId?: string | null; maxNodes?: number; source?: 'session' | 'checkpoint'; allowedKeys?: string[] | null; minConfidence?: number; autoPersistOnly?: boolean }) => ReturnType<typeof import('./knowledge-session').extractKnowledgeFromSessionRecord>;
         getByKey: (contextId: string, key: string, options?: { includeHidden?: boolean }) => ContextNode | null;
         getNode: (id: string) => ContextNode | null;
         addNode: (params: Omit<ContextNode, 'id' | 'createdAt'> & { rawPayload?: unknown; payloadContentType?: string; createdAtOverride?: number }) => ContextNode;
@@ -130,8 +137,10 @@ export function buildKnowledgeCheckpointDeps(
             normalizeBranch,
             normalizeWorktreePath
         }),
+        classifyKnowledgeAutoPersist,
         classifyKnowledgeReviewTier,
         buildKnowledgeEvidenceSummary,
+        buildKnowledgeTrustFlags,
         addNode: ops.addNode
     };
 }

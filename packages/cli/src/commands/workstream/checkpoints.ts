@@ -57,7 +57,7 @@ export function createCheckpointCommands(ctx: WorkstreamCommandContext) {
                 }
                 const result = await sendToDaemon('getCheckpointDetail', { contextId, checkpointId: effectiveCheckpointId });
                 return ctx.printJsonOrValue(asJson, result, () => {
-                    const detail = result as { checkpoint?: Record<string, unknown>; snapshotNodeCount?: number; payloadAvailable?: boolean };
+                    const detail = result as { checkpoint?: Record<string, unknown>; snapshotNodeCount?: number };
                     console.log('\nCheckpoint Detail\n');
                     console.log(`  Id: ${effectiveCheckpointId}`);
                     console.log(`  Name: ${String(detail.checkpoint?.name ?? '-')}`);
@@ -65,7 +65,6 @@ export function createCheckpointCommands(ctx: WorkstreamCommandContext) {
                     console.log(`  Workstream: ${String(detail.checkpoint?.branch ?? '-')}`);
                     console.log(`  Session: ${String(detail.checkpoint?.sessionId ?? '-')}`);
                     console.log(`  Snapshot nodes: ${String(detail.snapshotNodeCount ?? 0)}`);
-                    console.log(`  Payload: ${detail.payloadAvailable ? 'available' : 'missing'}`);
                     console.log('');
                 });
             }

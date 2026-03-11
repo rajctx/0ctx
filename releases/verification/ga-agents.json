@@ -1,11 +1,11 @@
 {
   "ok": true,
-  "tempRoot": "C:\\Users\\Rajesh\\AppData\\Local\\Temp\\0ctx-release-ga-sn4gbf",
-  "contextId": "7ad896ab-8d51-44c1-9a4f-7e5df5cb6675",
+  "tempRoot": "C:\\Users\\Rajesh\\AppData\\Local\\Temp\\0ctx-release-ga-Eko52N",
+  "contextId": "0575229b-df44-4059-809a-a88034424328",
   "branch": "main",
   "sessionCount": 3,
   "handoffCount": 3,
-  "checkpointId": "4b14435a-f857-4f63-a200-bb80d69742a5",
+  "checkpointId": "a364e35f-662d-4dad-b09e-c77bf8a7ef93",
   "agents": {
     "factory": {
       "insertedCount": 2,
@@ -25,12 +25,12 @@
   },
   "transcripts": {
     "factory": {
-      "path": "C:\\Users\\Rajesh\\AppData\\Local\\Temp\\0ctx-release-ga-sn4gbf\\home\\factory-session.jsonl",
-      "sha256": "759759e954f462dfc3ebc0f9b8f8b52361d87bf317512a1e564b3b933bf12e25"
+      "path": "C:\\Users\\Rajesh\\AppData\\Local\\Temp\\0ctx-release-ga-Eko52N\\home\\factory-session.jsonl",
+      "sha256": "06ca68f3b1d87fcb5e9ee9d50981b1d5cb3e4a792768b5b0ff2b3aeaeca57a1b"
     },
     "antigravity": {
-      "path": "C:\\Users\\Rajesh\\AppData\\Local\\Temp\\0ctx-release-ga-sn4gbf\\home\\antigravity-session.jsonl",
-      "sha256": "ad5c94865b34a88c0d2d924c1c7dde7af00728baf67b98408d9a4d6b829f3f9c"
+      "path": "C:\\Users\\Rajesh\\AppData\\Local\\Temp\\0ctx-release-ga-Eko52N\\home\\antigravity-session.jsonl",
+      "sha256": "a27bcde68751f5c2e87eeafb952ae43888c6edbb3e24fbd6eba10dbd547b8a00"
     }
   }
 }

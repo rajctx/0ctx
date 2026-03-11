@@ -227,6 +227,10 @@
       setStatus('Choose another workspace before promoting this insight.');
       return;
     }
+    if ((node.promotionState || 'review') === 'blocked') {
+      setStatus(node.promotionSummary || 'This insight is not ready to promote yet.');
+      return;
+    }
     if (!methodSupported('promoteInsight')) {
       setStatus('Update the local runtime before promoting reviewed insights across workspaces.');
       return;

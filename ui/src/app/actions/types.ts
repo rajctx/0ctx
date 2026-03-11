@@ -1,4 +1,6 @@
-export const SUPPORTED_CLIENTS = ['claude', 'cursor', 'windsurf', 'codex', 'antigravity'] as const;
+export const GA_SUPPORTED_CLIENTS = ['claude', 'antigravity'] as const;
+export const PREVIEW_SUPPORTED_CLIENTS = ['codex', 'cursor', 'windsurf'] as const;
+export const SUPPORTED_CLIENTS = [...GA_SUPPORTED_CLIENTS, ...PREVIEW_SUPPORTED_CLIENTS] as const;
 
 export type SupportedClient = (typeof SUPPORTED_CLIENTS)[number];
 export type CheckStatus = 'pass' | 'warn' | 'fail';

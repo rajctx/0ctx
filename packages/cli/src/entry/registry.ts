@@ -66,15 +66,7 @@ export function createCliRegistry() {
     const collectRepoReadiness = createRepoReadinessCollector({
         ensureDaemonCapabilities,
         resolveRepoRoot: repoRoot => resolveRepoRoot(repoRoot ?? null),
-        selectHookContextId: (contexts, repoRoot, explicitContextId) => selectHookContextId(contexts, repoRoot, explicitContextId ?? null),
-        sendToDaemon,
-        getCurrentWorkstream,
-        collectHookHealth,
-        detectInstalledGaHookClients,
-        detectRegisteredGaMcpClients,
-        defaultHookInstallClients: DEFAULT_HOOK_INSTALL_CLIENTS,
-        sessionStartAgents: SESSION_START_AGENTS,
-        isGaHookAgent
+        sendToDaemon
     });
     const { resolveContextIdForHookIngest, validateHookIngestWorkspace, ensureChatSessionNode, ensureChatCommitNode } = createHookSupport({
         sendToDaemon,
@@ -99,7 +91,7 @@ export function createCliRegistry() {
         requireCommandContextId, resolveCommandContextId, parseOptionalStringFlag, parseOptionalPositiveNumberFlag, parseOptionalBooleanLikeFlag, ensureDaemonCapabilities, printCapabilityMismatch, formatSyncPolicyLabel, formatDebugArtifactsLabel, printJsonOrValue
     });
     const { commandStatus, commandBootstrap, commandMcp, commandInstall, commandEnable, commandDashboard, commandLogs, commandWorkspaces } = createProductCommands({
-        DB_PATH: dbPath, KEY_PATH: keyPath, SOCKET_PATH: socketPath, DEFAULT_MCP_CLIENTS: defaultEnableMcpClients, isDaemonReachable, startDaemonDetached, waitForDaemon, inferDaemonRecoverySteps, sendToDaemon, findGitRepoRoot, collectRepoReadiness, validateExplicitPreviewSelection, parseClients: raw => parseClients(raw), parseHookClients: raw => parseHookClients(raw), parseEnableMcpClients: raw => parseEnableMcpClients(raw), detectInstalledGaHookClients, detectInstalledGaMcpClients, parseOptionalStringFlag, parsePositiveIntegerFlag, parseOptionalPositiveNumberFlag, runBootstrap: (clients, dryRun, explicitEntrypoint, profile) => runBootstrap(clients as SupportedClient[], dryRun, explicitEntrypoint, profile), printBootstrapResults, resolveRepoRoot, selectHookContextId, installHooks, collectHookHealth, commandInstall: flags => commandInstall(flags), buildDefaultDashboardQuery: () => buildDefaultDashboardQuery({ sendToDaemon, selectHookContextId }), applyDashboardQuery, getHostedDashboardUrl, openUrl, getConnectorStatePath, readConnectorState, getConnectorQueuePath, listQueuedConnectorEvents, getConnectorQueueStats, getCliOpsLogPath, readCliOpsLog, startLogsServer, formatAgentList, formatLabelValue, formatRetentionLabel, formatSyncPolicyLabel, printJsonOrValue
+        DB_PATH: dbPath, KEY_PATH: keyPath, SOCKET_PATH: socketPath, DEFAULT_MCP_CLIENTS: defaultEnableMcpClients, isDaemonReachable, startDaemonDetached, waitForDaemon, inferDaemonRecoverySteps, sendToDaemon, findGitRepoRoot, collectRepoReadiness, validateExplicitPreviewSelection, parseClients: raw => parseClients(raw), parseHookClients: raw => parseHookClients(raw), parseEnableMcpClients: raw => parseEnableMcpClients(raw), detectInstalledGaHookClients, detectInstalledGaMcpClients, parseOptionalStringFlag, parsePositiveIntegerFlag, parseOptionalPositiveNumberFlag, runBootstrap: (clients, dryRun, explicitEntrypoint, profile) => runBootstrap(clients as SupportedClient[], dryRun, explicitEntrypoint, profile), printBootstrapResults, resolveRepoRoot, selectHookContextId, installHooks, commandInstall: flags => commandInstall(flags), buildDefaultDashboardQuery: () => buildDefaultDashboardQuery({ sendToDaemon, selectHookContextId }), applyDashboardQuery, getHostedDashboardUrl, openUrl, getConnectorStatePath, readConnectorState, getConnectorQueuePath, listQueuedConnectorEvents, getConnectorQueueStats, getCliOpsLogPath, readCliOpsLog, startLogsServer, formatAgentList, formatLabelValue, formatRetentionLabel, formatSyncPolicyLabel, printJsonOrValue
     });
     const { commandConnector } = createConnectorCommands({
         isDaemonReachable, readConnectorState, resolveToken, fetchConnectorCapabilities, sendConnectorHeartbeat, getHostedDashboardUrl, getConnectorStatePath, writeConnectorState, sendToDaemon, inferDaemonRecoverySteps, runConnectorRuntime, parsePositiveIntegerFlag, commandLogs, commandDaemonService, commandConnectorQueue, registerConnector, registerConnectorInCloud

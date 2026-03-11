@@ -96,10 +96,10 @@ describe('@0ctx/cli build artifact source', () => {
         expect(cliSurface).toContain("0ctx explain [--repo-root=<path>] [--checkpoint-id=<id>] [--json]");
         expect(cliSurface).toContain("0ctx logs [--no-open] [--snapshot] [--limit=50] [--since-hours=N] [--grep=text] [--errors-only]");
         expect(cliSurface).toContain("0ctx bootstrap [--dry-run] [--clients=ga|<explicit-list>] [--entrypoint=/path/to/mcp-server.js]");
-        expect(cliSurface).toContain("[--mcp-profile=all|core|recall|ops] [--json]");
+        expect(cliSurface).toContain("[--mcp-profile=all|core|recall|ops] [--allow-preview] [--json]");
         expect(cliSurface).toContain("0ctx mcp [bootstrap]");
         expect(cliSurface).toContain("0ctx mcp                     Interactive supported-agent retrieval bootstrap");
-        expect(cliSurface).toContain("0ctx install [--clients=ga|<explicit-list>] [--json] [--skip-bootstrap] [--mcp-profile=all|core|recall|ops]");
+        expect(cliSurface).toContain("0ctx install [--clients=ga|<explicit-list>] [--json] [--skip-bootstrap] [--mcp-profile=all|core|recall|ops] [--allow-preview]");
         expect(clientsSource).toContain("export const DEFAULT_MCP_CLIENTS: SupportedClient[] = ['claude', 'antigravity'];");
         expect(registrySource).toContain("const defaultEnableMcpClients: SupportedClient[] = DEFAULT_MCP_CLIENTS;");
         expect(cliSurface).toContain("0ctx connector service install|enable|disable|uninstall|status|start|stop|restart");
@@ -121,6 +121,7 @@ describe('@0ctx/cli build artifact source', () => {
         expect(cliSurface).toContain("Advanced utilities:");
         expect(cliSurface).toContain("0ctx connector hook install [--clients=ga|<explicit-list>] [--repo-root=<path>] [--global]");
         expect(cliSurface).toContain("Name non-GA integrations directly only when you intentionally opt into them.");
+        expect(cliSurface).toContain("Preview MCP retrieval also requires --allow-preview.");
         expect(cliSurface).toContain("0ctx connector hook prune [--days=14] [--json]");
         expect(clientsSource).toContain("export const DEFAULT_HOOK_INSTALL_CLIENTS: HookInstallClient[] = ['claude', 'factory', 'antigravity'];");
         expect(cliSurface).toContain("0ctx connector hook prune [--days=14] [--json]");

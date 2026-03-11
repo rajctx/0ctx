@@ -121,7 +121,7 @@ describe('repo readiness display', () => {
         expect(lines.some((line) => line.includes('not installed'))).toBe(false);
     });
 
-    it('does not claim automatic retrieval when Claude still needs automatic retrieval setup', () => {
+    it('keeps zero-touch context ready when session-start works but deeper retrieval is still optional', () => {
         const lines = buildRepoReadinessLines({
             mode: 'status',
             repoReadiness: {
@@ -134,16 +134,16 @@ describe('repo readiness display', () => {
                 captureManagedForRepo: true,
                 captureReadyAgents: ['claude'],
                 captureMissingAgents: [],
-                autoContextAgents: [],
-                autoContextMissingAgents: ['claude'],
+                autoContextAgents: ['claude'],
+                autoContextMissingAgents: [],
                 sessionStartMissingAgents: [],
                 mcpRegistrationMissingAgents: ['claude'],
                 syncPolicy: 'metadata_only',
                 syncScope: 'workspace',
                 captureScope: 'machine',
                 debugScope: 'machine',
-                zeroTouchReady: false,
-                nextActionHint: 'Finish automatic retrieval setup for claude.',
+                zeroTouchReady: true,
+                nextActionHint: null,
                 dataPolicyPreset: 'lean',
                 dataPolicyActionHint: null,
                 captureRetentionDays: 14,
@@ -156,7 +156,8 @@ describe('repo readiness display', () => {
             formatSyncPolicyLabel: (policy) => String(policy ?? '')
         });
 
-        expect(lines).toContain('Context: claude need automatic retrieval setup');
-        expect(lines.some((line) => line.includes('inject current workstream context automatically'))).toBe(false);
+        expect(lines).toContain('Ready: zero-touch for supported agents');
+        expect(lines).toContain('Context: claude inject current workstream context automatically');
+        expect(lines.some((line) => line.includes('need automatic retrieval setup'))).toBe(false);
     });
 });

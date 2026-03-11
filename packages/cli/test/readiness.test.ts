@@ -1,250 +1,66 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createRepoReadinessCollector } from '../src/cli-core/readiness';
 
-describe('repo readiness', () => {
-    it('ignores preview-only integrations in the normal readiness path', async () => {
+describe('repo readiness collector', () => {
+    it('requests repo readiness from the daemon using the resolved repo root', async () => {
+        const ensureDaemonCapabilities = vi.fn(async () => ({ ok: true, missingMethods: [] }));
+        const resolveRepoRoot = vi.fn((repoRoot?: string | null) => repoRoot ?? 'C:\\repo');
+        const sendToDaemon = vi.fn(async () => ({
+            repoRoot: 'C:\\repo',
+            contextId: 'ctx-1',
+            workspaceName: 'Repo',
+            workstream: 'main',
+            sessionCount: 2,
+            checkpointCount: 1,
+            syncPolicy: 'metadata_only',
+            syncScope: 'workspace',
+            captureScope: 'machine',
+            debugScope: 'machine',
+            captureReadyAgents: ['claude'],
+            autoContextAgents: ['claude'],
+            autoContextMissingAgents: [],
+            sessionStartMissingAgents: [],
+            mcpRegistrationMissingAgents: [],
+            captureMissingAgents: [],
+            captureManagedForRepo: true,
+            zeroTouchReady: true,
+            nextActionHint: null,
+            dataPolicyPreset: 'lean',
+            dataPolicyActionHint: null,
+            captureRetentionDays: 14,
+            debugRetentionDays: 7,
+            debugArtifactsEnabled: false
+        }));
+
         const collectRepoReadiness = createRepoReadinessCollector({
-            ensureDaemonCapabilities: async () => ({ ok: true, missingMethods: [] }),
-            resolveRepoRoot: (repoRoot) => repoRoot ?? 'C:\\repo',
-            selectHookContextId: (contexts, repoRoot) => {
-                const matched = contexts.find(context => Array.isArray(context.paths) && context.paths.includes(repoRoot ?? ''));
-                return matched?.id ?? null;
-            },
-            sendToDaemon: async (method: string) => {
-                if (method === 'listContexts') {
-                    return [{ id: 'ctx-1', name: 'Repo', paths: ['C:\\repo'] }];
-                }
-                if (method === 'getAgentContextPack') {
-                    return {
-                        workspaceName: 'Repo',
-                        branch: 'main',
-                        workstream: { sessionCount: 0, checkpointCount: 0 }
-                    };
-                }
-                if (method === 'getDataPolicy') {
-                    return {
-                        syncPolicy: 'metadata_only',
-                        captureRetentionDays: 14,
-                        debugRetentionDays: 7,
-                        debugArtifactsEnabled: false
-                    };
-                }
-                throw new Error(`Unexpected method ${method}`);
-            },
-            getCurrentWorkstream: () => 'main',
-            collectHookHealth: async () => ({
-                check: { id: 'hook_state', status: 'pass', message: 'ok' },
-                dumpCheck: { id: 'hook_dump_dir', status: 'pass', message: 'ok' },
-                details: {
-                    statePath: 'state',
-                    projectRoot: 'C:\\repo',
-                    projectRootExists: true,
-                    projectConfigPath: 'config',
-                    projectConfigExists: true,
-                    contextId: 'ctx-1',
-                    contextIdExists: true,
-                    installedAgentCount: 1,
-                    agents: [
-                        {
-                            agent: 'codex',
-                            configPath: 'config.toml',
-                            configExists: true,
-                            commandPresent: true,
-                            sessionStartPresent: false,
-                            command: '0ctx connector hook ingest --agent=codex'
-                        }
-                    ]
-                }
-            }),
-            detectInstalledGaHookClients: () => ['claude'],
-            detectRegisteredGaMcpClients: () => [],
-            defaultHookInstallClients: ['claude', 'factory', 'antigravity'],
-            sessionStartAgents: ['claude', 'factory', 'antigravity'],
-            isGaHookAgent: (agent) => agent === 'claude' || agent === 'factory' || agent === 'antigravity'
+            ensureDaemonCapabilities,
+            resolveRepoRoot,
+            sendToDaemon
         });
 
-        const readiness = await collectRepoReadiness({ repoRoot: 'C:\\repo' });
-        expect(readiness).not.toBeNull();
-        expect(readiness?.captureReadyAgents).toEqual([]);
-        expect(readiness?.zeroTouchReady).toBe(false);
-        expect(readiness?.nextActionHint).toBe('Run 0ctx enable to install supported capture integrations.');
-    });
+        const readiness = await collectRepoReadiness({ repoRoot: 'C:\\repo', contextId: 'ctx-1' });
 
-    it('treats equivalent Windows repo paths as the same managed repo', async () => {
-        const collectRepoReadiness = createRepoReadinessCollector({
-            ensureDaemonCapabilities: async () => ({ ok: true, missingMethods: [] }),
-            resolveRepoRoot: (repoRoot) => repoRoot ?? 'C:/repo',
-            selectHookContextId: (contexts) => contexts[0]?.id ?? null,
-            sendToDaemon: async (method: string) => {
-                if (method === 'listContexts') {
-                    return [{ id: 'ctx-1', name: 'Repo', paths: ['C:/repo'] }];
-                }
-                if (method === 'getAgentContextPack') {
-                    return {
-                        workspaceName: 'Repo',
-                        branch: 'main',
-                        workstream: { sessionCount: 2, checkpointCount: 1 }
-                    };
-                }
-                if (method === 'getDataPolicy') {
-                    return {
-                        syncPolicy: 'metadata_only',
-                        captureRetentionDays: 14,
-                        debugRetentionDays: 7,
-                        debugArtifactsEnabled: false
-                    };
-                }
-                throw new Error(`Unexpected method ${method}`);
-            },
-            getCurrentWorkstream: () => 'main',
-            collectHookHealth: async () => ({
-                check: { id: 'hook_state', status: 'pass', message: 'ok' },
-                dumpCheck: { id: 'hook_dump_dir', status: 'pass', message: 'ok' },
-                details: {
-                    statePath: 'state',
-                    projectRoot: 'C:\\repo',
-                    projectRootExists: true,
-                    projectConfigPath: 'config',
-                    projectConfigExists: true,
-                    contextId: 'ctx-1',
-                    contextIdExists: true,
-                    installedAgentCount: 3,
-                    agents: [
-                        { agent: 'claude', configPath: 'a', configExists: true, commandPresent: true, sessionStartPresent: true, command: '0ctx connector hook ingest --agent=claude' },
-                        { agent: 'factory', configPath: 'b', configExists: true, commandPresent: true, sessionStartPresent: true, command: '0ctx connector hook ingest --agent=factory' },
-                        { agent: 'antigravity', configPath: 'c', configExists: true, commandPresent: true, sessionStartPresent: true, command: '0ctx connector hook ingest --agent=antigravity' }
-                    ]
-                }
-            }),
-            detectInstalledGaHookClients: () => ['claude', 'factory', 'antigravity'],
-            detectRegisteredGaMcpClients: () => ['claude', 'antigravity'],
-            defaultHookInstallClients: ['claude', 'factory', 'antigravity'],
-            sessionStartAgents: ['claude', 'factory', 'antigravity'],
-            isGaHookAgent: (agent) => agent === 'claude' || agent === 'factory' || agent === 'antigravity'
+        expect(ensureDaemonCapabilities).toHaveBeenCalledWith(['getRepoReadiness']);
+        expect(resolveRepoRoot).toHaveBeenCalledWith('C:\\repo');
+        expect(sendToDaemon).toHaveBeenCalledWith('getRepoReadiness', {
+            repoRoot: 'C:\\repo',
+            contextId: 'ctx-1'
         });
-
-        const readiness = await collectRepoReadiness({ repoRoot: 'C:/repo' });
-        expect(readiness?.captureManagedForRepo).toBe(true);
-        expect(readiness?.captureReadyAgents).toEqual(['claude', 'factory', 'antigravity']);
-        expect(readiness?.autoContextAgents).toEqual(['claude', 'factory', 'antigravity']);
         expect(readiness?.zeroTouchReady).toBe(true);
+        expect(readiness?.autoContextAgents).toEqual(['claude']);
     });
 
-    it('does not mark zero-touch ready when capture exists without SessionStart injection', async () => {
+    it('fails fast when the daemon does not expose repo readiness', async () => {
         const collectRepoReadiness = createRepoReadinessCollector({
-            ensureDaemonCapabilities: async () => ({ ok: true, missingMethods: [] }),
-            resolveRepoRoot: (repoRoot) => repoRoot ?? 'C:\\repo',
-            selectHookContextId: (contexts) => contexts[0]?.id ?? null,
-            sendToDaemon: async (method: string) => {
-                if (method === 'listContexts') {
-                    return [{ id: 'ctx-1', name: 'Repo', paths: ['C:\\repo'] }];
-                }
-                if (method === 'getAgentContextPack') {
-                    return {
-                        workspaceName: 'Repo',
-                        branch: 'main',
-                        workstream: { sessionCount: 1, checkpointCount: 0 }
-                    };
-                }
-                if (method === 'getDataPolicy') {
-                    return {
-                        syncPolicy: 'metadata_only',
-                        captureRetentionDays: 14,
-                        debugRetentionDays: 7,
-                        debugArtifactsEnabled: false
-                    };
-                }
-                throw new Error(`Unexpected method ${method}`);
-            },
-            getCurrentWorkstream: () => 'main',
-            collectHookHealth: async () => ({
-                check: { id: 'hook_state', status: 'pass', message: 'ok' },
-                dumpCheck: { id: 'hook_dump_dir', status: 'pass', message: 'ok' },
-                details: {
-                    statePath: 'state',
-                    projectRoot: 'C:\\repo',
-                    projectRootExists: true,
-                    projectConfigPath: 'config',
-                    projectConfigExists: true,
-                    contextId: 'ctx-1',
-                    contextIdExists: true,
-                    installedAgentCount: 1,
-                    agents: [
-                        { agent: 'claude', configPath: 'a', configExists: true, commandPresent: true, sessionStartPresent: false, command: '0ctx connector hook ingest --agent=claude' }
-                    ]
-                }
-            }),
-            detectInstalledGaHookClients: () => ['claude'],
-            detectRegisteredGaMcpClients: () => ['claude'],
-            defaultHookInstallClients: ['claude', 'factory', 'antigravity'],
-            sessionStartAgents: ['claude', 'factory', 'antigravity'],
-            isGaHookAgent: (agent) => agent === 'claude' || agent === 'factory' || agent === 'antigravity'
+            ensureDaemonCapabilities: async () => ({ ok: false, missingMethods: ['getRepoReadiness'], error: null }),
+            resolveRepoRoot: (repoRoot?: string | null) => repoRoot ?? 'C:\\repo',
+            sendToDaemon: async () => {
+                throw new Error('should not reach daemon');
+            }
         });
 
-        const readiness = await collectRepoReadiness({ repoRoot: 'C:\\repo' });
-        expect(readiness?.captureReadyAgents).toEqual(['claude']);
-        expect(readiness?.autoContextAgents).toEqual([]);
-        expect(readiness?.sessionStartMissingAgents).toEqual(['claude']);
-        expect(readiness?.zeroTouchReady).toBe(false);
-        expect(readiness?.nextActionHint).toContain('automatic context injection');
-    });
-
-    it('does not claim zero-touch retrieval when Claude capture exists without automatic retrieval setup', async () => {
-        const collectRepoReadiness = createRepoReadinessCollector({
-            ensureDaemonCapabilities: async () => ({ ok: true, missingMethods: [] }),
-            resolveRepoRoot: (repoRoot) => repoRoot ?? 'C:\\repo',
-            selectHookContextId: (contexts) => contexts[0]?.id ?? null,
-            sendToDaemon: async (method: string) => {
-                if (method === 'listContexts') {
-                    return [{ id: 'ctx-1', name: 'Repo', paths: ['C:\\repo'] }];
-                }
-                if (method === 'getAgentContextPack') {
-                    return {
-                        workspaceName: 'Repo',
-                        branch: 'main',
-                        workstream: { sessionCount: 1, checkpointCount: 0 }
-                    };
-                }
-                if (method === 'getDataPolicy') {
-                    return {
-                        syncPolicy: 'metadata_only',
-                        captureRetentionDays: 14,
-                        debugRetentionDays: 7,
-                        debugArtifactsEnabled: false
-                    };
-                }
-                throw new Error(`Unexpected method ${method}`);
-            },
-            getCurrentWorkstream: () => 'main',
-            collectHookHealth: async () => ({
-                check: { id: 'hook_state', status: 'pass', message: 'ok' },
-                dumpCheck: { id: 'hook_dump_dir', status: 'pass', message: 'ok' },
-                details: {
-                    statePath: 'state',
-                    projectRoot: 'C:\\repo',
-                    projectRootExists: true,
-                    projectConfigPath: 'config',
-                    projectConfigExists: true,
-                    contextId: 'ctx-1',
-                    contextIdExists: true,
-                    installedAgentCount: 1,
-                    agents: [
-                        { agent: 'claude', configPath: 'a', configExists: true, commandPresent: true, sessionStartPresent: true, command: '0ctx connector hook ingest --agent=claude' }
-                    ]
-                }
-            }),
-            detectInstalledGaHookClients: () => ['claude'],
-            detectRegisteredGaMcpClients: () => [],
-            defaultHookInstallClients: ['claude', 'factory', 'antigravity'],
-            sessionStartAgents: ['claude', 'factory', 'antigravity'],
-            isGaHookAgent: (agent) => agent === 'claude' || agent === 'factory' || agent === 'antigravity'
-        });
-
-        const readiness = await collectRepoReadiness({ repoRoot: 'C:\\repo' });
-        expect(readiness?.captureReadyAgents).toEqual(['claude']);
-        expect(readiness?.autoContextAgents).toEqual([]);
-        expect(readiness?.mcpRegistrationMissingAgents).toEqual(['claude']);
-        expect(readiness?.zeroTouchReady).toBe(false);
-        expect(readiness?.nextActionHint).toContain('Finish automatic retrieval setup for claude');
+        await expect(collectRepoReadiness({ repoRoot: 'C:\\repo' }))
+            .rejects
+            .toThrow(/daemon capabilities stale: getRepoReadiness/i);
     });
 });

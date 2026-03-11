@@ -407,12 +407,51 @@
     return text || null;
   }
 
+  function prioritizeTrustFlags(flags, limit = Infinity) {
+    const priority = [
+      'no_local_evidence',
+      'cross_session',
+      'same_session_only',
+      'cross_role',
+      'assistant_only',
+      'user_only',
+      'distinct_support',
+      'duplicate_only',
+      'repeated',
+      'promoted'
+    ];
+    const ordered = Array.isArray(flags)
+      ? flags.map((value) => String(value || '').trim()).filter(Boolean)
+      : [];
+    ordered.sort((left, right) => {
+      const leftIndex = priority.indexOf(left);
+      const rightIndex = priority.indexOf(right);
+      const safeLeft = leftIndex === -1 ? priority.length : leftIndex;
+      const safeRight = rightIndex === -1 ? priority.length : rightIndex;
+      if (safeLeft !== safeRight) return safeLeft - safeRight;
+      return left.localeCompare(right);
+    });
+    return ordered.slice(0, limit);
+  }
+
   function candidateDefaultSelectionEligible(candidate) {
     if (!candidate || candidate.action !== 'create' || candidate.reviewTier === 'weak') {
       return false;
     }
+    if (candidate.autoPersist === true) {
+      return true;
+    }
     if (candidate.reviewTier === 'strong') {
       return true;
+    }
+    const trustFlags = Array.isArray(candidate.trustFlags)
+      ? candidate.trustFlags.map((value) => String(value || '').trim().toLowerCase()).filter(Boolean)
+      : [];
+    if (trustFlags.includes('assistant_only') && !trustFlags.includes('cross_role')) {
+      return false;
+    }
+    if (trustFlags.includes('same_session_only') && !trustFlags.includes('cross_session')) {
+      return false;
     }
     const evidenceCount = Number(candidate.evidenceCount || 0);
     const distinctEvidenceCount = Number(candidate.distinctEvidenceCount || candidate.evidenceCount || 0);
@@ -446,7 +485,9 @@
                 ${renderChip(candidate.type || 'node', candidate.action === 'create' ? 'green' : 'beige')}
                 ${renderChip(candidate.action === 'create' ? 'new node' : 'already in graph', candidate.action === 'create' ? 'green' : 'orange')}
                 ${candidate.reviewTier ? renderChip(formatReviewTier(candidate.reviewTier), reviewTierTone(candidate.reviewTier)) : ''}
+                ${candidate.autoPersist === true ? renderChip('auto write', 'green') : renderChip('review only', 'orange')}
                 ${candidate.confidence != null ? renderChip(formatConfidence(candidate.confidence), confidenceTone(candidate.confidence)) : ''}
+                ${prioritizeTrustFlags(candidate.trustFlags, 2).map((flag) => renderChip(humanizeLabel(flag), 'beige')).join('')}
                 ${candidate.distinctEvidenceCount && candidate.distinctEvidenceCount > 1 ? renderChip(`${candidate.distinctEvidenceCount} distinct`, 'purple') : ''}
                 ${candidate.evidenceCount && candidate.distinctEvidenceCount && candidate.evidenceCount > candidate.distinctEvidenceCount ? renderChip(`${candidate.evidenceCount} mentions`, 'beige') : ''}
                 ${candidate.role ? renderChip(candidate.role, chipToneForRole(candidate.role)) : ''}
@@ -459,6 +500,7 @@
               ${formatEvidenceSummary(candidate.evidenceSummary) ? `<span>${esc(formatEvidenceSummary(candidate.evidenceSummary))}</span>` : ''}
               ${formatReason(candidate.reason) ? `<span>Why: ${esc(formatReason(candidate.reason))}</span>` : ''}
               ${candidate.reviewSummary ? `<span>${esc(candidate.reviewSummary)}</span>` : ''}
+              ${candidate.autoPersistSummary ? `<span>${esc(candidate.autoPersistSummary)}</span>` : ''}
             </div>
           </div>
         </div>
@@ -478,5 +520,5 @@
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  Object.assign(app, { esc, short, cleanConversationText, splitConversationText, describeSession, describeTurn, findAdjacentTurn, describeSelectedTurn, basenameFromPath, humanizeLabel, formatTime, formatRelativeTime, commitShort, chipToneForAgent, chipToneForRole, renderChip, renderMetaLine, summarizeCheckoutPaths, describeWorkstreamCheckout, describeWorkstreamSync, describeWorkstreamActionHint, describeWorkingTreeState, renderAgentChain, activeSessionKnowledgePreview, activeCheckpointKnowledgePreview, selectedKnowledgeKeys, setSelectedKnowledgeKeys, selectKnowledgeCandidates, formatConfidence, confidenceTone, formatReason, formatReviewTier, reviewTierTone, formatEvidenceSummary, candidateDefaultSelectionEligible, renderKnowledgeCandidates, jsonText, delay });
+  Object.assign(app, { esc, short, cleanConversationText, splitConversationText, describeSession, describeTurn, findAdjacentTurn, describeSelectedTurn, basenameFromPath, humanizeLabel, formatTime, formatRelativeTime, commitShort, chipToneForAgent, chipToneForRole, renderChip, renderMetaLine, summarizeCheckoutPaths, describeWorkstreamCheckout, describeWorkstreamSync, describeWorkstreamActionHint, describeWorkingTreeState, renderAgentChain, activeSessionKnowledgePreview, activeCheckpointKnowledgePreview, selectedKnowledgeKeys, setSelectedKnowledgeKeys, selectKnowledgeCandidates, formatConfidence, confidenceTone, formatReason, formatReviewTier, reviewTierTone, formatEvidenceSummary, prioritizeTrustFlags, candidateDefaultSelectionEligible, renderKnowledgeCandidates, jsonText, delay });
 })();

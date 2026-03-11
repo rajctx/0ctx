@@ -20,7 +20,7 @@ type KnowledgeCheckpointDeps = {
     previewKnowledgeFromSession: (
         contextId: string,
         sessionId: string,
-        options?: { checkpointId?: string | null; maxNodes?: number; source?: 'session' | 'checkpoint'; minConfidence?: number }
+        options?: { checkpointId?: string | null; maxNodes?: number; source?: 'session' | 'checkpoint'; minConfidence?: number; autoPersistOnly?: boolean }
     ) => KnowledgePreviewResult;
     extractKnowledgeFromSession: (
         contextId: string,
@@ -31,6 +31,7 @@ type KnowledgeCheckpointDeps = {
             source?: 'session' | 'checkpoint';
             allowedKeys?: string[] | null;
             minConfidence?: number;
+            autoPersistOnly?: boolean;
         }
     ) => KnowledgeExtractionResult;
     getByKey: (contextId: string, key: string, options?: { includeHidden?: boolean }) => ContextNode | null;
@@ -46,13 +47,36 @@ type KnowledgeCheckpointDeps = {
         confidence: number,
         evidenceCount: number,
         distinctEvidenceCount: number,
-        roles: Set<string>
+        roles: Set<string>,
+        options?: {
+            distinctSessionCount?: number;
+        }
     ) => { reviewTier: 'strong' | 'review' | 'weak'; reviewSummary: string };
+    classifyKnowledgeAutoPersist: (
+        reviewTier: 'strong' | 'review' | 'weak',
+        evidenceCount: number,
+        distinctEvidenceCount: number,
+        roles: Set<string>,
+        options?: {
+            distinctSessionCount?: number;
+        }
+    ) => { autoPersist: boolean; autoPersistSummary: string };
     buildKnowledgeEvidenceSummary: (
         evidenceCount: number,
         distinctEvidenceCount: number,
-        roles: Set<string>
+        roles: Set<string>,
+        options?: {
+            distinctSessionCount?: number;
+        }
     ) => string;
+    buildKnowledgeTrustFlags: (
+        evidenceCount: number,
+        distinctEvidenceCount: number,
+        roles: Set<string>,
+        options?: {
+            distinctSessionCount?: number;
+        }
+    ) => string[];
     addNode: (params: AddNodeInput) => ContextNode;
 };
 
@@ -65,7 +89,7 @@ function getCheckpoint(deps: KnowledgeCheckpointDeps, checkpointId: string): Che
 export function previewKnowledgeFromCheckpointRecord(
     deps: KnowledgeCheckpointDeps,
     checkpointId: string,
-    options: { maxNodes?: number; minConfidence?: number } = {}
+    options: { maxNodes?: number; minConfidence?: number; autoPersistOnly?: boolean } = {}
 ): KnowledgePreviewResult {
     const checkpoint = getCheckpoint(deps, checkpointId);
     if (checkpoint.sessionId) {
@@ -73,6 +97,7 @@ export function previewKnowledgeFromCheckpointRecord(
             checkpointId,
             maxNodes: options.maxNodes,
             minConfidence: options.minConfidence,
+            autoPersistOnly: options.autoPersistOnly,
             source: 'checkpoint'
         });
     }
@@ -99,7 +124,24 @@ export function previewKnowledgeFromCheckpointRecord(
     });
     const existingNode = deps.getByKey(checkpoint.contextId, key, { includeHidden: true });
     const roles = new Set<string>(['assistant']);
-    const review = deps.classifyKnowledgeReviewTier(classified.type, classified.confidence, 1, 1, roles);
+    const review = deps.classifyKnowledgeReviewTier(classified.type, classified.confidence, 1, 1, roles, {
+        distinctSessionCount: 1
+    });
+    const autoPersist = deps.classifyKnowledgeAutoPersist(review.reviewTier, 1, 1, roles, {
+        distinctSessionCount: 1
+    });
+    if (options.autoPersistOnly && !autoPersist.autoPersist) {
+        return {
+            contextId: checkpoint.contextId,
+            source: 'checkpoint',
+            sessionId: null,
+            checkpointId,
+            candidateCount: 0,
+            createCount: 0,
+            reuseCount: 0,
+            candidates: []
+        };
+    }
     return {
         contextId: checkpoint.contextId,
         source: 'checkpoint',
@@ -126,10 +168,17 @@ export function previewKnowledgeFromCheckpointRecord(
             reason: classified.reason,
             evidenceCount: 1,
             distinctEvidenceCount: 1,
-            evidenceSummary: deps.buildKnowledgeEvidenceSummary(1, 1, roles),
+            evidenceSummary: deps.buildKnowledgeEvidenceSummary(1, 1, roles, {
+                distinctSessionCount: 1
+            }),
+            trustFlags: deps.buildKnowledgeTrustFlags(1, 1, roles, {
+                distinctSessionCount: 1
+            }),
             corroboratedRoles: ['assistant'],
             reviewTier: review.reviewTier,
-            reviewSummary: review.reviewSummary
+            reviewSummary: review.reviewSummary,
+            autoPersist: autoPersist.autoPersist,
+            autoPersistSummary: autoPersist.autoPersistSummary
         }]
     };
 }
@@ -137,7 +186,7 @@ export function previewKnowledgeFromCheckpointRecord(
 export function extractKnowledgeFromCheckpointRecord(
     deps: KnowledgeCheckpointDeps,
     checkpointId: string,
-    options: { maxNodes?: number; allowedKeys?: string[] | null; minConfidence?: number } = {}
+    options: { maxNodes?: number; allowedKeys?: string[] | null; minConfidence?: number; autoPersistOnly?: boolean } = {}
 ): KnowledgeExtractionResult {
     const checkpoint = getCheckpoint(deps, checkpointId);
     if (checkpoint.sessionId) {
@@ -146,7 +195,8 @@ export function extractKnowledgeFromCheckpointRecord(
             maxNodes: options.maxNodes,
             source: 'checkpoint',
             allowedKeys: options.allowedKeys,
-            minConfidence: options.minConfidence
+            minConfidence: options.minConfidence,
+            autoPersistOnly: options.autoPersistOnly
         });
     }
 

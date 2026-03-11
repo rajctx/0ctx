@@ -55,7 +55,7 @@ Usage:
 Recommended daily flow:
   0ctx enable [--repo-root=<path>] [--name=<workspace>] [--data-policy=<lean|review|debug|shared>] [--json]
               [--clients=ga|claude,factory,antigravity] [--mcp-clients=none|ga|claude,antigravity]
-              [--skip-bootstrap] [--skip-hooks] [--mcp-profile=core|recall|ops]
+              [--skip-bootstrap] [--skip-hooks] [--mcp-profile=core|recall|ops] [--allow-preview]
 
 Advanced / machine management:
   0ctx setup [--clients=ga|<explicit-list>] [--no-open] [--json] [--validate]
@@ -64,9 +64,9 @@ Advanced / machine management:
              [--create-context=<name>] [--dashboard-query[=k=v&...]]
              [--skip-service] [--skip-bootstrap] [--skip-hooks] [--hooks-dry-run]
              [--mcp-profile=all|core|recall|ops]
-  0ctx install [--clients=ga|<explicit-list>] [--json] [--skip-bootstrap] [--mcp-profile=all|core|recall|ops]
+  0ctx install [--clients=ga|<explicit-list>] [--json] [--skip-bootstrap] [--mcp-profile=all|core|recall|ops] [--allow-preview]
   0ctx bootstrap [--dry-run] [--clients=ga|<explicit-list>] [--entrypoint=/path/to/mcp-server.js]
-                 [--mcp-profile=all|core|recall|ops] [--json]
+                 [--mcp-profile=all|core|recall|ops] [--allow-preview] [--json]
   0ctx mcp [bootstrap]
   0ctx mcp                     Interactive supported-agent retrieval bootstrap
   0ctx mcp bootstrap [--dry-run] [--clients=ga|<explicit-list>] [--mcp-profile=all|core|recall|ops]
@@ -110,6 +110,7 @@ Capture support:
 Client scope defaults:
   ga      Supported-by-default product path
   Name non-GA integrations directly only when you intentionally opt into them.
+  Preview MCP retrieval also requires --allow-preview.
 
 Authentication:
   0ctx auth login    Start device-code login flow

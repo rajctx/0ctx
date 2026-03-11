@@ -64,7 +64,7 @@
         ? state.runtimeIssue.detail
         : installedGa.length > 0
           ? `${installedGa.length} GA integration${installedGa.length === 1 ? '' : 's'} ${installedGa.length === 1 ? 'is' : 'are'} installed on this machine. Use this screen only to enable another repo, add another GA agent, or open runtime support when something is off.`
-          : 'No GA integrations are installed on this machine yet. Use this screen to add a supported integration for the normal repo-first path.';
+            : 'No GA integrations are installed on this machine yet. Use this screen to add a supported integration for the normal repo-first path.';
     }
 
     document.getElementById('hookSummary').textContent = `${installedGa.length} GA installed / ${gaHooks.length}`;
@@ -180,7 +180,13 @@
       const detailItems = [
         { title: 'Policy mode', detail: formatDataPolicyPresetLabel(policy.preset || 'lean') },
         { title: 'Workspace sync (this workspace)', detail: workspaceSync.detail },
-        { title: 'Machine capture (this machine)', detail: capturePolicySummary() }
+        { title: 'Machine capture (this machine)', detail: capturePolicySummary() },
+        {
+          title: 'Debug trails (utility-only)',
+          detail: app.debugArtifactsEnabled()
+            ? 'Enabled locally for troubleshooting'
+            : 'Off in the normal product path'
+        }
       ];
       detailList.innerHTML = detailItems.map((item) => `
         <article>

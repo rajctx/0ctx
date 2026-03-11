@@ -11,10 +11,10 @@ function getLastAuditHash(db: Database.Database): string {
     const row = db.prepare(`
       SELECT entryHash
       FROM audit_logs
-      ORDER BY createdAt DESC, id DESC
+      ORDER BY rowid DESC
       LIMIT 1
     `).get() as { entryHash?: string } | undefined;
-    return row?.entryHash ?? '';
+    return row?.entryHash ?? 'genesis';
 }
 
 export function recordAuditEventRecord(
@@ -69,16 +69,17 @@ export function verifyAuditChainRecord(
     const rows = deps.db.prepare(`
       SELECT *
       FROM audit_logs
-      ORDER BY createdAt ASC, id ASC
+      ORDER BY rowid ASC
       LIMIT ?
     `).all(Math.max(1, Math.min(limit, 100000))) as any[];
 
-    let previousHash = '';
+    let previousHash = 'genesis';
     let checked = 0;
     for (const row of rows) {
-        const hmacData = `${row.prevHash ?? ''}|${row.id}|${row.action}|${row.createdAt}`;
+        const rowPrevHash = row.prevHash ?? 'genesis';
+        const hmacData = `${rowPrevHash}|${row.id}|${row.action}|${row.createdAt}`;
         const expectedHash = createHmac('sha256', deps.resolveAuditSecret()).update(hmacData).digest('hex');
-        if ((row.prevHash ?? '') !== previousHash || row.entryHash !== expectedHash) {
+        if (rowPrevHash !== previousHash || row.entryHash !== expectedHash) {
             return { valid: false, checked, brokenAt: row.id };
         }
         previousHash = row.entryHash;

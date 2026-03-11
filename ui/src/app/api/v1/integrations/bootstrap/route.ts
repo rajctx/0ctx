@@ -4,6 +4,7 @@ import {
   jsonResponse,
   requireTenantSession
 } from '@/lib/bff';
+import { GA_SUPPORTED_CLIENTS } from '@/app/actions/types';
 
 export async function POST(request: Request) {
   const [, claims, authErr] = await requireTenantSession();
@@ -26,7 +27,7 @@ export async function POST(request: Request) {
     return errorResponse(400, 'invalid_request', 'machineId is required');
   }
 
-  const clients = Array.isArray(body.clients) ? body.clients : ['claude', 'cursor', 'windsurf', 'codex', 'antigravity'];
+  const clients = Array.isArray(body.clients) ? body.clients : [...GA_SUPPORTED_CLIENTS];
   const dryRun = body.dryRun === true;
 
   try {

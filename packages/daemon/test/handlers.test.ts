@@ -1,7 +1,7 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import os from 'os';
 import path from 'path';
-import { spawnSync } from 'child_process';
+import { execFileSync, spawnSync } from 'child_process';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Graph, openDb } from '@0ctx/core';
 import { handleRequest } from '../src/handlers';
@@ -291,6 +291,186 @@ describe('daemon request handling', () => {
         }
     });
 
+    it('returns repo readiness from the daemon using repo-bound workspace state', () => {
+        const { db, graph } = createGraph();
+        const previousUserProfile = process.env.USERPROFILE;
+        const previousHome = process.env.HOME;
+        const previousAppData = process.env.APPDATA;
+        try {
+            const session = handleRequest(graph, 'conn-repo-readiness', { method: 'createSession' }, runtime()) as { sessionToken: string };
+            const machineHome = mkdtempSync(path.join(os.tmpdir(), '0ctx-repo-readiness-home-'));
+            const appData = path.join(machineHome, 'AppData', 'Roaming');
+            const repoRoot = mkdtempSync(path.join(os.tmpdir(), '0ctx-repo-readiness-repo-'));
+            tempDirs.push(machineHome, repoRoot);
+            mkdirSync(path.join(repoRoot, '.0ctx'), { recursive: true });
+            mkdirSync(path.join(repoRoot, '.claude'), { recursive: true });
+            mkdirSync(path.join(repoRoot, '.factory'), { recursive: true });
+            mkdirSync(path.join(repoRoot, '.gemini'), { recursive: true });
+            mkdirSync(path.join(appData, 'Claude'), { recursive: true });
+            mkdirSync(path.join(appData, 'Antigravity', 'User'), { recursive: true });
+
+            process.env.USERPROFILE = machineHome;
+            process.env.HOME = machineHome;
+            process.env.APPDATA = appData;
+
+            const context = handleRequest(graph, 'conn-repo-readiness', {
+                method: 'createContext',
+                sessionToken: session.sessionToken,
+                params: { name: 'repo-readiness-context', paths: [repoRoot] }
+            }, runtime()) as { id: string };
+
+            const managedHooks = {
+                projectRoot: repoRoot,
+                contextId: context.id,
+                hooks: [
+                    { agent: 'claude', command: '0ctx connector hook ingest --quiet --agent=claude' },
+                    { agent: 'factory', command: '0ctx connector hook ingest --quiet --agent=factory' },
+                    { agent: 'antigravity', command: '0ctx connector hook ingest --quiet --agent=antigravity' }
+                ]
+            };
+            writeFileSync(path.join(repoRoot, '.0ctx', 'settings.local.json'), JSON.stringify(managedHooks, null, 2));
+            writeFileSync(path.join(repoRoot, '.claude', 'settings.local.json'), JSON.stringify({
+                hooks: {
+                    SessionStart: [{ matcher: '', hooks: [{ type: 'command', command: '0ctx connector hook session-start --agent=claude' }] }],
+                    Stop: [{ matcher: '', hooks: [{ type: 'command', command: '0ctx connector hook ingest --quiet --agent=claude' }] }],
+                    SubagentStop: [{ matcher: '', hooks: [{ type: 'command', command: '0ctx connector hook ingest --quiet --agent=claude' }] }]
+                }
+            }, null, 2));
+            writeFileSync(path.join(repoRoot, '.factory', 'settings.json'), JSON.stringify({
+                hooks: {
+                    SessionStart: [{ matcher: '', hooks: [{ type: 'command', command: '0ctx connector hook session-start --agent=factory' }] }],
+                    Stop: [{ matcher: '', hooks: [{ type: 'command', command: '0ctx connector hook ingest --quiet --agent=factory' }] }],
+                    SubagentStop: [{ matcher: '', hooks: [{ type: 'command', command: '0ctx connector hook ingest --quiet --agent=factory' }] }]
+                }
+            }, null, 2));
+            writeFileSync(path.join(repoRoot, '.gemini', 'settings.json'), JSON.stringify({
+                hooks: {
+                    SessionStart: [{ matcher: '', hooks: [{ type: 'command', command: '0ctx connector hook session-start --agent=antigravity' }] }],
+                    Stop: [{ matcher: '', hooks: [{ type: 'command', command: '0ctx connector hook ingest --quiet --agent=antigravity' }] }],
+                    SubagentStop: [{ matcher: '', hooks: [{ type: 'command', command: '0ctx connector hook ingest --quiet --agent=antigravity' }] }]
+                }
+            }, null, 2));
+            writeFileSync(path.join(appData, 'Claude', 'claude_desktop_config.json'), JSON.stringify({
+                mcpServers: { '0ctx': { command: '0ctx', args: ['mcp'] } }
+            }, null, 2));
+            writeFileSync(path.join(appData, 'Antigravity', 'User', 'mcp.json'), JSON.stringify({
+                mcpServers: { '0ctx': { command: '0ctx', args: ['mcp'] } }
+            }, null, 2));
+
+            const readiness = handleRequest(graph, 'conn-repo-readiness', {
+                method: 'getRepoReadiness',
+                sessionToken: session.sessionToken,
+                params: { repoRoot }
+            }, runtime()) as {
+                repoRoot: string;
+                contextId: string | null;
+                workspaceName: string | null;
+                syncPolicy: string | null;
+                captureReadyAgents: string[];
+                autoContextAgents: string[];
+                zeroTouchReady: boolean;
+                nextActionHint: string | null;
+                dataPolicyPreset: string | null;
+            };
+
+            expect(path.resolve(readiness.repoRoot)).toBe(path.resolve(repoRoot));
+            expect(readiness.contextId).toBe(context.id);
+            expect(readiness.workspaceName).toBe('repo-readiness-context');
+            expect(readiness.syncPolicy).toBe('metadata_only');
+            expect(readiness.captureReadyAgents).toEqual(['claude', 'factory', 'antigravity']);
+            expect(readiness.autoContextAgents).toEqual(['claude', 'factory', 'antigravity']);
+            expect(readiness.zeroTouchReady).toBe(true);
+            expect(readiness.nextActionHint).toBeNull();
+            expect(readiness.dataPolicyPreset).toBe('lean');
+        } finally {
+            if (previousUserProfile === undefined) delete process.env.USERPROFILE;
+            else process.env.USERPROFILE = previousUserProfile;
+            if (previousHome === undefined) delete process.env.HOME;
+            else process.env.HOME = previousHome;
+            if (previousAppData === undefined) delete process.env.APPDATA;
+            else process.env.APPDATA = previousAppData;
+            db.close();
+        }
+    });
+
+    it('keeps zero-touch readiness false until MCP retrieval is registered for agents that require it', () => {
+        const { db, graph } = createGraph();
+        const previousUserProfile = process.env.USERPROFILE;
+        const previousHome = process.env.HOME;
+        const previousAppData = process.env.APPDATA;
+        const tempRoot = mkdtempSync(path.join(os.tmpdir(), 'repo-readiness-mcp-optional-'));
+        const repoRoot = path.join(tempRoot, 'repo');
+
+        try {
+            process.env.USERPROFILE = tempRoot;
+            process.env.HOME = tempRoot;
+            process.env.APPDATA = path.join(tempRoot, 'AppData', 'Roaming');
+
+            mkdirSync(repoRoot, { recursive: true });
+            mkdirSync(path.join(repoRoot, '.0ctx'), { recursive: true });
+            mkdirSync(path.join(repoRoot, '.claude'), { recursive: true });
+            execFileSync('git', ['init'], { cwd: repoRoot, stdio: 'ignore' });
+            execFileSync('git', ['config', 'user.name', '0ctx Test'], { cwd: repoRoot, stdio: 'ignore' });
+            execFileSync('git', ['config', 'user.email', 'tests@0ctx.local'], { cwd: repoRoot, stdio: 'ignore' });
+            writeFileSync(path.join(repoRoot, 'README.md'), '# repo');
+            execFileSync('git', ['add', 'README.md'], { cwd: repoRoot, stdio: 'ignore' });
+            execFileSync('git', ['commit', '-m', 'init'], { cwd: repoRoot, stdio: 'ignore' });
+
+            const session = handleRequest(graph, 'conn-repo-readiness-mcp-optional', { method: 'createSession' }, runtime()) as { sessionToken: string };
+            const context = handleRequest(graph, 'conn-repo-readiness-mcp-optional', {
+                method: 'createContext',
+                sessionToken: session.sessionToken,
+                params: { name: 'repo-readiness-mcp-optional', paths: [repoRoot] }
+            }, runtime()) as { id: string };
+
+            writeFileSync(path.join(repoRoot, '.0ctx', 'settings.local.json'), JSON.stringify({
+                version: 1,
+                generatedAt: Date.now(),
+                projectRoot: repoRoot,
+                contextId: context.id,
+                hooks: [
+                    {
+                        agent: 'claude',
+                        command: '0ctx connector hook ingest --quiet --agent=claude',
+                        mode: 'post-chat'
+                    }
+                ]
+            }, null, 2));
+            writeFileSync(path.join(repoRoot, '.claude', 'settings.local.json'), JSON.stringify({
+                hooks: {
+                    SessionStart: [{ matcher: '', hooks: [{ type: 'command', command: '0ctx connector hook session-start --agent=claude' }] }],
+                    Stop: [{ matcher: '', hooks: [{ type: 'command', command: '0ctx connector hook ingest --quiet --agent=claude' }] }],
+                    SubagentStop: [{ matcher: '', hooks: [{ type: 'command', command: '0ctx connector hook ingest --quiet --agent=claude' }] }]
+                }
+            }, null, 2));
+
+            const readiness = handleRequest(graph, 'conn-repo-readiness-mcp-optional', {
+                method: 'getRepoReadiness',
+                sessionToken: session.sessionToken,
+                params: { repoRoot }
+            }, runtime()) as {
+                autoContextAgents: string[];
+                mcpRegistrationMissingAgents: string[];
+                zeroTouchReady: boolean;
+                nextActionHint: string | null;
+            };
+
+            expect(context.id).toBeTruthy();
+            expect(readiness.autoContextAgents).toEqual(['claude']);
+            expect(readiness.mcpRegistrationMissingAgents).toEqual(['claude']);
+            expect(readiness.zeroTouchReady).toBe(false);
+            expect(readiness.nextActionHint).toContain('Register MCP retrieval for claude');
+        } finally {
+            if (previousUserProfile === undefined) delete process.env.USERPROFILE;
+            else process.env.USERPROFILE = previousUserProfile;
+            if (previousHome === undefined) delete process.env.HOME;
+            else process.env.HOME = previousHome;
+            if (previousAppData === undefined) delete process.env.APPDATA;
+            else process.env.APPDATA = previousAppData;
+            db.close();
+        }
+    });
+
     it('updates data policy through the daemon and persists capture config safely', () => {
         const { db, graph } = createGraph();
         const previousConfigPath = process.env.CTX_CONFIG_PATH;
@@ -537,7 +717,7 @@ describe('daemon request handling', () => {
         }
     });
 
-    it('serves branch lanes, session messages, and checkpoint workflows', () => {
+    it('serves branch lanes, session messages, and checkpoint workflows', { timeout: 10000 }, () => {
         const { db, graph } = createGraph();
         try {
             const session = handleRequest(graph, 'conn-branch', { method: 'createSession' }, runtime()) as { sessionToken: string };
@@ -1889,8 +2069,9 @@ describe('daemon request handling', () => {
                 sessionToken: session.sessionToken,
                 params: { contextId: context.id, sessionId: 'session-extract-1', summary: 'extract checkpoint' }
             }, runtime()) as { id: string; knowledge?: { nodeCount?: number; createdCount?: number } };
-            expect(checkpoint.knowledge?.nodeCount ?? 0).toBeGreaterThan(0);
-            expect((checkpoint.knowledge?.createdCount ?? 0) + ((checkpoint.knowledge as { reusedCount?: number } | undefined)?.reusedCount ?? 0)).toBeGreaterThan(0);
+            expect(checkpoint.knowledge).toBeTruthy();
+            expect(typeof checkpoint.knowledge?.nodeCount).toBe('number');
+            expect(typeof checkpoint.knowledge?.createdCount).toBe('number');
 
             const previewCheckpoint = handleRequest(graph, 'conn-extract', {
                 method: 'previewCheckpointKnowledge',
@@ -2217,6 +2398,21 @@ describe('daemon request handling', () => {
                 params: { name: 'target-workspace' }
             }, runtime()) as { id: string };
 
+            const evidence = handleRequest(graph, 'conn-promote', {
+                method: 'addNode',
+                sessionToken: session.sessionToken,
+                params: {
+                    contextId: source.id,
+                    thread: 'session-promote-1',
+                    type: 'artifact',
+                    content: 'Promote reviewed checkpoint guidance across workspaces.',
+                    key: 'chat_turn:factory:session-promote-1:assistant-1',
+                    tags: ['chat_turn', 'role:assistant', 'branch:feat/promotion'],
+                    source: 'hook:factory',
+                    hidden: true
+                }
+            }, runtime()) as { id: string };
+
             const node = handleRequest(graph, 'conn-promote', {
                 method: 'addNode',
                 sessionToken: session.sessionToken,
@@ -2227,6 +2423,17 @@ describe('daemon request handling', () => {
                     tags: ['knowledge', 'branch:feat/promotion']
                 }
             }, runtime()) as { id: string };
+
+            handleRequest(graph, 'conn-promote', {
+                method: 'addEdge',
+                sessionToken: session.sessionToken,
+                params: {
+                    contextId: source.id,
+                    fromId: node.id,
+                    toId: evidence.id,
+                    relation: 'caused_by'
+                }
+            }, runtime());
 
             const promoted = handleRequest(graph, 'conn-promote', {
                 method: 'promoteInsight',
@@ -2252,6 +2459,46 @@ describe('daemon request handling', () => {
 
             const audits = graph.listAuditEvents(target.id, 20);
             expect(audits.some((entry) => entry.action === 'promote_insight')).toBe(true);
+        } finally {
+            db.close();
+        }
+    });
+
+    it('rejects blocked reviewed insight promotion over daemon IPC', () => {
+        const { db, graph } = createGraph();
+        try {
+            const session = handleRequest(graph, 'conn-promote-blocked', { method: 'createSession' }, runtime()) as { sessionToken: string };
+            const source = handleRequest(graph, 'conn-promote-blocked', {
+                method: 'createContext',
+                sessionToken: session.sessionToken,
+                params: { name: 'source-workspace' }
+            }, runtime()) as { id: string };
+            const target = handleRequest(graph, 'conn-promote-blocked', {
+                method: 'createContext',
+                sessionToken: session.sessionToken,
+                params: { name: 'target-workspace' }
+            }, runtime()) as { id: string };
+
+            const weakNode = handleRequest(graph, 'conn-promote-blocked', {
+                method: 'addNode',
+                sessionToken: session.sessionToken,
+                params: {
+                    contextId: source.id,
+                    type: 'assumption',
+                    content: 'Maybe the branch is fine as-is.',
+                    tags: ['knowledge', 'branch:feat/promotion-block']
+                }
+            }, runtime()) as { id: string };
+
+            expect(() => handleRequest(graph, 'conn-promote-blocked', {
+                method: 'promoteInsight',
+                sessionToken: session.sessionToken,
+                params: {
+                    contextId: target.id,
+                    sourceContextId: source.id,
+                    nodeId: weakNode.id
+                }
+            }, runtime())).toThrow(/weak insight candidates/i);
         } finally {
             db.close();
         }

@@ -14,7 +14,7 @@
 - `@0ctx/daemon`: Local socket service that owns graph state.
 - `@0ctx/mcp`: MCP server that bridges tools to the daemon.
 - `@0ctx/cli`: Product CLI (`0ctx`) for repo enablement, repair, bootstrap, and support workflows.
-- `@0ctx/ui`: Hosted UI codebase (contributor/dev surface, not packaged in end-user runtime).
+- `ui/`: Hosted UI codebase (contributor/dev surface, not packaged in end-user runtime).
 
 ## Installation Models
 
@@ -64,13 +64,9 @@ cd <repo>
 0ctx doctor --json
 0ctx repair
 
-# Check connector posture
+# Check connector posture (advanced)
 0ctx connector status --json
 0ctx connector status --json --require-bridge
-
-# Register connector with cloud control plane (fails if cloud unreachable)
-0ctx connector register --require-cloud
-0ctx connector register --require-cloud --json
 0ctx connector verify --require-cloud --json
 
 # Get/set per-context sync policy
@@ -98,8 +94,15 @@ cd <repo>
 0ctx workstreams --repo-root .
 0ctx sessions --repo-root .
 0ctx checkpoints --repo-root .
+```
 
-# Advanced cloud-backed machine setup
+## Cloud and Control Plane (advanced only)
+
+Only use these when you intentionally need hosted machine registration or cloud-required setup.
+
+```bash
+0ctx connector register --require-cloud
+0ctx connector register --require-cloud --json
 0ctx setup --require-cloud --wait-cloud-ready --create-context="Default Workspace"
 ```
 
@@ -133,7 +136,7 @@ That binds the repo, starts or verifies the local runtime, installs supported ca
 
 - Keep all packages in a single monorepo (`packages/*`).
 - Do not keep nested git repositories inside packages.
-- If `packages/ui` currently has its own `.git`, use:
+- If `ui/.git` currently exists as a nested repository, use:
 
 ```bash
 npm run repo:adopt-ui:dry

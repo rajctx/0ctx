@@ -73,8 +73,11 @@
         const meta = [
           { label: 'Type', value: humanizeLabel(selectedInsight.type) },
           { label: 'Trust', value: humanizeLabel(selectedInsight.trustTier) },
+          { label: 'Trust flags', value: selectedInsight.trustFlags.length > 0 ? selectedInsight.trustFlags.map((flag) => humanizeLabel(flag)).join(', ') : 'none' },
+          { label: 'Promotion', value: humanizeLabel(selectedInsight.promotionState || 'review') },
           { label: 'Evidence', value: String(selectedInsight.evidenceCount) },
           { label: 'Distinct evidence', value: String(selectedInsight.distinctEvidenceCount || selectedInsight.evidenceCount || 0) },
+          { label: 'Distinct sessions', value: String(selectedInsight.distinctSessionCount || 0) },
           { label: 'Corroborated roles', value: selectedInsight.corroboratedRoles.length > 0 ? selectedInsight.corroboratedRoles.map((role) => humanizeLabel(role)).join(', ') : 'none' },
           { label: 'Latest evidence', value: selectedInsight.latestEvidenceAt ? formatTime(selectedInsight.latestEvidenceAt) : 'none' },
           { label: 'Source', value: selectedInsight.source },
@@ -93,6 +96,19 @@
         if (selectedInsight.trustSummary) {
           selectedInsightCopy.insertAdjacentHTML('beforeend', `<div class="preview-footnote">${esc(selectedInsight.trustSummary)}</div>`);
         }
+        if (selectedInsight.promotionSummary) {
+          selectedInsightCopy.insertAdjacentHTML('beforeend', `<div class="preview-footnote">${esc(selectedInsight.promotionSummary)}</div>`);
+        }
+        if (selectedInsight.evidencePreview.length > 0) {
+          selectedInsightCopy.insertAdjacentHTML('beforeend', `
+            <div class="preview-footnote">
+              <strong>Evidence preview</strong>
+              <ul class="support-list">
+                ${selectedInsight.evidencePreview.map((excerpt) => `<li>${esc(excerpt)}</li>`).join('')}
+              </ul>
+            </div>
+          `);
+        }
       }
 
       const targetSelect = document.getElementById('insightTargetContext');
@@ -106,17 +122,21 @@
       targetSelect.disabled = targetContexts.length === 0;
 
       const promoteButton = document.getElementById('promoteInsightBtn');
-      promoteButton.disabled = !promoteSupported || !selectedNode || !selectedTargetContext;
+      promoteButton.disabled = !promoteSupported || !selectedNode || !selectedTargetContext || selectedInsight.promotionState === 'blocked';
 
       const promotionCopy = document.getElementById('insightPromotionCopy');
       if (!promoteSupported) {
         promotionCopy.textContent = 'Update the local runtime to promote reviewed insights across workspaces.';
       } else if (!selectedNode) {
         promotionCopy.textContent = 'Select an insight first. Promotion is always explicit and keeps project boundaries visible.';
+      } else if (selectedInsight.promotionState === 'blocked') {
+        promotionCopy.textContent = selectedInsight.promotionSummary || 'This insight is not ready to promote yet.';
       } else if (!selectedTargetContext) {
         promotionCopy.textContent = 'Create another workspace before promoting reviewed insights across projects.';
       } else {
-        promotionCopy.textContent = `Promote this reviewed insight into ${selectedTargetContext.name}. The promoted node keeps provenance back to the source workspace and insight.`;
+        promotionCopy.textContent = selectedInsight.promotionState === 'review'
+          ? `Review-tier insight: you can still promote this into ${selectedTargetContext.name}, but it needs human judgment. Provenance stays attached.`
+          : `Promote this reviewed insight into ${selectedTargetContext.name}. The promoted node keeps provenance back to the source workspace and insight.`;
       }
 
       const promotionMeta = [];
@@ -144,6 +164,9 @@
             const summary = insightSummary(node);
             const metaLine = [
               `${humanizeLabel(summary.trustTier)} trust`,
+              summary.trustFlags.length > 0 ? summary.trustFlags.slice(0, 2).map((flag) => humanizeLabel(flag)).join(', ') : null,
+              `${humanizeLabel(summary.promotionState || 'review')} promotion`,
+              summary.distinctSessionCount > 1 ? `${summary.distinctSessionCount} sessions` : (summary.distinctSessionCount === 1 && summary.evidenceCount > 1 ? 'single-session corroboration' : null),
               summary.distinctEvidenceCount > 0
                 ? `${summary.distinctEvidenceCount} distinct / ${summary.evidenceCount} total`
                 : (summary.evidenceCount > 0 ? `${summary.evidenceCount} evidence` : 'no evidence'),

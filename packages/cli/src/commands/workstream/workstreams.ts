@@ -86,7 +86,9 @@ export function createBranchCommands(ctx: WorkstreamCommandContext) {
                     if (Array.isArray(result.insights) && result.insights.length > 0) {
                         console.log('\n  Reviewed insights:');
                         for (const insight of result.insights.slice(0, 4)) {
-                            console.log(`    - [${String(insight.type ?? 'insight')}] ${ctx.short(String(insight.content ?? '-'), 120)}`);
+                            const trust = insight.trustTier ? ` | ${insight.trustTier} trust` : '';
+                            const promotion = insight.promotionState ? ` | ${insight.promotionState} promotion` : '';
+                            console.log(`    - [${String(insight.type ?? 'insight')}${trust}${promotion}] ${ctx.short(String(insight.content ?? '-'), 120)}`);
                         }
                     }
                     console.log('');

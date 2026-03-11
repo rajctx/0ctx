@@ -12,11 +12,12 @@ export function createHookStatusCommand(deps: HookCommandDeps) {
         const previewAgents = state.agents.filter((agent) => !isGaHookAgent(agent.agent as HookSupportedAgent));
         const visibleAgents = includePreview ? state.agents : gaAgents;
         if (asJson) {
-            console.log(JSON.stringify({
+            const payload = {
                 ...state,
                 agents: visibleAgents,
-                previewAgents: includePreview ? previewAgents : []
-            }, null, 2));
+                ...(includePreview ? { previewAgents } : {})
+            };
+            console.log(JSON.stringify(payload, null, 2));
             return 0;
         }
 
@@ -27,9 +28,6 @@ export function createHookStatusCommand(deps: HookCommandDeps) {
             console.log(`  updated_at:     ${new Date(state.updatedAt).toISOString()}`);
             for (const agent of visibleAgents) {
                 console.log(`  ${agent.agent}: ${agent.status}${agent.installed ? ' (installed)' : ''}`);
-            }
-            if (!includePreview && previewAgents.some((agent) => agent.installed)) {
-                console.log('  non_ga: hidden (use --include-explicit to inspect explicit opt-in installs)');
             }
             console.log('');
         }

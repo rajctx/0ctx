@@ -30,6 +30,7 @@ export type {
     AgentContextPack,
     DataPolicyPreset,
     DataPolicySummary,
+    RepoReadinessSummary,
     InsightSummary,
     SessionMessage,
     CheckpointSummary,

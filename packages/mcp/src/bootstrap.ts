@@ -11,8 +11,10 @@ import {
 } from './bootstrap-config';
 
 type SupportedClient = BootstrapSupportedClient;
-const SUPPORTED_CLIENTS: SupportedClient[] = ['claude', 'cursor', 'windsurf', 'codex', 'antigravity'];
-const DEFAULT_CLIENTS: SupportedClient[] = ['claude', 'antigravity'];
+const GA_SUPPORTED_CLIENTS: SupportedClient[] = ['claude', 'antigravity'];
+const PREVIEW_SUPPORTED_CLIENTS: SupportedClient[] = ['cursor', 'windsurf', 'codex'];
+const SUPPORTED_CLIENTS: SupportedClient[] = [...GA_SUPPORTED_CLIENTS, ...PREVIEW_SUPPORTED_CLIENTS];
+const DEFAULT_CLIENTS: SupportedClient[] = [...GA_SUPPORTED_CLIENTS];
 
 interface BootstrapOptions {
     clients: SupportedClient[];
@@ -35,6 +37,7 @@ interface BootstrapResult {
 export function parseBootstrapClients(raw: string | undefined): SupportedClient[] {
     const source = (raw || 'ga').trim().toLowerCase();
     if (!source || source === 'ga') return DEFAULT_CLIENTS;
+    if (source === 'preview' || source === 'all') return [];
 
     const parsed = source
         .split(/[,\s]+/)
@@ -42,6 +45,27 @@ export function parseBootstrapClients(raw: string | undefined): SupportedClient[
         .filter((item): item is SupportedClient => SUPPORTED_CLIENTS.includes(item as SupportedClient));
 
     return parsed.length === 0 ? DEFAULT_CLIENTS : parsed;
+}
+
+function includesPreviewBootstrapClient(raw: string | undefined): boolean {
+    const source = (raw || '').trim().toLowerCase();
+    if (!source) return false;
+    return source
+        .split(/[,\s]+/)
+        .map(item => item.trim())
+        .some((item) => PREVIEW_SUPPORTED_CLIENTS.includes(item as SupportedClient));
+}
+
+export function validateBootstrapClientSelection(raw: string | undefined, allowPreview = false): string | null {
+    const source = (raw || '').trim().toLowerCase();
+    if (!source) return null;
+    if (source === 'preview' || source === 'all') {
+        return 'Preview integrations stay outside the normal product path. Use --clients=ga for the supported path or name preview integrations explicitly with --clients=codex,cursor,windsurf.';
+    }
+    if (!allowPreview && includesPreviewBootstrapClient(raw)) {
+        return 'Preview MCP integrations require an explicit opt-in. Re-run with --allow-preview and name preview integrations directly with --clients=codex,cursor,windsurf.';
+    }
+    return null;
 }
 
 function getPlatform(options?: Pick<BootstrapOptions, 'platform'>): NodeJS.Platform {
@@ -167,7 +191,14 @@ function printSummary(results: BootstrapResult[], dryRun: boolean): void {
 
 export function runBootstrapFromCli(): number {
     const dryRun = hasFlag('--dry-run');
-    const clients = parseBootstrapClients(parseArgValue('--clients') || parseArgValue('--client'));
+    const allowPreview = hasFlag('--allow-preview');
+    const rawClients = parseArgValue('--clients') || parseArgValue('--client');
+    const clientValidationError = validateBootstrapClientSelection(rawClients, allowPreview);
+    if (clientValidationError) {
+        console.error(clientValidationError);
+        return 1;
+    }
+    const clients = parseBootstrapClients(rawClients);
     const serverName = parseArgValue('--server-name') || '0ctx';
     const entrypoint = parseArgValue('--entrypoint');
     const profile = parseArgValue('--profile') || parseArgValue('--mcp-profile') || 'core';

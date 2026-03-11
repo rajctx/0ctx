@@ -26,6 +26,7 @@ export function createEnableCommands(deps: ProductCommandDeps & { commandBootstr
         const requestedDataPolicy = deps.parseOptionalStringFlag(flags['data-policy'] ?? flags.dataPolicy);
         const dataPolicyPreset = parseDataPolicyPreset(requestedDataPolicy);
         const workspaceName = requestedName ?? (path.basename(repoRoot) || 'Workspace');
+        const allowPreview = Boolean(flags['allow-preview']) || Boolean(flags.allowPreview);
         const hookPreviewError = deps.validateExplicitPreviewSelection(flags.clients, 'codex,cursor,windsurf');
         if (hookPreviewError) {
             console.error(hookPreviewError);
@@ -35,7 +36,9 @@ export function createEnableCommands(deps: ProductCommandDeps & { commandBootstr
             console.error('Invalid data policy. Use lean, review, debug, or shared.');
             return 1;
         }
-        const mcpPreviewError = deps.validateExplicitPreviewSelection(flags['mcp-clients'] ?? flags.mcpClients, 'codex', 'claude,antigravity');
+        const mcpPreviewError = !allowPreview
+            ? deps.validateExplicitPreviewSelection(flags['mcp-clients'] ?? flags.mcpClients, 'codex', 'claude,antigravity')
+            : null;
         if (mcpPreviewError) {
             console.error(`MCP clients: ${mcpPreviewError}`);
             return 1;
@@ -232,12 +235,10 @@ export function createEnableCommands(deps: ProductCommandDeps & { commandBootstr
         }
 
         let hookSummary: ReturnType<typeof deps.installHooks> | null = null;
-        let hookHealthDetails: Awaited<ReturnType<typeof deps.collectHookHealth>>['details'] | null = null;
         if (!skipHooks && hookClients.length > 0) {
             if (spinner) spinner.message('Installing capture integrations');
             hookSummary = deps.installHooks({ projectRoot: repoRoot, contextId, clients: hookClients, installClaudeGlobal: Boolean(flags.global) });
             steps.push({ id: 'capture', status: 'pass', message: 'Capture integrations installed.', details: { clients: hookClients, changed: hookSummary.changed, statePath: hookSummary.statePath, projectConfigPath: hookSummary.projectConfigPath } });
-            hookHealthDetails = (await deps.collectHookHealth()).details;
         } else {
             steps.push({
                 id: 'capture',
@@ -250,7 +251,7 @@ export function createEnableCommands(deps: ProductCommandDeps & { commandBootstr
         }
 
         if (spinner) spinner.stop(color.green('0ctx is enabled for this repository'));
-        const repoReadiness = await deps.collectRepoReadiness({ repoRoot, contextId, hookDetails: hookHealthDetails });
+        const repoReadiness = await deps.collectRepoReadiness({ repoRoot, contextId });
 
         if (asJson) {
             console.log(JSON.stringify({

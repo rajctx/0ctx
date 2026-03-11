@@ -2,7 +2,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { bootstrapMcpRegistration, parseBootstrapClients } from '../src/bootstrap';
+import { bootstrapMcpRegistration, parseBootstrapClients, validateBootstrapClientSelection } from '../src/bootstrap';
 
 const tempDirs: string[] = [];
 
@@ -240,9 +240,17 @@ describe('bootstrapMcpRegistration', () => {
     it('defaults bootstrap client parsing to GA clients only', () => {
         expect(parseBootstrapClients(undefined)).toEqual(['claude', 'antigravity']);
         expect(parseBootstrapClients('ga')).toEqual(['claude', 'antigravity']);
-        expect(parseBootstrapClients('preview')).toEqual(['claude', 'antigravity']);
-        expect(parseBootstrapClients('all')).toEqual(['claude', 'antigravity']);
+        expect(parseBootstrapClients('preview')).toEqual([]);
+        expect(parseBootstrapClients('all')).toEqual([]);
         expect(parseBootstrapClients('cursor')).toEqual(['cursor']);
         expect(parseBootstrapClients('')).toEqual(['claude', 'antigravity']);
+    });
+
+    it('rejects preview and all bootstrap shorthands in the normal product path', () => {
+        expect(validateBootstrapClientSelection('preview')).toContain('--clients=ga');
+        expect(validateBootstrapClientSelection('all')).toContain('--clients=codex,cursor,windsurf');
+        expect(validateBootstrapClientSelection('cursor')).toContain('--allow-preview');
+        expect(validateBootstrapClientSelection('cursor', true)).toBeNull();
+        expect(validateBootstrapClientSelection(undefined)).toBeNull();
     });
 });

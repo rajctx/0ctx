@@ -1,3 +1,4 @@
+import type { RepoReadinessSummary } from '@0ctx/core';
 import type { HookSupportedAgent } from '../hooks';
 
 export type { HookSupportedAgent } from '../hooks';
@@ -41,33 +42,6 @@ export interface HookHealthDetails {
     contextIdExists: boolean | null;
     installedAgentCount: number;
     agents: HookHealthAgentCheck[];
-}
-
-export interface RepoReadinessSummary {
-    repoRoot: string;
-    contextId: string | null;
-    workspaceName: string | null;
-    workstream: string | null;
-    sessionCount: number | null;
-    checkpointCount: number | null;
-    syncPolicy: string | null;
-    syncScope: 'workspace';
-    captureScope: 'machine';
-    debugScope: 'machine';
-    captureReadyAgents: HookSupportedAgent[];
-    autoContextAgents: HookSupportedAgent[];
-    autoContextMissingAgents: HookSupportedAgent[];
-    sessionStartMissingAgents: HookSupportedAgent[];
-    mcpRegistrationMissingAgents: SupportedClient[];
-    captureMissingAgents: HookInstallClient[];
-    captureManagedForRepo: boolean;
-    zeroTouchReady: boolean;
-    nextActionHint: string | null;
-    dataPolicyPreset: string | null;
-    dataPolicyActionHint: string | null;
-    captureRetentionDays: number;
-    debugRetentionDays: number;
-    debugArtifactsEnabled: boolean;
 }
 
 export interface ParsedArgs {

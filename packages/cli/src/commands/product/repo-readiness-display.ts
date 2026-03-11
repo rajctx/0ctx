@@ -1,4 +1,4 @@
-import type { RepoReadinessSummary } from './types';
+import type { RepoReadinessSummary } from '@0ctx/core';
 import { formatScopedDataPolicyPresetLabel } from '../../cli-core/data-policy-display';
 
 type DisplayMode = 'enable' | 'status';
@@ -89,7 +89,7 @@ function buildAutoContextSetupGaps(options: {
         parts.push(`${options.formatAgentList(options.repoReadiness.sessionStartMissingAgents)} need automatic context injection`);
     }
     if (options.repoReadiness.mcpRegistrationMissingAgents.length > 0) {
-        parts.push(`${options.formatAgentList(options.repoReadiness.mcpRegistrationMissingAgents)} need automatic retrieval setup`);
+        parts.push(`${options.formatAgentList(options.repoReadiness.mcpRegistrationMissingAgents)} need MCP retrieval registration`);
     }
     return parts;
 }

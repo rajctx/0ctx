@@ -189,7 +189,7 @@ export function scoreKnowledgeCandidate(
         if (/\b(click|open|refresh|restart|repair|reinstall|review|check|verify|inspect|copy|paste|button|screen)\b/.test(normalized)) return null;
         return { type: 'constraint', confidence: 0.84, reason: 'constraint-language' };
     }
-    if (/\b(decided|decision|going with|adopt|adopted|chosen|choose to|switched to|default to|standardize|migrate to)\b/.test(normalized)) {
+    if (/\b(decided|decision|going with|adopt|adopted|chosen|choose to|chose to|switched to|default to|standardize|migrate to)\b/.test(normalized)) {
         if (/\b(test|tests|smoke|refresh|restart|rerun|validate|repair|debug|build|compiled|verified|installed|review|check|verify|inspect|button|screen)\b/.test(normalized)) return null;
         return { type: 'decision', confidence: lowerRole === 'assistant' ? 0.86 : 0.74, reason: 'decision-language' };
     }

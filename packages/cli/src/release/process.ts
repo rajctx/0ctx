@@ -18,7 +18,7 @@ export interface ReleaseStepResult extends ProcessRunResult {
     skipped?: boolean;
 }
 
-function getNpmCommand(): string {
+export function getNpmCommand(): string {
     return 'npm';
 }
 
@@ -89,7 +89,7 @@ async function runProcess(
     });
 }
 
-function buildNpmRunArgs(script: string, scriptArgs: string[] = []): string[] {
+export function buildNpmRunArgs(script: string, scriptArgs: string[] = []): string[] {
     return scriptArgs.length > 0 ? ['run', script, '--', ...scriptArgs] : ['run', script];
 }
 

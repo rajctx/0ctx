@@ -55,9 +55,12 @@ export interface HookStatusState {
 export interface HookPruneResult {
     rootDir: string;
     maxAgeDays: number;
+    debugMaxAgeDays: number;
+    debugArtifactsEnabled: boolean;
     deletedFiles: number;
     deletedDirs: number;
     reclaimedBytes: number;
+    prunedPaths: string[];
 }
 
 export interface HookSessionStartResult {

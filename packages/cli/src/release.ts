@@ -1,5 +1,5 @@
 import type { ReleaseStepResult, RunMode } from './release/process.js';
-import { resolveReleaseRepoRoot, runNpmScript, runPublishScript } from './release/process.js';
+import { buildNpmRunArgs, getNpmCommand, resolveReleaseRepoRoot, runNpmScript, runPublishScript } from './release/process.js';
 import { bumpAllPackageVersions, normalizeReleaseVersion, validateReleaseVersion } from './release/versioning.js';
 
 export interface ReleasePublishOptions {

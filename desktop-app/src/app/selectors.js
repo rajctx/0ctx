@@ -89,10 +89,15 @@
         createdAt: null,
         evidenceCount: 0,
         distinctEvidenceCount: 0,
+        distinctSessionCount: 0,
         corroboratedRoles: [],
+        trustFlags: [],
         latestEvidenceAt: null,
+        evidencePreview: [],
         trustTier: 'weak',
-        trustSummary: 'No reviewed insight selected.'
+        trustSummary: 'No reviewed insight selected.',
+        promotionState: 'blocked',
+        promotionSummary: 'Select an insight before promoting it.'
       };
     }
     const nodeId = node.nodeId || node.id || '';
@@ -110,10 +115,15 @@
       createdAt: node.createdAt || null,
       evidenceCount: Number(node.evidenceCount || 0),
       distinctEvidenceCount: Number(node.distinctEvidenceCount || node.evidenceCount || 0),
+      distinctSessionCount: Number(node.distinctSessionCount || 0),
       corroboratedRoles: Array.isArray(node.corroboratedRoles) ? node.corroboratedRoles : [],
+      trustFlags: Array.isArray(node.trustFlags) ? node.trustFlags : [],
       latestEvidenceAt: node.latestEvidenceAt || null,
+      evidencePreview: Array.isArray(node.evidencePreview) ? node.evidencePreview.map((value) => String(value || '').trim()).filter(Boolean) : [],
       trustTier: node.trustTier || 'weak',
-      trustSummary: node.trustSummary || 'No linked evidence messages yet.'
+      trustSummary: node.trustSummary || 'No linked evidence messages yet.',
+      promotionState: node.promotionState || 'review',
+      promotionSummary: node.promotionSummary || 'Review this insight before promoting it into another workspace.'
     };
   }
 
@@ -178,6 +188,10 @@
 
   function autoContextGaAgents() {
     return installedGaAgents().filter((agent) => agent.sessionStartInstalled === true);
+  }
+
+  function currentRepoReadiness() {
+    return state.repoReadiness || null;
   }
 
   function integrationLabel(agent) {
@@ -265,6 +279,26 @@
   }
 
   function zeroTouchState() {
+    const readiness = currentRepoReadiness();
+    if (readiness) {
+      const ready = readiness.zeroTouchReady === true;
+      const captureAgents = Array.isArray(readiness.captureReadyAgents) ? readiness.captureReadyAgents : [];
+      const autoAgents = Array.isArray(readiness.autoContextAgents) ? readiness.autoContextAgents : [];
+      return {
+        label: ready ? 'Ready for zero-touch' : 'Needs one-time setup',
+        className: ready ? 'badge connected' : 'badge degraded',
+        detail: ready
+          ? `${integrationListText(autoAgents.map((agent) => ({ agent }))) || 'Supported agents'} will capture and receive workstream context automatically.`
+          : captureAgents.length > 0
+            ? `${integrationListText(captureAgents.map((agent) => ({ agent })))} are installed, but the normal path still needs one-time setup.`
+            : 'No GA integration is installed for this repo.',
+        nextAction: readiness.nextActionHint
+          || readiness.dataPolicyActionHint
+          || (ready ? 'Use the supported agent normally. 0ctx will inject the current workstream and capture new sessions automatically.' : 'Run 0ctx enable in this repo.'),
+        ready
+      };
+    }
+
     const context = activeContext();
     const repoBound = Array.isArray(context?.paths) && context.paths.some((value) => String(value || '').trim().length > 0);
     const gaHooks = installedGaAgents();
@@ -335,6 +369,18 @@
   }
 
   function automaticContextState() {
+    const readiness = currentRepoReadiness();
+    if (readiness) {
+      const autoAgents = Array.isArray(readiness.autoContextAgents) ? readiness.autoContextAgents : [];
+      const missingAgents = Array.isArray(readiness.sessionStartMissingAgents) ? readiness.sessionStartMissingAgents : [];
+      if (autoAgents.length > 0) {
+        return missingAgents.length > 0
+          ? `${autoAgents.join(', ')} inject the current workstream automatically; finish setup for ${missingAgents.join(', ')}`
+          : `${autoAgents.join(', ')} inject the current workstream automatically`;
+      }
+      return readiness.nextActionHint || 'No supported integration is installed for automatic workstream context';
+    }
+
     const gaHooks = autoContextGaAgents();
     if (gaHooks.length > 0) {
       return `${integrationListText(gaHooks)} inject the current workstream automatically at session start`;
@@ -343,6 +389,16 @@
   }
 
   function capturePolicySummary() {
+    const readiness = currentRepoReadiness();
+    if (readiness) {
+      const captureDays = Number.isFinite(readiness.captureRetentionDays) ? readiness.captureRetentionDays : 14;
+      const debugDays = Number.isFinite(readiness.debugRetentionDays) ? readiness.debugRetentionDays : 7;
+      if (readiness.debugArtifactsEnabled === true) {
+        return `${captureDays}d local capture kept; ${debugDays}d debug trails enabled`;
+      }
+      return `${captureDays}d local capture kept; debug trails off by default (${debugDays}d if enabled)`;
+    }
+
     const policy = state.dataPolicy || state.hook?.capturePolicy || {};
     const captureDays = Number.isFinite(policy.captureRetentionDays) ? policy.captureRetentionDays : 14;
     const debugDays = Number.isFinite(policy.debugRetentionDays) ? policy.debugRetentionDays : 7;
@@ -353,6 +409,11 @@
   }
 
   function dataPolicyActionHint(policyInput) {
+    const readiness = currentRepoReadiness();
+    if (readiness && !policyInput) {
+      return readiness.dataPolicyActionHint || readiness.nextActionHint || '';
+    }
+
     const policy = policyInput || state.dataPolicy || state.hook?.capturePolicy || {};
     const preset = String(policy.preset || '').trim().toLowerCase();
     const syncPolicy = String(policy.syncPolicy || '').trim().toLowerCase();
@@ -376,11 +437,19 @@
   }
 
   function debugArtifactsEnabled() {
+    const readiness = currentRepoReadiness();
+    if (readiness) {
+      return readiness.debugArtifactsEnabled === true;
+    }
     const policy = state.dataPolicy || state.hook?.capturePolicy || {};
     return policy.debugArtifactsEnabled === true;
   }
 
   function currentRepoRoot() {
+    const readiness = currentRepoReadiness();
+    if (readiness?.repoRoot) {
+      return readiness.repoRoot;
+    }
     const context = activeContext();
     const fromContext = Array.isArray(context?.paths) ? context.paths.find((value) => String(value || '').trim().length > 0) : null;
     return fromContext || state.hook?.projectRoot || '<repo-root>';
@@ -471,6 +540,6 @@
     document.getElementById('statusTime').textContent = `Updated ${new Date().toLocaleTimeString()}`;
   }
 
-  Object.assign(app, { bindById, matches, activeContext, selectedTurn, branchKey, normalizeBranch, activeBranch, comparisonTargetBranch, activeSession, selectedCheckpoint, activeInsightNode, contextById, workspaceComparisonTargetContext, extractTagValue, insightSummary, insightTargetContexts, syncInsightSelection, syncPromotionTargetSelection, workspaceComparisonTargets, syncWorkspaceComparisonTargetSelection, installedAgents, isGaIntegration, installedGaAgents, autoContextGaAgents, integrationLabel, formatIntegrationNote, methodSupported, missingRequiredMethods, integrationListText, hasLocalRuntimeData, formatPosture, postureClass, formatSyncPolicyLabel, formatDataPolicyPresetLabel, captureState, zeroTouchState, automaticContextState, capturePolicySummary, dataPolicyActionHint, debugArtifactsEnabled, currentRepoRoot, enableCommand, describeBranchLane, syncComparisonTargetSelection, describeCheckpoint, syncBranchSelectionFromSession, resetBranchScopedState, setStatus });
+  Object.assign(app, { bindById, matches, activeContext, selectedTurn, branchKey, normalizeBranch, activeBranch, comparisonTargetBranch, activeSession, selectedCheckpoint, activeInsightNode, contextById, workspaceComparisonTargetContext, extractTagValue, insightSummary, insightTargetContexts, syncInsightSelection, syncPromotionTargetSelection, workspaceComparisonTargets, syncWorkspaceComparisonTargetSelection, installedAgents, isGaIntegration, installedGaAgents, autoContextGaAgents, currentRepoReadiness, integrationLabel, formatIntegrationNote, methodSupported, missingRequiredMethods, integrationListText, hasLocalRuntimeData, formatPosture, postureClass, formatSyncPolicyLabel, formatDataPolicyPresetLabel, captureState, zeroTouchState, automaticContextState, capturePolicySummary, dataPolicyActionHint, debugArtifactsEnabled, currentRepoRoot, enableCommand, describeBranchLane, syncComparisonTargetSelection, describeCheckpoint, syncBranchSelectionFromSession, resetBranchScopedState, setStatus });
 })();
 

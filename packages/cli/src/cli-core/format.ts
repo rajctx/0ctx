@@ -1,5 +1,5 @@
 import color from 'picocolors';
-import type { RepoReadinessSummary } from './types';
+import type { RepoReadinessSummary } from '@0ctx/core';
 
 export function formatLabelValue(label: string, value: string): string {
     return `${color.dim(label.padEnd(12))} : ${value}`;
@@ -37,11 +37,8 @@ export function formatSyncPolicyLabel(policy: string | null | undefined): string
     return normalized;
 }
 
-export function formatRetentionLabel(readiness: Pick<RepoReadinessSummary, 'captureRetentionDays' | 'debugRetentionDays' | 'debugArtifactsEnabled'>): string {
-    if (readiness.debugArtifactsEnabled) {
-        return `${readiness.captureRetentionDays}d local capture kept; ${readiness.debugRetentionDays}d debug trails enabled`;
-    }
-    return `${readiness.captureRetentionDays}d local capture kept; debug trails off by default (${readiness.debugRetentionDays}d if enabled)`;
+export function formatRetentionLabel(readiness: Pick<RepoReadinessSummary, 'captureRetentionDays'>): string {
+    return `${readiness.captureRetentionDays}d local capture retained`;
 }
 
 export function formatDebugArtifactsLabel(enabled: boolean): string {

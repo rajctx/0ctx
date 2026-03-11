@@ -1,34 +1,7 @@
-import type { HookHealthDetails } from '../../cli-core/types';
+import type { RepoReadinessSummary } from '@0ctx/core';
 
 export type FlagMap = Record<string, string | boolean>;
 export type CheckStatus = 'pass' | 'warn' | 'fail';
-
-export interface RepoReadinessSummary {
-    repoRoot: string;
-    contextId: string | null;
-    workspaceName: string | null;
-    workstream: string | null;
-    sessionCount: number | null;
-    checkpointCount: number | null;
-    captureManagedForRepo: boolean;
-    captureReadyAgents: string[];
-    captureMissingAgents: string[];
-    autoContextAgents: string[];
-    autoContextMissingAgents: string[];
-    sessionStartMissingAgents: string[];
-    mcpRegistrationMissingAgents: string[];
-    syncPolicy: string | null;
-    syncScope: 'workspace';
-    captureScope: 'machine';
-    debugScope: 'machine';
-    zeroTouchReady: boolean;
-    nextActionHint: string | null;
-    dataPolicyPreset: string | null;
-    dataPolicyActionHint: string | null;
-    captureRetentionDays: number;
-    debugRetentionDays: number;
-    debugArtifactsEnabled: boolean;
-}
 
 export interface BootstrapResult {
     client: string;
@@ -48,7 +21,7 @@ export interface ProductCommandDeps {
     inferDaemonRecoverySteps: (error?: string) => string[];
     sendToDaemon: <T = unknown>(method: string, params?: Record<string, unknown>) => Promise<T>;
     findGitRepoRoot: (input: string | null) => string | null;
-    collectRepoReadiness: (opts: { repoRoot: string; contextId?: string | null; hookDetails?: HookHealthDetails | null }) => Promise<RepoReadinessSummary | null>;
+    collectRepoReadiness: (opts: { repoRoot: string; contextId?: string | null }) => Promise<RepoReadinessSummary | null>;
     validateExplicitPreviewSelection: (raw: string | boolean | undefined, previewExample: string, gaExample?: string) => string | null;
     parseClients: (raw: string | boolean | undefined) => string[];
     parseHookClients: (raw: string | boolean | undefined) => string[];
@@ -63,7 +36,6 @@ export interface ProductCommandDeps {
     resolveRepoRoot: (input: string | null) => string;
     selectHookContextId: (contexts: Array<{ id?: string; name?: string; paths?: string[] }>, repoRoot: string, preferredContextId: string | null) => string | null;
     installHooks: (opts: { projectRoot: string; contextId: string | null; clients: string[]; installClaudeGlobal?: boolean; dryRun?: boolean; cliCommand?: string }) => { changed?: unknown; statePath?: string; projectConfigPath?: string; warnings?: string[] };
-    collectHookHealth: () => Promise<{ details: HookHealthDetails }>;
     commandInstall: (flags: FlagMap) => Promise<number>;
     buildDefaultDashboardQuery: () => Promise<string | undefined>;
     applyDashboardQuery: (url: string, queryRaw: string | boolean | undefined) => string;

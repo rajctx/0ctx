@@ -412,11 +412,85 @@ describe('Graph context isolation', () => {
             expect(Number(repeatedGoal?.confidence || 0)).toBeGreaterThan(0.9);
             expect(String(repeatedGoal?.reason || '')).toContain('repeated-2-times');
             expect(String(repeatedGoal?.reason || '')).toContain('corroborated-across-roles');
-            expect(repeatedGoal?.reviewTier).toBe('strong');
-            expect(String(repeatedGoal?.reviewSummary || '')).toContain('Strong signal');
+            expect(repeatedGoal?.reviewTier).toBe('review');
+            expect(String(repeatedGoal?.reviewSummary || '')).toContain('one session');
+            expect(repeatedGoal?.autoPersist).toBe(false);
+            expect(String(repeatedGoal?.autoPersistSummary || '')).toContain('Single-session corroboration stays manual');
             expect(String(repeatedGoal?.evidenceSummary || '')).toContain('Repeated 2 times across user and assistant messages');
+            expect(repeatedGoal?.trustFlags).toEqual(expect.arrayContaining(['repeated', 'distinct_support', 'cross_role', 'same_session_only']));
             expect(Array.isArray(repeatedGoal?.evidencePreview)).toBe(true);
             expect(String(repeatedGoal?.sourceExcerpt || '')).toContain('branch-first desktop workflow');
+        } finally {
+            db.close();
+        }
+    });
+
+    it('does not auto-persist same-session cross-role corroboration at checkpoint time', () => {
+        const { db, graph } = createGraph();
+        try {
+            const ctx = graph.createContext('knowledge-same-session-manual');
+            graph.addNode({
+                contextId: ctx.id,
+                thread: 'session-same-session-manual-1',
+                type: 'artifact',
+                content: 'same session corroboration session',
+                key: 'chat_session:factory:session-same-session-manual-1',
+                tags: ['chat_session', 'agent:factory'],
+                source: 'hook:factory',
+                hidden: true,
+                rawPayload: {
+                    sessionId: 'session-same-session-manual-1',
+                    branch: 'feature/same-session-manual',
+                    agent: 'factory'
+                }
+            });
+
+            graph.addNode({
+                contextId: ctx.id,
+                thread: 'session-same-session-manual-1',
+                type: 'artifact',
+                content: 'We need to keep checkpoint restore explicit across workstreams.',
+                key: 'chat_turn:factory:session-same-session-manual-1:user-1',
+                tags: ['chat_turn', 'role:user'],
+                source: 'hook:factory',
+                hidden: true,
+                rawPayload: {
+                    sessionId: 'session-same-session-manual-1',
+                    messageId: 'user-1',
+                    role: 'user',
+                    branch: 'feature/same-session-manual',
+                    occurredAt: 1700000103000
+                }
+            });
+
+            graph.addNode({
+                contextId: ctx.id,
+                thread: 'session-same-session-manual-1',
+                type: 'artifact',
+                content: 'We need to keep checkpoint restore explicit across workstreams.',
+                key: 'chat_turn:factory:session-same-session-manual-1:assistant-1',
+                tags: ['chat_turn', 'role:assistant'],
+                source: 'hook:factory',
+                hidden: true,
+                rawPayload: {
+                    sessionId: 'session-same-session-manual-1',
+                    messageId: 'assistant-1',
+                    role: 'assistant',
+                    branch: 'feature/same-session-manual',
+                    occurredAt: 1700000104000
+                }
+            });
+
+            const autoPersistOnly = graph.extractKnowledgeFromSession(ctx.id, 'session-same-session-manual-1', {
+                autoPersistOnly: true
+            });
+            expect(autoPersistOnly.nodeCount).toBe(0);
+
+            const manual = graph.previewKnowledgeFromSession(ctx.id, 'session-same-session-manual-1');
+            const candidate = manual.candidates.find((item) => item.type === 'goal');
+            expect(candidate?.reviewTier).toBe('review');
+            expect(candidate?.autoPersist).toBe(false);
+            expect(candidate?.trustFlags).toEqual(expect.arrayContaining(['same_session_only', 'cross_role']));
         } finally {
             db.close();
         }
@@ -474,6 +548,63 @@ describe('Graph context isolation', () => {
             expect(Number(repeatedConstraint?.confidence || 0)).toBeLessThan(0.9);
             expect(repeatedConstraint?.reviewTier).toBe('review');
             expect(String(repeatedConstraint?.evidenceSummary || '')).toContain('Distinct supporting statements: 1');
+            expect(repeatedConstraint?.trustFlags).toEqual(expect.arrayContaining(['repeated', 'user_only', 'duplicate_only']));
+        } finally {
+            db.close();
+        }
+    });
+
+    it('keeps repeated single-role signals in review instead of upgrading them to strong', () => {
+        const { db, graph } = createGraph();
+        try {
+            const ctx = graph.createContext('knowledge-single-role-repeat-review');
+            graph.addNode({
+                contextId: ctx.id,
+                thread: 'session-single-role-review-1',
+                type: 'artifact',
+                content: 'single-role repeat review session',
+                key: 'chat_session:factory:session-single-role-review-1',
+                tags: ['chat_session', 'agent:factory'],
+                source: 'hook:factory',
+                hidden: true,
+                rawPayload: {
+                    sessionId: 'session-single-role-review-1',
+                    branch: 'feature/single-role-review',
+                    agent: 'factory'
+                }
+            });
+
+            for (const [key, content, createdAt] of [
+                ['assistant-1', 'We decided to keep branch-first workstreams as the default organization model.', 1700000161000],
+                ['assistant-2', 'We chose to keep branch-first workstreams as the default organization model.', 1700000162000]
+            ] as const) {
+                graph.addNode({
+                    contextId: ctx.id,
+                    thread: 'session-single-role-review-1',
+                    type: 'artifact',
+                    content,
+                    key: `chat_turn:factory:session-single-role-review-1:${key}`,
+                    tags: ['chat_turn', 'role:assistant'],
+                    source: 'hook:factory',
+                    hidden: true,
+                    rawPayload: {
+                        sessionId: 'session-single-role-review-1',
+                        messageId: key,
+                        role: 'assistant',
+                        branch: 'feature/single-role-review',
+                        occurredAt: createdAt
+                    }
+                });
+            }
+
+            const preview = graph.previewKnowledgeFromSession(ctx.id, 'session-single-role-review-1');
+            const decision = preview.candidates.find((candidate) => candidate.type === 'decision');
+            expect(decision).toBeTruthy();
+            expect(decision?.reviewTier).toBe('review');
+            expect(String(decision?.reviewSummary || '')).toContain('Repeated single-role signal');
+            expect(decision?.autoPersist).toBe(false);
+            expect(String(decision?.autoPersistSummary || '')).toContain('Assistant-only');
+            expect(decision?.trustFlags).toEqual(expect.arrayContaining(['repeated', 'distinct_support', 'assistant_only']));
         } finally {
             db.close();
         }
@@ -1102,9 +1233,17 @@ describe('Graph context isolation', () => {
             const goalCandidate = preview.candidates.find(candidate => candidate.type === 'goal');
             expect(goalCandidate?.reviewTier).toBe('review');
             expect(String(goalCandidate?.evidenceSummary || '')).toContain('Single assistant-only statement');
+            expect(goalCandidate?.autoPersist).toBe(false);
+            expect(String(goalCandidate?.autoPersistSummary || '')).toContain('Assistant-only');
 
             const extraction = graph.extractKnowledgeFromSession(ctx.id, 'session-assistant-goal-1');
             expect(extraction.nodeCount).toBe(0);
+
+            const autoPersistExtraction = graph.extractKnowledgeFromSession(ctx.id, 'session-assistant-goal-1', {
+                minConfidence: 0.64,
+                autoPersistOnly: true
+            });
+            expect(autoPersistExtraction.nodeCount).toBe(0);
 
             const permissiveExtraction = graph.extractKnowledgeFromSession(ctx.id, 'session-assistant-goal-1', { minConfidence: 0.64 });
             expect(permissiveExtraction.nodeCount).toBe(1);
@@ -1310,10 +1449,64 @@ describe('Graph context isolation', () => {
               const insights = graph.listWorkstreamInsights(ctx.id, { branch: 'feature/evidence' });
               expect(insights).toHaveLength(1);
               expect(insights[0]?.evidenceCount).toBe(2);
+              expect(insights[0]?.distinctSessionCount).toBe(1);
               expect(insights[0]?.corroboratedRoles).toEqual(['assistant', 'user']);
-              expect(insights[0]?.trustTier).toBe('strong');
+              expect(insights[0]?.trustFlags).toEqual(expect.arrayContaining(['repeated', 'distinct_support', 'cross_role', 'same_session_only']));
+              expect(insights[0]?.trustTier).toBe('review');
               expect(insights[0]?.trustSummary).toMatch(/Repeated 2 times/i);
+              expect(insights[0]?.evidencePreview).toEqual([
+                  'We should keep repo routing strict for capture.',
+                  'Agreed. Strict repo routing avoids writing to the wrong workspace.'
+              ]);
+              expect(insights[0]?.promotionState).toBe('review');
+              expect(insights[0]?.promotionSummary).toMatch(/single session/i);
               expect(insights[0]?.latestEvidenceAt).toBeGreaterThan(0);
+          } finally {
+              db.close();
+          }
+      });
+
+      it('marks cross-session corroborated insights as ready to promote', () => {
+          const { db, graph } = createGraph();
+          try {
+              const ctx = graph.createContext('knowledge-cross-session-summary');
+              const userTurn = graph.addNode({
+                  contextId: ctx.id,
+                  thread: 'session-evidence-a',
+                  type: 'artifact',
+                  content: 'We should keep repo routing strict for capture.',
+                  key: 'chat_turn:factory:session-evidence-a:user-1',
+                  tags: ['chat_turn', 'role:user', 'branch:feature/evidence'],
+                  source: 'hook:factory',
+                  hidden: true
+              });
+              const assistantTurn = graph.addNode({
+                  contextId: ctx.id,
+                  thread: 'session-evidence-b',
+                  type: 'artifact',
+                  content: 'Agreed. Strict repo routing avoids writing to the wrong workspace.',
+                  key: 'chat_turn:factory:session-evidence-b:assistant-1',
+                  tags: ['chat_turn', 'role:assistant', 'branch:feature/evidence'],
+                  source: 'hook:factory',
+                  hidden: true
+              });
+              const insight = graph.addNode({
+                  contextId: ctx.id,
+                  type: 'decision',
+                  content: 'Keep repo routing strict for capture.',
+                  key: 'knowledge:decision:feature-evidence-routing-cross-session',
+                  tags: ['knowledge', 'branch:feature/evidence'],
+                  source: 'extractor:session'
+              });
+              graph.addEdge(insight.id, userTurn.id, 'caused_by');
+              graph.addEdge(insight.id, assistantTurn.id, 'caused_by');
+
+              const insights = graph.listWorkstreamInsights(ctx.id, { branch: 'feature/evidence' });
+              expect(insights).toHaveLength(1);
+              expect(insights[0]?.distinctSessionCount).toBe(2);
+              expect(insights[0]?.trustFlags).toEqual(expect.arrayContaining(['cross_session', 'cross_role']));
+              expect(insights[0]?.promotionState).toBe('ready');
+              expect(insights[0]?.promotionSummary).toMatch(/across 2 sessions/i);
           } finally {
               db.close();
           }
@@ -1335,10 +1528,129 @@ describe('Graph context isolation', () => {
               const insights = graph.listWorkstreamInsights(ctx.id);
               expect(insights).toHaveLength(1);
               expect(insights[0]?.evidenceCount).toBe(0);
+              expect(insights[0]?.trustFlags).toEqual(expect.arrayContaining(['promoted', 'no_local_evidence']));
               expect(insights[0]?.trustTier).toBe('review');
               expect(insights[0]?.trustSummary).toMatch(/No local corroboration yet/i);
+              expect(insights[0]?.promotionState).toBe('blocked');
+              expect(insights[0]?.promotionSummary).toMatch(/no local corroboration yet/i);
               expect(insights[0]?.originContextId).toBe('source-workspace');
               expect(insights[0]?.originNodeId).toBe('source-node-1');
+          } finally {
+              db.close();
+          }
+      });
+
+      it('reuses prior cross-session corroboration when previewing the same insight in a later session', () => {
+          const { db, graph } = createGraph();
+          try {
+              const ctx = graph.createContext('knowledge-preview-existing-cross-session');
+              graph.addNode({
+                  contextId: ctx.id,
+                  thread: 'session-existing-a',
+                  type: 'artifact',
+                  content: 'existing corroboration session a',
+                  key: 'chat_session:factory:session-existing-a',
+                  tags: ['chat_session', 'agent:factory'],
+                  source: 'hook:factory',
+                  hidden: true,
+                  rawPayload: {
+                      sessionId: 'session-existing-a',
+                      branch: 'feature/existing-corroboration',
+                      agent: 'factory'
+                  }
+              });
+              const sessionAUser = graph.addNode({
+                  contextId: ctx.id,
+                  thread: 'session-existing-a',
+                  type: 'artifact',
+                  content: 'We decided to keep strict repo routing for capture.',
+                  key: 'chat_turn:factory:session-existing-a:user-1',
+                  tags: ['chat_turn', 'role:user', 'branch:feature/existing-corroboration'],
+                  source: 'hook:factory',
+                  hidden: true
+              });
+              graph.addNode({
+                  contextId: ctx.id,
+                  thread: 'session-existing-b',
+                  type: 'artifact',
+                  content: 'existing corroboration session b',
+                  key: 'chat_session:factory:session-existing-b',
+                  tags: ['chat_session', 'agent:factory'],
+                  source: 'hook:factory',
+                  hidden: true,
+                  rawPayload: {
+                      sessionId: 'session-existing-b',
+                      branch: 'feature/existing-corroboration',
+                      agent: 'factory'
+                  }
+              });
+              const sessionBAssistant = graph.addNode({
+                  contextId: ctx.id,
+                  thread: 'session-existing-b',
+                  type: 'artifact',
+                  content: 'Agreed. Keep strict repo routing for capture.',
+                  key: 'chat_turn:factory:session-existing-b:assistant-1',
+                  tags: ['chat_turn', 'role:assistant', 'branch:feature/existing-corroboration'],
+                  source: 'hook:factory',
+                  hidden: true
+              });
+              const previewA = graph.previewKnowledgeFromSession(ctx.id, 'session-existing-a', { minConfidence: 0.6 });
+              const generatedKey = previewA.candidates.find((item) => item.type === 'decision')?.key;
+              expect(generatedKey).toBeTruthy();
+              const existingInsight = graph.addNode({
+                  contextId: ctx.id,
+                  type: 'decision',
+                  content: 'Keep strict repo routing for capture.',
+                  key: generatedKey ?? undefined,
+                  tags: ['knowledge', 'branch:feature/existing-corroboration'],
+                  source: 'extractor:session'
+              });
+              graph.addEdge(existingInsight.id, sessionAUser.id, 'caused_by');
+              graph.addEdge(existingInsight.id, sessionBAssistant.id, 'caused_by');
+
+              graph.addNode({
+                  contextId: ctx.id,
+                  thread: 'session-existing-c',
+                  type: 'artifact',
+                  content: 'We decided to keep strict repo routing for capture.',
+                  key: 'chat_turn:factory:session-existing-c:assistant-1',
+                  tags: ['chat_turn', 'role:assistant', 'branch:feature/existing-corroboration'],
+                  source: 'hook:factory',
+                  hidden: true,
+                  rawPayload: {
+                      sessionId: 'session-existing-c',
+                      messageId: 'assistant-1',
+                      role: 'assistant',
+                      branch: 'feature/existing-corroboration'
+                  }
+              });
+
+              graph.addNode({
+                  contextId: ctx.id,
+                  thread: 'session-existing-c',
+                  type: 'artifact',
+                  content: 'existing corroboration session',
+                  key: 'chat_session:factory:session-existing-c',
+                  tags: ['chat_session', 'agent:factory'],
+                  source: 'hook:factory',
+                  hidden: true,
+                  rawPayload: {
+                      sessionId: 'session-existing-c',
+                      branch: 'feature/existing-corroboration',
+                      agent: 'factory'
+                  }
+              });
+
+              const preview = graph.previewKnowledgeFromSession(ctx.id, 'session-existing-c', { minConfidence: 0.6 });
+              const candidate = preview.candidates.find((item) => item.existingNodeId === existingInsight.id);
+
+              expect(candidate).toBeTruthy();
+              expect(candidate?.action).toBe('reuse');
+              expect(candidate?.reviewTier).toBe('strong');
+              expect(candidate?.autoPersist).toBe(true);
+              expect(candidate?.trustFlags).toEqual(expect.arrayContaining(['cross_session', 'cross_role']));
+              expect(candidate?.evidenceSummary).toMatch(/2 sessions/i);
+              expect(candidate?.reason).toContain('corroborated-by-existing-insight');
           } finally {
               db.close();
           }
@@ -1512,11 +1824,77 @@ describe('Graph checkpoints', () => {
         }
     });
 
+    it('keeps assistant-only checkpoint extraction manual when auto-persist is required', () => {
+        const { db, graph } = createGraph();
+        try {
+            const context = graph.createContext('checkpoint-knowledge-assistant-only');
+            graph.addNode({
+                contextId: context.id,
+                thread: 'session-k2',
+                type: 'artifact',
+                content: 'assistant-only checkpoint extraction session',
+                key: 'chat_session:factory:session-k2',
+                tags: ['chat_session', 'agent:factory'],
+                source: 'hook:factory',
+                hidden: true,
+                rawPayload: {
+                    sessionId: 'session-k2',
+                    branch: 'feature/checkpoint-knowledge',
+                    agent: 'factory'
+                }
+            });
+            graph.addNode({
+                contextId: context.id,
+                thread: 'session-k2',
+                type: 'artifact',
+                content: 'We need to support automatic context injection for Claude session start.',
+                key: 'chat_turn:factory:session-k2:assistant-1',
+                tags: ['chat_turn', 'role:assistant'],
+                source: 'hook:factory',
+                hidden: true,
+                rawPayload: {
+                    sessionId: 'session-k2',
+                    messageId: 'assistant-1',
+                    role: 'assistant'
+                }
+            });
+
+            const checkpoint = graph.createSessionCheckpoint(context.id, 'session-k2', {
+                summary: 'Automatic context injection for Claude',
+                name: 'checkpoint-knowledge-assistant-only'
+            });
+
+            const autoResult = graph.extractKnowledgeFromCheckpoint(checkpoint.id, {
+                minConfidence: 0.64,
+                autoPersistOnly: true
+            });
+            expect(autoResult.nodeCount).toBe(0);
+
+            const manualResult = graph.extractKnowledgeFromCheckpoint(checkpoint.id, {
+                minConfidence: 0.64
+            });
+            expect(manualResult.nodeCount).toBe(1);
+            expect(manualResult.nodes[0]?.type).toBe('goal');
+        } finally {
+            db.close();
+        }
+    });
+
     it('promotes a reviewed insight into another workspace and reuses it on repeat', () => {
         const { db, graph } = createGraph();
         try {
             const source = graph.createContext('source-workspace');
             const target = graph.createContext('target-workspace');
+            const supportingTurn = graph.addNode({
+                contextId: source.id,
+                thread: 'session-promote-1',
+                type: 'artifact',
+                content: 'We decided to ship checkpoints as the primary restore primitive.',
+                key: 'chat_turn:factory:session-promote-1:assistant-1',
+                tags: ['chat_turn', 'role:assistant', 'branch:feat/restore-flow'],
+                source: 'hook:factory',
+                hidden: true
+            });
             const insight = graph.addNode({
                 contextId: source.id,
                 type: 'decision',
@@ -1525,6 +1903,7 @@ describe('Graph checkpoints', () => {
                 source: 'extractor:session',
                 hidden: false
             });
+            graph.addEdge(insight.id, supportingTurn.id, 'caused_by');
 
             const first = graph.promoteInsightNode(source.id, insight.id, target.id);
             expect(first.created).toBe(true);
@@ -1571,6 +1950,72 @@ describe('Graph checkpoints', () => {
 
             expect(() => graph.promoteInsightNode(source.id, hiddenNode.id, target.id)).toThrow(/hidden/i);
             expect(() => graph.promoteInsightNode(source.id, artifactNode.id, target.id)).toThrow(/artifact/i);
+        } finally {
+            db.close();
+        }
+    });
+
+    it('blocks promotion of weak or imported-without-local-evidence insights', () => {
+        const { db, graph } = createGraph();
+        try {
+            const source = graph.createContext('source-workspace-promotion-block');
+            const target = graph.createContext('target-workspace-promotion-block');
+            const weakNode = graph.addNode({
+                contextId: source.id,
+                type: 'assumption',
+                content: 'Maybe the branch is fine as-is.',
+                tags: ['knowledge', 'branch:feat/promotion-block'],
+                source: 'extractor:session',
+                hidden: false
+            });
+            const importedNode = graph.addNode({
+                contextId: source.id,
+                type: 'decision',
+                content: 'Keep promotion explicit across workspaces.',
+                tags: ['knowledge', 'promoted', 'origin_context:older-workspace', 'origin_node:source-legacy'],
+                source: 'promote:workspace',
+                hidden: false
+            });
+
+            expect(() => graph.promoteInsightNode(source.id, weakNode.id, target.id)).toThrow(/weak insight candidates/i);
+            expect(() => graph.promoteInsightNode(source.id, importedNode.id, target.id)).toThrow(/no local corroboration yet/i);
+        } finally {
+            db.close();
+        }
+    });
+
+    it('still allows promotion of review-tier insights when they have local evidence', () => {
+        const { db, graph } = createGraph();
+        try {
+            const source = graph.createContext('source-workspace-promotion-review');
+            const target = graph.createContext('target-workspace-promotion-review');
+            const supportingTurn = graph.addNode({
+                contextId: source.id,
+                thread: 'session-review-1',
+                type: 'artifact',
+                content: 'We should keep repo routing strict for this workflow.',
+                key: 'chat_turn:factory:session-review-1:assistant-1',
+                tags: ['chat_turn', 'role:assistant', 'branch:feat/promotion-review'],
+                source: 'hook:factory',
+                hidden: true
+            });
+            const reviewInsight = graph.addNode({
+                contextId: source.id,
+                type: 'constraint',
+                content: 'Keep repo routing strict for this workflow.',
+                tags: ['knowledge', 'branch:feat/promotion-review'],
+                source: 'extractor:session',
+                hidden: false
+            });
+            graph.addEdge(reviewInsight.id, supportingTurn.id, 'caused_by');
+
+            const insights = graph.listWorkstreamInsights(source.id, { branch: 'feat/promotion-review' });
+            expect(insights[0]?.trustTier).toBe('review');
+            expect(insights[0]?.promotionState).toBe('review');
+
+            const result = graph.promoteInsightNode(source.id, reviewInsight.id, target.id);
+            expect(result.created).toBe(true);
+            expect(result.reused).toBe(false);
         } finally {
             db.close();
         }

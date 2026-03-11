@@ -4,7 +4,10 @@ import type { ProductCommandDeps, FlagMap } from './types';
 export function createBootstrapCommands(deps: ProductCommandDeps) {
     async function commandBootstrap(flags: FlagMap): Promise<number> {
         const p = await import('@clack/prompts');
-        const previewError = deps.validateExplicitPreviewSelection(flags.clients, 'codex,cursor,windsurf');
+        const allowPreview = Boolean(flags['allow-preview']) || Boolean(flags.allowPreview);
+        const previewError = !allowPreview
+            ? deps.validateExplicitPreviewSelection(flags.clients, 'codex,cursor,windsurf')
+            : null;
         if (previewError) {
             console.error(previewError);
             return 1;

@@ -255,6 +255,23 @@
     }
   }
 
+  async function loadRepoReadiness() {
+    const context = activeContext();
+    const repoRoot = Array.isArray(context?.paths) ? context.paths.find((value) => String(value || '').trim().length > 0) : null;
+    if (!repoRoot && !state.activeContextId) {
+      state.repoReadiness = null;
+      return;
+    }
+    try {
+      state.repoReadiness = await daemon('getRepoReadiness', {
+        ...(repoRoot ? { repoRoot } : {}),
+        ...(state.activeContextId ? { contextId: state.activeContextId } : {})
+      });
+    } catch {
+      state.repoReadiness = null;
+    }
+  }
+
   async function refreshAll(options = {}) {
     const quiet = options.quiet === true;
     if (state.loading) return;
@@ -314,6 +331,9 @@
       });
       await safeLoad('data policy', loadDataPolicy, () => {
         state.dataPolicy = null;
+      });
+      await safeLoad('repo readiness', loadRepoReadiness, () => {
+        state.repoReadiness = null;
       });
       await safeLoad('workspace comparison', loadWorkspaceComparison, () => {
         state.workspaceComparison = null;
@@ -383,5 +403,5 @@
     }
   }
 
-  Object.assign(app, { loadBranchComparison, selectContext, loadBranches, loadSessions, loadSessionDetail, getSessionDetailWithFallback, loadTurns, loadCheckpoints, loadCheckpointDetail, loadHandoff, loadBranchComparisonSafe, loadWorkspaceComparison, loadGraph, loadInsights, loadHook, loadDataPolicy, refreshAll });
+  Object.assign(app, { loadBranchComparison, selectContext, loadBranches, loadSessions, loadSessionDetail, getSessionDetailWithFallback, loadTurns, loadCheckpoints, loadCheckpointDetail, loadHandoff, loadBranchComparisonSafe, loadWorkspaceComparison, loadGraph, loadInsights, loadHook, loadDataPolicy, loadRepoReadiness, refreshAll });
 })();

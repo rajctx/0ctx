@@ -210,3 +210,30 @@ export interface DataPolicySummary {
     debugArtifactsEnabled: boolean;
     preset: DataPolicyPreset;
 }
+
+export interface RepoReadinessSummary {
+    repoRoot: string;
+    contextId: string | null;
+    workspaceName: string | null;
+    workstream: string | null;
+    sessionCount: number | null;
+    checkpointCount: number | null;
+    syncPolicy: SyncPolicy | null;
+    syncScope: 'workspace';
+    captureScope: 'machine';
+    debugScope: 'machine';
+    captureReadyAgents: string[];
+    autoContextAgents: string[];
+    autoContextMissingAgents: string[];
+    sessionStartMissingAgents: string[];
+    mcpRegistrationMissingAgents: string[];
+    captureMissingAgents: string[];
+    captureManagedForRepo: boolean;
+    zeroTouchReady: boolean;
+    nextActionHint: string | null;
+    dataPolicyPreset: DataPolicyPreset | string | null;
+    dataPolicyActionHint: string | null;
+    captureRetentionDays: number;
+    debugRetentionDays: number;
+    debugArtifactsEnabled: boolean;
+}

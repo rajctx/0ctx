@@ -37,13 +37,11 @@ export function resolveGaAutoContextReadiness(options: {
     const mcpRegistrationMissingAgents = sessionStartReadyAgents
         .filter(requiresGaMcpRegistration)
         .filter(agent => !registeredMcpClients.has(agent));
-    const autoContextAgents = sessionStartReadyAgents.filter(agent =>
-        !requiresGaMcpRegistration(agent) || !mcpRegistrationMissingAgents.includes(agent)
-    );
+    const autoContextAgents = sessionStartReadyAgents;
 
     return {
         autoContextAgents,
-        autoContextMissingAgents: captureReadyAgents.filter(agent => !autoContextAgents.includes(agent)),
+        autoContextMissingAgents: sessionStartMissingAgents,
         sessionStartMissingAgents,
         mcpRegistrationMissingAgents
     };
@@ -58,7 +56,7 @@ export function buildGaAutoContextActionHint(options: {
         parts.push(`Install automatic context injection for ${options.sessionStartMissingAgents.join(', ')}.`);
     }
     if (options.mcpRegistrationMissingAgents.length > 0) {
-        parts.push(`Finish automatic retrieval setup for ${options.mcpRegistrationMissingAgents.join(', ')}.`);
+        parts.push(`Register MCP retrieval for ${options.mcpRegistrationMissingAgents.join(', ')}.`);
     }
     return parts.length > 0 ? parts.join(' ') : null;
 }

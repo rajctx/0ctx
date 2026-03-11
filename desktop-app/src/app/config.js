@@ -57,6 +57,7 @@
 
   const REQUIRED_RUNTIME_METHODS = [
     'getDataPolicy',
+    'getRepoReadiness',
     'listBranchLanes',
     'listBranchSessions',
     'listSessionMessages',
@@ -135,6 +136,7 @@
     auth: { authenticated: true, provider: 'local' },
     hook: null,
     dataPolicy: null,
+    repoReadiness: null,
     runtimeIssue: null,
     sessionKnowledgePreview: null,
     sessionKnowledgeSelectedKeys: [],

@@ -1,5 +1,6 @@
 import type {
     ContextNode,
+    InsightSummary,
     KnowledgeCandidate,
     KnowledgeExtractionResult,
     KnowledgePreviewResult,
@@ -22,6 +23,7 @@ type AddNodeInput = Omit<ContextNode, 'id' | 'createdAt'> & {
 type KnowledgeSessionDeps = {
     getSessionDetail: (contextId: string, sessionId: string) => SessionDetail;
     getByKey: (contextId: string, key: string, options?: { includeHidden?: boolean }) => ContextNode | null;
+    getInsightSummary: (nodeId: string) => InsightSummary | null;
     buildKnowledgeKey: (
         contextId: string,
         type: Exclude<NodeType, 'artifact'>,
@@ -40,13 +42,36 @@ type KnowledgeSessionDeps = {
         confidence: number,
         evidenceCount: number,
         distinctEvidenceCount: number,
-        roles: Set<string>
+        roles: Set<string>,
+        options?: {
+            distinctSessionCount?: number;
+        }
     ) => { reviewTier: 'strong' | 'review' | 'weak'; reviewSummary: string };
+    classifyKnowledgeAutoPersist: (
+        reviewTier: 'strong' | 'review' | 'weak',
+        evidenceCount: number,
+        distinctEvidenceCount: number,
+        roles: Set<string>,
+        options?: {
+            distinctSessionCount?: number;
+        }
+    ) => { autoPersist: boolean; autoPersistSummary: string };
     buildKnowledgeEvidenceSummary: (
         evidenceCount: number,
         distinctEvidenceCount: number,
-        roles: Set<string>
+        roles: Set<string>,
+        options?: {
+            distinctSessionCount?: number;
+        }
     ) => string;
+    buildKnowledgeTrustFlags: (
+        evidenceCount: number,
+        distinctEvidenceCount: number,
+        roles: Set<string>,
+        options?: {
+            distinctSessionCount?: number;
+        }
+    ) => string[];
     buildKnowledgeEvidenceReason: (
         baseReason: string,
         evidenceCount: number,
@@ -59,6 +84,43 @@ type KnowledgeSessionDeps = {
 
 type CandidateWithNode = KnowledgeCandidate & { existingNode: ContextNode | null };
 
+function mergeExistingInsightEvidence(
+    candidate: {
+        type: Exclude<NodeType, 'artifact'>;
+        bestConfidence: number;
+        bestReason: string;
+        evidenceCount: number;
+        distinctEvidenceCount: number;
+        roles: Set<string>;
+    },
+    existingInsight: InsightSummary | null
+) {
+    if (!existingInsight || existingInsight.distinctSessionCount <= 1) {
+        return {
+            confidence: candidate.bestConfidence,
+            evidenceCount: candidate.evidenceCount,
+            distinctEvidenceCount: candidate.distinctEvidenceCount,
+            distinctSessionCount: 1,
+            roles: new Set(candidate.roles),
+            reason: candidate.bestReason
+        };
+    }
+
+    const mergedRoles = new Set(candidate.roles);
+    for (const role of existingInsight.corroboratedRoles ?? []) {
+        if (typeof role === 'string' && role.trim()) mergedRoles.add(role.toLowerCase());
+    }
+
+    return {
+        confidence: candidate.bestConfidence + 0.04,
+        evidenceCount: Math.max(candidate.evidenceCount, existingInsight.evidenceCount),
+        distinctEvidenceCount: Math.max(candidate.distinctEvidenceCount, existingInsight.distinctEvidenceCount),
+        distinctSessionCount: Math.max(1, existingInsight.distinctSessionCount),
+        roles: mergedRoles,
+        reason: `${candidate.bestReason}, corroborated-by-existing-insight`
+    };
+}
+
 function collectSessionKnowledgeCandidates(
     deps: KnowledgeSessionDeps,
     contextId: string,
@@ -69,6 +131,7 @@ function collectSessionKnowledgeCandidates(
         source?: 'session' | 'checkpoint';
         allowedKeys?: string[] | null;
         minConfidence?: number;
+        autoPersistOnly?: boolean;
     } = {}
 ): {
     source: 'session' | 'checkpoint';
@@ -158,16 +221,34 @@ function collectSessionKnowledgeCandidates(
 
     const candidates = Array.from(aggregated.values())
         .map((candidate) => {
-            const distinctEvidenceCount = candidate.distinctEvidenceKeys.size;
+            const localDistinctEvidenceCount = candidate.distinctEvidenceKeys.size;
+            const existingNode = deps.getByKey(contextId, candidate.key, { includeHidden: true });
+            const existingInsight = existingNode ? deps.getInsightSummary(existingNode.id) : null;
+            const mergedEvidence = mergeExistingInsightEvidence({
+                type: candidate.type,
+                bestConfidence: candidate.bestConfidence,
+                bestReason: candidate.bestReason,
+                evidenceCount: candidate.evidenceCount,
+                distinctEvidenceCount: localDistinctEvidenceCount,
+                roles: candidate.roles
+            }, existingInsight);
             const confidence = deps.boostKnowledgeCandidateConfidence(
                 candidate.type,
-                candidate.bestConfidence,
-                candidate.evidenceCount,
-                distinctEvidenceCount,
-                candidate.roles
+                mergedEvidence.confidence,
+                mergedEvidence.evidenceCount,
+                mergedEvidence.distinctEvidenceCount,
+                mergedEvidence.roles
             );
-            const existingNode = deps.getByKey(contextId, candidate.key, { includeHidden: true });
-            const review = deps.classifyKnowledgeReviewTier(candidate.type, confidence, candidate.evidenceCount, distinctEvidenceCount, candidate.roles);
+            const review = deps.classifyKnowledgeReviewTier(candidate.type, confidence, mergedEvidence.evidenceCount, mergedEvidence.distinctEvidenceCount, mergedEvidence.roles, {
+                distinctSessionCount: mergedEvidence.distinctSessionCount
+            });
+            const autoPersist = deps.classifyKnowledgeAutoPersist(
+                review.reviewTier,
+                mergedEvidence.evidenceCount,
+                mergedEvidence.distinctEvidenceCount,
+                mergedEvidence.roles,
+                { distinctSessionCount: mergedEvidence.distinctSessionCount }
+            );
             return {
                 contextId,
                 source,
@@ -183,19 +264,27 @@ function collectSessionKnowledgeCandidates(
                 role: candidate.role,
                 createdAt: candidate.createdAt,
                 confidence,
-                reason: deps.buildKnowledgeEvidenceReason(candidate.bestReason, candidate.evidenceCount, distinctEvidenceCount, candidate.roles),
-                evidenceCount: candidate.evidenceCount,
-                distinctEvidenceCount,
-                evidenceSummary: deps.buildKnowledgeEvidenceSummary(candidate.evidenceCount, distinctEvidenceCount, candidate.roles),
+                reason: deps.buildKnowledgeEvidenceReason(mergedEvidence.reason, mergedEvidence.evidenceCount, mergedEvidence.distinctEvidenceCount, mergedEvidence.roles),
+                evidenceCount: mergedEvidence.evidenceCount,
+                distinctEvidenceCount: mergedEvidence.distinctEvidenceCount,
+                evidenceSummary: deps.buildKnowledgeEvidenceSummary(mergedEvidence.evidenceCount, mergedEvidence.distinctEvidenceCount, mergedEvidence.roles, {
+                    distinctSessionCount: mergedEvidence.distinctSessionCount
+                }),
+                trustFlags: deps.buildKnowledgeTrustFlags(mergedEvidence.evidenceCount, mergedEvidence.distinctEvidenceCount, mergedEvidence.roles, {
+                    distinctSessionCount: mergedEvidence.distinctSessionCount
+                }),
                 sourceExcerpt: candidate.evidencePreview[0] ?? null,
                 evidencePreview: candidate.evidencePreview,
-                corroboratedRoles: Array.from(candidate.roles),
+                corroboratedRoles: Array.from(mergedEvidence.roles),
                 reviewTier: review.reviewTier,
                 reviewSummary: review.reviewSummary,
+                autoPersist: autoPersist.autoPersist,
+                autoPersistSummary: autoPersist.autoPersistSummary,
                 existingNode
             };
         })
         .filter((candidate) => candidate.confidence >= minConfidence)
+        .filter((candidate) => !options.autoPersistOnly || candidate.autoPersist === true)
         .sort((left, right) => (right.confidence ?? 0) - (left.confidence ?? 0) || (right.evidenceCount ?? 0) - (left.evidenceCount ?? 0) || right.createdAt - left.createdAt)
         .slice(0, safeLimit);
 
@@ -232,6 +321,7 @@ export function extractKnowledgeFromSessionRecord(
         source?: 'session' | 'checkpoint';
         allowedKeys?: string[] | null;
         minConfidence?: number;
+        autoPersistOnly?: boolean;
     } = {}
 ): KnowledgeExtractionResult {
     const extractionOptions = options.minConfidence == null ? { ...options, minConfidence: 0.7 } : options;
