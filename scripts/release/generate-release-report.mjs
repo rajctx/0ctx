@@ -68,6 +68,25 @@ function summarizeStep(runResult) {
   };
 }
 
+function parsePackDryRun(runResult) {
+  const text = `${runResult.stdout ?? ""}\n${runResult.stderr ?? ""}`;
+  const filename = text.match(/filename:\s+([^\r\n]+)/i)?.[1]?.trim() ?? null;
+  const packageName = text.match(/name:\s+([^\r\n]+)/i)?.[1]?.trim() ?? null;
+  const version = text.match(/version:\s+([^\r\n]+)/i)?.[1]?.trim() ?? null;
+  const packageSize = text.match(/package size:\s+([^\r\n]+)/i)?.[1]?.trim() ?? null;
+  const unpackedSize = text.match(/unpacked size:\s+([^\r\n]+)/i)?.[1]?.trim() ?? null;
+  const totalFilesText = text.match(/total files:\s+([^\r\n]+)/i)?.[1]?.trim() ?? null;
+  const totalFiles = totalFilesText ? Number.parseInt(totalFilesText, 10) : null;
+  return {
+    packageName,
+    version,
+    filename,
+    packageSize,
+    unpackedSize,
+    totalFiles: Number.isFinite(totalFiles) ? totalFiles : null,
+  };
+}
+
 function main() {
   const git = getGitState();
 
@@ -79,6 +98,11 @@ function main() {
   const build = run("npm", ["run", "build"], { captureOutput: true });
   if (!build.ok) {
     throw new Error(`Build failed.\nstdout:\n${build.stdout}\nstderr:\n${build.stderr}`);
+  }
+
+  const packDryRun = run("npm", ["run", "release:pack:dry"], { captureOutput: true });
+  if (!packDryRun.ok) {
+    throw new Error(`CLI pack dry-run failed.\nstdout:\n${packDryRun.stdout}\nstderr:\n${packDryRun.stderr}`);
   }
 
   const test = run("npm", ["run", "test"], { captureOutput: true });
@@ -119,6 +143,7 @@ function main() {
     steps: {
       typecheck: summarizeStep(typecheck),
       build: summarizeStep(build),
+      cliPackDryRun: summarizeStep(packDryRun),
       test: summarizeStep(test),
       gaAgents: summarizeStep(ga),
       dailyFlow: summarizeStep(daily),
@@ -143,6 +168,7 @@ function main() {
       syncPolicy: dailyReport.dataPolicy?.syncPolicy ?? null,
       reportPath: dailyReport.reportPath ?? null,
     },
+    cliPackage: parsePackDryRun(packDryRun),
     desktopRealFlow: desktopRealReport ? {
       workspace: desktopRealReport.source?.contextName ?? null,
       branch: desktopRealReport.source?.branch ?? null,

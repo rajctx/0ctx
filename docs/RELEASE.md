@@ -23,10 +23,20 @@ This runs the real release gates and writes:
 
 - `releases/verification/release-readiness.json`
 
+The consolidated report also captures CLI package integrity details:
+
+- package name
+- version
+- tarball filename
+- package size
+- unpacked size
+- total files
+
 The consolidated report includes:
 
 - typecheck
 - build
+- CLI package dry-run
 - test
 - GA agent e2e
 - daily flow e2e
