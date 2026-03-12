@@ -25,17 +25,22 @@ export function buildRepoReadinessLines(options: {
         options.formatLabelValue('Workspace', repoReadiness.workspaceName ?? '-'),
         options.formatLabelValue('Workstream', repoReadiness.workstream ?? '-'),
         options.formatLabelValue('Ready', repoReadiness.zeroTouchReady ? 'zero-touch for supported agents' : 'needs one-time setup'),
+        options.formatLabelValue('Policy', repoReadiness.normalPathSummary || describePolicyNormalPath({
+            workspaceResolved: Boolean(repoReadiness.contextId),
+            syncPolicy: repoReadiness.syncPolicy
+        })),
         options.formatLabelValue('Policy mode', formatScopedDataPolicyPresetLabel(repoReadiness.dataPolicyPreset)),
         options.formatLabelValue('Capture', captureLine),
         options.formatLabelValue('Context', autoContextLine),
         options.formatLabelValue('History', historySummary),
-        options.formatLabelValue('Workspace sync', options.formatSyncPolicyLabel(repoReadiness.syncPolicy)),
-        options.formatLabelValue('Machine capture', options.formatRetentionLabel(repoReadiness)),
+        options.formatLabelValue('Workspace sync', repoReadiness.workspaceSyncSummary || options.formatSyncPolicyLabel(repoReadiness.syncPolicy)),
+        options.formatLabelValue('Machine capture', repoReadiness.machineCaptureSummary || options.formatRetentionLabel(repoReadiness)),
         options.formatLabelValue(
             'Utility debug',
-            repoReadiness.debugArtifactsEnabled
-                ? `enabled (${repoReadiness.debugRetentionDays}d retention)`
-                : `off in the normal path (${repoReadiness.debugRetentionDays}d retention if enabled)`
+            repoReadiness.debugUtilitySummary
+                || (repoReadiness.debugArtifactsEnabled
+                    ? `enabled (${repoReadiness.debugRetentionDays}d retention)`
+                    : `off in the normal path (${repoReadiness.debugRetentionDays}d retention if enabled)`)
         ),
         ...(repoReadiness.dataPolicyActionHint ? [options.formatLabelValue('Policy step', repoReadiness.dataPolicyActionHint)] : []),
         ...(repoReadiness.nextActionHint ? [options.formatLabelValue('Next step', repoReadiness.nextActionHint)] : [])

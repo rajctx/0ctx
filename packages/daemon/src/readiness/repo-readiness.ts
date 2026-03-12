@@ -12,31 +12,6 @@ function requiresGaMcpRegistration(agent: GaHookAgent): agent is GaMcpClient {
     return agent === 'claude' || agent === 'antigravity';
 }
 
-function buildDataPolicyActionHint(summary: {
-    syncPolicy: string;
-    captureRetentionDays: number;
-    debugRetentionDays: number;
-    debugArtifactsEnabled: boolean;
-    preset: string | null;
-}): string | null {
-    const preset = String(summary.preset || '').trim().toLowerCase();
-    const syncPolicy = String(summary.syncPolicy || '').trim().toLowerCase();
-
-    if (preset === 'custom') {
-        return 'Normalize this workspace with Lean, Review, Debug, or explicit Full Sync only when needed.';
-    }
-    if (preset === 'shared' || syncPolicy === 'full_sync') {
-        return 'Return this workspace to metadata_only when richer cloud sync is no longer needed.';
-    }
-    if (preset === 'debug' || summary.debugArtifactsEnabled) {
-        return 'Turn off debug artifacts when troubleshooting is complete.';
-    }
-    if (preset === 'review' || summary.captureRetentionDays > 14 || summary.debugRetentionDays > 7) {
-        return 'Return this machine to Lean when the longer local review window is no longer needed.';
-    }
-    return null;
-}
-
 function resolveGaAutoContextReadiness(options: {
     captureReadyAgents: GaHookAgent[];
     sessionStartReadyAgents: GaHookAgent[];
@@ -124,10 +99,15 @@ export function buildRepoReadinessSummary(
             zeroTouchReady: false,
             nextActionHint: 'Run 0ctx enable in this repo.',
             dataPolicyPreset: policy.preset,
-            dataPolicyActionHint: buildDataPolicyActionHint(policy),
+            dataPolicyActionHint: policy.policyActionHint ?? null,
             captureRetentionDays: policy.captureRetentionDays,
             debugRetentionDays: policy.debugRetentionDays,
-            debugArtifactsEnabled: policy.debugArtifactsEnabled
+            debugArtifactsEnabled: policy.debugArtifactsEnabled,
+            normalPathSummary: policy.normalPathSummary,
+            workspaceSyncSummary: policy.workspaceSyncSummary,
+            workspaceSyncHint: policy.workspaceSyncHint,
+            machineCaptureSummary: policy.machineCaptureSummary,
+            debugUtilitySummary: policy.debugUtilitySummary
         };
     }
 
@@ -177,11 +157,16 @@ export function buildRepoReadinessSummary(
             captureReadyAgents: repoCapture.captureReadyAgents,
             sessionStartMissingAgents: autoContext.sessionStartMissingAgents as GaHookAgent[],
             mcpRegistrationMissingAgents: autoContext.mcpRegistrationMissingAgents as GaMcpClient[]
-        }) ?? buildDataPolicyActionHint(policy),
+        }) ?? policy.policyActionHint ?? null,
         dataPolicyPreset: policy.preset,
-        dataPolicyActionHint: buildDataPolicyActionHint(policy),
+        dataPolicyActionHint: policy.policyActionHint ?? null,
         captureRetentionDays: policy.captureRetentionDays,
         debugRetentionDays: policy.debugRetentionDays,
-        debugArtifactsEnabled: policy.debugArtifactsEnabled
+        debugArtifactsEnabled: policy.debugArtifactsEnabled,
+        normalPathSummary: policy.normalPathSummary,
+        workspaceSyncSummary: policy.workspaceSyncSummary,
+        workspaceSyncHint: policy.workspaceSyncHint,
+        machineCaptureSummary: policy.machineCaptureSummary,
+        debugUtilitySummary: policy.debugUtilitySummary
     };
 }

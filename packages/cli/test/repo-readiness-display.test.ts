@@ -29,7 +29,12 @@ describe('repo readiness display', () => {
                 dataPolicyActionHint: 'Return this workspace to Lean when richer cloud sync is no longer needed.',
                 captureRetentionDays: 14,
                 debugRetentionDays: 7,
-                debugArtifactsEnabled: false
+                debugArtifactsEnabled: false,
+                normalPathSummary: 'Workspace sync is explicitly opted into full_sync. Machine capture defaults remain local.',
+                workspaceSyncSummary: 'full_sync (opt-in)',
+                workspaceSyncHint: '',
+                machineCaptureSummary: '14d local capture; debug trails off by default (7d if enabled)',
+                debugUtilitySummary: 'Off in the normal path (7d retention if enabled)'
             },
             formatAgentList: (agents) => agents.join(', '),
             formatLabelValue: (label, value) => `${label}: ${value}`,
@@ -37,6 +42,7 @@ describe('repo readiness display', () => {
             formatSyncPolicyLabel: (policy) => policy === 'full_sync' ? 'full_sync (opt-in)' : String(policy ?? '')
         });
 
+        expect(lines).toContain('Policy: Workspace sync is explicitly opted into full_sync. Machine capture defaults remain local.');
         expect(lines).toContain('Policy mode: Shared (workspace override)');
         expect(lines).toContain('Workspace sync: full_sync (opt-in)');
         expect(lines).toContain('Policy step: Return this workspace to Lean when richer cloud sync is no longer needed.');
@@ -69,7 +75,12 @@ describe('repo readiness display', () => {
                 dataPolicyActionHint: 'Return this machine to Lean when the longer local review window is no longer needed.',
                 captureRetentionDays: 30,
                 debugRetentionDays: 7,
-                debugArtifactsEnabled: false
+                debugArtifactsEnabled: false,
+                normalPathSummary: 'Workspace sync stays metadata_only. Machine capture defaults are tuned for a longer local review window.',
+                workspaceSyncSummary: 'metadata_only',
+                workspaceSyncHint: '',
+                machineCaptureSummary: '30d local capture; debug trails off by default (7d if enabled)',
+                debugUtilitySummary: 'Off in the normal path (7d retention if enabled)'
             },
             formatAgentList: (agents) => agents.join(', '),
             formatLabelValue: (label, value) => `${label}: ${value}`,
@@ -77,9 +88,10 @@ describe('repo readiness display', () => {
             formatSyncPolicyLabel: (policy) => String(policy ?? '')
         });
 
+        expect(lines).toContain('Policy: Workspace sync stays metadata_only. Machine capture defaults are tuned for a longer local review window.');
         expect(lines).toContain('Policy mode: Review (machine default)');
         expect(lines).toContain('Workspace sync: metadata_only');
-        expect(lines).toContain('Machine capture: 30d local capture');
+        expect(lines).toContain('Machine capture: 30d local capture; debug trails off by default (7d if enabled)');
     });
 
     it('does not accuse undetected GA agents of being missing in the normal readiness display', () => {
@@ -109,7 +121,12 @@ describe('repo readiness display', () => {
                 dataPolicyActionHint: null,
                 captureRetentionDays: 14,
                 debugRetentionDays: 7,
-                debugArtifactsEnabled: false
+                debugArtifactsEnabled: false,
+                normalPathSummary: 'Lean is the normal default. Workspace sync stays metadata_only and machine capture defaults stay local.',
+                workspaceSyncSummary: 'metadata_only',
+                workspaceSyncHint: '',
+                machineCaptureSummary: '14d local capture; debug trails off by default (7d if enabled)',
+                debugUtilitySummary: 'Off in the normal path (7d retention if enabled)'
             },
             formatAgentList: (agents) => agents.join(', '),
             formatLabelValue: (label, value) => `${label}: ${value}`,
@@ -148,7 +165,12 @@ describe('repo readiness display', () => {
                 dataPolicyActionHint: null,
                 captureRetentionDays: 14,
                 debugRetentionDays: 7,
-                debugArtifactsEnabled: false
+                debugArtifactsEnabled: false,
+                normalPathSummary: 'Lean is the normal default. Workspace sync stays metadata_only and machine capture defaults stay local.',
+                workspaceSyncSummary: 'metadata_only',
+                workspaceSyncHint: '',
+                machineCaptureSummary: '14d local capture; debug trails off by default (7d if enabled)',
+                debugUtilitySummary: 'Off in the normal path (7d retention if enabled)'
             },
             formatAgentList: (agents) => agents.join(', '),
             formatLabelValue: (label, value) => `${label}: ${value}`,

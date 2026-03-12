@@ -46,7 +46,13 @@ function createEnvironment() {
           preset: 'lean',
           captureRetentionDays: 14,
           debugRetentionDays: 7,
-          debugArtifactsEnabled: false
+          debugArtifactsEnabled: false,
+          normalPathSummary: 'No active workspace yet. Machine capture defaults are ready, and workspace sync stays metadata_only once a workspace is active.',
+          workspaceSyncSummary: 'No active workspace yet',
+          workspaceSyncHint: 'Metadata Only (default) becomes the workspace default after a workspace is active.',
+          machineCaptureSummary: '14d local capture; debug trails off by default (7d if enabled)',
+          debugUtilitySummary: 'Off in the normal path (7d retention if enabled)',
+          policyActionHint: 'Full sync is available only after a workspace is active.'
         },
         contexts: [
           { id: 'ctx-1', name: 'Repo One', paths: ['C:/repo-one'], syncPolicy: 'metadata_only', createdAt: Date.now() - 1_000 },
@@ -114,6 +120,7 @@ describe('desktop policy renderers', () => {
     expect(getElement('policySummaryBadge').textContent).toBe('Lean');
     expect(getElement('policyDetailList').innerHTML).toContain('Policy mode');
     expect(getElement('policyDetailList').innerHTML).toContain('No active workspace yet');
+    expect(getElement('policyDetailList').innerHTML).toContain('Off in the normal path');
     expect(getElement('policyHint').textContent).toContain('No active workspace yet.');
     expect(getElement('policyHint').textContent).toContain('Full sync is available only after a workspace is active.');
   });
@@ -127,6 +134,7 @@ describe('desktop policy renderers', () => {
     expect(getElement('workspacePolicySummaryBadge').textContent).toBe('Lean');
     expect(getElement('workspacePolicyDetailList').innerHTML).toContain('Policy mode');
     expect(getElement('workspacePolicyDetailList').innerHTML).toContain('No active workspace yet');
+    expect(getElement('workspacePolicyDetailList').innerHTML).toContain('Off in the normal path');
     expect(getElement('workspacePolicyHint').textContent).toContain('No active workspace yet.');
     expect(getElement('workspacePolicyHint').textContent).toContain('Full sync is available only after a workspace is active.');
   });

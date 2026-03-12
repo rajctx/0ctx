@@ -10,6 +10,13 @@
 })(function () {
   function describeWorkspaceSyncDisplay(options) {
     const policy = options.policy || {};
+    if (policy.workspaceSyncSummary) {
+      return {
+        workspaceResolved: policy.workspaceResolved === true && options.hasActiveWorkspace === true,
+        detail: policy.workspaceSyncSummary,
+        hint: policy.workspaceSyncHint || ''
+      };
+    }
     const workspaceResolved = policy.workspaceResolved === true && options.hasActiveWorkspace === true;
     const defaultLabel = options.formatSyncPolicyLabel(policy.syncPolicy || 'metadata_only');
 
@@ -30,6 +37,16 @@
 
   function describeDesktopPolicyHint(options) {
     const policy = options.policy || {};
+    if (policy.normalPathSummary) {
+      const base = policy.normalPathSummary;
+      if (!options.supportsMutation) {
+        return `${base} Update the local runtime before changing sync or machine capture defaults from the desktop.`;
+      }
+      if (options.actionHint) {
+        return `${base} ${options.actionHint}`;
+      }
+      return base;
+    }
     const preset = String(policy.preset || 'lean').trim().toLowerCase();
     const syncPolicy = String(policy.syncPolicy || 'metadata_only').trim().toLowerCase();
 

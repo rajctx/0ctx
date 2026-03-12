@@ -150,25 +150,26 @@
             detail: `${state.allSessions.length} session${state.allSessions.length === 1 ? '' : 's'}`,
             hint: 'All captured runs currently linked to this project.'
           },
-          {
-            title: 'Sync and capture',
-            detail: (() => {
-              const workspaceSync = describeWorkspaceSyncDisplay({
-                policy: state.dataPolicy || context,
-                hasActiveWorkspace: Boolean(context?.id),
-                formatSyncPolicyLabel
-              });
-              return `Workspace sync: ${workspaceSync.detail}`;
-            })(),
-            hint: (() => {
-              const workspaceSync = describeWorkspaceSyncDisplay({
-                policy: state.dataPolicy || context,
-                hasActiveWorkspace: Boolean(context?.id),
-                formatSyncPolicyLabel
-              });
-              return `Machine capture: ${capturePolicySummary()}${workspaceSync.hint ? `. ${workspaceSync.hint}` : ''}`;
-            })()
-          }
+      {
+        title: 'Sync and capture',
+        detail: (() => {
+          const workspaceSync = describeWorkspaceSyncDisplay({
+            policy: state.dataPolicy || context,
+            hasActiveWorkspace: Boolean(context?.id),
+            formatSyncPolicyLabel
+          });
+          const machineCapture = state.dataPolicy?.machineCaptureSummary || capturePolicySummary();
+          return `Workspace sync: ${workspaceSync.detail} | Machine capture: ${machineCapture}`;
+        })(),
+        hint: (() => {
+          const workspaceSync = describeWorkspaceSyncDisplay({
+            policy: state.dataPolicy || context,
+            hasActiveWorkspace: Boolean(context?.id),
+            formatSyncPolicyLabel
+          });
+          return (workspaceSync.hint || state.dataPolicy?.normalPathSummary || '').trim();
+        })()
+      }
         ]
       : [
           {
@@ -213,8 +214,9 @@
     if (policyDetailList) {
       const detailItems = [
         { title: 'Policy mode', detail: formatDataPolicyPresetLabel(policy.preset || 'lean') },
-        { title: 'Workspace sync (this workspace)', detail: workspaceSync.detail },
-        { title: 'Machine capture (this machine)', detail: capturePolicySummary() }
+        { title: 'Workspace sync (this workspace)', detail: policy.workspaceSyncSummary || workspaceSync.detail },
+        { title: 'Machine capture (this machine)', detail: policy.machineCaptureSummary || capturePolicySummary() },
+        { title: 'Debug trails (utility-only)', detail: policy.debugUtilitySummary || (app.debugArtifactsEnabled() ? 'Enabled locally for troubleshooting' : 'Off in the normal product path') }
       ];
       policyDetailList.innerHTML = detailItems.map((item) => `
         <article>
@@ -231,7 +233,7 @@
         workspaceResolved: workspaceSync.workspaceResolved,
         actionHint,
         workspaceHint: workspaceSync.hint
-      }) + ' Fine-tune retention and debug trails from Utilities when a workspace needs a custom local policy.';
+      }) + ' Fine-tune retention and debug trails from Utilities only when a workspace needs a deliberate override.';
     }
   }
 

@@ -225,6 +225,12 @@ export interface DataPolicySummary {
     debugRetentionDays: number;
     debugArtifactsEnabled: boolean;
     preset: DataPolicyPreset;
+    normalPathSummary?: string;
+    workspaceSyncSummary?: string;
+    workspaceSyncHint?: string;
+    machineCaptureSummary?: string;
+    debugUtilitySummary?: string;
+    policyActionHint?: string | null;
 }
 
 export interface RepoReadinessSummary {
@@ -252,4 +258,9 @@ export interface RepoReadinessSummary {
     captureRetentionDays: number;
     debugRetentionDays: number;
     debugArtifactsEnabled: boolean;
+    normalPathSummary?: string;
+    workspaceSyncSummary?: string;
+    workspaceSyncHint?: string;
+    machineCaptureSummary?: string;
+    debugUtilitySummary?: string;
 }

@@ -43,6 +43,93 @@ const DATA_POLICY_PRESETS: Record<Exclude<DataPolicyPreset, 'custom'>, DataPolic
     }
 };
 
+function formatWorkspaceSyncSummary(syncPolicy: SyncPolicy, workspaceResolved: boolean): {
+    summary: string;
+    hint: string;
+} {
+    const syncLabel = syncPolicy === 'full_sync' ? 'full_sync (opt-in)' : 'metadata_only (default)';
+    if (workspaceResolved) {
+        return {
+            summary: syncLabel,
+            hint: ''
+        };
+    }
+    return {
+        summary: 'No active workspace yet',
+        hint: `${syncLabel} becomes the workspace default after a workspace is active.`
+    };
+}
+
+function formatMachineCaptureSummary(options: {
+    captureRetentionDays: number;
+    debugRetentionDays: number;
+    debugArtifactsEnabled: boolean;
+}): string {
+    if (options.debugArtifactsEnabled) {
+        return `${options.captureRetentionDays}d local capture; ${options.debugRetentionDays}d debug trails enabled`;
+    }
+    return `${options.captureRetentionDays}d local capture; debug trails off by default (${options.debugRetentionDays}d if enabled)`;
+}
+
+function formatDebugUtilitySummary(options: {
+    debugRetentionDays: number;
+    debugArtifactsEnabled: boolean;
+}): string {
+    return options.debugArtifactsEnabled
+        ? `Enabled locally for troubleshooting (${options.debugRetentionDays}d retention)`
+        : `Off in the normal path (${options.debugRetentionDays}d retention if enabled)`;
+}
+
+function buildDataPolicyActionHint(summary: {
+    workspaceResolved: boolean;
+    syncPolicy: SyncPolicy;
+    captureRetentionDays: number;
+    debugRetentionDays: number;
+    debugArtifactsEnabled: boolean;
+    preset: DataPolicyPreset;
+}): string | null {
+    if (!summary.workspaceResolved) {
+        return 'Full sync is available only after a workspace is active.';
+    }
+    if (summary.preset === 'custom') {
+        return 'Choose Lean, Review, or Debug to return machine defaults to a supported path. Use Shared only when a workspace explicitly needs richer cloud sync.';
+    }
+    if (summary.preset === 'shared' || summary.syncPolicy === 'full_sync') {
+        return 'Return this workspace to metadata_only when richer cloud sync is no longer needed.';
+    }
+    if (summary.preset === 'debug' || summary.debugArtifactsEnabled) {
+        return 'Turn off debug trails when troubleshooting is complete.';
+    }
+    if (summary.preset === 'review' || summary.captureRetentionDays > 14 || summary.debugRetentionDays > 7) {
+        return 'Return this machine to Lean when the longer local review window is no longer needed.';
+    }
+    return null;
+}
+
+function buildNormalPathSummary(summary: {
+    workspaceResolved: boolean;
+    syncPolicy: SyncPolicy;
+    preset: DataPolicyPreset;
+    debugArtifactsEnabled: boolean;
+}): string {
+    if (!summary.workspaceResolved) {
+        return 'No active workspace yet. Machine capture defaults are ready, and workspace sync stays metadata_only once a workspace is active.';
+    }
+    if (summary.preset === 'shared' || summary.syncPolicy === 'full_sync') {
+        return 'Workspace sync is explicitly opted into full_sync. Machine capture defaults remain local.';
+    }
+    if (summary.preset === 'custom') {
+        return 'Workspace sync and machine capture defaults use a custom combination.';
+    }
+    if (summary.preset === 'debug' || summary.debugArtifactsEnabled) {
+        return 'Workspace sync stays metadata_only. Machine capture defaults are tuned for local debugging.';
+    }
+    if (summary.preset === 'review') {
+        return 'Workspace sync stays metadata_only. Machine capture defaults are tuned for a longer local review window.';
+    }
+    return 'Lean is the normal default. Workspace sync stays metadata_only and machine capture defaults stay local.';
+}
+
 export function getHookDumpRetentionDays(): number {
     const configured = getConfigValue('capture.retentionDays');
     return Number.isFinite(configured) && configured > 0 ? configured : 14;
@@ -90,9 +177,34 @@ export function buildDataPolicySummary(graph: Graph, contextId: string | null): 
     const captureRetentionDays = getHookDumpRetentionDays();
     const debugRetentionDays = getHookDebugRetentionDays();
     const debugArtifactsEnabled = isHookDebugArtifactsEnabled();
+    const workspaceResolved = Boolean(contextId);
+    const preset = inferDataPolicyPreset({
+        syncPolicy,
+        captureRetentionDays,
+        debugRetentionDays,
+        debugArtifactsEnabled
+    });
+    const workspaceSync = formatWorkspaceSyncSummary(syncPolicy, workspaceResolved);
+    const machineCaptureSummary = formatMachineCaptureSummary({
+        captureRetentionDays,
+        debugRetentionDays,
+        debugArtifactsEnabled
+    });
+    const debugUtilitySummary = formatDebugUtilitySummary({
+        debugRetentionDays,
+        debugArtifactsEnabled
+    });
+    const policyActionHint = buildDataPolicyActionHint({
+        workspaceResolved,
+        syncPolicy,
+        captureRetentionDays,
+        debugRetentionDays,
+        debugArtifactsEnabled,
+        preset
+    });
     return {
         contextId,
-        workspaceResolved: Boolean(contextId),
+        workspaceResolved,
         syncScope: 'workspace',
         captureScope: 'machine',
         debugScope: 'machine',
@@ -100,12 +212,18 @@ export function buildDataPolicySummary(graph: Graph, contextId: string | null): 
         captureRetentionDays,
         debugRetentionDays,
         debugArtifactsEnabled,
-        preset: inferDataPolicyPreset({
+        preset,
+        normalPathSummary: buildNormalPathSummary({
+            workspaceResolved,
             syncPolicy,
-            captureRetentionDays,
-            debugRetentionDays,
+            preset,
             debugArtifactsEnabled
-        })
+        }),
+        workspaceSyncSummary: workspaceSync.summary,
+        workspaceSyncHint: workspaceSync.hint,
+        machineCaptureSummary,
+        debugUtilitySummary,
+        policyActionHint
     };
 }
 

@@ -390,6 +390,9 @@
 
   function capturePolicySummary() {
     const readiness = currentRepoReadiness();
+    if (readiness?.machineCaptureSummary) {
+      return readiness.machineCaptureSummary;
+    }
     if (readiness) {
       const captureDays = Number.isFinite(readiness.captureRetentionDays) ? readiness.captureRetentionDays : 14;
       const debugDays = Number.isFinite(readiness.debugRetentionDays) ? readiness.debugRetentionDays : 7;
@@ -400,6 +403,9 @@
     }
 
     const policy = state.dataPolicy || state.hook?.capturePolicy || {};
+    if (policy.machineCaptureSummary) {
+      return policy.machineCaptureSummary;
+    }
     const captureDays = Number.isFinite(policy.captureRetentionDays) ? policy.captureRetentionDays : 14;
     const debugDays = Number.isFinite(policy.debugRetentionDays) ? policy.debugRetentionDays : 7;
     if (policy.debugArtifactsEnabled === true) {
@@ -415,6 +421,9 @@
     }
 
     const policy = policyInput || state.dataPolicy || state.hook?.capturePolicy || {};
+    if (policy.policyActionHint) {
+      return policy.policyActionHint;
+    }
     const preset = String(policy.preset || '').trim().toLowerCase();
     const syncPolicy = String(policy.syncPolicy || '').trim().toLowerCase();
     const captureDays = Number.isFinite(policy.captureRetentionDays) ? policy.captureRetentionDays : 14;

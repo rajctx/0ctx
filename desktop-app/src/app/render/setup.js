@@ -115,7 +115,8 @@
             hasActiveWorkspace: Boolean(activeContext()?.id),
             formatSyncPolicyLabel
           });
-          return `Workspace sync: ${workspaceSync.detail}`;
+          const machineCapture = state.dataPolicy?.machineCaptureSummary || capturePolicySummary();
+          return `Workspace sync: ${workspaceSync.detail} | Machine capture: ${machineCapture}`;
         })(),
         hint: (() => {
           const workspaceSync = describeWorkspaceSyncDisplay({
@@ -123,7 +124,7 @@
             hasActiveWorkspace: Boolean(activeContext()?.id),
             formatSyncPolicyLabel
           });
-          return `Machine capture: ${capturePolicySummary()}${workspaceSync.hint ? `. ${workspaceSync.hint}` : ''}`;
+          return (workspaceSync.hint || state.dataPolicy?.normalPathSummary || '').trim();
         })()
       }
     ];
@@ -210,13 +211,13 @@
     if (detailList) {
       const detailItems = [
         { title: 'Policy mode', detail: formatDataPolicyPresetLabel(policy.preset || 'lean') },
-        { title: 'Workspace sync (this workspace)', detail: workspaceSync.detail },
-        { title: 'Machine capture (this machine)', detail: capturePolicySummary() },
+        { title: 'Workspace sync (this workspace)', detail: policy.workspaceSyncSummary || workspaceSync.detail },
+        { title: 'Machine capture (this machine)', detail: policy.machineCaptureSummary || capturePolicySummary() },
         {
           title: 'Debug trails (utility-only)',
-          detail: app.debugArtifactsEnabled()
+          detail: policy.debugUtilitySummary || (app.debugArtifactsEnabled()
             ? 'Enabled locally for troubleshooting'
-            : 'Off in the normal product path'
+            : 'Off in the normal product path')
         }
       ];
       detailList.innerHTML = detailItems.map((item) => `
