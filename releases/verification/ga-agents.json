@@ -1,11 +1,11 @@
 {
   "ok": true,
-  "tempRoot": "C:\\Users\\Rajesh\\AppData\\Local\\Temp\\0ctx-release-ga-A9XXaU",
-  "contextId": "bbdf0b4f-89dd-40fd-8a2b-e25f3a6779bb",
+  "tempRoot": "C:\\Users\\Rajesh\\AppData\\Local\\Temp\\0ctx-release-ga-81cGSP",
+  "contextId": "54bc3cea-cfcc-48f6-ab57-6cc4c5afff8c",
   "branch": "main",
   "sessionCount": 3,
   "handoffCount": 3,
-  "checkpointId": "f20f9498-fc52-463c-948c-fb110ce7ddcb",
+  "checkpointId": "77e7d196-4f78-49f1-9536-e2087feaa7f8",
   "agents": {
     "claude": {
       "insertedCount": 2,
@@ -26,16 +26,16 @@
   },
   "transcripts": {
     "claude": {
-      "path": "C:\\Users\\Rajesh\\AppData\\Local\\Temp\\0ctx-release-ga-A9XXaU\\home\\claude-session.jsonl",
-      "sha256": "f7dbc7bd88fa5a923d4aebca3c5a2fdc6a9ea75fdb6f7e90e150ac93fe3d116f"
+      "path": "C:\\Users\\Rajesh\\AppData\\Local\\Temp\\0ctx-release-ga-81cGSP\\home\\claude-session.jsonl",
+      "sha256": "4e3b24045290d0e1c1ecb0528dcba1753c52479bb4e4754d6fb7ec8f36554e01"
     },
     "factory": {
-      "path": "C:\\Users\\Rajesh\\AppData\\Local\\Temp\\0ctx-release-ga-A9XXaU\\home\\factory-session.jsonl",
-      "sha256": "78165bf19ba102f407206db074043a103b33b5fe15d6cd26f0cc918345941d87"
+      "path": "C:\\Users\\Rajesh\\AppData\\Local\\Temp\\0ctx-release-ga-81cGSP\\home\\factory-session.jsonl",
+      "sha256": "919d4d32630f801861d14b4936ea3d9c378ca134f6dcab49743e94cd29cd0520"
     },
     "antigravity": {
-      "path": "C:\\Users\\Rajesh\\AppData\\Local\\Temp\\0ctx-release-ga-A9XXaU\\home\\antigravity-session.jsonl",
-      "sha256": "5f902bb1dd1720917ecda4a4c7ef31c8f090e9907578d732db19334b99a564c0"
+      "path": "C:\\Users\\Rajesh\\AppData\\Local\\Temp\\0ctx-release-ga-81cGSP\\home\\antigravity-session.jsonl",
+      "sha256": "dc9af21aed958e79c06e8738666d9aa830cac32db05c1e80fd5fde2822ca3a9e"
     }
   }
 }

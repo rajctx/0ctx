@@ -25,6 +25,7 @@
     "release:validate": "powershell -ExecutionPolicy Bypass -File scripts/release/validate-release.ps1",
     "release:e2e:ga": "node scripts/release/verify-ga-agents.mjs",
     "release:e2e:daily": "node scripts/release/verify-daily-flow.mjs",
+    "release:e2e:desktop:real": "node scripts/release/verify-desktop-real-flow.mjs",
     "release:report": "node scripts/release/generate-release-report.mjs",
     "release:desktop:artifacts": "node scripts/release/package-desktop-artifacts.mjs",
     "release:changelog:prepare": "powershell -ExecutionPolicy Bypass -File scripts/release/prepare-changelog.ps1",

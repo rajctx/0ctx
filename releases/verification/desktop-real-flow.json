@@ -1,7 +1,7 @@
 {
   "ok": true,
-  "validatedAt": "2026-03-10T04:29:18.424Z",
-  "daemonStarted": false,
+  "validatedAt": "2026-03-12T08:07:43.937Z",
+  "daemonStarted": true,
   "source": {
     "contextId": "54e17d31-8f60-45c1-b412-61fcdda3d628",
     "contextName": "0ctx-dev",
@@ -18,19 +18,17 @@
     "detailLoaded": true
   },
   "insight": {
-    "nodeId": "c0ce3670-8662-498f-b556-46102fd4a3e7",
-    "createdForValidation": true,
-    "trustTier": null
+    "nodeId": "8157614a-7409-4822-80e2-6ca0eb7cee3b",
+    "createdForValidation": false,
+    "trustTier": "strong"
   },
   "promotion": {
-    "targetContextId": "4c7e77aa-5cb0-4c8e-871c-7d0ed0aa1916",
-    "targetNodeId": "e0f20f6c-d13d-42bf-b37b-db49179a82fb",
+    "targetContextId": "556035fc-e071-46db-993d-f9ca35df8eaa",
+    "targetNodeId": "b801fad9-ca63-4176-af07-bf06c7b1c2a9",
     "created": true,
     "reused": false
   },
-  "breakdowns": [
-    "Created a temporary reviewed-memory node because the source workstream had no visible insights."
-  ],
+  "breakdowns": [],
   "reportPath": "C:\\Users\\Rajesh\\development\\0ctx-dev\\releases\\verification\\desktop-real-flow.json",
   "sessionDetailTitle": null
 }

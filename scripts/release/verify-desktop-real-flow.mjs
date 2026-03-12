@@ -145,9 +145,19 @@ async function ensureInsight(source, sessionToken, breakdowns) {
     worktreePath: source.worktreePath,
     limit: 25,
   }, sessionToken).catch(() => []);
-  if (existing.length > 0) {
-    return { insight: existing[0], created: false, sourceNodeId: existing[0].nodeId || existing[0].id || null };
+  const promotable = existing.find((item) => {
+    const promotionState = String(item?.promotionState || "").trim().toLowerCase();
+    return promotionState === "ready" || promotionState === "review";
+  });
+  if (promotable) {
+    return {
+      insight: promotable,
+      created: false,
+      sourceNodeId: promotable.nodeId || promotable.id || null,
+      cleanupNodeIds: [],
+    };
   }
+
   const created = await request("addNode", {
     contextId: source.context.id,
     type: "decision",
@@ -159,6 +169,59 @@ async function ensureInsight(source, sessionToken, breakdowns) {
       "source:desktop-validation",
     ],
   }, sessionToken);
+  const supportUser = await request("addNode", {
+    contextId: source.context.id,
+    type: "artifact",
+    content: "We should keep workstream handoff tied to named branches and checkpoints.",
+    hidden: true,
+    thread: `desktop-real-flow-user-${Date.now()}`,
+    source: "validation:desktop-real-flow",
+    tags: [
+      "chat_turn",
+      "role:user",
+      `branch:${source.branch}`,
+      `worktree:${source.worktreePath}`,
+    ],
+    rawPayload: {
+      role: "user",
+      branch: source.branch,
+      worktreePath: source.worktreePath,
+      captureSource: "desktop-real-flow",
+    },
+  }, sessionToken);
+
+  const supportAssistant = await request("addNode", {
+    contextId: source.context.id,
+    type: "artifact",
+    content: "Agreed. Cross-session, cross-role evidence should be strong enough to promote reviewed insights safely.",
+    hidden: true,
+    thread: `desktop-real-flow-assistant-${Date.now()}`,
+    source: "validation:desktop-real-flow",
+    tags: [
+      "chat_turn",
+      "role:assistant",
+      `branch:${source.branch}`,
+      `worktree:${source.worktreePath}`,
+    ],
+    rawPayload: {
+      role: "assistant",
+      branch: source.branch,
+      worktreePath: source.worktreePath,
+      captureSource: "desktop-real-flow",
+    },
+  }, sessionToken);
+
+  await request("addEdge", {
+    fromId: created.id,
+    toId: supportUser.id,
+    relation: "caused_by",
+  }, sessionToken);
+  await request("addEdge", {
+    fromId: created.id,
+    toId: supportAssistant.id,
+    relation: "caused_by",
+  }, sessionToken);
+
   const refreshed = await request("listWorkstreamInsights", {
     contextId: source.context.id,
     branch: source.branch,
@@ -167,8 +230,18 @@ async function ensureInsight(source, sessionToken, breakdowns) {
   }, sessionToken);
   const insight = refreshed.find((item) => (item.nodeId || item.id) === created.id) || refreshed[0] || null;
   assert(insight, "Failed to surface the validation insight in workstream insights.");
-  breakdowns.push("Created a temporary reviewed-memory node because the source workstream had no visible insights.");
-  return { insight, created: true, sourceNodeId: created.id };
+  const promotionState = String(insight.promotionState || "").trim().toLowerCase();
+  assert(
+    promotionState === "ready" || promotionState === "review",
+    "Failed to create a promotable validation insight."
+  );
+  breakdowns.push("Created a temporary reviewed-memory node with cross-role, cross-session evidence because the source workstream had no promotable insights.");
+  return {
+    insight,
+    created: true,
+    sourceNodeId: created.id,
+    cleanupNodeIds: [created.id, supportUser.id, supportAssistant.id],
+  };
 }
 
 async function createTargetContext(sessionToken) {
@@ -213,9 +286,11 @@ async function main() {
       limit: 10,
     }, sessionToken).catch(() => []);
 
-    const { insight, created: insightCreated, sourceNodeId } = await ensureInsight(source, sessionToken, breakdowns);
-    if (insightCreated && sourceNodeId) {
-      cleanup.push(() => request("deleteNode", { contextId: source.context.id, id: sourceNodeId }, sessionToken).catch(() => null));
+    const { insight, created: insightCreated, sourceNodeId, cleanupNodeIds } = await ensureInsight(source, sessionToken, breakdowns);
+    if (insightCreated) {
+      for (const nodeId of cleanupNodeIds || []) {
+        cleanup.push(() => request("deleteNode", { contextId: source.context.id, id: nodeId }, sessionToken).catch(() => null));
+      }
     }
 
     const target = await createTargetContext(sessionToken);

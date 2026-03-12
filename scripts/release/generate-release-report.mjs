@@ -91,6 +91,8 @@ function main() {
     throw new Error(`Daily flow e2e failed.\nstdout:\n${daily.stdout}\nstderr:\n${daily.stderr}`);
   }
 
+  const desktopReal = run("npm", ["run", "release:e2e:desktop:real"], { captureOutput: true });
+
   const desktopSmoke = run("npm", ["run", "desktop:smoke"], { captureOutput: true });
   if (!desktopSmoke.ok) {
     throw new Error(`Desktop smoke failed.\nstdout:\n${desktopSmoke.stdout}\nstderr:\n${desktopSmoke.stderr}`);
@@ -103,6 +105,7 @@ function main() {
 
   const gaReport = parseJsonOutput(ga);
   const dailyReport = parseJsonOutput(daily);
+  const desktopRealReport = desktopReal.ok ? parseJsonOutput(desktopReal) : null;
 
   const report = {
     ok: true,
@@ -113,6 +116,7 @@ function main() {
       test: summarizeStep(test),
       gaAgents: summarizeStep(ga),
       dailyFlow: summarizeStep(daily),
+      desktopRealFlow: summarizeStep(desktopReal),
       desktopSmoke: summarizeStep(desktopSmoke),
       nestedGit: summarizeStep(nestedGit),
     },
@@ -132,6 +136,17 @@ function main() {
       autoContextAgents: dailyReport.readiness?.autoContextAgents ?? [],
       syncPolicy: dailyReport.dataPolicy?.syncPolicy ?? null,
       reportPath: dailyReport.reportPath ?? null,
+    },
+    desktopRealFlow: desktopRealReport ? {
+      workspace: desktopRealReport.source?.contextName ?? null,
+      branch: desktopRealReport.source?.branch ?? null,
+      sessionId: desktopRealReport.source?.sessionId ?? null,
+      checkpointId: desktopRealReport.checkpoint?.checkpointId ?? null,
+      promotedNodeId: desktopRealReport.promotion?.targetNodeId ?? null,
+      reportPath: desktopRealReport.reportPath ?? null,
+    } : {
+      skipped: true,
+      reason: "No real captured workspace data was available for desktop validation.",
     },
   };
 
