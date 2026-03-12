@@ -42,20 +42,20 @@ function createEnvironment() {
         dataPolicy: {
           contextId: null,
           workspaceResolved: false,
-          syncPolicy: 'metadata_only',
+          syncPolicy: 'local_only',
           preset: 'lean',
           captureRetentionDays: 14,
           debugRetentionDays: 7,
           debugArtifactsEnabled: false,
-          normalPathSummary: 'No active workspace yet. Machine capture defaults are ready, and workspace sync stays metadata_only once a workspace is active.',
+          normalPathSummary: 'No active workspace yet. Machine capture defaults are ready, and workspace sync stays local_only once a workspace is active.',
           workspaceSyncSummary: 'No active workspace yet',
-          workspaceSyncHint: 'Metadata Only (default) becomes the workspace default after a workspace is active.',
+          workspaceSyncHint: 'Local Only (default) becomes the workspace default after a workspace is active.',
           machineCaptureSummary: '14d local capture; debug trails off by default (7d if enabled)',
           debugUtilitySummary: 'Off in the normal path (7d retention if enabled)',
           policyActionHint: 'Full sync is available only after a workspace is active.'
         },
         contexts: [
-          { id: 'ctx-1', name: 'Repo One', paths: ['C:/repo-one'], syncPolicy: 'metadata_only', createdAt: Date.now() - 1_000 },
+          { id: 'ctx-1', name: 'Repo One', paths: ['C:/repo-one'], syncPolicy: 'local_only', createdAt: Date.now() - 1_000 },
           { id: 'ctx-2', name: 'Repo Two', paths: ['C:/repo-two'], syncPolicy: 'full_sync', createdAt: Date.now() - 2_000 }
         ],
         activeContextId: 'ctx-1',
@@ -75,7 +75,12 @@ function createEnvironment() {
       formatIntegrationNote: (value) => value || '',
       zeroTouchState: () => ({ ready: true, label: 'Ready', detail: 'Repo-first path active', nextAction: 'None' }),
       formatPosture: (value) => value,
-      formatSyncPolicyLabel: (policy) => String(policy || '').trim().toLowerCase() === 'full_sync' ? 'Full Sync (opt-in)' : 'Metadata Only (default)',
+      formatSyncPolicyLabel: (policy) => {
+        const value = String(policy || '').trim().toLowerCase();
+        if (value === 'full_sync') return 'Full Sync (opt-in)';
+        if (value === 'metadata_only') return 'Metadata Only (opt-in)';
+        return 'Local Only (default)';
+      },
       formatDataPolicyPresetLabel: (preset) => String(preset || '').trim().toLowerCase() === 'shared' ? 'Shared' : 'Lean',
       describeWorkspaceSyncDisplay,
       describeDesktopPolicyHint,
@@ -122,7 +127,7 @@ describe('desktop policy renderers', () => {
     expect(getElement('policyDetailList').innerHTML).toContain('No active workspace yet');
     expect(getElement('policyDetailList').innerHTML).toContain('Off in the normal path');
     expect(getElement('policyHint').textContent).toContain('No active workspace yet.');
-    expect(getElement('policyHint').textContent).toContain('Full sync is available only after a workspace is active.');
+    expect(getElement('policyHint').textContent).toContain('Metadata-only and full sync are available only after a workspace is active.');
   });
 
   it('shows the same honest workspace-sync copy on the workspaces screen', () => {
@@ -136,6 +141,6 @@ describe('desktop policy renderers', () => {
     expect(getElement('workspacePolicyDetailList').innerHTML).toContain('No active workspace yet');
     expect(getElement('workspacePolicyDetailList').innerHTML).toContain('Off in the normal path');
     expect(getElement('workspacePolicyHint').textContent).toContain('No active workspace yet.');
-    expect(getElement('workspacePolicyHint').textContent).toContain('Full sync is available only after a workspace is active.');
+    expect(getElement('workspacePolicyHint').textContent).toContain('Metadata-only and full sync are available only after a workspace is active.');
   });
 });

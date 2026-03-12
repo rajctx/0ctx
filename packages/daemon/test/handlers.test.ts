@@ -307,7 +307,7 @@ describe('daemon request handling', () => {
             expect(defaultPolicy.syncScope).toBe('workspace');
             expect(defaultPolicy.captureScope).toBe('machine');
             expect(defaultPolicy.debugScope).toBe('machine');
-            expect(defaultPolicy.syncPolicy).toBe('metadata_only');
+            expect(defaultPolicy.syncPolicy).toBe('local_only');
             expect(defaultPolicy.captureRetentionDays).toBe(14);
             expect(defaultPolicy.debugRetentionDays).toBe(7);
             expect(defaultPolicy.debugArtifactsEnabled).toBe(false);
@@ -411,7 +411,7 @@ describe('daemon request handling', () => {
             expect(path.resolve(readiness.repoRoot)).toBe(path.resolve(repoRoot));
             expect(readiness.contextId).toBe(context.id);
             expect(readiness.workspaceName).toBe('repo-readiness-context');
-            expect(readiness.syncPolicy).toBe('metadata_only');
+            expect(readiness.syncPolicy).toBe('local_only');
             expect(readiness.captureReadyAgents).toEqual(['claude', 'factory', 'antigravity']);
             expect(readiness.autoContextAgents).toEqual(['claude', 'factory', 'antigravity']);
             expect(readiness.zeroTouchReady).toBe(true);
@@ -611,7 +611,7 @@ describe('daemon request handling', () => {
                 preset: string;
             };
 
-            expect(debugPolicy.syncPolicy).toBe('metadata_only');
+            expect(debugPolicy.syncPolicy).toBe('local_only');
             expect(debugPolicy.syncScope).toBe('workspace');
             expect(debugPolicy.captureScope).toBe('machine');
             expect(debugPolicy.debugScope).toBe('machine');
@@ -624,7 +624,7 @@ describe('daemon request handling', () => {
             expect(sharedPolicy.syncScope).toBe('workspace');
             expect(sharedPolicy.captureScope).toBe('machine');
             expect(sharedPolicy.debugScope).toBe('machine');
-            expect(sharedPolicy.syncPolicy).toBe('full_sync');
+            expect(sharedPolicy.syncPolicy).toBe('metadata_only');
             expect(sharedPolicy.captureRetentionDays).toBe(14);
             expect(sharedPolicy.debugRetentionDays).toBe(7);
             expect(sharedPolicy.debugArtifactsEnabled).toBe(false);
@@ -638,7 +638,7 @@ describe('daemon request handling', () => {
             db.close();
         }
     });
-    it('defaults new contexts to metadata_only sync', () => {
+    it('defaults new contexts to local_only sync', () => {
         const { db, graph } = createGraph();
         try {
             const session = handleRequest(graph, 'conn-sync-default', { method: 'createSession' }, runtime()) as { sessionToken: string };
@@ -654,8 +654,8 @@ describe('daemon request handling', () => {
                 params: { contextId: context.id }
             }, runtime()) as { syncPolicy: string };
 
-            expect(context.syncPolicy).toBe('metadata_only');
-            expect(current.syncPolicy).toBe('metadata_only');
+            expect(context.syncPolicy).toBe('local_only');
+            expect(current.syncPolicy).toBe('local_only');
         } finally {
             db.close();
         }

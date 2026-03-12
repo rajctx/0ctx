@@ -142,8 +142,7 @@ describe('@0ctx/cli build artifact source', () => {
         expect(syncSource).toContain("sendToDaemon('syncStatus'");
         expect(lifecycleSource).toContain('async function collectDoctorChecks');
         expect(lifecycleSource).toContain('async function commandRepair');
-        expect(noArgsSource).toContain("reason: 'repo_entrypoint'");
-        expect(noArgsSource).toContain("'cli.workstreams.current'");
+        expect(noArgsSource).toContain("reason: connectorState ? 'repo_entrypoint' : 'first_run_repo'");
         expect(cliSurface).toContain("0ctx connector hook ingest --agent=claude|factory|antigravity [--repo-root=<path>]");
         expect(cliSurface).not.toContain("Preview replay utilities:");
         expect(cliSurface).not.toContain("Preview-only replay flows stay out of the normal help surface.");
@@ -184,8 +183,7 @@ describe('@0ctx/cli build artifact source', () => {
         expect(versionSource).toContain("console.log(`cli_path: ${payload.cliPath}`);");
         expect(repoSource).toContain("function findGitRepoRoot(input: string | null): string | null {");
         expect(noArgsSource).toContain("Detected git repo. Enabling 0ctx for");
-        expect(noArgsSource).toContain("This repo is not enabled yet. Enabling 0ctx for");
-        expect(noArgsSource).toContain("Daemon is unreachable. Re-enabling 0ctx for");
+        expect(noArgsSource).toContain("0ctx works repo-first. Move into a project repo and run `0ctx enable`.");
         expect(dispatchSource).toContain("Use `0ctx enable` inside a repo for the normal product flow. Use `0ctx dashboard` only for hosted support surfaces.");
     });
 });

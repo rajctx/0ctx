@@ -27,7 +27,7 @@ describe('commandStatus', () => {
                 workstream: 'main',
                 sessionCount: 2,
                 checkpointCount: 1,
-                syncPolicy: 'metadata_only',
+                syncPolicy: 'local_only',
                 syncScope: 'workspace',
                 captureScope: 'machine',
                 debugScope: 'machine',
@@ -53,7 +53,8 @@ describe('commandStatus', () => {
             formatAgentList: (agents: string[]) => agents.join(', '),
             formatRetentionLabel: () => '14d capture, 7d debug',
             formatSyncPolicyLabel: (policy: string | null | undefined) => {
-                if (policy === 'metadata_only') return 'metadata_only (default)';
+                if (policy === 'metadata_only') return 'metadata_only (opt-in)';
+                if (policy === 'local_only') return 'local_only (default)';
                 if (policy === 'full_sync') return 'full_sync (opt-in)';
                 return policy ?? 'none';
             }
@@ -71,7 +72,7 @@ describe('commandStatus', () => {
         expect(payload.repo.readiness).toMatchObject({
             workspaceName: 'repo',
             zeroTouchReady: true,
-            syncPolicy: 'metadata_only',
+            syncPolicy: 'local_only',
             captureRetentionDays: 14,
             debugRetentionDays: 7,
             debugArtifactsEnabled: false
@@ -108,7 +109,7 @@ describe('commandStatus', () => {
                 zeroTouchReady: false,
                 nextActionHint: 'Complete one-time context setup for Claude.',
                 dataPolicyPreset: 'shared',
-                dataPolicyActionHint: 'Return this workspace to metadata_only when richer cloud sync is no longer needed.',
+                dataPolicyActionHint: 'Return this workspace to local_only when richer sync is no longer needed.',
                 captureRetentionDays: 14,
                 debugRetentionDays: 7,
                 debugArtifactsEnabled: true
@@ -120,7 +121,8 @@ describe('commandStatus', () => {
             formatAgentList: (agents: string[]) => agents.join(', '),
             formatRetentionLabel: () => '14d capture, 7d debug',
             formatSyncPolicyLabel: (policy: string | null | undefined) => {
-                if (policy === 'metadata_only') return 'metadata_only (default)';
+                if (policy === 'metadata_only') return 'metadata_only (opt-in)';
+                if (policy === 'local_only') return 'local_only (default)';
                 if (policy === 'full_sync') return 'full_sync (opt-in)';
                 return policy ?? 'none';
             }

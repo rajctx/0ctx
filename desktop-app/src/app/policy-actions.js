@@ -33,7 +33,7 @@
   }
 
   function readCustomDataPolicyForm() {
-    const syncPolicy = String(document.getElementById('dataPolicySyncPolicy')?.value || 'metadata_only').trim().toLowerCase();
+    const syncPolicy = String(document.getElementById('dataPolicySyncPolicy')?.value || 'local_only').trim().toLowerCase();
     const debugArtifactsEnabled = document.getElementById('dataPolicyDebugArtifacts')?.checked === true;
     return {
       syncPolicy,

@@ -1,7 +1,7 @@
 import type Database from 'better-sqlite3';
 import { getSchemaVersion, hasColumn, setSchemaVersion } from './meta';
 
-export const CURRENT_SCHEMA_VERSION = 10;
+export const CURRENT_SCHEMA_VERSION = 11;
 
 export function migrate(db: Database.Database): void {
     db.exec(`
@@ -51,6 +51,10 @@ export function migrate(db: Database.Database): void {
     if (version < 10) {
         migrateToV10(db);
         setSchemaVersion(db, 10);
+    }
+    if (version < 11) {
+        migrateToV11(db);
+        setSchemaVersion(db, 11);
     }
 }
 
@@ -130,7 +134,7 @@ function migrateToV3(db: Database.Database): void {
     if (!hasColumn(db, 'contexts', 'syncPolicy')) {
         db.exec(`
           ALTER TABLE contexts
-          ADD COLUMN syncPolicy TEXT NOT NULL DEFAULT 'metadata_only'
+          ADD COLUMN syncPolicy TEXT NOT NULL DEFAULT 'local_only'
         `);
     }
 }
@@ -322,6 +326,53 @@ function migrateToV10(db: Database.Database): void {
       SET syncPolicy = 'metadata_only'
       WHERE syncPolicy IS NULL
          OR TRIM(syncPolicy) = ''
-         OR syncPolicy = 'full_sync'
+    `);
+}
+
+function migrateToV11(db: Database.Database): void {
+    const syncPolicyColumn = db.prepare(`PRAGMA table_info(contexts)`).all() as Array<{
+        name: string;
+        dflt_value: string | null;
+    }>;
+    const defaultValue = syncPolicyColumn.find((column) => column.name === 'syncPolicy')?.dflt_value ?? null;
+    if (defaultValue === "'local_only'") {
+        db.exec(`
+          UPDATE contexts
+          SET syncPolicy = 'local_only'
+          WHERE syncPolicy IS NULL
+             OR TRIM(syncPolicy) = ''
+             OR syncPolicy = 'metadata_only'
+        `);
+        return;
+    }
+
+    db.exec(`
+      PRAGMA foreign_keys = OFF;
+
+      CREATE TABLE contexts_v11 (
+        id         TEXT PRIMARY KEY,
+        name       TEXT NOT NULL,
+        paths      TEXT NOT NULL DEFAULT '[]',
+        createdAt  INTEGER NOT NULL,
+        syncPolicy TEXT NOT NULL DEFAULT 'local_only'
+      );
+
+      INSERT INTO contexts_v11 (id, name, paths, createdAt, syncPolicy)
+      SELECT
+        id,
+        name,
+        paths,
+        createdAt,
+        CASE
+          WHEN syncPolicy = 'full_sync' THEN 'full_sync'
+          WHEN syncPolicy = 'local_only' THEN 'local_only'
+          ELSE 'local_only'
+        END
+      FROM contexts;
+
+      DROP TABLE contexts;
+      ALTER TABLE contexts_v11 RENAME TO contexts;
+
+      PRAGMA foreign_keys = ON;
     `);
 }

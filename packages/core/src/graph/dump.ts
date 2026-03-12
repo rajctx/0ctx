@@ -38,7 +38,7 @@ type DumpDeps = {
 function normalizeDumpSyncPolicy(syncPolicy: unknown): SyncPolicy {
     return syncPolicy === 'local_only' || syncPolicy === 'metadata_only' || syncPolicy === 'full_sync'
         ? syncPolicy
-        : 'metadata_only';
+        : 'local_only';
 }
 
 export function exportContextDumpRecord(deps: DumpDeps, contextId: string): ContextDump {

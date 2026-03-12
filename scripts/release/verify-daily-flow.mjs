@@ -200,8 +200,8 @@ async function main() {
     assert(enableResult.repoReadiness?.zeroTouchReady === true, "Enable did not produce a zero-touch ready repo");
     assert(JSON.stringify(enableResult.repoReadiness?.captureReadyAgents ?? []) === JSON.stringify(["claude", "factory", "antigravity"]), "Unexpected capture ready agents");
     assert(JSON.stringify(enableResult.repoReadiness?.autoContextAgents ?? []) === JSON.stringify(["claude", "factory", "antigravity"]), "Unexpected auto-context agents");
-    assert(enableResult.repoReadiness?.syncPolicy === "metadata_only", "Workspace sync policy is not metadata_only");
-    assert(enableResult.dataPolicy?.syncPolicy === "metadata_only (default)", "Enable did not report metadata_only (default)");
+    assert(enableResult.repoReadiness?.syncPolicy === "local_only", "Workspace sync policy is not local_only");
+    assert(enableResult.dataPolicy?.syncPolicy === "local_only (default)", "Enable did not report local_only (default)");
     assert(enableResult.repoReadiness?.captureRetentionDays === 14, "Unexpected capture retention");
     assert(enableResult.repoReadiness?.debugRetentionDays === 7, "Unexpected debug retention");
     assert(enableResult.repoReadiness?.debugArtifactsEnabled === false, "Debug artifacts should be disabled by default");

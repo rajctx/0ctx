@@ -645,9 +645,9 @@
                         <label>
                           <span>Workspace sync</span>
                           <select id="dataPolicySyncPolicy" aria-label="Workspace sync policy">
-                            <option value="metadata_only">Metadata only</option>
-                            <option value="local_only">Local only</option>
-                            <option value="full_sync">Full sync</option>
+                            <option value="local_only">Local only (default)</option>
+                            <option value="metadata_only">Metadata only (opt-in)</option>
+                            <option value="full_sync">Full sync (opt-in)</option>
                           </select>
                         </label>
                         <label>
@@ -672,7 +672,7 @@
                       </div>
                     </details>
                     <div id="policyDetailList" class="info-list compact-info-list"></div>
-                    <p id="policyHint" class="page-copy compact-copy">Metadata-only sync is the normal default for this workspace. Raw payloads stay local and debug artifacts stay off unless you explicitly enable them from Utilities.</p>
+                    <p id="policyHint" class="page-copy compact-copy">Local-only sync is the normal default for this workspace. Metadata-only and full sync stay opt-in, raw payloads stay local, and debug artifacts stay off unless you explicitly enable them from Utilities.</p>
                   </form>
                 </section>
 

@@ -134,7 +134,7 @@ function printPolicyGuidance(payload: DataPolicyPayload): void {
     console.log(`  Recommended for:         ${definition.recommendation}`);
 
     if (payload.preset === 'shared') {
-        console.log('  Next step:               Keep Shared only for workspaces that explicitly need richer cloud sync, then return this workspace to Lean when that is no longer needed.');
+        console.log('  Next step:               Keep Shared only for workspaces that explicitly need metadata-only cloud sync, then return this workspace to Lean when that is no longer needed.');
         return;
     }
 
@@ -236,9 +236,9 @@ export function createDataPolicyCommands(deps: PolicyCommandDeps) {
             return 1;
         }
         const confirmFullSync = Boolean(flags['confirm-full-sync']) || Boolean(flags.confirmFullSync);
-        const enablingFullSync = syncPolicy === 'full_sync' || preset === 'shared';
-        if (enablingFullSync && !confirmFullSync) {
-            console.error('full_sync requires explicit confirmation. Re-run with --confirm-full-sync if this workspace should send richer metadata to the cloud.');
+        const enablingCloudSync = syncPolicy === 'full_sync' || preset === 'shared';
+        if (enablingCloudSync && !confirmFullSync) {
+            console.error('Cloud sync opt-in requires explicit confirmation. Re-run with --confirm-full-sync if this workspace should send metadata to the cloud.');
             return 1;
         }
 

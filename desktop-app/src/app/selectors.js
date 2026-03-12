@@ -242,8 +242,8 @@
   function formatSyncPolicyLabel(policy) {
     const value = String(policy || '').trim().toLowerCase();
     if (value === 'full_sync') return 'Full Sync (opt-in)';
-    if (value === 'local_only') return 'Local Only';
-    return 'Metadata Only (default)';
+    if (value === 'metadata_only') return 'Metadata Only (opt-in)';
+    return 'Local Only (default)';
   }
 
   function formatDataPolicyPresetLabel(preset) {
@@ -304,8 +304,7 @@
     const gaHooks = installedGaAgents();
     const autoContextHooks = autoContextGaAgents();
     const runtimeReady = !state.runtimeIssue;
-    const signedIn = state.auth.authenticated === true;
-    const syncPolicy = String(state.dataPolicy?.syncPolicy || context?.syncPolicy || 'metadata_only').trim().toLowerCase();
+    const syncPolicy = String(state.dataPolicy?.syncPolicy || context?.syncPolicy || 'local_only').trim().toLowerCase();
 
     if (!repoBound) {
       return {
@@ -313,16 +312,6 @@
         className: 'badge offline',
         detail: 'Bind this repo to a workspace first.',
         nextAction: 'Choose a repository folder and create or select the matching workspace.',
-        ready: false
-      };
-    }
-
-    if (!signedIn) {
-      return {
-        label: 'Needs one-time setup',
-        className: 'badge degraded',
-        detail: 'Sign in on this machine.',
-        nextAction: 'Run 0ctx enable in this repo to restore the normal capture path.',
         ready: false
       };
     }
@@ -362,7 +351,7 @@
       className: 'badge connected',
       detail: `${integrationListText(autoContextHooks)} will capture and receive workstream context automatically.`,
       nextAction: syncPolicy === 'full_sync'
-        ? 'This workspace is opted into richer cloud sync. Return to Lean when that is no longer needed.'
+        ? 'This workspace is opted into fuller cloud sync. Return to Lean when that is no longer needed.'
         : 'Use the supported agent normally. 0ctx will inject the current workstream and capture new sessions automatically.',
       ready: true
     };

@@ -1,7 +1,7 @@
 (() => {
   window.OctxDesktop = window.OctxDesktop || {};
   const app = window.OctxDesktop;
-  const { state, matches, activeContext, zeroTouchState, formatSyncPolicyLabel, formatDataPolicyPresetLabel, describeWorkspaceSyncDisplay, describeDesktopPolicyHint, capturePolicySummary, dataPolicyActionHint, esc, formatRelativeTime, renderChip, renderMetaLine, short, humanizeLabel, contextById, syncWorkspaceComparisonTargetSelection, workspaceComparisonTargetContext } = app;
+  const { state, matches, activeContext, zeroTouchState, formatSyncPolicyLabel, formatDataPolicyPresetLabel, describeWorkspaceSyncDisplay, describeDesktopPolicyHint, capturePolicySummary, dataPolicyActionHint, esc, formatRelativeTime, renderChip, renderMetaLine, short, humanizeLabel, contextById, syncWorkspaceComparisonTargetSelection, workspaceComparisonTargetContext, methodSupported } = app;
 
   function renderWorkspaces() {
     const contexts = state.contexts.filter((context) => matches(`${context.name || ''} ${(context.paths || []).join(' ')}`));
@@ -191,7 +191,7 @@
     const policy = state.dataPolicy || {
       contextId: null,
       workspaceResolved: false,
-      syncPolicy: 'metadata_only',
+      syncPolicy: 'local_only',
       captureRetentionDays: 14,
       debugRetentionDays: 7,
       debugArtifactsEnabled: false,

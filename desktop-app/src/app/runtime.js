@@ -47,16 +47,13 @@
       return;
     }
     const force = options.force === true;
-    const targetContextId = state.activeContextId || null;
+    const targetContextId = null;
     if (!force && state.subscriptionId && state.subscriptionContextId === targetContextId) {
       return;
     }
 
     await clearEventSubscription({ quiet: true });
     const payload = {};
-    if (targetContextId) {
-      payload.contextId = targetContextId;
-    }
     const result = await invoke('subscribe_events', payload);
     state.subscriptionId = result?.subscriptionId || null;
     state.subscriptionContextId = targetContextId;
@@ -69,7 +66,9 @@
       state.health = status?.health || {};
       state.caps = Array.isArray(status?.capabilities?.methods) ? status.capabilities.methods : [];
       state.storage = status?.storage || {};
-      const contexts = Array.isArray(status?.contexts) ? status.contexts : [];
+      const contexts = typeof app.resolveContexts === 'function'
+        ? await app.resolveContexts(status)
+        : (Array.isArray(status?.contexts) ? status.contexts : []);
       const activeStillExists = state.activeContextId && contexts.some((context) => context.id === state.activeContextId);
       state.contexts = contexts;
 

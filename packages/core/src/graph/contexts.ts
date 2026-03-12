@@ -6,7 +6,7 @@ export function createContextRecord(
     db: Database.Database,
     name: string,
     paths: string[] = [],
-    syncPolicy: SyncPolicy = 'metadata_only'
+    syncPolicy: SyncPolicy = 'local_only'
 ): Context {
     const context: Context = { id: randomUUID(), name, paths, syncPolicy, createdAt: Date.now() };
     db.prepare(`
@@ -18,7 +18,7 @@ export function createContextRecord(
 
 export function getContextRecord(db: Database.Database, id: string): Context | null {
     const row = db.prepare('SELECT * FROM contexts WHERE id = ?').get(id) as any;
-    return row ? { ...row, paths: JSON.parse(row.paths), syncPolicy: row.syncPolicy ?? 'metadata_only' } : null;
+    return row ? { ...row, paths: JSON.parse(row.paths), syncPolicy: row.syncPolicy ?? 'local_only' } : null;
 }
 
 export function listContextRecords(db: Database.Database): Context[] {
@@ -26,7 +26,7 @@ export function listContextRecords(db: Database.Database): Context[] {
     return rows.map((row) => ({
         ...row,
         paths: JSON.parse(row.paths),
-        syncPolicy: row.syncPolicy ?? 'metadata_only'
+        syncPolicy: row.syncPolicy ?? 'local_only'
     }));
 }
 
@@ -36,7 +36,7 @@ export function getContextSyncPolicyRecord(db: Database.Database, contextId: str
     if (row.syncPolicy === 'local_only' || row.syncPolicy === 'full_sync' || row.syncPolicy === 'metadata_only') {
         return row.syncPolicy;
     }
-    return 'metadata_only';
+    return 'local_only';
 }
 
 export function setContextSyncPolicyRecord(

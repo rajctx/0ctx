@@ -53,7 +53,7 @@ export function replaceContextFromDump(
                 || dump.context.syncPolicy === 'metadata_only'
                 || dump.context.syncPolicy === 'full_sync'
                 ? dump.context.syncPolicy
-                : 'metadata_only';
+                : 'local_only';
 
         db.prepare(`
           INSERT INTO contexts (id, name, paths, syncPolicy, createdAt)

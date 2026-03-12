@@ -144,7 +144,7 @@
     const policy = state.dataPolicy || {
       contextId: null,
       workspaceResolved: false,
-      syncPolicy: 'metadata_only',
+      syncPolicy: 'local_only',
       captureRetentionDays: 14,
       debugRetentionDays: 7,
       debugArtifactsEnabled: false,
@@ -181,12 +181,12 @@
     });
 
     if (syncInput) {
-      syncInput.value = String(policy.syncPolicy || 'metadata_only').trim().toLowerCase();
+      syncInput.value = String(policy.syncPolicy || 'local_only').trim().toLowerCase();
       Array.from(syncInput.options || []).forEach((option) => {
-        option.disabled = option.value === 'full_sync' && !workspaceResolved;
+        option.disabled = !workspaceResolved && option.value !== 'local_only';
       });
-      if (!workspaceResolved && syncInput.value === 'full_sync') {
-        syncInput.value = 'metadata_only';
+      if (!workspaceResolved && syncInput.value !== 'local_only') {
+        syncInput.value = 'local_only';
       }
       syncInput.disabled = !supportsMutation;
     }
@@ -239,7 +239,7 @@
         workspaceResolved,
         actionHint,
         workspaceHint: workspaceSync.hint
-      }) + ' Debug trails and richer sync stay behind Advanced controls.';
+      }) + ' Debug trails and opt-in cloud sync stay behind Advanced controls.';
     }
   }
 

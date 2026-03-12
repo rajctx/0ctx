@@ -15,7 +15,7 @@ export function dispatchGraphRequest(context: HandlerMethodContext): MethodDispa
             const name = typeof params.name === 'string' ? params.name : null;
             if (!name) throw new Error("Missing required 'name' for createContext.");
             const paths = Array.isArray(params.paths) ? params.paths.filter((p): p is string => typeof p === 'string') : [];
-            const syncPolicy = parseSyncPolicy(params.syncPolicy) ?? 'metadata_only';
+            const syncPolicy = parseSyncPolicy(params.syncPolicy) ?? 'local_only';
             const created = graph.createContext(name, paths, syncPolicy);
             syncActiveContext(connectionId, req.sessionToken, created.id);
             recordMutationAudit(graph, req, 'create_context', created.id, params, { contextId: created.id }, auditMetadata);

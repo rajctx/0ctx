@@ -1,7 +1,7 @@
 (() => {
   window.OctxDesktop = window.OctxDesktop || {};
   const app = window.OctxDesktop;
-  const { state, VIEW_META, SEARCH_HINTS, activeContext, formatPosture, postureClass, short } = app;
+  const { state, VIEW_META, SEARCH_HINTS, activeContext, formatPosture, postureClass, short, esc } = app;
 
   function setText(selector, text) {
     if (typeof document?.querySelector !== 'function') {
@@ -62,13 +62,8 @@
       ? 'Bound to a repo path. Daily work now flows through workstreams, sessions, and checkpoints.'
       : 'Choose a repo folder to route future capture here automatically.';
 
-    const auth = state.health?.auth;
-    if (auth && typeof auth.authenticated === 'boolean') {
-      state.auth = { authenticated: Boolean(auth.authenticated), provider: auth.provider || 'unknown' };
-    } else {
-      state.auth = { authenticated: true, provider: 'local' };
-    }
-    document.getElementById('authBanner').classList.toggle('hidden', state.auth.authenticated);
+    state.auth = { authenticated: true, provider: 'local' };
+    document.getElementById('authBanner').classList.add('hidden');
   }
 
   function renderHero() {

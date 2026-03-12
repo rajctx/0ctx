@@ -70,7 +70,7 @@ export class Graph {
     private checkpointDeps() { return buildCheckpointDeps(this.db, { getCheckpointPayload: (checkpointId) => this.getCheckpointPayload(checkpointId), setCheckpointPayload: (checkpointId, contextId, payload, options) => this.setCheckpointPayload(checkpointId, contextId, payload, options), exportContextDump: (contextId) => this.exportContextDump(contextId), refreshBranchLaneProjection: (contextId) => this.refreshBranchLaneProjection(contextId), replaceContextFromDump: (contextId, dump) => this.replaceContextFromDump(contextId, dump), listChatSessions: (contextId, limit) => this.listChatSessions(contextId, limit) as AgentSessionSummary[] }); }
     private auditDeps() { return buildAuditDeps(this.db, () => this.resolveAuditSecret()); }
 
-    createContext(name: string, paths: string[] = [], syncPolicy: SyncPolicy = 'metadata_only'): Context { return createContextRecord(this.db, name, paths, syncPolicy); }
+    createContext(name: string, paths: string[] = [], syncPolicy: SyncPolicy = 'local_only'): Context { return createContextRecord(this.db, name, paths, syncPolicy); }
     getContext(id: string): Context | null { return getContextRecord(this.db, id); }
     listContexts(): Context[] { return listContextRecords(this.db); }
     getContextSyncPolicy(contextId: string): SyncPolicy | null { return getContextSyncPolicyRecord(this.db, contextId); }

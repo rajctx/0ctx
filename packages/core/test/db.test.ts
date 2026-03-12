@@ -65,18 +65,18 @@ describe('openDb migrations', () => {
         }
     });
 
-    it('uses metadata_only as the contexts syncPolicy default', () => {
+    it('uses local_only as the contexts syncPolicy default', () => {
         const db = openDb({ dbPath: createTempDbPath() });
         try {
             const columns = db.prepare(`PRAGMA table_info(contexts)`).all() as Array<{ name: string; dflt_value: string | null }>;
             const syncPolicy = columns.find((column) => column.name === 'syncPolicy');
-            expect(syncPolicy?.dflt_value).toBe("'metadata_only'");
+            expect(syncPolicy?.dflt_value).toBe("'local_only'");
         } finally {
             db.close();
         }
     });
 
-    it('normalizes legacy full_sync contexts to metadata_only on upgrade', () => {
+    it('preserves valid full_sync contexts on upgrade', () => {
         const dbPath = createTempDbPath();
         const db = openDb({ dbPath });
         try {
@@ -98,7 +98,7 @@ describe('openDb migrations', () => {
         try {
             expect(getSchemaVersion(reopened)).toBe(CURRENT_SCHEMA_VERSION);
             const row = reopened.prepare('SELECT syncPolicy FROM contexts WHERE id = ?').get('ctx-sync') as { syncPolicy: string };
-            expect(row.syncPolicy).toBe('metadata_only');
+            expect(row.syncPolicy).toBe('full_sync');
         } finally {
             reopened.close();
         }

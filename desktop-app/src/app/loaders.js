@@ -3,10 +3,23 @@
   const app = window.OctxDesktop;
   const { state, activeBranch, activeContext, activeSession, branchKey, comparisonTargetBranch, resetBranchScopedState, syncComparisonTargetSelection, syncWorkspaceComparisonTargetSelection, setRuntimeIssue, setStatus, missingRequiredMethods, ensureEventSubscription, clearEventSubscription, renderAll, requestDaemonStatus, daemon, methodSupported } = app;
 
+  async function resolveContexts(status) {
+    const statusContexts = Array.isArray(status?.contexts) ? status.contexts : [];
+    if (statusContexts.length > 0) {
+      return statusContexts;
+    }
+    try {
+      const contexts = await daemon('listContexts', {});
+      return Array.isArray(contexts) ? contexts : [];
+    } catch {
+      return statusContexts;
+    }
+  }
+
   async function loadBranchComparison() {
     const source = activeBranch();
     const target = comparisonTargetBranch();
-    if (!state.activeContextId || !source || !target || !state.auth.authenticated) {
+    if (!state.activeContextId || !source || !target) {
       state.branchComparison = null;
       return;
     }
@@ -35,7 +48,7 @@
   }
 
   async function loadBranches() {
-    if (!state.activeContextId || !state.auth.authenticated) {
+    if (!state.activeContextId) {
       state.branches = [];
       state.activeBranchKey = null;
       return;
@@ -50,7 +63,7 @@
   }
 
   async function loadSessions() {
-    if (!state.activeContextId || !state.auth.authenticated) {
+    if (!state.activeContextId) {
       state.allSessions = [];
       state.sessions = [];
       state.activeSessionId = null;
@@ -81,7 +94,7 @@
   }
 
   async function loadSessionDetail() {
-    if (!state.activeContextId || !state.activeSessionId || !state.auth.authenticated) {
+    if (!state.activeContextId || !state.activeSessionId) {
       state.sessionDetail = null;
       return;
     }
@@ -89,7 +102,7 @@
   }
 
   async function getSessionDetailWithFallback(sessionId) {
-    if (!state.activeContextId || !sessionId || !state.auth.authenticated) {
+    if (!state.activeContextId || !sessionId) {
       return null;
     }
     return daemon('getSessionDetail', {
@@ -99,7 +112,7 @@
   }
 
   async function loadTurns() {
-    if (!state.activeContextId || !state.activeSessionId || !state.auth.authenticated) {
+    if (!state.activeContextId || !state.activeSessionId) {
       state.turns = [];
       state.activeTurnId = null;
       return;
@@ -116,7 +129,7 @@
   }
 
   async function loadCheckpoints() {
-    if (!state.activeContextId || !state.auth.authenticated) {
+    if (!state.activeContextId) {
       state.checkpoints = [];
       state.activeCheckpointId = null;
       state.checkpointDetail = null;
@@ -176,7 +189,7 @@
 
   async function loadHandoff() {
     const lane = activeBranch();
-    if (!state.activeContextId || !lane || !state.auth.authenticated) {
+    if (!state.activeContextId || !lane) {
       state.handoff = [];
       return;
     }
@@ -195,7 +208,7 @@
   }
 
   async function loadWorkspaceComparison() {
-    if (!state.activeContextId || !state.auth.authenticated || !methodSupported('compareWorkspaces')) {
+    if (!state.activeContextId || !methodSupported('compareWorkspaces')) {
       state.workspaceComparison = null;
       return;
     }
@@ -280,7 +293,7 @@
       state.runtimeIssue = null;
       const status = await requestDaemonStatus();
       state.health = status?.health || {};
-      state.contexts = Array.isArray(status?.contexts) ? status.contexts : [];
+      state.contexts = await resolveContexts(status);
       state.caps = Array.isArray(status?.capabilities?.methods) ? status.capabilities.methods : [];
       state.storage = status?.storage || {};
       if (!state.activeContextId || !state.contexts.some((context) => context.id === state.activeContextId)) {
@@ -403,5 +416,5 @@
     }
   }
 
-  Object.assign(app, { loadBranchComparison, selectContext, loadBranches, loadSessions, loadSessionDetail, getSessionDetailWithFallback, loadTurns, loadCheckpoints, loadCheckpointDetail, loadHandoff, loadBranchComparisonSafe, loadWorkspaceComparison, loadGraph, loadInsights, loadHook, loadDataPolicy, loadRepoReadiness, refreshAll });
+  Object.assign(app, { resolveContexts, loadBranchComparison, selectContext, loadBranches, loadSessions, loadSessionDetail, getSessionDetailWithFallback, loadTurns, loadCheckpoints, loadCheckpointDetail, loadHandoff, loadBranchComparisonSafe, loadWorkspaceComparison, loadGraph, loadInsights, loadHook, loadDataPolicy, loadRepoReadiness, refreshAll });
 })();

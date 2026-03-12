@@ -18,25 +18,25 @@ type DataPolicyPresetConfig = {
 
 const DATA_POLICY_PRESETS: Record<Exclude<DataPolicyPreset, 'custom'>, DataPolicyPresetConfig> = {
     lean: {
-        syncPolicy: 'metadata_only',
+        syncPolicy: 'local_only',
         captureRetentionDays: 14,
         debugRetentionDays: 7,
         debugArtifactsEnabled: false
     },
     review: {
-        syncPolicy: 'metadata_only',
+        syncPolicy: 'local_only',
         captureRetentionDays: 30,
         debugRetentionDays: 7,
         debugArtifactsEnabled: false
     },
     debug: {
-        syncPolicy: 'metadata_only',
+        syncPolicy: 'local_only',
         captureRetentionDays: 30,
         debugRetentionDays: 14,
         debugArtifactsEnabled: true
     },
     shared: {
-        syncPolicy: 'full_sync',
+        syncPolicy: 'metadata_only',
         captureRetentionDays: 14,
         debugRetentionDays: 7,
         debugArtifactsEnabled: false
@@ -47,7 +47,11 @@ function formatWorkspaceSyncSummary(syncPolicy: SyncPolicy, workspaceResolved: b
     summary: string;
     hint: string;
 } {
-    const syncLabel = syncPolicy === 'full_sync' ? 'full_sync (opt-in)' : 'metadata_only (default)';
+    const syncLabel = syncPolicy === 'full_sync'
+        ? 'full_sync (opt-in)'
+        : syncPolicy === 'metadata_only'
+            ? 'metadata_only (opt-in)'
+            : 'local_only (default)';
     if (workspaceResolved) {
         return {
             summary: syncLabel,
@@ -94,8 +98,8 @@ function buildDataPolicyActionHint(summary: {
     if (summary.preset === 'custom') {
         return 'Choose Lean, Review, or Debug to return machine defaults to a supported path. Use Shared only when a workspace explicitly needs richer cloud sync.';
     }
-    if (summary.preset === 'shared' || summary.syncPolicy === 'full_sync') {
-        return 'Return this workspace to metadata_only when richer cloud sync is no longer needed.';
+    if (summary.preset === 'shared' || summary.syncPolicy === 'metadata_only' || summary.syncPolicy === 'full_sync') {
+        return 'Return this workspace to local_only when cloud sync is no longer needed.';
     }
     if (summary.preset === 'debug' || summary.debugArtifactsEnabled) {
         return 'Turn off debug trails when troubleshooting is complete.';
@@ -113,21 +117,24 @@ function buildNormalPathSummary(summary: {
     debugArtifactsEnabled: boolean;
 }): string {
     if (!summary.workspaceResolved) {
-        return 'No active workspace yet. Machine capture defaults are ready, and workspace sync stays metadata_only once a workspace is active.';
+        return 'No active workspace yet. Machine capture defaults are ready, and workspace sync stays local_only once a workspace is active.';
     }
-    if (summary.preset === 'shared' || summary.syncPolicy === 'full_sync') {
+    if (summary.syncPolicy === 'full_sync') {
         return 'Workspace sync is explicitly opted into full_sync. Machine capture defaults remain local.';
+    }
+    if (summary.preset === 'shared' || summary.syncPolicy === 'metadata_only') {
+        return 'Workspace sync is explicitly opted into metadata_only. Machine capture defaults remain local.';
     }
     if (summary.preset === 'custom') {
         return 'Workspace sync and machine capture defaults use a custom combination.';
     }
     if (summary.preset === 'debug' || summary.debugArtifactsEnabled) {
-        return 'Workspace sync stays metadata_only. Machine capture defaults are tuned for local debugging.';
+        return 'Workspace sync stays local_only. Machine capture defaults are tuned for local debugging.';
     }
     if (summary.preset === 'review') {
-        return 'Workspace sync stays metadata_only. Machine capture defaults are tuned for a longer local review window.';
+        return 'Workspace sync stays local_only. Machine capture defaults are tuned for a longer local review window.';
     }
-    return 'Lean is the normal default. Workspace sync stays metadata_only and machine capture defaults stay local.';
+    return 'Lean is the normal default. Workspace sync stays local_only and machine capture defaults stay local.';
 }
 
 export function getHookDumpRetentionDays(): number {
@@ -172,8 +179,8 @@ export function getDataPolicyPresetConfig(preset: DataPolicyPreset | null | unde
 
 export function buildDataPolicySummary(graph: Graph, contextId: string | null): DataPolicySummary {
     const syncPolicy = contextId
-        ? graph.getContextSyncPolicy(contextId) ?? 'metadata_only'
-        : 'metadata_only';
+        ? graph.getContextSyncPolicy(contextId) ?? 'local_only'
+        : 'local_only';
     const captureRetentionDays = getHookDumpRetentionDays();
     const debugRetentionDays = getHookDebugRetentionDays();
     const debugArtifactsEnabled = isHookDebugArtifactsEnabled();

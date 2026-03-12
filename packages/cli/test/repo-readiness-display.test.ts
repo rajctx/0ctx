@@ -66,7 +66,7 @@ describe('repo readiness display', () => {
                 autoContextMissingAgents: [],
                 sessionStartMissingAgents: [],
                 mcpRegistrationMissingAgents: [],
-                syncPolicy: 'metadata_only',
+                syncPolicy: 'local_only',
                 syncScope: 'workspace',
                 captureScope: 'machine',
                 debugScope: 'machine',
@@ -77,8 +77,8 @@ describe('repo readiness display', () => {
                 captureRetentionDays: 30,
                 debugRetentionDays: 7,
                 debugArtifactsEnabled: false,
-                normalPathSummary: 'Workspace sync stays metadata_only. Machine capture defaults are tuned for a longer local review window.',
-                workspaceSyncSummary: 'metadata_only',
+                normalPathSummary: 'Workspace sync stays local_only. Machine capture defaults are tuned for a longer local review window.',
+                workspaceSyncSummary: 'local_only (default)',
                 workspaceSyncHint: '',
                 machineCaptureSummary: '30d local capture; debug trails off by default (7d if enabled)',
                 debugUtilitySummary: 'Off in the normal path (7d retention if enabled)'
@@ -89,9 +89,9 @@ describe('repo readiness display', () => {
             formatSyncPolicyLabel: (policy) => String(policy ?? '')
         });
 
-        expect(lines).toContain('Policy: Workspace sync stays metadata_only. Machine capture defaults are tuned for a longer local review window.');
+        expect(lines).toContain('Policy: Workspace sync stays local_only. Machine capture defaults are tuned for a longer local review window.');
         expect(lines).toContain('Policy mode: Review (machine default)');
-        expect(lines).toContain('Workspace sync: metadata_only');
+        expect(lines).toContain('Workspace sync: local_only (default)');
         expect(lines).toContain('Machine capture: 30d local capture; debug trails off by default (7d if enabled)');
         expect(lines.some((line) => line.startsWith('Utility debug:'))).toBe(false);
     });
@@ -113,7 +113,7 @@ describe('repo readiness display', () => {
                 autoContextMissingAgents: [],
                 sessionStartMissingAgents: [],
                 mcpRegistrationMissingAgents: [],
-                syncPolicy: 'metadata_only',
+                syncPolicy: 'local_only',
                 syncScope: 'workspace',
                 captureScope: 'machine',
                 debugScope: 'machine',
@@ -124,8 +124,8 @@ describe('repo readiness display', () => {
                 captureRetentionDays: 14,
                 debugRetentionDays: 7,
                 debugArtifactsEnabled: false,
-                normalPathSummary: 'Lean is the normal default. Workspace sync stays metadata_only and machine capture defaults stay local.',
-                workspaceSyncSummary: 'metadata_only',
+                normalPathSummary: 'Lean is the normal default. Workspace sync stays local_only and machine capture defaults stay local.',
+                workspaceSyncSummary: 'local_only (default)',
                 workspaceSyncHint: '',
                 machineCaptureSummary: '14d local capture; debug trails off by default (7d if enabled)',
                 debugUtilitySummary: 'Off in the normal path (7d retention if enabled)'
@@ -157,7 +157,7 @@ describe('repo readiness display', () => {
                 autoContextMissingAgents: ['claude'],
                 sessionStartMissingAgents: [],
                 mcpRegistrationMissingAgents: ['claude'],
-                syncPolicy: 'metadata_only',
+                syncPolicy: 'local_only',
                 syncScope: 'workspace',
                 captureScope: 'machine',
                 debugScope: 'machine',
@@ -168,8 +168,8 @@ describe('repo readiness display', () => {
                 captureRetentionDays: 14,
                 debugRetentionDays: 7,
                 debugArtifactsEnabled: false,
-                normalPathSummary: 'Lean is the normal default. Workspace sync stays metadata_only and machine capture defaults stay local.',
-                workspaceSyncSummary: 'metadata_only',
+                normalPathSummary: 'Lean is the normal default. Workspace sync stays local_only and machine capture defaults stay local.',
+                workspaceSyncSummary: 'local_only (default)',
                 workspaceSyncHint: '',
                 machineCaptureSummary: '14d local capture; debug trails off by default (7d if enabled)',
                 debugUtilitySummary: 'Off in the normal path (7d retention if enabled)'

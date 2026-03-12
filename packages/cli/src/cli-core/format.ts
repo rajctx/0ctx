@@ -30,10 +30,10 @@ export function formatAgentList(agents: string[]): string {
 }
 
 export function formatSyncPolicyLabel(policy: string | null | undefined): string {
-    const normalized = String(policy ?? 'metadata_only').trim().toLowerCase();
-    if (normalized === 'metadata_only') return 'metadata_only (default)';
+    const normalized = String(policy ?? 'local_only').trim().toLowerCase();
+    if (normalized === 'local_only') return 'local_only (default)';
+    if (normalized === 'metadata_only') return 'metadata_only (opt-in)';
     if (normalized === 'full_sync') return 'full_sync (opt-in)';
-    if (normalized === 'local_only') return 'local_only';
     return normalized;
 }
 

@@ -293,6 +293,20 @@
         }
       });
     }
+
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('focus', () => {
+        void refreshAll({ quiet: true });
+      });
+    }
+
+    if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          void refreshAll({ quiet: true });
+        }
+      });
+    }
   }
 
   async function boot() {

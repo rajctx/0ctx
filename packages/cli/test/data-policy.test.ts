@@ -75,7 +75,7 @@ describe('data-policy command surface', () => {
                 recoverySteps: []
             }),
             printCapabilityMismatch: vi.fn(),
-            formatSyncPolicyLabel: (policy) => policy === 'full_sync' ? 'full_sync (opt-in)' : policy === 'metadata_only' ? 'metadata_only (default)' : String(policy ?? ''),
+            formatSyncPolicyLabel: (policy) => policy === 'full_sync' ? 'full_sync (opt-in)' : policy === 'metadata_only' ? 'metadata_only (opt-in)' : policy === 'local_only' ? 'local_only (default)' : String(policy ?? ''),
             formatDebugArtifactsLabel: (enabled) => enabled ? 'enabled' : 'disabled',
             printJsonOrValue: (_asJson, _value, render) => {
                 render();
@@ -100,7 +100,7 @@ describe('data-policy command surface', () => {
         expect(lines.some((line) => line.includes('Review (machine default)'))).toBe(true);
         expect(lines.some((line) => line.includes('Debug (machine default)'))).toBe(true);
         expect(lines.some((line) => line.includes('Shared (workspace override)'))).toBe(true);
-        expect(lines.some((line) => line.includes('Workspace sync:') && line.includes('full_sync (opt-in)'))).toBe(true);
+        expect(lines.some((line) => line.includes('Workspace sync:') && line.includes('metadata_only (opt-in)'))).toBe(true);
         log.mockRestore();
     });
 
@@ -146,7 +146,7 @@ describe('data-policy command surface', () => {
 
         const sendToDaemon = vi.spyOn(client, 'sendToDaemon').mockResolvedValue({
             workspaceResolved: true,
-            syncPolicy: 'metadata_only',
+            syncPolicy: 'local_only',
             captureRetentionDays: 14,
             debugRetentionDays: 7,
             debugArtifactsEnabled: false,
@@ -157,7 +157,7 @@ describe('data-policy command surface', () => {
 
         expect(code).toBe(0);
         expect(lines.some((line) => line.includes('Policy mode:') && line.includes('Lean (machine default)'))).toBe(true);
-        expect(lines.some((line) => line.includes('Normal path:') && line.includes('workspace sync is metadata_only; machine defaults remain local'))).toBe(true);
+        expect(lines.some((line) => line.includes('Normal path:') && line.includes('workspace sync is local_only; machine defaults remain local'))).toBe(true);
         sendToDaemon.mockRestore();
         log.mockRestore();
     });
@@ -204,7 +204,7 @@ describe('data-policy command surface', () => {
 
         const sendToDaemon = vi.spyOn(client, 'sendToDaemon').mockResolvedValue({
             workspaceResolved: true,
-            syncPolicy: 'metadata_only',
+            syncPolicy: 'local_only',
             captureRetentionDays: 30,
             debugRetentionDays: 7,
             debugArtifactsEnabled: false,
@@ -243,7 +243,7 @@ describe('data-policy command surface', () => {
                 recoverySteps: []
             }),
             printCapabilityMismatch: vi.fn(),
-            formatSyncPolicyLabel: (policy) => policy === 'full_sync' ? 'full_sync (opt-in)' : String(policy ?? ''),
+            formatSyncPolicyLabel: (policy) => policy === 'full_sync' ? 'full_sync (opt-in)' : policy === 'metadata_only' ? 'metadata_only (opt-in)' : policy === 'local_only' ? 'local_only (default)' : String(policy ?? ''),
             formatDebugArtifactsLabel: (enabled) => enabled ? 'enabled' : 'disabled',
             printJsonOrValue: (_asJson, _value, render) => {
                 render();
@@ -263,7 +263,7 @@ describe('data-policy command surface', () => {
 
         const sendToDaemon = vi.spyOn(client, 'sendToDaemon').mockResolvedValue({
             workspaceResolved: true,
-            syncPolicy: 'full_sync',
+            syncPolicy: 'metadata_only',
             captureRetentionDays: 14,
             debugRetentionDays: 7,
             debugArtifactsEnabled: false,
@@ -274,8 +274,8 @@ describe('data-policy command surface', () => {
 
         expect(code).toBe(0);
         expect(lines.some((line) => line.includes('Policy mode:') && line.includes('Shared (workspace override)'))).toBe(true);
-        expect(lines.some((line) => line.includes('Workspace sync:') && line.includes('full_sync (opt-in)'))).toBe(true);
-        expect(lines.some((line) => line.includes('Normal path:') && line.includes('richer cloud sync'))).toBe(true);
+        expect(lines.some((line) => line.includes('Workspace sync:') && line.includes('metadata_only (opt-in)'))).toBe(true);
+        expect(lines.some((line) => line.includes('Normal path:') && line.includes('metadata_only'))).toBe(true);
         sendToDaemon.mockRestore();
         log.mockRestore();
     });
@@ -319,7 +319,7 @@ describe('data-policy command surface', () => {
         const sendToDaemon = vi.spyOn(client, 'sendToDaemon').mockResolvedValue({
             contextId: 'ctx-1',
             workspaceResolved: true,
-            syncPolicy: 'metadata_only',
+            syncPolicy: 'local_only',
             captureRetentionDays: 14,
             debugRetentionDays: 7,
             debugArtifactsEnabled: false,
@@ -383,7 +383,7 @@ describe('data-policy command surface', () => {
         const sendToDaemon = vi.spyOn(client, 'sendToDaemon').mockResolvedValue({
             contextId: null,
             workspaceResolved: false,
-            syncPolicy: 'metadata_only',
+            syncPolicy: 'local_only',
             captureRetentionDays: 14,
             debugRetentionDays: 7,
             debugArtifactsEnabled: false,

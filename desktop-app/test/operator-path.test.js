@@ -74,7 +74,7 @@ function createEnvironment() {
     dataPolicy: {
       contextId: null,
       workspaceResolved: false,
-      syncPolicy: 'metadata_only',
+      syncPolicy: 'local_only',
       preset: 'lean',
       captureRetentionDays: 14,
       debugRetentionDays: 7,
@@ -99,7 +99,7 @@ function createEnvironment() {
         setup: { title: 'Repo setup and support', primaryLabel: 'Copy enable command', primaryAction: 'copy-enable' },
         branches: { title: 'Workstreams', primaryLabel: 'Open sessions', primaryAction: 'go-sessions' }
       },
-      SEARCH_HINTS: { setup: 'Filter repo setup, integrations, or support actions' },
+      SEARCH_HINTS: { setup: 'Filter repo setup, integrations, or utility actions' },
       activeContext: () => null,
       activeInsightNode: () => null,
       syncInsightSelection: () => null,
@@ -139,14 +139,19 @@ function createEnvironment() {
       formatPosture: (value) => String(value || ''),
       postureClass: () => 'ready',
       renderMetaLine: () => '',
-      formatSyncPolicyLabel: (policy) => String(policy || '').trim().toLowerCase() === 'full_sync' ? 'Full Sync (opt-in)' : 'Metadata Only (default)',
+      formatSyncPolicyLabel: (policy) => {
+        const value = String(policy || '').trim().toLowerCase();
+        if (value === 'full_sync') return 'Full Sync (opt-in)';
+        if (value === 'metadata_only') return 'Metadata Only (opt-in)';
+        return 'Local Only (default)';
+      },
       formatDataPolicyPresetLabel: (preset) => String(preset || '').trim().toLowerCase() === 'shared' ? 'Shared' : 'Lean',
       describeWorkspaceSyncDisplay: () => ({
         workspaceResolved: false,
         detail: 'No active workspace yet',
-        hint: 'Metadata Only (default) becomes the workspace default after a workspace is active.'
+        hint: 'Local Only (default) becomes the workspace default after a workspace is active.'
       }),
-      describeDesktopPolicyHint: () => 'No active workspace yet. Full sync is available only after a workspace is active.',
+      describeDesktopPolicyHint: () => 'No active workspace yet. Metadata-only and full sync are available only after a workspace is active.',
       enableCommand: () => '0ctx enable',
       capturePolicySummary: () => '14-day capture retention, debug artifacts off',
       dataPolicyActionHint: () => 'Keep workspace sync metadata-only until full sync is explicitly needed.'
@@ -196,8 +201,8 @@ describe('desktop operator-first cleanup', () => {
     expect(global.document.querySelector('section[data-view="setup"] .page-kicker').textContent).toBe('Setup');
     expect(global.document.querySelector('section[data-view="setup"] h1').textContent).toBe('Enable repo and agents');
     expect(labels[0].textContent).toBe('Setup commands');
-    expect(labels[3].textContent).toBe('Support actions');
-    expect(headings[2].textContent).toBe('Runtime support');
+    expect(labels[3].textContent).toBe('Utility actions');
+    expect(headings[2].textContent).toBe('Runtime utilities');
     expect(getElement('setupPageMeta').textContent).toContain('open runtime support when something is off');
     expect(getElement('setupSupportCopy').textContent).toContain('Use setup only when enabling another repo');
   });

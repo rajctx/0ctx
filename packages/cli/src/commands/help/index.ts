@@ -33,11 +33,6 @@ Daily use:
 Supported integrations:
   GA: Claude, Factory, Antigravity
 
-Authentication:
-  0ctx auth login
-  0ctx auth logout
-  0ctx auth status [--json]
-
 Need machine management or deeper diagnostics?
   0ctx help --advanced
 `);
@@ -115,8 +110,8 @@ Preview overrides:
   Use --allow-preview only when you explicitly name preview integrations such as codex,cursor,windsurf.
   Keep preview installs and preview retrieval out of the normal enable/bootstrap path.
 
-Authentication:
-  0ctx auth login    Start device-code login flow
+Optional cloud authentication:
+  0ctx auth login    Start device-code login flow for account-backed features
   0ctx auth logout   Clear stored credentials
   0ctx auth status   Show current auth state
   0ctx auth status --json
@@ -141,7 +136,7 @@ Sync:
   0ctx sync status   Show sync engine health and queue
   0ctx sync policy get [--repo-root=<path>] [--json]
   0ctx sync policy set <local_only|metadata_only|full_sync> [--repo-root=<path>] [--confirm-full-sync] [--json]
-                    metadata_only is the normal default; full_sync is explicit opt-in
+                    local_only is the normal default; metadata_only and full_sync are explicit opt-in
 
 Connector:
   0ctx connector service install|enable|disable|uninstall|status|start|stop|restart

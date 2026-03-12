@@ -39,7 +39,7 @@ export function dispatchRuntimeRequest(context: HandlerMethodContext): MethodDis
                 'addNode', 'getNode', 'updateNode', 'getByKey', 'deleteNode',
                 'addEdge', 'getSubgraph', 'search', 'getGraphData',
                 'listChatSessions', 'listChatTurns', 'getNodePayload', 'getHookHealth',
-                'listBranchLanes', 'getWorkstreamBrief', 'getAgentContextPack', 'getRepoReadiness', 'compareWorkstreams', 'compareWorkspaces', 'listBranchSessions', 'listSessionMessages',
+                'listBranchLanes', 'listWorkstreamInsights', 'getWorkstreamBrief', 'getAgentContextPack', 'getRepoReadiness', 'compareWorkstreams', 'compareWorkspaces', 'listBranchSessions', 'listSessionMessages',
                 'listBranchCheckpoints', 'getSessionDetail', 'getCheckpointDetail',
                 'getHandoffTimeline', 'previewSessionKnowledge', 'previewCheckpointKnowledge',
                 'extractSessionKnowledge', 'extractCheckpointKnowledge', 'promoteInsight',
