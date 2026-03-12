@@ -18,17 +18,22 @@ function Invoke-CheckedCommand {
     param(
         [string]$Name,
         [string]$Command,
-        [switch]$DryRun
+        [switch]$DryRun,
+        [switch]$SafeInDryRun
     )
 
     Write-Output ""
     Write-Output "==> $Name"
     if ($DryRun) {
-        Write-Output "[dry-run] $Command"
-        return
-    }
+        if (-not $SafeInDryRun) {
+            Write-Output "[dry-run] skip mutating command: $Command"
+            return
+        }
 
-    Write-Output "[run] $Command"
+        Write-Output "[dry-run] run safe validation command: $Command"
+    } else {
+        Write-Output "[run] $Command"
+    }
     cmd /c $Command
     if ($LASTEXITCODE -ne 0) {
         throw "Command failed with exit code ${LASTEXITCODE}: $Command"
@@ -69,11 +74,11 @@ try {
     }
 
     $steps = @(
-        @{ Name = "Release readiness report"; Command = "npm run release:report" }
+        @{ Name = "Release readiness report"; Command = "npm run release:report"; SafeInDryRun = $true }
     )
 
     foreach ($step in $steps) {
-        Invoke-CheckedCommand -Name $step.Name -Command $step.Command -DryRun:$DryRun
+        Invoke-CheckedCommand -Name $step.Name -Command $step.Command -DryRun:$DryRun -SafeInDryRun:$step.SafeInDryRun
     }
 
     Write-Output ""

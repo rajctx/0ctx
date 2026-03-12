@@ -13,6 +13,8 @@ Validation steps:
 1. consolidated release report
 2. changelog and working-tree checks from `validate-release.ps1`
 
+`-DryRun` still executes the non-mutating readiness checks. It only avoids publish-side effects.
+
 ## Consolidated release report
 
 ```bash
