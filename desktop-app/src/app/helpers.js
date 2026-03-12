@@ -359,6 +359,14 @@
     let keys;
     if (mode === 'none') {
       keys = [];
+    } else if (mode === 'auto') {
+      keys = preview.candidates
+        .filter((candidate) => candidate.action === 'create' && candidate.autoPersist === true)
+        .map((candidate) => candidate.key);
+    } else if (mode === 'ready') {
+      keys = preview.candidates
+        .filter((candidate) => candidate.action === 'create' && candidate.promotionState === 'ready')
+        .map((candidate) => candidate.key);
     } else if (mode === 'new') {
       keys = preview.candidates
         .filter((candidate) => candidateDefaultSelectionEligible(candidate))

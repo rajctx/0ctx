@@ -143,6 +143,18 @@ function isDesignOrLayoutChatter(text: string): boolean {
     return hasUiSurface && hasDesignVerb && !hasProductPolicy;
 }
 
+function isEvaluativeProductChatter(text: string): boolean {
+    const normalized = text.toLowerCase().trim();
+    if (!normalized) return false;
+
+    const hasProductSurface = /\b(app|desktop|desktop app|ui|screen|view|page|panel|reader|sidebar|topbar|toolbar|shell|layout|setup|graph|insight|workflow|workstream compare|session reader|management surface|product)\b/.test(normalized);
+    const hasEvaluativeLanguage = /\b(better|cleaner|clearer|calmer|stronger|strongest|more usable|usable enough|more consistent|intentional|premium|modern|polished|good enough|ugly|beautiful|readable|human[- ]friendly|world[- ]class|production[- ]ready|ship[- ]ready)\b/.test(normalized);
+    const hasTemporalMarker = /\b(now|currently|already|still|yet|feels|look|looks|looking)\b/.test(normalized);
+    const hasDurablePolicy = /\b(must|should|need to|default|policy|requirement|required|repo-first|local-first|daemon|source of truth|explicit promotion|strict isolation|metadata_only|full_sync|ga|preview)\b/.test(normalized);
+
+    return hasProductSurface && hasEvaluativeLanguage && hasTemporalMarker && !hasDurablePolicy;
+}
+
 function isExecutionPlanningChatter(text: string): boolean {
     const normalized = text.toLowerCase().trim();
     if (!normalized) return false;
@@ -243,6 +255,7 @@ export function scoreKnowledgeCandidate(
     if (isImplementationStatus(text)) return null;
     if (isInsightReviewChatter(text)) return null;
     if (isDesignOrLayoutChatter(text)) return null;
+    if (isEvaluativeProductChatter(text)) return null;
     if (isExecutionPlanningChatter(text)) return null;
     if (isProgressOrCoordinationChatter(text)) return null;
     if (isReadinessOrStatusChatter(text)) return null;

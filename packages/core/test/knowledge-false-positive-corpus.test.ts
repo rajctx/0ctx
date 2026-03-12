@@ -202,4 +202,24 @@ describe('Reviewed insight false-positive corpus', () => {
             db.close();
         }
     });
+
+    it('skips subjective product-evaluation chatter while preserving durable policy statements', () => {
+        const { db, graph } = createGraph();
+        try {
+            const context = graph.createContext('knowledge-false-positive-evaluation');
+            addSession(graph, context.id, 'session-corpus-8');
+            addTurn(graph, context.id, 'session-corpus-8', 'assistant-1', 'assistant', 'The desktop app now feels cleaner and more usable.', 1700001232000);
+            addTurn(graph, context.id, 'session-corpus-8', 'assistant-2', 'assistant', 'The management surface looks more intentional and production-ready now.', 1700001233000);
+            addTurn(graph, context.id, 'session-corpus-8', 'assistant-3', 'assistant', 'The normal product path must stay repo-first through 0ctx enable.', 1700001234000);
+
+            const preview = graph.previewKnowledgeFromSession(context.id, 'session-corpus-8');
+            const contents = preview.candidates.map((candidate) => candidate.content);
+
+            expect(contents).not.toContain('The desktop app now feels cleaner and more usable.');
+            expect(contents).not.toContain('The management surface looks more intentional and production-ready now.');
+            expect(contents).toContain('The normal product path must stay repo-first through 0ctx enable.');
+        } finally {
+            db.close();
+        }
+    });
 });
