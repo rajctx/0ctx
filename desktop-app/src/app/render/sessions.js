@@ -6,6 +6,7 @@
   function renderSessions() {
     const sessions = state.sessions.filter((session) => matches(`${session.sessionId} ${session.summary || ''} ${session.branch || ''} ${session.commitSha || ''} ${session.agent || ''}`));
     const turns = state.turns.filter((turn) => matches(`${turn.content || ''} ${turn.role || ''} ${turn.commitSha || ''} ${turn.agent || ''}`));
+    const newestFirstTurns = [...turns].reverse();
     const lane = activeBranch();
     const session = activeSession();
     const sessionSummary = session ? describeSession(session) : null;
@@ -47,8 +48,8 @@
       }).join('')
       : '<div class="empty-state">No sessions are loaded for this workstream yet.</div>';
 
-    document.getElementById('turnList').innerHTML = turns.length > 0
-      ? turns.map((turn) => {
+    document.getElementById('turnList').innerHTML = newestFirstTurns.length > 0
+      ? newestFirstTurns.map((turn) => {
         const summary = describeTurn(turn);
         return `
           <article class="list-item conversation-card ${turn.nodeId === state.activeTurnId ? 'active' : ''}" data-turn-id="${esc(turn.nodeId)}">

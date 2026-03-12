@@ -124,7 +124,7 @@
     });
     state.turns = Array.isArray(turns) ? turns : [];
     if (!state.activeTurnId || !state.turns.some((turn) => turn.nodeId === state.activeTurnId)) {
-      state.activeTurnId = state.turns[0]?.nodeId || null;
+      state.activeTurnId = state.turns[state.turns.length - 1]?.nodeId || null;
     }
   }
 
