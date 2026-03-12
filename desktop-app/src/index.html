@@ -173,25 +173,10 @@
                     </div>
                     <span id="workspacePolicySummaryBadge" class="chip">Default</span>
                   </div>
-                  <div class="policy-preset-grid">
-                    <button class="btn tertiary policy-preset-btn workspace-policy-preset" data-policy-preset="lean" type="button">
-                      <strong>Lean</strong>
-                      <span>Normal default. Metadata-only sync for this workspace, short machine-local retention, no debug trails.</span>
-                    </button>
-                    <button class="btn tertiary policy-preset-btn workspace-policy-preset" data-policy-preset="review" type="button">
-                      <strong>Review</strong>
-                      <span>Keep more local capture on this machine for project review and investigation.</span>
-                    </button>
-                    <button class="btn tertiary policy-preset-btn workspace-policy-preset" data-policy-preset="debug" type="button">
-                      <strong>Debug</strong>
-                      <span>Temporarily enable richer local debugging artifacts for support and diagnosis.</span>
-                    </button>
-                  </div>
                   <div id="workspacePolicyDetailList" class="info-list compact-info-list"></div>
-                  <p id="workspacePolicyHint" class="page-copy compact-copy">Metadata-only sync is the normal default for this workspace. Machine-local capture stays on this machine and debug trails remain off unless you explicitly enable them.</p>
+                  <p id="workspacePolicyHint" class="page-copy compact-copy">Metadata-only sync is the normal default for this workspace. Machine-local capture stays on this machine and debug trails remain off unless you explicitly enable them from Utilities.</p>
                   <div class="row-actions">
-                    <button class="btn quiet workspace-policy-preset" data-policy-preset="shared" type="button">Opt this workspace into full sync</button>
-                    <button id="copyPolicyCleanup" class="btn quiet" type="button">Copy lean cleanup</button>
+                    <button class="btn quiet" data-nav="setup" type="button">Open utilities</button>
                   </div>
                 </section>
 
@@ -638,16 +623,18 @@
                         <strong>Review</strong>
                         <span>Longer local capture</span>
                       </button>
-                      <button class="btn tertiary policy-preset-btn" data-policy-preset="debug" type="button">
-                        <strong>Debug</strong>
-                        <span>Temporary debug trails</span>
-                      </button>
-                    </div>
-                    <section class="policy-custom-block">
+                    <button class="btn tertiary policy-preset-btn" data-policy-preset="debug" type="button">
+                      <strong>Debug</strong>
+                      <span>Temporary debug trails</span>
+                    </button>
+                  </div>
+                    <details class="advanced-details policy-custom-block">
+                      <summary>Advanced policy controls</summary>
+                      <div class="advanced-details-body">
                       <div class="section-row small">
                         <div>
                           <p class="section-label">Custom policy</p>
-                          <h4>Fine-tune retention</h4>
+                          <h4>Fine-tune retention and sync</h4>
                         </div>
                       </div>
                       <div class="policy-custom-grid">
@@ -672,15 +659,17 @@
                         <input id="dataPolicyDebugArtifacts" type="checkbox" />
                         <span>Keep debug artifacts on this machine for troubleshooting</span>
                       </label>
-                      <p class="page-copy compact-copy">Use the presets for the normal product path. Use custom controls only when retention or sync needs to differ for this workspace.</p>
+                      <p class="page-copy compact-copy">Use the presets for the normal product path. Open custom controls only when a workspace needs a non-standard local retention or sync override.</p>
                       <div class="row-actions">
                         <button id="applyCustomDataPolicy" class="btn tertiary" type="submit">Apply custom policy</button>
                       </div>
-                    </section>
+                      </div>
+                    </details>
                     <div id="policyDetailList" class="info-list compact-info-list"></div>
-                    <p id="policyHint" class="page-copy compact-copy">Metadata-only sync is the normal default for this workspace. Raw payloads stay local and debug artifacts stay off unless you explicitly enable them on this machine.</p>
+                    <p id="policyHint" class="page-copy compact-copy">Metadata-only sync is the normal default for this workspace. Raw payloads stay local and debug artifacts stay off unless you explicitly enable them from Utilities.</p>
                     <div class="row-actions">
                       <button class="btn quiet" data-policy-preset="shared" type="button">Opt current workspace into full sync</button>
+                      <button id="copyPolicyCleanupSetup" class="btn quiet" type="button">Copy lean cleanup</button>
                     </div>
                   </form>
                 </section>
@@ -692,7 +681,6 @@
                       <h4>Recover the local runtime</h4>
                     </div>
                     <div class="row-actions wrap-row">
-                      <button id="copyPolicyCleanupSetup" class="btn quiet" type="button">Copy lean cleanup</button>
                       <button id="refreshUtilities" class="btn quiet" type="button">Refresh runtime</button>
                       <button id="restartUtilities" class="btn quiet" type="button">Restart runtime</button>
                       <button id="checkUpdates" class="btn quiet" type="button">Check updates</button>

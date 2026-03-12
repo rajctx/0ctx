@@ -17,6 +17,12 @@ type HookHealthAgent = {
     notes: string | null;
 };
 
+type HookHealthOptions = {
+    includePreview?: boolean;
+};
+
+const GA_HOOK_AGENTS = new Set(['claude', 'factory', 'antigravity']);
+
 function getHookConfigPathForAgent(projectRoot: string, agent: string): string | null {
     switch (agent) {
         case 'claude':
@@ -58,7 +64,14 @@ function getHookStatePath(): string {
     return process.env.CTX_HOOK_STATE_PATH || path.join(os.homedir(), '.0ctx', 'hooks-state.json');
 }
 
-export function readHookHealth(): {
+function filterHookHealthAgents(agents: HookHealthAgent[], includePreview: boolean): HookHealthAgent[] {
+    if (includePreview) {
+        return agents;
+    }
+    return agents.filter((agent) => GA_HOOK_AGENTS.has(agent.agent));
+}
+
+export function readHookHealth(options: HookHealthOptions = {}): {
     statePath: string;
     projectRoot: string | null;
     contextId: string | null;
@@ -71,6 +84,7 @@ export function readHookHealth(): {
     };
     agents: HookHealthAgent[];
 } {
+    const includePreview = options.includePreview === true;
     const defaults: HookHealthAgent[] = [
         { agent: 'claude', status: 'Skipped', installed: false, command: null, sessionStartInstalled: false, updatedAt: null, notes: 'supported' },
         { agent: 'windsurf', status: 'Skipped', installed: false, command: null, sessionStartInstalled: false, updatedAt: null, notes: 'preview-hook' },
@@ -95,7 +109,7 @@ export function readHookHealth(): {
             projectConfigPath: null,
             updatedAt: null,
             capturePolicy,
-            agents: defaults
+            agents: filterHookHealthAgents(defaults, includePreview)
         };
     }
 
@@ -122,7 +136,7 @@ export function readHookHealth(): {
             projectConfigPath: typeof parsed.projectConfigPath === 'string' ? parsed.projectConfigPath : null,
             updatedAt: typeof parsed.updatedAt === 'number' ? parsed.updatedAt : null,
             capturePolicy,
-            agents
+            agents: filterHookHealthAgents(agents, includePreview)
         };
     } catch {
         return {
@@ -132,7 +146,7 @@ export function readHookHealth(): {
             projectConfigPath: null,
             updatedAt: null,
             capturePolicy,
-            agents: defaults
+            agents: filterHookHealthAgents(defaults, includePreview)
         };
     }
 }

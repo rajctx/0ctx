@@ -94,7 +94,9 @@ export function dispatchRuntimeRequest(context: HandlerMethodContext): MethodDis
     }
 
     if (req.method === 'getHookHealth') {
-        return handled(readHookHealth());
+        return handled(readHookHealth({
+            includePreview: params.includePreview === true
+        }));
     }
 
     if (req.method === 'getRepoReadiness') {

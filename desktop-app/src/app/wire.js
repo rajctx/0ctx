@@ -96,7 +96,6 @@
     bindById('explainCheckpointBtn', 'click', () => void explainActiveCheckpoint());
 
     bindById('copyEnableCommand', 'click', () => void copyText(enableCommand()));
-    bindById('copyPolicyCleanup', 'click', () => void copyText(policyCleanupCommand()));
     bindById('copyPolicyCleanupSetup', 'click', () => void copyText(policyCleanupCommand()));
     bindById('copyShell', 'click', () => void copyText('0ctx shell'));
     bindById('copyRepair', 'click', () => void copyText('0ctx repair'));

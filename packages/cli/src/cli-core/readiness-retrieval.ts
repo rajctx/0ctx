@@ -37,11 +37,14 @@ export function resolveGaAutoContextReadiness(options: {
     const mcpRegistrationMissingAgents = sessionStartReadyAgents
         .filter(requiresGaMcpRegistration)
         .filter(agent => !registeredMcpClients.has(agent));
-    const autoContextAgents = sessionStartReadyAgents;
+    const autoContextAgents = sessionStartReadyAgents.filter(
+        agent => !requiresGaMcpRegistration(agent) || registeredMcpClients.has(agent)
+    );
+    const autoContextMissingAgents = captureReadyAgents.filter(agent => !autoContextAgents.includes(agent));
 
     return {
         autoContextAgents,
-        autoContextMissingAgents: sessionStartMissingAgents,
+        autoContextMissingAgents,
         sessionStartMissingAgents,
         mcpRegistrationMissingAgents
     };

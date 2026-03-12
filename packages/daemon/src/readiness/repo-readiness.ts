@@ -8,6 +8,10 @@ import { findContextIdForRepo, readRepoCaptureState } from './repo-config';
 type GaHookAgent = 'claude' | 'factory' | 'antigravity';
 type GaMcpClient = 'claude' | 'antigravity';
 
+function requiresGaMcpRegistration(agent: GaHookAgent): agent is GaMcpClient {
+    return agent === 'claude' || agent === 'antigravity';
+}
+
 function buildDataPolicyActionHint(summary: {
     syncPolicy: string;
     captureRetentionDays: number;
@@ -44,13 +48,16 @@ function resolveGaAutoContextReadiness(options: {
 
     const sessionStartMissingAgents = captureReadyAgents.filter((agent) => !sessionStartReadyAgents.includes(agent));
     const mcpRegistrationMissingAgents = sessionStartReadyAgents
-        .filter((agent): agent is GaMcpClient => agent === 'claude' || agent === 'antigravity')
+        .filter(requiresGaMcpRegistration)
         .filter((agent) => !registeredMcpClients.has(agent));
-    const autoContextAgents = sessionStartReadyAgents;
+    const autoContextAgents = sessionStartReadyAgents.filter(
+        (agent) => !requiresGaMcpRegistration(agent) || registeredMcpClients.has(agent)
+    );
+    const autoContextMissingAgents = captureReadyAgents.filter((agent) => !autoContextAgents.includes(agent));
 
     return {
         autoContextAgents,
-        autoContextMissingAgents: sessionStartMissingAgents,
+        autoContextMissingAgents,
         sessionStartMissingAgents,
         mcpRegistrationMissingAgents
     };
@@ -143,8 +150,7 @@ export function buildRepoReadinessSummary(
     const captureMissingAgents = resolveExpectedGaCaptureAgents(repoCapture.captureReadyAgents)
         .filter((agent) => !repoCapture.captureReadyAgents.includes(agent));
     const zeroTouchReady = repoCapture.captureManagedForRepo
-        && autoContext.sessionStartMissingAgents.length === 0
-        && autoContext.mcpRegistrationMissingAgents.length === 0
+        && autoContext.autoContextMissingAgents.length === 0
         && repoCapture.captureReadyAgents.length > 0;
 
     return {

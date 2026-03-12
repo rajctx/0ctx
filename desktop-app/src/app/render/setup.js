@@ -137,7 +137,7 @@
     document.getElementById('setupSupportCopy').textContent = state.runtimeIssue
       ? state.runtimeIssue.detail
       : zeroTouch.ready
-        ? 'The supported path is active. Use setup only when enabling another repo, adding another GA integration, or opening runtime utilities.'
+        ? 'The supported path is active. Use Utilities only when enabling another repo, adding another GA integration, or changing machine defaults deliberately.'
         : 'Use setup once to reach the supported path, then work from the bound repo in the agent.';
 
     const policy = state.dataPolicy || {
@@ -234,7 +234,7 @@
         workspaceResolved,
         actionHint,
         workspaceHint: workspaceSync.hint
-      });
+      }) + ' Open Advanced policy controls only when a workspace needs a deliberate override.';
     }
   }
 

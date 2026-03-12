@@ -1112,12 +1112,49 @@ tbody td {
 }
 
 .policy-custom-block {
-  display: grid;
-  gap: 14px;
-  padding: 16px;
+  display: block;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.02);
+}
+
+.advanced-details {
+  overflow: hidden;
+}
+
+.advanced-details > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  color: var(--text-strong);
+  font-size: 13px;
+  font-weight: 600;
+  list-style: none;
+}
+
+.advanced-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.advanced-details > summary::after {
+  content: '+';
+  color: var(--text-soft);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.advanced-details[open] > summary::after {
+  content: '−';
+}
+
+.advanced-details-body {
+  display: grid;
+  gap: 14px;
+  padding: 0 16px 16px;
+  border-top: 1px solid var(--line);
 }
 
 .policy-custom-grid {

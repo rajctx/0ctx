@@ -134,8 +134,8 @@ describe('repo readiness display', () => {
                 captureManagedForRepo: true,
                 captureReadyAgents: ['claude'],
                 captureMissingAgents: [],
-                autoContextAgents: ['claude'],
-                autoContextMissingAgents: [],
+                autoContextAgents: [],
+                autoContextMissingAgents: ['claude'],
                 sessionStartMissingAgents: [],
                 mcpRegistrationMissingAgents: ['claude'],
                 syncPolicy: 'metadata_only',
@@ -157,7 +157,7 @@ describe('repo readiness display', () => {
         });
 
         expect(lines).toContain('Ready: needs one-time setup');
-        expect(lines).toContain('Context: claude inject current workstream context automatically; claude need MCP retrieval registration');
+        expect(lines).toContain('Context: claude need MCP retrieval registration');
         expect(lines).toContain('Next step: Register MCP retrieval for claude.');
     });
 });

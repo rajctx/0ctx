@@ -144,7 +144,7 @@ describe('daemon request handling', () => {
         }
     });
 
-    it('reports GA and preview integration defaults honestly when no hook state exists yet', () => {
+    it('reports only GA integration defaults by default when no hook state exists yet', () => {
         const { db, graph } = createGraph();
         const hookStatePath = path.join(path.dirname(db.name), 'missing-hooks-state.json');
         const previousHookStatePath = process.env.CTX_HOOK_STATE_PATH;
@@ -171,12 +171,43 @@ describe('daemon request handling', () => {
             expect(byAgent.get('claude')).toBe('supported');
             expect(byAgent.get('factory')).toBe('supported');
             expect(byAgent.get('antigravity')).toBe('supported');
-            expect(byAgent.get('codex')).toBe('preview-notify-archive');
-            expect(byAgent.get('cursor')).toBe('preview-hook');
-            expect(byAgent.get('windsurf')).toBe('preview-hook');
+            expect(byAgent.has('codex')).toBe(false);
+            expect(byAgent.has('cursor')).toBe(false);
+            expect(byAgent.has('windsurf')).toBe(false);
             expect(sessionStartByAgent.get('claude')).toBe(false);
             expect(sessionStartByAgent.get('factory')).toBe(false);
             expect(sessionStartByAgent.get('antigravity')).toBe(false);
+        } finally {
+            if (previousHookStatePath === undefined) {
+                delete process.env.CTX_HOOK_STATE_PATH;
+            } else {
+                process.env.CTX_HOOK_STATE_PATH = previousHookStatePath;
+            }
+            db.close();
+        }
+    });
+
+    it('includes preview integrations only when explicitly requested', () => {
+        const { db, graph } = createGraph();
+        const hookStatePath = path.join(path.dirname(db.name), 'missing-hooks-state.json');
+        const previousHookStatePath = process.env.CTX_HOOK_STATE_PATH;
+        try {
+            process.env.CTX_HOOK_STATE_PATH = hookStatePath;
+
+            const hookHealth = handleRequest(graph, 'conn-hook-health-preview', {
+                method: 'getHookHealth',
+                params: { includePreview: true }
+            }, runtime()) as {
+                agents: Array<{ agent: string; notes: string | null }>;
+            };
+
+            const byAgent = new Map(hookHealth.agents.map((agent) => [agent.agent, agent.notes]));
+            expect(byAgent.get('claude')).toBe('supported');
+            expect(byAgent.get('factory')).toBe('supported');
+            expect(byAgent.get('antigravity')).toBe('supported');
+            expect(byAgent.get('codex')).toBe('preview-notify-archive');
+            expect(byAgent.get('cursor')).toBe('preview-hook');
+            expect(byAgent.get('windsurf')).toBe('preview-hook');
         } finally {
             if (previousHookStatePath === undefined) {
                 delete process.env.CTX_HOOK_STATE_PATH;
@@ -450,13 +481,15 @@ describe('daemon request handling', () => {
                 params: { repoRoot }
             }, runtime()) as {
                 autoContextAgents: string[];
+                autoContextMissingAgents: string[];
                 mcpRegistrationMissingAgents: string[];
                 zeroTouchReady: boolean;
                 nextActionHint: string | null;
             };
 
             expect(context.id).toBeTruthy();
-            expect(readiness.autoContextAgents).toEqual(['claude']);
+            expect(readiness.autoContextAgents).toEqual([]);
+            expect(readiness.autoContextMissingAgents).toEqual(['claude']);
             expect(readiness.mcpRegistrationMissingAgents).toEqual(['claude']);
             expect(readiness.zeroTouchReady).toBe(false);
             expect(readiness.nextActionHint).toContain('Register MCP retrieval for claude');

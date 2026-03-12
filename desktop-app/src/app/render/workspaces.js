@@ -1,7 +1,7 @@
 (() => {
   window.OctxDesktop = window.OctxDesktop || {};
   const app = window.OctxDesktop;
-  const { state, matches, activeContext, zeroTouchState, formatSyncPolicyLabel, formatDataPolicyPresetLabel, describeWorkspaceSyncDisplay, describeDesktopPolicyHint, capturePolicySummary, dataPolicyActionHint, esc, formatRelativeTime, renderChip, renderMetaLine, short, humanizeLabel, methodSupported, contextById, syncWorkspaceComparisonTargetSelection, workspaceComparisonTargetContext } = app;
+  const { state, matches, activeContext, zeroTouchState, formatSyncPolicyLabel, formatDataPolicyPresetLabel, describeWorkspaceSyncDisplay, describeDesktopPolicyHint, capturePolicySummary, dataPolicyActionHint, esc, formatRelativeTime, renderChip, renderMetaLine, short, humanizeLabel, contextById, syncWorkspaceComparisonTargetSelection, workspaceComparisonTargetContext } = app;
 
   function renderWorkspaces() {
     const contexts = state.contexts.filter((context) => matches(`${context.name || ''} ${(context.paths || []).join(' ')}`));
@@ -199,24 +199,11 @@
     const policyBadge = document.getElementById('workspacePolicySummaryBadge');
     const policyHint = document.getElementById('workspacePolicyHint');
     const policyDetailList = document.getElementById('workspacePolicyDetailList');
-    const supportsMutation = methodSupported('setDataPolicy');
-    const preset = String(policy.preset || 'lean').trim().toLowerCase();
     const actionHint = dataPolicyActionHint(policy);
     const workspaceSync = describeWorkspaceSyncDisplay({
       policy,
       hasActiveWorkspace: Boolean(activeContext()?.id),
       formatSyncPolicyLabel
-    });
-    const workspaceResolved = workspaceSync.workspaceResolved;
-
-    document.querySelectorAll('.workspace-policy-preset').forEach((button) => {
-      const presetValue = String(button.getAttribute('data-policy-preset') || '').trim().toLowerCase();
-      button.classList.toggle('active', presetValue === preset);
-      const requiresWorkspace = presetValue === 'shared';
-      button.disabled = !supportsMutation || (requiresWorkspace && !workspaceResolved);
-      button.title = requiresWorkspace && !workspaceResolved
-        ? 'Full sync is available only after a workspace is active.'
-        : '';
     });
 
     if (policyBadge) {
@@ -239,9 +226,9 @@
 
     if (policyHint) {
       policyHint.textContent = describeDesktopPolicyHint({
-        supportsMutation,
+        supportsMutation: true,
         policy,
-        workspaceResolved,
+        workspaceResolved: workspaceSync.workspaceResolved,
         actionHint,
         workspaceHint: workspaceSync.hint
       }) + ' Fine-tune retention and debug trails from Utilities when a workspace needs a custom local policy.';
