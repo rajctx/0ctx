@@ -1,7 +1,7 @@
 (() => {
   window.OctxDesktop = window.OctxDesktop || {};
   const app = window.OctxDesktop;
-  const { state, matches, activeContext, activeBranch, activeSession, activeSessionKnowledgePreview, selectedKnowledgeKeys, selectedTurn, describeSession, describeTurn, describeSelectedTurn, describeBranchLane, esc, formatRelativeTime, renderMetaLine, humanizeLabel, commitShort, renderChip, chipToneForRole, chipToneForAgent, formatTime, renderKnowledgeCandidates, normalizeBranch } = app;
+  const { state, matches, activeContext, activeBranch, activeSession, activeSessionKnowledgePreview, selectedKnowledgeKeys, selectedTurn, describeSession, describeTurn, describeSelectedTurn, describeBranchLane, esc, formatRelativeTime, renderMetaLine, humanizeLabel, commitShort, renderChip, chipToneForRole, chipToneForAgent, formatTime, renderKnowledgeCandidates, describeKnowledgePreviewSummary, normalizeBranch } = app;
 
   function renderSessions() {
     const sessions = state.sessions.filter((session) => matches(`${session.sessionId} ${session.summary || ''} ${session.branch || ''} ${session.commitSha || ''} ${session.agent || ''}`));
@@ -95,6 +95,7 @@
         : '';
       document.getElementById('sessionKnowledgePreviewPanel').classList.add('hidden');
       document.getElementById('sessionKnowledgePreviewBadge').textContent = '0 candidates';
+      document.getElementById('sessionKnowledgePreviewMeta').textContent = '0 strong · 0 review · 0 weak';
       document.getElementById('sessionKnowledgePreviewList').innerHTML = '';
       return;
     }
@@ -142,11 +143,13 @@
     if (!preview) {
       previewPanel.classList.add('hidden');
       document.getElementById('sessionKnowledgePreviewBadge').textContent = '0 selected';
+      document.getElementById('sessionKnowledgePreviewMeta').textContent = '0 strong · 0 review · 0 weak';
       document.getElementById('sessionKnowledgePreviewList').innerHTML = '';
     } else {
       previewPanel.classList.remove('hidden');
       const selectedCount = selectedKnowledgeKeys('session').length;
       document.getElementById('sessionKnowledgePreviewBadge').textContent = `${selectedCount} selected / ${preview.candidateCount}`;
+      document.getElementById('sessionKnowledgePreviewMeta').textContent = describeKnowledgePreviewSummary(preview.summary);
       document.getElementById('sessionKnowledgePreviewList').innerHTML = renderKnowledgeCandidates(preview.candidates, 'session');
     }
   }

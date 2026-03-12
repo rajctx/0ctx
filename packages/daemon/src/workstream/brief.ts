@@ -71,6 +71,8 @@ export function buildWorkstreamBrief(
         ? { checkedOutWorktreePaths: lane.checkedOutWorktreePaths ?? [], checkedOutHere: lane.checkedOutHere ?? null, checkedOutElsewhere: lane.checkedOutElsewhere ?? null }
         : { checkedOutWorktreePaths: [], checkedOutHere: null, checkedOutElsewhere: null };
     const hasUncommittedChanges = lane?.hasUncommittedChanges ?? workingTreeState?.hasUncommittedChanges ?? null;
+    const hasMergeConflicts = lane?.hasMergeConflicts ?? workingTreeState?.hasMergeConflicts ?? null;
+    const unmergedCount = lane?.unmergedCount ?? workingTreeState?.unmergedCount ?? null;
     const stagedChangeCount = lane?.stagedChangeCount ?? workingTreeState?.stagedChangeCount ?? null;
     const unstagedChangeCount = lane?.unstagedChangeCount ?? workingTreeState?.unstagedChangeCount ?? null;
     const untrackedCount = lane?.untrackedCount ?? workingTreeState?.untrackedCount ?? null;
@@ -91,6 +93,8 @@ export function buildWorkstreamBrief(
         checkedOutHere: checkoutState.checkedOutHere,
         checkedOutElsewhere: checkoutState.checkedOutElsewhere,
         hasUncommittedChanges,
+        hasMergeConflicts,
+        unmergedCount,
         aheadCount: lane?.aheadCount ?? null,
         behindCount: lane?.behindCount ?? null,
         baseline,
@@ -160,6 +164,7 @@ export function buildWorkstreamBrief(
 
     if (hasUncommittedChanges) {
         const dirtyFacts = [
+            typeof unmergedCount === 'number' && unmergedCount > 0 ? `${unmergedCount} unmerged` : null,
             typeof stagedChangeCount === 'number' && stagedChangeCount > 0 ? `${stagedChangeCount} staged` : null,
             typeof unstagedChangeCount === 'number' && unstagedChangeCount > 0 ? `${unstagedChangeCount} unstaged` : null,
             typeof untrackedCount === 'number' && untrackedCount > 0 ? `${untrackedCount} untracked` : null
@@ -217,6 +222,8 @@ export function buildWorkstreamBrief(
         checkedOutElsewhere: checkoutState.checkedOutElsewhere,
         captureDrift,
         hasUncommittedChanges,
+        hasMergeConflicts,
+        unmergedCount,
         stagedChangeCount,
         unstagedChangeCount,
         untrackedCount,

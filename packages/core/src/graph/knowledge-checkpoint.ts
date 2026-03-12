@@ -2,11 +2,13 @@ import type Database from 'better-sqlite3';
 import type {
     Checkpoint,
     ContextNode,
+    KnowledgeCandidate,
     KnowledgeExtractionResult,
     KnowledgePreviewResult,
     NodeType
 } from '../schema';
 import { cleanupExtractionText, scoreKnowledgeCandidate } from '../knowledge-scoring';
+import { buildKnowledgePreviewSummary } from './knowledge';
 
 type AddNodeInput = Omit<ContextNode, 'id' | 'createdAt'> & {
     rawPayload?: unknown;
@@ -86,6 +88,7 @@ type KnowledgeCheckpointDeps = {
         evidenceCount: number;
         distinctEvidenceCount: number;
         distinctSessionCount: number;
+        corroboratedRoles?: string[] | null;
         originContextId: string | null;
         originNodeId: string | null;
     }) => {
@@ -128,6 +131,7 @@ export function previewKnowledgeFromCheckpointRecord(
             candidateCount: 0,
             createCount: 0,
             reuseCount: 0,
+            summary: buildKnowledgePreviewSummary([]),
             candidates: []
         };
     }
@@ -153,6 +157,7 @@ export function previewKnowledgeFromCheckpointRecord(
         evidenceCount: 1,
         distinctEvidenceCount: 1,
         distinctSessionCount: 1,
+        corroboratedRoles: ['assistant'],
         originContextId: null,
         originNodeId: null
     });
@@ -165,9 +170,43 @@ export function previewKnowledgeFromCheckpointRecord(
             candidateCount: 0,
             createCount: 0,
             reuseCount: 0,
+            summary: buildKnowledgePreviewSummary([]),
             candidates: []
         };
     }
+    const candidates: KnowledgeCandidate[] = [{
+        contextId: checkpoint.contextId,
+        source: 'checkpoint',
+        sessionId: null,
+        checkpointId,
+        type,
+        content: summary,
+        key,
+        action: existingNode ? 'reuse' : 'create',
+        existingNodeId: existingNode?.id ?? null,
+        sourceNodeId: null,
+        messageId: null,
+        role: 'assistant',
+        createdAt: checkpoint.createdAt,
+        confidence: classified.confidence,
+        reason: classified.reason,
+        evidenceCount: 1,
+        distinctEvidenceCount: 1,
+        distinctSessionCount: 1,
+        evidenceSummary,
+        trustFlags: deps.buildKnowledgeTrustFlags(1, 1, roles, {
+            distinctSessionCount: 1
+        }),
+        corroboratedRoles: ['assistant'],
+        reviewTier: review.reviewTier,
+        reviewSummary: review.reviewSummary,
+        trustSummary: deps.buildKnowledgeTrustSummary(review.reviewSummary, evidenceSummary),
+        promotionState: promotion.promotionState,
+        promotionSummary: promotion.promotionSummary,
+        autoPersist: autoPersist.autoPersist,
+        autoPersistSummary: autoPersist.autoPersistSummary
+    }];
+
     return {
         contextId: checkpoint.contextId,
         source: 'checkpoint',
@@ -176,38 +215,8 @@ export function previewKnowledgeFromCheckpointRecord(
         candidateCount: 1,
         createCount: existingNode ? 0 : 1,
         reuseCount: existingNode ? 1 : 0,
-        candidates: [{
-            contextId: checkpoint.contextId,
-            source: 'checkpoint',
-            sessionId: null,
-            checkpointId,
-            type,
-            content: summary,
-            key,
-            action: existingNode ? 'reuse' : 'create',
-            existingNodeId: existingNode?.id ?? null,
-            sourceNodeId: null,
-            messageId: null,
-            role: 'assistant',
-            createdAt: checkpoint.createdAt,
-            confidence: classified.confidence,
-            reason: classified.reason,
-            evidenceCount: 1,
-            distinctEvidenceCount: 1,
-            distinctSessionCount: 1,
-            evidenceSummary,
-            trustFlags: deps.buildKnowledgeTrustFlags(1, 1, roles, {
-                distinctSessionCount: 1
-            }),
-            corroboratedRoles: ['assistant'],
-            reviewTier: review.reviewTier,
-            reviewSummary: review.reviewSummary,
-            trustSummary: deps.buildKnowledgeTrustSummary(review.reviewSummary, evidenceSummary),
-            promotionState: promotion.promotionState,
-            promotionSummary: promotion.promotionSummary,
-            autoPersist: autoPersist.autoPersist,
-            autoPersistSummary: autoPersist.autoPersistSummary
-        }]
+        summary: buildKnowledgePreviewSummary(candidates),
+        candidates
     };
 }
 

@@ -290,6 +290,9 @@
   function describeWorkingTreeState(lane) {
     if (!lane || lane.hasUncommittedChanges !== true) return '';
     const parts = [];
+    if (typeof lane.unmergedCount === 'number' && lane.unmergedCount > 0) {
+      parts.push(`${lane.unmergedCount} unmerged`);
+    }
     if (typeof lane.stagedChangeCount === 'number' && lane.stagedChangeCount > 0) {
       parts.push(`${lane.stagedChangeCount} staged`);
     }
@@ -464,6 +467,16 @@
     return roles.includes('user');
   }
 
+  function describeKnowledgePreviewSummary(summary) {
+    const safe = summary && typeof summary === 'object' ? summary : {};
+    const strong = Number(safe.strongCount || 0);
+    const review = Number(safe.reviewCount || 0);
+    const weak = Number(safe.weakCount || 0);
+    const autoWrite = Number(safe.autoPersistCount || 0);
+    const ready = Number(safe.readyPromotionCount || 0);
+    return `${strong} strong · ${review} review · ${weak} weak · ${autoWrite} auto write · ${ready} ready to promote`;
+  }
+
   function renderKnowledgeCandidates(candidates, scope) {
     if (!Array.isArray(candidates) || candidates.length === 0) {
       return '<div class="empty-state">No extractable insight candidates were found in this source.</div>';
@@ -523,5 +536,5 @@
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  Object.assign(app, { esc, short, cleanConversationText, splitConversationText, describeSession, describeTurn, findAdjacentTurn, describeSelectedTurn, basenameFromPath, humanizeLabel, formatTime, formatRelativeTime, commitShort, chipToneForAgent, chipToneForRole, renderChip, renderMetaLine, summarizeCheckoutPaths, describeWorkstreamCheckout, describeWorkstreamSync, describeWorkstreamActionHint, describeWorkingTreeState, renderAgentChain, activeSessionKnowledgePreview, activeCheckpointKnowledgePreview, selectedKnowledgeKeys, setSelectedKnowledgeKeys, selectKnowledgeCandidates, formatConfidence, confidenceTone, formatReason, formatReviewTier, reviewTierTone, formatEvidenceSummary, prioritizeTrustFlags, candidateDefaultSelectionEligible, renderKnowledgeCandidates, jsonText, delay });
+  Object.assign(app, { esc, short, cleanConversationText, splitConversationText, describeSession, describeTurn, findAdjacentTurn, describeSelectedTurn, basenameFromPath, humanizeLabel, formatTime, formatRelativeTime, commitShort, chipToneForAgent, chipToneForRole, renderChip, renderMetaLine, summarizeCheckoutPaths, describeWorkstreamCheckout, describeWorkstreamSync, describeWorkstreamActionHint, describeWorkingTreeState, renderAgentChain, activeSessionKnowledgePreview, activeCheckpointKnowledgePreview, selectedKnowledgeKeys, setSelectedKnowledgeKeys, selectKnowledgeCandidates, formatConfidence, confidenceTone, formatReason, formatReviewTier, reviewTierTone, formatEvidenceSummary, prioritizeTrustFlags, candidateDefaultSelectionEligible, describeKnowledgePreviewSummary, renderKnowledgeCandidates, jsonText, delay });
 })();

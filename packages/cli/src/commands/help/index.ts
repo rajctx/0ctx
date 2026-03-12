@@ -62,11 +62,11 @@ Advanced / machine management:
              [--require-cloud] [--wait-cloud-ready]
              [--cloud-wait-timeout-ms=60000] [--cloud-wait-interval-ms=2000]
              [--create-context=<name>] [--dashboard-query[=k=v&...]]
-             [--skip-service] [--skip-bootstrap] [--skip-hooks] [--hooks-dry-run] [--allow-preview]
+             [--skip-service] [--skip-bootstrap] [--skip-hooks] [--hooks-dry-run]
              [--mcp-profile=all|core|recall|ops]
-  0ctx install [--clients=ga|claude,factory,antigravity] [--json] [--skip-bootstrap] [--mcp-profile=all|core|recall|ops] [--allow-preview]
+  0ctx install [--clients=ga|claude,factory,antigravity] [--json] [--skip-bootstrap] [--mcp-profile=all|core|recall|ops]
   0ctx bootstrap [--dry-run] [--clients=ga|claude,antigravity] [--entrypoint=/path/to/mcp-server.js]
-                 [--mcp-profile=all|core|recall|ops] [--allow-preview] [--json]
+                 [--mcp-profile=all|core|recall|ops] [--json]
   0ctx mcp [bootstrap]
   0ctx mcp                     Interactive supported-agent retrieval bootstrap
   0ctx mcp bootstrap [--dry-run] [--clients=ga|claude,antigravity] [--mcp-profile=all|core|recall|ops]
@@ -109,8 +109,11 @@ Capture support:
 
 Client scope defaults:
   ga      Supported-by-default product path
-  Preview integrations: codex, cursor, windsurf (name them explicitly only when you opt in).
-  Preview MCP retrieval also requires --allow-preview.
+  Preview integrations stay outside the normal product path and require explicit advanced opt-in.
+
+Preview overrides:
+  Use --allow-preview only when you explicitly name preview integrations such as codex,cursor,windsurf.
+  Keep preview installs and preview retrieval out of the normal enable/bootstrap path.
 
 Authentication:
   0ctx auth login    Start device-code login flow
@@ -147,7 +150,7 @@ Connector:
   0ctx connector verify [--require-cloud] [--json]
   0ctx connector register [--force] [--local-only] [--require-cloud] [--json]
   0ctx connector run [--once] [--interval-ms=5000] [--no-daemon-autostart]
-  0ctx connector hook install [--clients=ga|claude,factory,antigravity] [--repo-root=<path>] [--global] [--allow-preview]
+  0ctx connector hook install [--clients=ga|claude,factory,antigravity] [--repo-root=<path>] [--global]
   0ctx connector hook status [--json] [--include-explicit]
   0ctx connector hook prune [--days=14] [--json]
   0ctx connector hook session-start --agent=claude|factory|antigravity [--repo-root=<path>]

@@ -66,7 +66,7 @@ export function createBranchCommands(ctx: WorkstreamCommandContext) {
                         console.log(`  Capture drift: ${result.captureDrift.summary}`);
                     }
                     if (result.hasUncommittedChanges) {
-                        console.log(`  Local changes: staged ${result.stagedChangeCount ?? 0} | unstaged ${result.unstagedChangeCount ?? 0} | untracked ${result.untrackedCount ?? 0}`);
+                        console.log(`  Local changes: unmerged ${result.unmergedCount ?? 0} | staged ${result.stagedChangeCount ?? 0} | unstaged ${result.unstagedChangeCount ?? 0} | untracked ${result.untrackedCount ?? 0}`);
                     }
                     if (result.baseline?.summary) console.log(`  Baseline: ${result.baseline.summary}`);
                     if (Array.isArray(result.recentSessions) && result.recentSessions.length > 0) {
@@ -210,6 +210,9 @@ export function createBranchCommands(ctx: WorkstreamCommandContext) {
                     if (checkoutState) console.log(`    Checkout: ${checkoutState}`);
                     if (lane.headDiffersFromCaptured && lane.captureDrift?.summary) {
                         console.log(`    Capture drift: ${lane.captureDrift.summary}`);
+                    }
+                    if (lane.hasMergeConflicts) {
+                        console.log(`    Conflicts: ${lane.unmergedCount ?? 0} unmerged path${lane.unmergedCount === 1 ? '' : 's'}`);
                     }
                     if (lane.baseline?.summary) console.log(`    Baseline: ${lane.baseline.summary}`);
                     if (lane.upstream) {

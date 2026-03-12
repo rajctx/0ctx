@@ -15,7 +15,7 @@
 
   function applyShellCopy() {
     setText('.nav-btn[data-view="setup"] span:last-child', 'Setup');
-    setText('#runtimeBannerSetup', 'Open setup');
+    setText('#runtimeBannerSetup', 'Open utilities');
   }
 
   function renderChrome() {
@@ -24,10 +24,7 @@
     const postureText = formatPosture(posture);
     document.body.dataset.view = state.view;
     document.querySelector('.main-stage')?.setAttribute('data-view', state.view);
-    const postureBadge = document.getElementById('postureBadge');
     const sidebarPosture = document.getElementById('sidebarPosture');
-    postureBadge.className = postureClass(posture);
-    postureBadge.textContent = postureText;
     sidebarPosture.className = postureClass(posture);
     sidebarPosture.textContent = postureText;
     document.getElementById('search').placeholder = SEARCH_HINTS[state.view] || 'Filter this screen';

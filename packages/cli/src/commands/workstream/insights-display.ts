@@ -23,6 +23,16 @@ type ExtractionResultShape = {
     createCount?: number;
     reuseCount?: number;
     candidateCount?: number;
+    summary?: {
+        strongCount?: number;
+        reviewCount?: number;
+        weakCount?: number;
+        autoPersistCount?: number;
+        reviewOnlyCount?: number;
+        readyPromotionCount?: number;
+        reviewPromotionCount?: number;
+        blockedPromotionCount?: number;
+    };
     nodes?: ExtractionItem[];
     candidates?: ExtractionItem[];
 };
@@ -86,6 +96,17 @@ export function renderExtractionResultLines(
     lines.push(`  Created: ${String(result.createdCount ?? result.createCount ?? 0)}`);
     lines.push(`  Reused: ${String(result.reusedCount ?? result.reuseCount ?? 0)}`);
     lines.push(`  ${preview ? 'Candidates' : 'Nodes'}: ${String(result.nodeCount ?? result.candidateCount ?? 0)}`);
+    if (preview && result.summary) {
+        lines.push(
+            `  Trust: ${String(result.summary.strongCount ?? 0)} strong, ${String(result.summary.reviewCount ?? 0)} review, ${String(result.summary.weakCount ?? 0)} weak`
+        );
+        lines.push(
+            `  Write: ${String(result.summary.autoPersistCount ?? 0)} auto, ${String(result.summary.reviewOnlyCount ?? 0)} review-only`
+        );
+        lines.push(
+            `  Promote: ${String(result.summary.readyPromotionCount ?? 0)} ready, ${String(result.summary.reviewPromotionCount ?? 0)} review, ${String(result.summary.blockedPromotionCount ?? 0)} blocked`
+        );
+    }
 
     const items: ExtractionItem[] = preview
         ? (result.candidates ?? [])

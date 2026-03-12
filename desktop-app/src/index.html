@@ -41,11 +41,6 @@
 
       <div class="workspace-controls">
         <select id="ctxSel" aria-label="Select workspace"></select>
-        <div class="workspace-actions">
-          <span id="postureBadge" class="badge offline">Offline</span>
-          <button id="refresh" class="btn tertiary" type="button">Refresh</button>
-          <button id="restart" class="btn tertiary" type="button">Restart</button>
-        </div>
       </div>
     </section>
 
@@ -387,6 +382,7 @@
                         <div>
                           <p class="section-label">Insights preview</p>
                           <h4>Review extracted candidates</h4>
+                          <p id="sessionKnowledgePreviewMeta" class="section-copy preview-summary">0 strong · 0 review · 0 weak</p>
                         </div>
                         <div class="row-actions">
                           <span id="sessionKnowledgePreviewBadge" class="chip">0 selected</span>
@@ -483,6 +479,7 @@
                         <div>
                           <p class="section-label">Insights preview</p>
                           <h4>Review extracted candidates</h4>
+                          <p id="checkpointKnowledgePreviewMeta" class="section-copy preview-summary">0 strong · 0 review · 0 weak</p>
                         </div>
                         <div class="row-actions">
                           <span id="checkpointKnowledgePreviewBadge" class="chip">0 selected</span>
@@ -646,6 +643,40 @@
                         <span>Temporary debug trails</span>
                       </button>
                     </div>
+                    <section class="policy-custom-block">
+                      <div class="section-row small">
+                        <div>
+                          <p class="section-label">Custom policy</p>
+                          <h4>Fine-tune retention</h4>
+                        </div>
+                      </div>
+                      <div class="policy-custom-grid">
+                        <label>
+                          <span>Workspace sync</span>
+                          <select id="dataPolicySyncPolicy" aria-label="Workspace sync policy">
+                            <option value="metadata_only">Metadata only</option>
+                            <option value="local_only">Local only</option>
+                            <option value="full_sync">Full sync</option>
+                          </select>
+                        </label>
+                        <label>
+                          <span>Capture retention (days)</span>
+                          <input id="dataPolicyCaptureRetention" type="number" min="1" step="1" inputmode="numeric" />
+                        </label>
+                        <label>
+                          <span>Debug retention (days)</span>
+                          <input id="dataPolicyDebugRetention" type="number" min="1" step="1" inputmode="numeric" />
+                        </label>
+                      </div>
+                      <label class="toggle policy-toggle">
+                        <input id="dataPolicyDebugArtifacts" type="checkbox" />
+                        <span>Keep debug artifacts on this machine for troubleshooting</span>
+                      </label>
+                      <p class="page-copy compact-copy">Use the presets for the normal product path. Use custom controls only when retention or sync needs to differ for this workspace.</p>
+                      <div class="row-actions">
+                        <button id="applyCustomDataPolicy" class="btn tertiary" type="submit">Apply custom policy</button>
+                      </div>
+                    </section>
                     <div id="policyDetailList" class="info-list compact-info-list"></div>
                     <p id="policyHint" class="page-copy compact-copy">Metadata-only sync is the normal default for this workspace. Raw payloads stay local and debug artifacts stay off unless you explicitly enable them on this machine.</p>
                     <div class="row-actions">
@@ -654,7 +685,7 @@
                   </form>
                 </section>
 
-                <section class="panel subpanel compact-support-block">
+                <section class="panel subpanel compact-utility-block">
                   <div class="section-row small">
                     <div>
                   <p class="section-label">Utility actions</p>
@@ -662,6 +693,8 @@
                     </div>
                     <div class="row-actions wrap-row">
                       <button id="copyPolicyCleanupSetup" class="btn quiet" type="button">Copy lean cleanup</button>
+                      <button id="refreshUtilities" class="btn quiet" type="button">Refresh runtime</button>
+                      <button id="restartUtilities" class="btn quiet" type="button">Restart runtime</button>
                       <button id="checkUpdates" class="btn quiet" type="button">Check updates</button>
                       <button id="copyRepair" class="btn quiet" type="button">Copy 0ctx repair</button>
                       <button id="copyDoctor" class="btn quiet" type="button">Copy 0ctx doctor</button>
@@ -697,6 +730,7 @@
 <script src="./app/render/index.js" defer></script>
 <script src="./app/runtime.js" defer></script>
 <script src="./app/loaders.js" defer></script>
+<script src="./app/policy-actions.js" defer></script>
 <script src="./app/actions.js" defer></script>
 <script src="./app/wire.js" defer></script>
 </body>

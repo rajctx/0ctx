@@ -39,8 +39,8 @@
     },
     setup: {
       eyebrow: 'Setup',
-      title: 'Repo setup and support',
-      summary: 'Enable this repo, install the integrations you actually use, and open runtime support only when something is off.',
+      title: 'Repo setup and utilities',
+      summary: 'Enable this repo, install the integrations you actually use, and open utilities only when you need them.',
       primaryLabel: 'Copy enable command',
       primaryAction: 'copy-enable'
     }
@@ -52,7 +52,7 @@
     checkpoints: 'Filter checkpoints, sessions, or commits',
     workspaces: 'Filter projects by name or repository path',
     knowledge: 'Filter reviewed insights and graph nodes',
-    setup: 'Filter repo setup, integrations, or support actions'
+    setup: 'Filter repo setup, integrations, or utility actions'
   };
 
   const REQUIRED_RUNTIME_METHODS = [

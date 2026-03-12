@@ -1,7 +1,7 @@
 (() => {
   window.OctxDesktop = window.OctxDesktop || {};
   const app = window.OctxDesktop;
-  const { state, bindById, setView, renderAll, selectContext, resetBranchScopedState, loadBranches, loadSessions, loadSessionDetail, loadTurns, loadCheckpoints, loadCheckpointDetail, loadHandoff, loadBranchComparisonSafe, loadWorkspaceComparison, loadGraph, loadInsights, refreshAll, setStatus, invoke, copyText, createContext, applyDataPolicyPreset, performHeroAction, createCheckpointFromActiveSession, previewKnowledgeFromActiveSession, extractKnowledgeFromActiveSession, previewKnowledgeFromActiveCheckpoint, extractKnowledgeFromActiveCheckpoint, promoteActiveInsight, rewindActiveCheckpoint, explainActiveCheckpoint, enableCommand, policyCleanupCommand, selectKnowledgeCandidates, selectedKnowledgeKeys, setSelectedKnowledgeKeys, syncBranchSelectionFromSession, startBackgroundRefreshLoops, basenameFromPath } = app;
+  const { state, bindById, setView, renderAll, selectContext, resetBranchScopedState, loadBranches, loadSessions, loadSessionDetail, loadTurns, loadCheckpoints, loadCheckpointDetail, loadHandoff, loadBranchComparisonSafe, loadWorkspaceComparison, loadGraph, loadInsights, refreshAll, setStatus, invoke, copyText, createContext, applyDataPolicyPreset, applyCustomDataPolicy, performHeroAction, createCheckpointFromActiveSession, previewKnowledgeFromActiveSession, extractKnowledgeFromActiveSession, previewKnowledgeFromActiveCheckpoint, extractKnowledgeFromActiveCheckpoint, promoteActiveInsight, rewindActiveCheckpoint, explainActiveCheckpoint, enableCommand, policyCleanupCommand, selectKnowledgeCandidates, selectedKnowledgeKeys, setSelectedKnowledgeKeys, syncBranchSelectionFromSession, startBackgroundRefreshLoops, basenameFromPath } = app;
 
   function wire() {
     document.querySelectorAll('.nav-btn').forEach((button) => {
@@ -31,8 +31,8 @@
       renderAll();
     });
 
-    bindById('refresh', 'click', () => void refreshAll());
-    bindById('restart', 'click', async () => {
+    bindById('refreshUtilities', 'click', () => void refreshAll());
+    bindById('restartUtilities', 'click', async () => {
       try {
         const result = await invoke('restart_connector', {});
         setStatus(String(result || 'Connector restarted.'));
@@ -101,6 +101,7 @@
     bindById('copyShell', 'click', () => void copyText('0ctx shell'));
     bindById('copyRepair', 'click', () => void copyText('0ctx repair'));
     bindById('copyDoctor', 'click', () => void copyText('0ctx doctor'));
+    bindById('dataPolicyForm', 'submit', (event) => void applyCustomDataPolicy(event));
     bindById('checkUpdates', 'click', async () => {
       try {
         const result = await invoke('check_for_updates', {});
@@ -286,12 +287,11 @@
     if (window.__TAURI__ && window.__TAURI__.event && typeof window.__TAURI__.event.listen === 'function') {
       window.__TAURI__.event.listen('posture-changed', (event) => {
         const posture = String(event?.payload || 'offline');
-        const badge = document.getElementById('postureBadge');
         const sidebarBadge = document.getElementById('sidebarPosture');
-        badge.className = postureClass(posture);
-        badge.textContent = formatPosture(posture);
-        sidebarBadge.className = postureClass(posture);
-        sidebarBadge.textContent = formatPosture(posture);
+        if (sidebarBadge) {
+          sidebarBadge.className = postureClass(posture);
+          sidebarBadge.textContent = formatPosture(posture);
+        }
       });
     }
   }

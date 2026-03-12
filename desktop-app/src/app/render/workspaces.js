@@ -244,7 +244,7 @@
         workspaceResolved,
         actionHint,
         workspaceHint: workspaceSync.hint
-      });
+      }) + ' Fine-tune retention and debug trails from Utilities when a workspace needs a custom local policy.';
     }
   }
 

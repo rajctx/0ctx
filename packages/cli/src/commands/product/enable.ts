@@ -28,7 +28,7 @@ export function createEnableCommands(deps: ProductCommandDeps & { commandBootstr
         const workspaceName = requestedName ?? (path.basename(repoRoot) || 'Workspace');
         const selectedPreviewHooks = deps.detectPreviewSelections(flags.clients, 'codex,cursor,windsurf');
         if (selectedPreviewHooks.length > 0) {
-            console.error(`0ctx enable supports only GA capture integrations. Use --clients=ga for the normal path, or use advanced commands like \`0ctx setup --allow-preview\` or \`0ctx connector hook install --allow-preview\` if you intentionally need preview integrations (${selectedPreviewHooks.join(', ')}).`);
+            console.error(`0ctx enable supports only GA capture integrations. Use --clients=ga for the normal path. If you intentionally need preview integrations (${selectedPreviewHooks.join(', ')}), use \`0ctx help --advanced\` and opt in explicitly.`);
             return 1;
         }
         if (requestedDataPolicy && !dataPolicyPreset) {
@@ -37,7 +37,7 @@ export function createEnableCommands(deps: ProductCommandDeps & { commandBootstr
         }
         const selectedPreviewMcp = deps.detectPreviewSelections(flags['mcp-clients'] ?? flags.mcpClients, 'codex');
         if (selectedPreviewMcp.length > 0) {
-            console.error(`MCP clients: 0ctx enable supports only GA automatic retrieval targets. Use --mcp-clients=ga for the normal path, or use \`0ctx bootstrap --allow-preview\` only when you intentionally need preview retrieval (${selectedPreviewMcp.join(', ')}).`);
+            console.error(`MCP clients: 0ctx enable supports only GA automatic retrieval targets. Use --mcp-clients=ga for the normal path. If you intentionally need preview retrieval (${selectedPreviewMcp.join(', ')}), use \`0ctx help --advanced\` and opt in explicitly.`);
             return 1;
         }
 

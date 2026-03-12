@@ -90,6 +90,8 @@ export function deriveWorkstreamState(
         checkedOutHere?: boolean | null;
         checkedOutElsewhere?: boolean | null;
         hasUncommittedChanges: boolean | null;
+        hasMergeConflicts?: boolean | null;
+        unmergedCount?: number | null;
         aheadCount: number | null;
         behindCount: number | null;
         baseline?: WorkstreamBaselineComparison | null;
@@ -97,7 +99,7 @@ export function deriveWorkstreamState(
         isCurrent?: boolean | null;
     }
 ): {
-    kind: 'current' | 'ahead' | 'behind' | 'diverged' | 'detached' | 'drifted' | 'dirty' | 'elsewhere' | 'isolated' | 'unknown';
+    kind: 'current' | 'ahead' | 'behind' | 'diverged' | 'detached' | 'drifted' | 'dirty' | 'conflicted' | 'elsewhere' | 'isolated' | 'unknown';
     summary: string;
     actionHint: string | null;
 } {
@@ -112,6 +114,16 @@ export function deriveWorkstreamState(
             kind: 'drifted',
             summary: data.captureDrift?.summary ?? 'Current HEAD differs from the last captured commit.',
             actionHint: data.captureDrift?.actionHint ?? 'Capture a fresh session or checkpoint so memory matches the current HEAD.'
+        };
+    }
+    if (data.hasMergeConflicts) {
+        const unmergedCount = typeof data.unmergedCount === 'number' ? data.unmergedCount : null;
+        return {
+            kind: 'conflicted',
+            summary: unmergedCount && unmergedCount > 0
+                ? `Working tree has ${unmergedCount} unmerged path${unmergedCount === 1 ? '' : 's'}.`
+                : 'Working tree has unresolved merge conflicts.',
+            actionHint: 'Resolve merge conflicts and verify the resulting checkout before handoff or checkpointing.'
         };
     }
     if (data.hasUncommittedChanges) {
@@ -149,7 +161,7 @@ export function deriveWorkstreamState(
 }
 
 export function deriveHandoffReadiness(options: {
-    stateKind?: 'current' | 'ahead' | 'behind' | 'diverged' | 'detached' | 'drifted' | 'dirty' | 'elsewhere' | 'isolated' | 'unknown';
+    stateKind?: 'current' | 'ahead' | 'behind' | 'diverged' | 'detached' | 'drifted' | 'dirty' | 'conflicted' | 'elsewhere' | 'isolated' | 'unknown';
     checkpointCount?: number | null;
 }): {
     readiness: 'ready' | 'review' | 'blocked';
@@ -180,6 +192,13 @@ export function deriveHandoffReadiness(options: {
                         : options.stateKind === 'behind'
                             ? ['Update from upstream or the baseline branch before handoff.']
                             : ['Reconcile divergence before handing work across agents.']
+            };
+        case 'conflicted':
+            return {
+                readiness: 'blocked',
+                summary: 'Do not hand this workstream off yet. Resolve merge conflicts first so another agent does not start from a broken checkout.',
+                blockers: ['This workstream has unresolved merge conflicts.'],
+                reviewItems: []
             };
         case 'detached':
         case 'elsewhere':

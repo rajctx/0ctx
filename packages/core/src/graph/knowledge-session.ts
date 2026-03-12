@@ -13,6 +13,7 @@ import {
     sourceExcerpt,
     splitExtractionCandidates
 } from '../knowledge-scoring';
+import { buildKnowledgePreviewSummary } from './knowledge';
 
 type AddNodeInput = Omit<ContextNode, 'id' | 'createdAt'> & {
     rawPayload?: unknown;
@@ -81,6 +82,7 @@ type KnowledgeSessionDeps = {
         evidenceCount: number;
         distinctEvidenceCount: number;
         distinctSessionCount: number;
+        corroboratedRoles?: string[] | null;
         originContextId: string | null;
         originNodeId: string | null;
     }) => {
@@ -196,7 +198,7 @@ function collectSessionKnowledgeCandidates(
             if (allowedKeys && !allowedKeys.has(key)) continue;
 
             const excerpt = sourceExcerpt(message.content);
-            const distinctEvidenceKey = `${(message.role ?? 'unknown').toLowerCase()}:${excerpt || canonicalText}`;
+            const distinctEvidenceKey = excerpt || canonicalText;
             const existing = aggregated.get(dedupeKey);
             if (!existing) {
                 aggregated.set(dedupeKey, {
@@ -275,6 +277,7 @@ function collectSessionKnowledgeCandidates(
                 evidenceCount: mergedEvidence.evidenceCount,
                 distinctEvidenceCount: mergedEvidence.distinctEvidenceCount,
                 distinctSessionCount: mergedEvidence.distinctSessionCount,
+                corroboratedRoles: Array.from(mergedEvidence.roles),
                 originContextId: null,
                 originNodeId: null
             });
@@ -338,6 +341,7 @@ export function previewKnowledgeFromSessionRecord(
         candidateCount: candidates.length,
         createCount,
         reuseCount: candidates.length - createCount,
+        summary: buildKnowledgePreviewSummary(candidates),
         candidates: candidates.map(({ existingNode, ...candidate }) => candidate)
     };
 }

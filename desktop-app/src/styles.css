@@ -984,14 +984,14 @@ select:focus {
   font-size: 11px;
 }
 
-.support-list {
+.evidence-list {
   margin: 8px 0 0;
   padding-left: 16px;
   display: grid;
   gap: 6px;
 }
 
-.support-list li {
+.evidence-list li {
   color: var(--text-soft);
 }
 
@@ -1111,6 +1111,39 @@ tbody td {
   gap: 12px;
 }
 
+.policy-custom-block {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.policy-custom-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.policy-custom-grid label {
+  display: grid;
+  gap: 8px;
+}
+
+.policy-custom-grid label span {
+  color: var(--text-soft);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.policy-toggle {
+  justify-content: flex-start;
+  padding: 10px 12px;
+}
+
 .policy-preset-btn {
   display: grid;
   justify-items: start;
@@ -1201,6 +1234,7 @@ tbody td {
   .utility-layout,
   .page-card-grid.two-up,
   .policy-preset-grid,
+  .policy-custom-grid,
   .fact-grid,
   .meta-grid,
   .compact-meta-grid,

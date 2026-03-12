@@ -103,7 +103,7 @@
           selectedInsightCopy.insertAdjacentHTML('beforeend', `
             <div class="preview-footnote">
               <strong>Evidence preview</strong>
-              <ul class="support-list">
+              <ul class="evidence-list">
                 ${selectedInsight.evidencePreview.map((excerpt) => `<li>${esc(excerpt)}</li>`).join('')}
               </ul>
             </div>

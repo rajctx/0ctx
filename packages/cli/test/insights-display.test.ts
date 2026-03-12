@@ -10,6 +10,16 @@ describe('insight preview display', () => {
                 candidateCount: 1,
                 createCount: 1,
                 reuseCount: 0,
+                summary: {
+                    strongCount: 1,
+                    reviewCount: 0,
+                    weakCount: 0,
+                    autoPersistCount: 1,
+                    reviewOnlyCount: 0,
+                    readyPromotionCount: 1,
+                    reviewPromotionCount: 0,
+                    blockedPromotionCount: 0
+                },
                 candidates: [
                     {
                         type: 'decision',
@@ -33,6 +43,9 @@ describe('insight preview display', () => {
         );
 
         const rendered = lines.join('\n');
+        expect(rendered).toContain('Trust: 1 strong, 0 review, 0 weak');
+        expect(rendered).toContain('Write: 1 auto, 0 review-only');
+        expect(rendered).toContain('Promote: 1 ready, 0 review, 0 blocked');
         expect(rendered).toContain('[decision | CREATE | Strong | PROMOTE Ready | AUTO WRITE]');
         expect(rendered).toContain('confidence: 91% confidence');
         expect(rendered).toContain('trust flags: Cross Session, Cross Role');
@@ -58,7 +71,17 @@ describe('insight preview display', () => {
                         type: 'constraint',
                         content: 'Do not silently blend workspaces.'
                     }
-                ]
+                ],
+                summary: {
+                    strongCount: 1,
+                    reviewCount: 0,
+                    weakCount: 0,
+                    autoPersistCount: 1,
+                    reviewOnlyCount: 0,
+                    readyPromotionCount: 1,
+                    reviewPromotionCount: 0,
+                    blockedPromotionCount: 0
+                }
             }
         );
 

@@ -1,5 +1,5 @@
 import { createHash } from 'crypto';
-import type { NodeType } from '../schema';
+import type { KnowledgeCandidate, KnowledgePreviewSummary, NodeType } from '../schema';
 import { canonicalizeKnowledgeCandidateText } from '../knowledge-scoring';
 
 export function buildKnowledgeTrustSummary(
@@ -273,6 +273,7 @@ export function describeKnowledgePromotionState(input: {
     evidenceCount: number;
     distinctEvidenceCount: number;
     distinctSessionCount: number;
+    corroboratedRoles?: string[] | null;
     originContextId: string | null;
     originNodeId: string | null;
 }): {
@@ -280,10 +281,18 @@ export function describeKnowledgePromotionState(input: {
     promotionSummary: string;
 } {
     const importedWithoutLocalEvidence = input.evidenceCount === 0 && (input.originContextId || input.originNodeId);
+    const roles = new Set((input.corroboratedRoles ?? []).map((value) => String(value || '').trim().toLowerCase()).filter(Boolean));
+    const assistantOnly = roles.size === 1 && roles.has('assistant');
     if (importedWithoutLocalEvidence) {
         return {
             promotionState: 'blocked',
             promotionSummary: 'Blocked: promoted insight has no local corroboration yet. Reconfirm it in this workspace before promoting it onward.'
+        };
+    }
+    if (assistantOnly) {
+        return {
+            promotionState: 'blocked',
+            promotionSummary: 'Blocked: assistant-only signals stay local until a user message or another corroborating session confirms them.'
         };
     }
     if (input.trustTier === 'weak') {
@@ -315,6 +324,38 @@ export function describeKnowledgePromotionState(input: {
             ? `Ready to promote: corroborated across ${input.distinctSessionCount} sessions with enough evidence to move across workspaces.`
             : 'Ready to promote: corroborated insight with enough evidence to move across workspaces.'
     };
+}
+
+export function buildKnowledgePreviewSummary(
+    candidates: Array<Pick<KnowledgeCandidate, 'reviewTier' | 'promotionState' | 'autoPersist'>>
+): KnowledgePreviewSummary {
+    const summary: KnowledgePreviewSummary = {
+        strongCount: 0,
+        reviewCount: 0,
+        weakCount: 0,
+        autoPersistCount: 0,
+        reviewOnlyCount: 0,
+        readyPromotionCount: 0,
+        reviewPromotionCount: 0,
+        blockedPromotionCount: 0
+    };
+
+    for (const candidate of candidates) {
+        const reviewTier = String(candidate.reviewTier || '').trim().toLowerCase();
+        if (reviewTier === 'strong') summary.strongCount += 1;
+        else if (reviewTier === 'review') summary.reviewCount += 1;
+        else summary.weakCount += 1;
+
+        if (candidate.autoPersist === true) summary.autoPersistCount += 1;
+        else summary.reviewOnlyCount += 1;
+
+        const promotionState = String(candidate.promotionState || '').trim().toLowerCase();
+        if (promotionState === 'ready') summary.readyPromotionCount += 1;
+        else if (promotionState === 'review') summary.reviewPromotionCount += 1;
+        else summary.blockedPromotionCount += 1;
+    }
+
+    return summary;
 }
 
 export function buildKnowledgeKey(

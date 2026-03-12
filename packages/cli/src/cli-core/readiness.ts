@@ -118,8 +118,8 @@ export function createHookHealthCollector(deps: {
                 status: dumpDirWritable ? 'pass' : 'warn',
                 message: dumpDirWritable
                     ? deps.isHookDebugArtifactsEnabled()
-                        ? `Support dump directory is writable (debug artifacts enabled; raw dumps kept ${deps.getHookDumpRetentionDays()} days, debug trails kept ${deps.getHookDebugRetentionDays()} days).`
-                        : `Support dump directory is writable (raw dumps and debug trails are off by default; kept locally for ${deps.getHookDebugRetentionDays()} days only when debug artifacts are enabled).`
+                        ? `Debug artifact directory is writable (debug artifacts enabled; raw dumps kept ${deps.getHookDumpRetentionDays()} days, debug trails kept ${deps.getHookDebugRetentionDays()} days).`
+                        : `Debug artifact directory is writable (raw dumps and debug trails are off by default; kept locally for ${deps.getHookDebugRetentionDays()} days only when debug artifacts are enabled).`
                     : 'Hook dump directory is not writable.',
                 details: {
                     path: dumpDir,

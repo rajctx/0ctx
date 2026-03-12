@@ -141,6 +141,17 @@ export interface KnowledgeCandidate {
     autoPersistSummary?: string | null;
 }
 
+export interface KnowledgePreviewSummary {
+    strongCount: number;
+    reviewCount: number;
+    weakCount: number;
+    autoPersistCount: number;
+    reviewOnlyCount: number;
+    readyPromotionCount: number;
+    reviewPromotionCount: number;
+    blockedPromotionCount: number;
+}
+
 export interface KnowledgePreviewResult {
     contextId: string;
     source: 'session' | 'checkpoint';
@@ -149,6 +160,7 @@ export interface KnowledgePreviewResult {
     candidateCount: number;
     createCount: number;
     reuseCount: number;
+    summary: KnowledgePreviewSummary;
     candidates: KnowledgeCandidate[];
 }
 

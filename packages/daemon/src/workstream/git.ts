@@ -3,6 +3,8 @@ import path from 'path';
 
 export interface WorkingTreeState {
     hasUncommittedChanges: boolean;
+    hasMergeConflicts: boolean;
+    unmergedCount: number;
     stagedChangeCount: number;
     unstagedChangeCount: number;
     untrackedCount: number;
@@ -114,6 +116,7 @@ export function getWorkingTreeState(repositoryRoot: string | null): WorkingTreeS
         return null;
     }
 
+    let unmergedCount = 0;
     let stagedChangeCount = 0;
     let unstagedChangeCount = 0;
     let untrackedCount = 0;
@@ -132,6 +135,11 @@ export function getWorkingTreeState(repositoryRoot: string | null): WorkingTreeS
         if (x === '!' && y === '!') {
             continue;
         }
+        const pair = `${x}${y}`;
+        if (['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU'].includes(pair)) {
+            unmergedCount += 1;
+            continue;
+        }
         if (x !== ' ') {
             stagedChangeCount += 1;
         }
@@ -141,7 +149,9 @@ export function getWorkingTreeState(repositoryRoot: string | null): WorkingTreeS
     }
 
     return {
-        hasUncommittedChanges: stagedChangeCount > 0 || unstagedChangeCount > 0 || untrackedCount > 0,
+        hasUncommittedChanges: unmergedCount > 0 || stagedChangeCount > 0 || unstagedChangeCount > 0 || untrackedCount > 0,
+        hasMergeConflicts: unmergedCount > 0,
+        unmergedCount,
         stagedChangeCount,
         unstagedChangeCount,
         untrackedCount

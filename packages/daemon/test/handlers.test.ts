@@ -1043,6 +1043,8 @@ describe('daemon request handling', () => {
                 checkedOutElsewhere: boolean | null;
                 upstream: string | null;
                 hasUncommittedChanges: boolean | null;
+                hasMergeConflicts?: boolean | null;
+                unmergedCount?: number | null;
                 stagedChangeCount: number | null;
                 unstagedChangeCount: number | null;
                 untrackedCount: number | null;
@@ -1062,6 +1064,8 @@ describe('daemon request handling', () => {
             expect(lanes[0].checkedOutWorktreePaths.map(item => path.resolve(item))).toContain(path.resolve(repoRoot));
             expect(lanes[0].upstream).toBeNull();
             expect(lanes[0].hasUncommittedChanges).toBe(true);
+            expect(lanes[0].hasMergeConflicts).toBe(false);
+            expect(lanes[0].unmergedCount).toBe(0);
             expect(lanes[0].stagedChangeCount).toBeGreaterThanOrEqual(1);
             expect(lanes[0].unstagedChangeCount).toBe(1);
             expect(lanes[0].untrackedCount).toBe(1);
@@ -1089,6 +1093,8 @@ describe('daemon request handling', () => {
                 checkedOutHere: boolean | null;
                 checkedOutElsewhere: boolean | null;
                 hasUncommittedChanges: boolean | null;
+                hasMergeConflicts?: boolean | null;
+                unmergedCount?: number | null;
                 stagedChangeCount: number | null;
                 unstagedChangeCount: number | null;
                 untrackedCount: number | null;
@@ -1112,6 +1118,8 @@ describe('daemon request handling', () => {
             expect(brief.checkedOutElsewhere).toBe(false);
             expect(brief.checkedOutWorktreePaths.map(item => path.resolve(item))).toContain(path.resolve(repoRoot));
             expect(brief.hasUncommittedChanges).toBe(true);
+            expect(brief.hasMergeConflicts).toBe(false);
+            expect(brief.unmergedCount).toBe(0);
             expect(brief.stagedChangeCount).toBeGreaterThanOrEqual(1);
             expect(brief.unstagedChangeCount).toBe(1);
             expect(brief.untrackedCount).toBe(1);
@@ -1156,6 +1164,8 @@ describe('daemon request handling', () => {
                     checkedOutHere: boolean | null;
                     checkedOutElsewhere: boolean | null;
                     hasUncommittedChanges: boolean | null;
+                    hasMergeConflicts?: boolean | null;
+                    unmergedCount?: number | null;
                     stagedChangeCount: number | null;
                     unstagedChangeCount: number | null;
                     untrackedCount: number | null;
@@ -1180,6 +1190,8 @@ describe('daemon request handling', () => {
             expect(pack.workstream.checkedOutElsewhere).toBe(false);
             expect(pack.workstream.checkedOutWorktreePaths.map(item => path.resolve(item))).toContain(path.resolve(repoRoot));
             expect(pack.workstream.hasUncommittedChanges).toBe(true);
+            expect(pack.workstream.hasMergeConflicts).toBe(false);
+            expect(pack.workstream.unmergedCount).toBe(0);
             expect(pack.workstream.stagedChangeCount).toBeGreaterThanOrEqual(1);
             expect(pack.workstream.unstagedChangeCount).toBe(1);
             expect(pack.workstream.untrackedCount).toBe(1);
@@ -1244,6 +1256,128 @@ describe('daemon request handling', () => {
             expect(inferredPack.workstream.branch).toBe('feature/runtime-shape');
             expect(inferredPack.baseline?.branch).toBe('main');
         } finally {
+            db.close();
+        }
+    }, 15000);
+
+    it('represents unresolved merge conflicts as a blocked workstream state', () => {
+        const { db, graph } = createGraph();
+        const repoRoot = mkdtempSync(path.join(os.tmpdir(), 'ctx-workstream-conflicted-'));
+
+        try {
+            execFileSync('git', ['init'], { cwd: repoRoot, stdio: 'ignore' });
+            execFileSync('git', ['config', 'user.name', '0ctx Test'], { cwd: repoRoot, stdio: 'ignore' });
+            execFileSync('git', ['config', 'user.email', 'tests@0ctx.local'], { cwd: repoRoot, stdio: 'ignore' });
+
+            const conflictFile = path.join(repoRoot, 'conflict.txt');
+            writeFileSync(conflictFile, 'base\n');
+            execFileSync('git', ['add', 'conflict.txt'], { cwd: repoRoot, stdio: 'ignore' });
+            execFileSync('git', ['commit', '-m', 'base'], { cwd: repoRoot, stdio: 'ignore' });
+
+            execFileSync('git', ['checkout', '-b', 'feature/conflicted'], { cwd: repoRoot, stdio: 'ignore' });
+            writeFileSync(conflictFile, 'feature\n');
+            execFileSync('git', ['add', 'conflict.txt'], { cwd: repoRoot, stdio: 'ignore' });
+            execFileSync('git', ['commit', '-m', 'feature change'], { cwd: repoRoot, stdio: 'ignore' });
+
+            execFileSync('git', ['checkout', 'master'], { cwd: repoRoot, stdio: 'ignore' });
+            writeFileSync(conflictFile, 'main\n');
+            execFileSync('git', ['add', 'conflict.txt'], { cwd: repoRoot, stdio: 'ignore' });
+            execFileSync('git', ['commit', '-m', 'main change'], { cwd: repoRoot, stdio: 'ignore' });
+
+            let mergeFailed = false;
+            try {
+                execFileSync('git', ['merge', 'feature/conflicted'], { cwd: repoRoot, stdio: 'ignore' });
+            } catch {
+                mergeFailed = true;
+            }
+            expect(mergeFailed).toBe(true);
+
+            const session = handleRequest(graph, 'conn-workstream-conflicted', { method: 'createSession' }, runtime()) as { sessionToken: string };
+            const context = handleRequest(graph, 'conn-workstream-conflicted', {
+                method: 'createContext',
+                sessionToken: session.sessionToken,
+                params: { name: 'conflicted-context', paths: [repoRoot] }
+            }, runtime()) as { id: string };
+
+            graph.addNode({
+                contextId: context.id,
+                type: 'artifact',
+                key: 'chat_session:claude:conflicted-session',
+                content: 'Conflicted workstream session',
+                metadata: {
+                    artifactType: 'chat_session',
+                    agent: 'claude',
+                    sessionId: 'conflicted-session',
+                    branch: 'master',
+                    worktreePath: repoRoot,
+                    summary: 'conflicted workstream'
+                },
+                hidden: true
+            });
+
+            graph.addNode({
+                contextId: context.id,
+                type: 'artifact',
+                key: 'chat_turn:claude:conflicted-session:msg-1',
+                content: 'Resolve the merge conflict.',
+                metadata: {
+                    artifactType: 'chat_turn',
+                    agent: 'claude',
+                    sessionId: 'conflicted-session',
+                    messageId: 'msg-1',
+                    role: 'assistant',
+                    branch: 'master',
+                    worktreePath: repoRoot,
+                    occurredAt: Date.now()
+                },
+                hidden: true
+            });
+
+            const brief = handleRequest(graph, 'conn-workstream-conflicted', {
+                method: 'getWorkstreamBrief',
+                sessionToken: session.sessionToken,
+                params: { contextId: context.id, branch: 'master' }
+            }, runtime()) as any;
+
+            expect(brief.branch).toBe('master');
+            expect(brief.hasUncommittedChanges).toBe(true);
+            expect(brief.hasMergeConflicts).toBe(true);
+            expect(brief.unmergedCount).toBeGreaterThanOrEqual(1);
+            expect(brief.stateKind).toBe('conflicted');
+            expect(brief.stateSummary).toContain('unmerged');
+            expect(brief.stateActionHint).toContain('Resolve merge conflicts');
+            expect(brief.handoffReadiness).toBe('blocked');
+            expect(brief.handoffSummary).toContain('Resolve merge conflicts');
+            expect(brief.handoffBlockers).toContain('This workstream has unresolved merge conflicts.');
+            expect(brief.contextText).toContain('Status: Working tree has');
+            expect(brief.contextText).toContain('Recommended next step: Resolve merge conflicts');
+            expect(brief.contextText).toContain('Handoff: Do not hand this workstream off yet.');
+            expect(brief.contextText).toContain('Local changes:');
+            expect(brief.contextText).toContain('unmerged');
+
+            const pack = handleRequest(graph, 'conn-workstream-conflicted', {
+                method: 'getAgentContextPack',
+                sessionToken: session.sessionToken,
+                params: { contextId: context.id, branch: 'master' }
+            }, runtime()) as any;
+
+            expect(pack.workstream.branch).toBe('master');
+            expect(pack.workstream.hasUncommittedChanges).toBe(true);
+            expect(pack.workstream.hasMergeConflicts).toBe(true);
+            expect(pack.workstream.unmergedCount).toBeGreaterThanOrEqual(1);
+            expect(pack.workstream.stateKind).toBe('conflicted');
+            expect(pack.workstream.stateActionHint).toContain('Resolve merge conflicts');
+            expect(pack.workstream.handoffReadiness).toBe('blocked');
+            expect(pack.workstream.handoffBlockers).toContain('This workstream has unresolved merge conflicts.');
+            expect(pack.promptText).toContain('State: Working tree has');
+            expect(pack.promptText).toContain('Next: Resolve merge conflicts');
+            expect(pack.promptText).toContain('Handoff: Do not hand this workstream off yet.');
+        } finally {
+            try {
+                execFileSync('git', ['merge', '--abort'], { cwd: repoRoot, stdio: 'ignore' });
+            } catch {
+                // merge may already be cleaned up
+            }
             db.close();
         }
     }, 15000);
@@ -2413,6 +2547,21 @@ describe('daemon request handling', () => {
                 }
             }, runtime()) as { id: string };
 
+            const corroboratingUserEvidence = handleRequest(graph, 'conn-promote', {
+                method: 'addNode',
+                sessionToken: session.sessionToken,
+                params: {
+                    contextId: source.id,
+                    thread: 'session-promote-1',
+                    type: 'artifact',
+                    content: 'Please promote reviewed checkpoint guidance across workspaces.',
+                    key: 'chat_turn:factory:session-promote-1:user-1',
+                    tags: ['chat_turn', 'role:user', 'branch:feat/promotion'],
+                    source: 'hook:factory',
+                    hidden: true
+                }
+            }, runtime()) as { id: string };
+
             const node = handleRequest(graph, 'conn-promote', {
                 method: 'addNode',
                 sessionToken: session.sessionToken,
@@ -2431,6 +2580,17 @@ describe('daemon request handling', () => {
                     contextId: source.id,
                     fromId: node.id,
                     toId: evidence.id,
+                    relation: 'caused_by'
+                }
+            }, runtime());
+
+            handleRequest(graph, 'conn-promote', {
+                method: 'addEdge',
+                sessionToken: session.sessionToken,
+                params: {
+                    contextId: source.id,
+                    fromId: node.id,
+                    toId: corroboratingUserEvidence.id,
                     relation: 'caused_by'
                 }
             }, runtime());

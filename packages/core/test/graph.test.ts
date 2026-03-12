@@ -416,14 +416,26 @@ describe('Graph context isolation', () => {
             expect(String(repeatedGoal?.reviewSummary || '')).toContain('one session');
             expect(repeatedGoal?.autoPersist).toBe(false);
             expect(String(repeatedGoal?.autoPersistSummary || '')).toContain('Single-session corroboration stays manual');
+            expect(repeatedGoal?.distinctEvidenceCount).toBe(1);
             expect(repeatedGoal?.distinctSessionCount).toBe(1);
             expect(String(repeatedGoal?.evidenceSummary || '')).toContain('Repeated 2 times across user and assistant messages');
             expect(String(repeatedGoal?.trustSummary || '')).toContain('Repeated within one session only');
             expect(repeatedGoal?.promotionState).toBe('review');
             expect(String(repeatedGoal?.promotionSummary || '')).toContain('single session');
-            expect(repeatedGoal?.trustFlags).toEqual(expect.arrayContaining(['repeated', 'distinct_support', 'cross_role', 'same_session_only']));
+            expect(repeatedGoal?.trustFlags).toEqual(expect.arrayContaining(['repeated', 'cross_role', 'same_session_only']));
+            expect(repeatedGoal?.trustFlags).not.toContain('distinct_support');
             expect(Array.isArray(repeatedGoal?.evidencePreview)).toBe(true);
             expect(String(repeatedGoal?.sourceExcerpt || '')).toContain('branch-first desktop workflow');
+            expect(preview.summary).toMatchObject({
+                strongCount: 0,
+                reviewCount: 1,
+                weakCount: 0,
+                autoPersistCount: 0,
+                reviewOnlyCount: 1,
+                readyPromotionCount: 0,
+                reviewPromotionCount: 1,
+                blockedPromotionCount: 0
+            });
         } finally {
             db.close();
         }
@@ -1239,6 +1251,8 @@ describe('Graph context isolation', () => {
             expect(String(goalCandidate?.evidenceSummary || '')).toContain('Single assistant-only statement');
             expect(goalCandidate?.autoPersist).toBe(false);
             expect(String(goalCandidate?.autoPersistSummary || '')).toContain('Assistant-only');
+            expect(goalCandidate?.promotionState).toBe('blocked');
+            expect(String(goalCandidate?.promotionSummary || '')).toContain('assistant-only');
 
             const extraction = graph.extractKnowledgeFromSession(ctx.id, 'session-assistant-goal-1');
             expect(extraction.nodeCount).toBe(0);
@@ -1874,6 +1888,12 @@ describe('Graph checkpoints', () => {
             });
             expect(autoResult.nodeCount).toBe(0);
 
+            const preview = graph.previewKnowledgeFromCheckpoint(checkpoint.id, {
+                minConfidence: 0.64
+            });
+            expect(preview.candidates[0]?.promotionState).toBe('blocked');
+            expect(String(preview.candidates[0]?.promotionSummary || '')).toContain('assistant-only');
+
             const manualResult = graph.extractKnowledgeFromCheckpoint(checkpoint.id, {
                 minConfidence: 0.64
             });
@@ -1889,7 +1909,17 @@ describe('Graph checkpoints', () => {
         try {
             const source = graph.createContext('source-workspace');
             const target = graph.createContext('target-workspace');
-            const supportingTurn = graph.addNode({
+            const supportingUserTurn = graph.addNode({
+                contextId: source.id,
+                thread: 'session-promote-1',
+                type: 'artifact',
+                content: 'We need to ship checkpoints as the primary restore primitive.',
+                key: 'chat_turn:factory:session-promote-1:user-1',
+                tags: ['chat_turn', 'role:user', 'branch:feat/restore-flow'],
+                source: 'hook:factory',
+                hidden: true
+            });
+            const supportingAssistantTurn = graph.addNode({
                 contextId: source.id,
                 thread: 'session-promote-1',
                 type: 'artifact',
@@ -1907,7 +1937,8 @@ describe('Graph checkpoints', () => {
                 source: 'extractor:session',
                 hidden: false
             });
-            graph.addEdge(insight.id, supportingTurn.id, 'caused_by');
+            graph.addEdge(insight.id, supportingUserTurn.id, 'caused_by');
+            graph.addEdge(insight.id, supportingAssistantTurn.id, 'caused_by');
 
             const first = graph.promoteInsightNode(source.id, insight.id, target.id);
             expect(first.created).toBe(true);
@@ -1993,11 +2024,21 @@ describe('Graph checkpoints', () => {
         try {
             const source = graph.createContext('source-workspace-promotion-review');
             const target = graph.createContext('target-workspace-promotion-review');
-            const supportingTurn = graph.addNode({
+            const supportingUserTurn = graph.addNode({
                 contextId: source.id,
                 thread: 'session-review-1',
                 type: 'artifact',
-                content: 'We should keep repo routing strict for this workflow.',
+                content: 'We need to keep repo routing strict for this workflow.',
+                key: 'chat_turn:factory:session-review-1:user-1',
+                tags: ['chat_turn', 'role:user', 'branch:feat/promotion-review'],
+                source: 'hook:factory',
+                hidden: true
+            });
+            const supportingAssistantTurn = graph.addNode({
+                contextId: source.id,
+                thread: 'session-review-1',
+                type: 'artifact',
+                content: 'Agreed. Keep repo routing strict for this workflow.',
                 key: 'chat_turn:factory:session-review-1:assistant-1',
                 tags: ['chat_turn', 'role:assistant', 'branch:feat/promotion-review'],
                 source: 'hook:factory',
@@ -2011,7 +2052,8 @@ describe('Graph checkpoints', () => {
                 source: 'extractor:session',
                 hidden: false
             });
-            graph.addEdge(reviewInsight.id, supportingTurn.id, 'caused_by');
+            graph.addEdge(reviewInsight.id, supportingUserTurn.id, 'caused_by');
+            graph.addEdge(reviewInsight.id, supportingAssistantTurn.id, 'caused_by');
 
             const insights = graph.listWorkstreamInsights(source.id, { branch: 'feat/promotion-review' });
             expect(insights[0]?.trustTier).toBe('review');
@@ -2020,6 +2062,42 @@ describe('Graph checkpoints', () => {
             const result = graph.promoteInsightNode(source.id, reviewInsight.id, target.id);
             expect(result.created).toBe(true);
             expect(result.reused).toBe(false);
+        } finally {
+            db.close();
+        }
+    });
+
+    it('blocks promotion of assistant-only review insights until another source corroborates them', () => {
+        const { db, graph } = createGraph();
+        try {
+            const source = graph.createContext('source-workspace-promotion-assistant-only');
+            const target = graph.createContext('target-workspace-promotion-assistant-only');
+            const supportingTurn = graph.addNode({
+                contextId: source.id,
+                thread: 'session-review-assistant-only-1',
+                type: 'artifact',
+                content: 'We should keep repo routing strict for this workflow.',
+                key: 'chat_turn:factory:session-review-assistant-only-1:assistant-1',
+                tags: ['chat_turn', 'role:assistant', 'branch:feat/promotion-assistant-only'],
+                source: 'hook:factory',
+                hidden: true
+            });
+            const reviewInsight = graph.addNode({
+                contextId: source.id,
+                type: 'constraint',
+                content: 'Keep repo routing strict for this workflow.',
+                tags: ['knowledge', 'branch:feat/promotion-assistant-only'],
+                source: 'extractor:session',
+                hidden: false
+            });
+            graph.addEdge(reviewInsight.id, supportingTurn.id, 'caused_by');
+
+            const insights = graph.listWorkstreamInsights(source.id, { branch: 'feat/promotion-assistant-only' });
+            expect(insights[0]?.trustTier).toBe('review');
+            expect(insights[0]?.promotionState).toBe('blocked');
+            expect(String(insights[0]?.promotionSummary || '')).toContain('assistant-only');
+
+            expect(() => graph.promoteInsightNode(source.id, reviewInsight.id, target.id)).toThrow(/assistant-only/i);
         } finally {
             db.close();
         }

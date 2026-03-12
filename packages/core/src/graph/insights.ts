@@ -176,6 +176,7 @@ function buildInsightSummaryRecord(
         evidenceCount: evidence.evidenceCount,
         distinctEvidenceCount: evidence.distinctEvidenceCount,
         distinctSessionCount: evidence.distinctSessionCount,
+        corroboratedRoles: evidence.corroboratedRoles,
         originContextId: originContextId ?? null,
         originNodeId: originNodeId ?? null
     });
@@ -289,6 +290,7 @@ export function promoteInsightNodeRecord(
         evidenceCount: sourceEvidence.evidenceCount,
         distinctEvidenceCount: sourceEvidence.distinctEvidenceCount,
         distinctSessionCount: sourceEvidence.distinctSessionCount,
+        corroboratedRoles: sourceEvidence.corroboratedRoles,
         originContextId: sourceOriginContextId,
         originNodeId: sourceOriginNodeId
     });

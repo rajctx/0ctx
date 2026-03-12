@@ -1,7 +1,7 @@
 (() => {
   window.OctxDesktop = window.OctxDesktop || {};
   const app = window.OctxDesktop;
-  const { state, matches, activeSession, selectedCheckpoint, activeCheckpointKnowledgePreview, selectedKnowledgeKeys, describeCheckpoint, describeSession, esc, formatRelativeTime, renderMetaLine, commitShort, formatTime, renderKnowledgeCandidates, short, normalizeBranch } = app;
+  const { state, matches, activeSession, selectedCheckpoint, activeCheckpointKnowledgePreview, selectedKnowledgeKeys, describeCheckpoint, describeSession, esc, formatRelativeTime, renderMetaLine, commitShort, formatTime, renderKnowledgeCandidates, describeKnowledgePreviewSummary, short, normalizeBranch } = app;
 
   function renderCheckpoints() {
       const checkpoints = state.checkpoints.filter((checkpoint) => matches(`${checkpoint.summary || ''} ${checkpoint.name || ''} ${checkpoint.sessionId || ''} ${checkpoint.commitSha || ''}`));
@@ -78,6 +78,7 @@
         document.getElementById('checkpointMeta').innerHTML = '';
         document.getElementById('checkpointKnowledgePreviewPanel').classList.add('hidden');
         document.getElementById('checkpointKnowledgePreviewBadge').textContent = '0 candidates';
+        document.getElementById('checkpointKnowledgePreviewMeta').textContent = '0 strong · 0 review · 0 weak';
         document.getElementById('checkpointKnowledgePreviewList').innerHTML = '';
         empty.classList.remove('hidden');
       body.classList.add('hidden');
@@ -121,11 +122,13 @@
     if (!preview) {
       previewPanel.classList.add('hidden');
       document.getElementById('checkpointKnowledgePreviewBadge').textContent = '0 selected';
+      document.getElementById('checkpointKnowledgePreviewMeta').textContent = '0 strong · 0 review · 0 weak';
       document.getElementById('checkpointKnowledgePreviewList').innerHTML = '';
     } else {
       previewPanel.classList.remove('hidden');
       const selectedCount = selectedKnowledgeKeys('checkpoint').length;
       document.getElementById('checkpointKnowledgePreviewBadge').textContent = `${selectedCount} selected / ${preview.candidateCount}`;
+      document.getElementById('checkpointKnowledgePreviewMeta').textContent = describeKnowledgePreviewSummary(preview.summary);
       document.getElementById('checkpointKnowledgePreviewList').innerHTML = renderKnowledgeCandidates(preview.candidates, 'checkpoint');
     }
   }

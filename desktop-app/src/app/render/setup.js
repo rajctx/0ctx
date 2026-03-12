@@ -42,11 +42,11 @@
       labels[0].textContent = 'Setup commands';
     }
     if (labels[3]) {
-      labels[3].textContent = 'Support actions';
+      labels[3].textContent = 'Utility actions';
     }
     const headings = Array.from(document.querySelectorAll?.('section[data-view="setup"] h4') || []);
     if (headings[2]) {
-      headings[2].textContent = 'Runtime support';
+      headings[2].textContent = 'Runtime utilities';
     }
   }
 
@@ -63,8 +63,8 @@
       setupPageMeta.textContent = state.runtimeIssue
         ? state.runtimeIssue.detail
         : installedGa.length > 0
-          ? `${installedGa.length} GA integration${installedGa.length === 1 ? '' : 's'} ${installedGa.length === 1 ? 'is' : 'are'} installed on this machine. Use this screen only to enable another repo, add another GA agent, or open runtime support when something is off.`
-            : 'No GA integrations are installed on this machine yet. Use this screen to add a supported integration for the normal repo-first path.';
+          ? `${installedGa.length} GA integration${installedGa.length === 1 ? '' : 's'} ${installedGa.length === 1 ? 'is' : 'are'} installed on this machine. Use this screen only to enable another repo, add another GA agent, or open runtime utilities when something is off.`
+          : 'No GA integrations are installed on this machine yet. Use this screen to add a supported integration for the normal repo-first path.';
     }
 
     document.getElementById('hookSummary').textContent = `${installedGa.length} GA installed / ${gaHooks.length}`;
@@ -137,7 +137,7 @@
     document.getElementById('setupSupportCopy').textContent = state.runtimeIssue
       ? state.runtimeIssue.detail
       : zeroTouch.ready
-        ? 'The supported path is active. Use setup only when enabling another repo, adding another GA integration, or opening runtime support.'
+        ? 'The supported path is active. Use setup only when enabling another repo, adding another GA integration, or opening runtime utilities.'
         : 'Use setup once to reach the supported path, then work from the bound repo in the agent.';
 
     const policy = state.dataPolicy || {
@@ -152,6 +152,11 @@
     const badge = document.getElementById('policySummaryBadge');
     const hint = document.getElementById('policyHint');
     const detailList = document.getElementById('policyDetailList');
+    const syncInput = document.getElementById('dataPolicySyncPolicy');
+    const captureInput = document.getElementById('dataPolicyCaptureRetention');
+    const debugInput = document.getElementById('dataPolicyDebugRetention');
+    const debugToggle = document.getElementById('dataPolicyDebugArtifacts');
+    const applyCustomButton = document.getElementById('applyCustomDataPolicy');
     const supportsMutation = methodSupported('setDataPolicy');
     const preset = String(policy.preset || 'lean').trim().toLowerCase();
     const actionHint = dataPolicyActionHint(policy);
@@ -171,6 +176,32 @@
         ? 'Full sync is available only after a workspace is active.'
         : '';
     });
+
+    if (syncInput) {
+      syncInput.value = String(policy.syncPolicy || 'metadata_only').trim().toLowerCase();
+      Array.from(syncInput.options || []).forEach((option) => {
+        option.disabled = option.value === 'full_sync' && !workspaceResolved;
+      });
+      if (!workspaceResolved && syncInput.value === 'full_sync') {
+        syncInput.value = 'metadata_only';
+      }
+      syncInput.disabled = !supportsMutation;
+    }
+    if (captureInput) {
+      captureInput.value = String(Number.isFinite(policy.captureRetentionDays) ? policy.captureRetentionDays : 14);
+      captureInput.disabled = !supportsMutation;
+    }
+    if (debugInput) {
+      debugInput.value = String(Number.isFinite(policy.debugRetentionDays) ? policy.debugRetentionDays : 7);
+      debugInput.disabled = !supportsMutation;
+    }
+    if (debugToggle) {
+      debugToggle.checked = policy.debugArtifactsEnabled === true;
+      debugToggle.disabled = !supportsMutation;
+    }
+    if (applyCustomButton) {
+      applyCustomButton.disabled = !supportsMutation;
+    }
 
     if (badge) {
       badge.textContent = formatDataPolicyPresetLabel(policy.preset || 'lean');
