@@ -1,7 +1,7 @@
 (() => {
   window.OctxDesktop = window.OctxDesktop || {};
   const app = window.OctxDesktop;
-  const { state, matches, activeContext, activeBranch, activeSession, activeSessionKnowledgePreview, selectedKnowledgeKeys, selectedTurn, describeSession, describeTurn, describeSelectedTurn, describeBranchLane, esc, formatRelativeTime, renderMetaLine, humanizeLabel, commitShort, renderChip, chipToneForRole, chipToneForAgent, formatTime, renderKnowledgeCandidates, describeKnowledgePreviewSummary, normalizeBranch } = app;
+  const { state, matches, activeContext, activeBranch, activeSession, activeSessionKnowledgePreview, selectedKnowledgeKeys, selectedTurn, describeSession, describeTurn, describeSelectedTurn, describeBranchLane, esc, short, formatRelativeTime, renderMetaLine, humanizeLabel, commitShort, renderChip, chipToneForRole, chipToneForAgent, formatTime, renderKnowledgeCandidates, describeKnowledgePreviewSummary, normalizeBranch } = app;
 
   function renderSessions() {
     const sessions = state.sessions.filter((session) => matches(`${session.sessionId} ${session.summary || ''} ${session.branch || ''} ${session.commitSha || ''} ${session.agent || ''}`));

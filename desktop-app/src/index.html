@@ -214,50 +214,50 @@
             </header>
 
             <div class="page-grid page-grid-branches">
-              <aside id="branchDetailPanel" class="panel side-focus-panel editorial-rail">
+              <aside class="panel branch-library-panel">
                 <div class="section-row">
                   <div>
-                    <p class="section-label">Current workstream</p>
-                    <h3 id="branchDetailTitle">Choose a workstream</h3>
+                    <p class="section-label">Workstream library</p>
+                    <h2>Tracked workstreams</h2>
                   </div>
-                  <button class="btn tertiary" data-nav="sessions" type="button">Open sessions</button>
+                  <span id="branchHeadline" class="chip">0 workstreams</span>
                 </div>
-                <div id="branchDetailEmpty" class="empty-state">Select a workstream to inspect cross-agent activity and checkpoint coverage.</div>
-
-                <div id="branchDetailBody" class="detail-stack hidden">
-                  <p id="branchLeadCopy" class="lead-copy"></p>
-                  <div id="branchMeta" class="meta-grid compact-meta-grid"></div>
-                  <div class="subpanel compare-panel">
-                    <div class="section-row small">
-                      <div>
-                        <p class="section-label">Compare workstreams</p>
-                        <h4>Git divergence and agent overlap</h4>
-                      </div>
-                    </div>
-                    <label class="compare-select-wrap">
-                      <span class="sr-only">Choose another workstream to compare</span>
-                      <select id="branchCompareSelect" aria-label="Compare workstreams"></select>
-                    </label>
-                    <div id="branchCompareEmpty" class="empty-state">Choose another workstream to compare git divergence, recent activity, and shared agents.</div>
-                    <div id="branchCompareBody" class="detail-stack hidden">
-                      <p id="branchComparisonSummary" class="page-copy compact-copy"></p>
-                      <div id="branchComparisonMeta" class="meta-grid compact-meta-grid"></div>
-                      <div id="branchComparisonAgents" class="meta-grid compact-meta-grid"></div>
-                    </div>
-                  </div>
-                </div>
+                <div id="branchList" class="list stack-list compact-list-surface"></div>
               </aside>
 
               <section class="page-main-stack">
-                <section class="panel">
+                <section id="branchDetailPanel" class="panel branch-detail-panel">
                   <div class="section-row">
                     <div>
-                      <p class="section-label">Workstream library</p>
-                      <h2>Tracked workstreams</h2>
+                      <p class="section-label">Current workstream</p>
+                      <h3 id="branchDetailTitle">Choose a workstream</h3>
                     </div>
-                    <span id="branchHeadline" class="chip">0 workstreams</span>
+                    <button class="btn tertiary" data-nav="sessions" type="button">Open sessions</button>
                   </div>
-                  <div id="branchList" class="list stack-list compact-list-surface"></div>
+                  <div id="branchDetailEmpty" class="empty-state">Select a workstream to inspect cross-agent activity and checkpoint coverage.</div>
+
+                  <div id="branchDetailBody" class="detail-stack hidden">
+                    <p id="branchLeadCopy" class="lead-copy"></p>
+                    <div id="branchMeta" class="meta-grid compact-meta-grid"></div>
+                    <div class="subpanel compare-panel">
+                      <div class="section-row small">
+                        <div>
+                          <p class="section-label">Compare workstreams</p>
+                          <h4>Git divergence and agent overlap</h4>
+                        </div>
+                      </div>
+                      <label class="compare-select-wrap">
+                        <span class="sr-only">Choose another workstream to compare</span>
+                        <select id="branchCompareSelect" aria-label="Compare workstreams"></select>
+                      </label>
+                      <div id="branchCompareEmpty" class="empty-state">Choose another workstream to compare git divergence, recent activity, and shared agents.</div>
+                      <div id="branchCompareBody" class="detail-stack hidden">
+                        <p id="branchComparisonSummary" class="page-copy compact-copy"></p>
+                        <div id="branchComparisonMeta" class="meta-grid compact-meta-grid"></div>
+                        <div id="branchComparisonAgents" class="meta-grid compact-meta-grid"></div>
+                      </div>
+                    </div>
+                  </div>
                 </section>
 
                 <div class="page-card-grid two-up">
@@ -296,50 +296,50 @@
             </header>
 
             <div class="page-grid page-grid-sessions">
-              <aside class="panel side-focus-panel editorial-rail">
-                <div class="section-row">
-                  <div>
-                    <p class="section-label">Current session</p>
-                    <h3 id="sessionFocusTitle">Choose a session</h3>
+              <aside class="panel session-library-panel">
+                <section class="session-rail-block session-focus-block">
+                  <div class="section-row">
+                    <div>
+                      <p class="section-label">Current session</p>
+                      <h3 id="sessionFocusTitle">Choose a session</h3>
+                    </div>
                   </div>
-                </div>
-                <p id="sessionFocusMeta" class="page-copy compact-copy">Pick a workstream, then choose a session to read the message stream and capture a checkpoint.</p>
-                <div class="action-stack">
-                  <button id="createCheckpointBtn" class="btn primary wide" type="button">Create checkpoint</button>
-                </div>
-                <div class="utility-inline">
-                  <button id="previewSessionKnowledgeBtn" class="btn quiet" type="button">Preview insights</button>
-                  <button id="extractSessionKnowledgeBtn" class="btn quiet" type="button">Save selected insights</button>
-                </div>
+                  <p id="sessionFocusMeta" class="page-copy compact-copy">Pick a workstream, then choose a session to read the message stream and capture a checkpoint.</p>
+                  <div class="action-stack">
+                    <button id="createCheckpointBtn" class="btn primary wide" type="button">Create checkpoint</button>
+                  </div>
+                  <div class="utility-inline">
+                    <button id="previewSessionKnowledgeBtn" class="btn quiet" type="button">Preview insights</button>
+                    <button id="extractSessionKnowledgeBtn" class="btn quiet" type="button">Save selected insights</button>
+                  </div>
+                </section>
+
+                <section class="session-rail-block">
+                  <div class="section-row">
+                    <div>
+                      <p class="section-label">Conversation</p>
+                      <h2>Sessions</h2>
+                    </div>
+                    <span id="sessionHeadline" class="chip">0 sessions</span>
+                  </div>
+                  <div id="sessionList" class="list stack-list compact-list-surface"></div>
+                </section>
+
+                <section class="session-rail-block">
+                  <div class="section-row">
+                    <div>
+                      <p class="section-label">Messages</p>
+                      <h2>Message stream</h2>
+                    </div>
+                    <span id="turnCount" class="chip">0 messages</span>
+                  </div>
+                  <div id="turnList" class="list stack-list compact-list-surface"></div>
+                </section>
               </aside>
 
               <section class="page-main-stack">
-                <div class="page-card-grid two-up sessions-overview-grid">
-                  <section class="panel">
-                    <div class="section-row">
-                      <div>
-                        <p class="section-label">Conversation</p>
-                        <h2>Sessions</h2>
-                      </div>
-                      <span id="sessionHeadline" class="chip">0 sessions</span>
-                    </div>
-                    <div id="sessionList" class="list stack-list compact-list-surface"></div>
-                  </section>
-
-                  <section class="panel">
-                    <div class="section-row">
-                      <div>
-                        <p class="section-label">Messages</p>
-                        <h2>Message stream</h2>
-                      </div>
-                      <span id="turnCount" class="chip">0 messages</span>
-                    </div>
-                    <div id="turnList" class="list stack-list compact-list-surface"></div>
-                  </section>
-                </div>
-
                 <section class="panel reader-panel">
-            <div id="turnDetailEmpty" class="empty-state">Select a message to inspect its text and companion context.</div>
+                  <div id="turnDetailEmpty" class="empty-state">Select a message to inspect its text and companion context.</div>
 
                   <div id="turnDetailBody" class="reader-body hidden">
                     <div class="reader-header-block">
