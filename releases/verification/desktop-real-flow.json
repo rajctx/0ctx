@@ -1,6 +1,6 @@
 {
   "ok": true,
-  "validatedAt": "2026-03-12T09:09:43.275Z",
+  "validatedAt": "2026-03-12T09:15:26.270Z",
   "daemonStarted": true,
   "source": {
     "contextId": "54e17d31-8f60-45c1-b412-61fcdda3d628",
@@ -23,8 +23,8 @@
     "trustTier": "strong"
   },
   "promotion": {
-    "targetContextId": "c1c62ad0-a0b7-4ef3-b30c-943de389c12d",
-    "targetNodeId": "f365de2e-ceb7-4d9f-b0c1-e4aca3de4232",
+    "targetContextId": "337d39f9-f5f8-421c-a1b2-d05a6eed885e",
+    "targetNodeId": "87b05faf-4930-4c1c-8939-9fb7dda8d22a",
     "created": true,
     "reused": false
   },

@@ -9,6 +9,9 @@ import { fileURLToPath } from "node:url";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const verificationRoot = path.join(repoRoot, "releases", "verification");
 const reportPath = path.join(verificationRoot, "release-readiness.json");
+const cliPackagePath = path.join(repoRoot, "packages", "cli", "package.json");
+const desktopPackagePath = path.join(repoRoot, "desktop-app", "package.json");
+const tauriConfigPath = path.join(repoRoot, "desktop-app", "src-tauri", "tauri.conf.json");
 
 function run(command, args, options = {}) {
   const startedAt = Date.now();
@@ -44,6 +47,10 @@ function parseJsonOutput(runResult) {
   return JSON.parse(text.slice(firstBrace));
 }
 
+function readJsonFile(filePath) {
+  return JSON.parse(fs.readFileSync(filePath, "utf8"));
+}
+
 function getGitState() {
   const head = run("git", ["rev-parse", "HEAD"], { captureOutput: true });
   if (!head.ok) {
@@ -68,6 +75,23 @@ function summarizeStep(runResult) {
   };
 }
 
+function getVersionAlignment() {
+  const cliPackage = readJsonFile(cliPackagePath);
+  const desktopPackage = readJsonFile(desktopPackagePath);
+  const tauriConfig = readJsonFile(tauriConfigPath);
+  const cliVersion = String(cliPackage.version || "").trim() || null;
+  const desktopVersion = String(desktopPackage.version || "").trim() || null;
+  const tauriVersion = String(tauriConfig.version || "").trim() || null;
+  const versions = [cliVersion, desktopVersion, tauriVersion].filter(Boolean);
+  const uniqueVersions = Array.from(new Set(versions));
+  return {
+    cliVersion,
+    desktopVersion,
+    tauriVersion,
+    aligned: uniqueVersions.length === 1 && uniqueVersions.length > 0,
+  };
+}
+
 function parsePackDryRun(runResult) {
   const text = `${runResult.stdout ?? ""}\n${runResult.stderr ?? ""}`;
   const filename = text.match(/filename:\s+([^\r\n]+)/i)?.[1]?.trim() ?? null;
@@ -89,6 +113,12 @@ function parsePackDryRun(runResult) {
 
 function main() {
   const git = getGitState();
+  const versionAlignment = getVersionAlignment();
+  if (!versionAlignment.aligned) {
+    throw new Error(
+      `Version alignment failed. CLI=${versionAlignment.cliVersion ?? "?"}, desktop=${versionAlignment.desktopVersion ?? "?"}, tauri=${versionAlignment.tauriVersion ?? "?"}`
+    );
+  }
 
   const typecheck = run("npm", ["run", "typecheck"], { captureOutput: true });
   if (!typecheck.ok) {
@@ -140,6 +170,7 @@ function main() {
     ok: true,
     generatedAt: new Date().toISOString(),
     git,
+    versionAlignment,
     steps: {
       typecheck: summarizeStep(typecheck),
       build: summarizeStep(build),

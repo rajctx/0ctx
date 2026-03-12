@@ -32,8 +32,15 @@ The consolidated report also captures CLI package integrity details:
 - unpacked size
 - total files
 
+It also verifies version alignment across:
+
+- `packages/cli/package.json`
+- `desktop-app/package.json`
+- `desktop-app/src-tauri/tauri.conf.json`
+
 The consolidated report includes:
 
+- version alignment
 - typecheck
 - build
 - CLI package dry-run
