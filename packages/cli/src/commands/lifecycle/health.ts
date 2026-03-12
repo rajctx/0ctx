@@ -4,6 +4,51 @@ import color from 'picocolors';
 import type { BootstrapResult, DoctorCheck, FlagMap, HealthCommandDeps, RepairStep } from './types';
 
 export function createHealthCommands(deps: HealthCommandDeps) {
+    async function collectRepoZeroTouchCheck(): Promise<DoctorCheck | null> {
+        const repoRoot = deps.findGitRepoRoot(null);
+        if (!repoRoot) return null;
+
+        const repoReadiness = await deps.collectRepoReadiness({ repoRoot }).catch(() => null);
+        if (!repoReadiness) {
+            return {
+                id: 'repo_zero_touch',
+                status: 'warn',
+                message: 'Current repo readiness could not be resolved.',
+                details: { repoRoot }
+            };
+        }
+
+        if (!repoReadiness.contextId || !repoReadiness.workspaceName) {
+            return {
+                id: 'repo_zero_touch',
+                status: 'warn',
+                message: 'Current repo is not enabled for automatic context yet.',
+                details: {
+                    repoRoot,
+                    nextActionHint: repoReadiness.nextActionHint ?? 'Run 0ctx enable in this repo.'
+                }
+            };
+        }
+
+        return {
+            id: 'repo_zero_touch',
+            status: repoReadiness.zeroTouchReady ? 'pass' : 'warn',
+            message: repoReadiness.zeroTouchReady
+                ? 'Current repo is zero-touch ready for supported agents.'
+                : 'Current repo still needs one-time automatic-context setup.',
+            details: {
+                repoRoot,
+                workspaceName: repoReadiness.workspaceName,
+                captureReadyAgents: repoReadiness.captureReadyAgents,
+                autoContextAgents: repoReadiness.autoContextAgents,
+                autoContextMissingAgents: repoReadiness.autoContextMissingAgents,
+                sessionStartMissingAgents: repoReadiness.sessionStartMissingAgents,
+                mcpRegistrationMissingAgents: repoReadiness.mcpRegistrationMissingAgents,
+                nextActionHint: repoReadiness.nextActionHint
+            }
+        };
+    }
+
     async function collectDoctorChecks(flags: FlagMap): Promise<{ checks: DoctorCheck[]; daemon: { ok: boolean; error?: string; health?: any } }> {
         const checks: DoctorCheck[] = [];
         const daemon = await deps.isDaemonReachable();
@@ -67,7 +112,106 @@ export function createHealthCommands(deps: HealthCommandDeps) {
         checks.push(hookHealth.check);
         checks.push(hookHealth.dumpCheck);
 
+        if (daemon.ok) {
+            const repoZeroTouchCheck = await collectRepoZeroTouchCheck();
+            if (repoZeroTouchCheck) checks.push(repoZeroTouchCheck);
+        }
+
         return { checks, daemon };
+    }
+
+    async function repairRepoZeroTouch(flags: FlagMap): Promise<RepairStep | null> {
+        const repoRoot = deps.findGitRepoRoot(null);
+        if (!repoRoot) return null;
+
+        const initialReadiness = await deps.collectRepoReadiness({ repoRoot }).catch(() => null);
+        if (!initialReadiness || !initialReadiness.contextId || !initialReadiness.workspaceName) {
+            return {
+                id: 'repo_zero_touch',
+                status: 'warn',
+                code: 0,
+                message: 'Current repo is not enabled yet.',
+                details: {
+                    repoRoot,
+                    nextActionHint: initialReadiness?.nextActionHint ?? 'Run 0ctx enable in this repo.'
+                }
+            };
+        }
+
+        if (initialReadiness.zeroTouchReady) {
+            return {
+                id: 'repo_zero_touch',
+                status: 'pass',
+                code: 0,
+                message: 'Current repo is already zero-touch ready for supported agents.',
+                details: { repoRoot, workspaceName: initialReadiness.workspaceName }
+            };
+        }
+
+        const repaired: string[] = [];
+
+        if (initialReadiness.captureManagedForRepo && initialReadiness.sessionStartMissingAgents.length > 0) {
+            deps.installHooks({
+                projectRoot: repoRoot,
+                contextId: initialReadiness.contextId,
+                clients: initialReadiness.captureReadyAgents,
+                dryRun: false,
+                cliCommand: '0ctx'
+            });
+            repaired.push(`capture hooks (${initialReadiness.sessionStartMissingAgents.join(', ')})`);
+        }
+
+        if (initialReadiness.mcpRegistrationMissingAgents.length > 0) {
+            const bootstrapCode = await deps.commandBootstrap({
+                ...flags,
+                quiet: true,
+                json: false,
+                clients: initialReadiness.mcpRegistrationMissingAgents.join(','),
+                'mcp-profile': 'core'
+            });
+            if (bootstrapCode !== 0) {
+                return {
+                    id: 'repo_zero_touch',
+                    status: 'fail',
+                    code: bootstrapCode,
+                    message: 'Failed to repair automatic retrieval for the current repo.',
+                    details: {
+                        repoRoot,
+                        workspaceName: initialReadiness.workspaceName,
+                        attemptedMcpClients: initialReadiness.mcpRegistrationMissingAgents
+                    }
+                };
+            }
+            repaired.push(`automatic retrieval (${initialReadiness.mcpRegistrationMissingAgents.join(', ')})`);
+        }
+
+        const finalReadiness = await deps.collectRepoReadiness({ repoRoot, contextId: initialReadiness.contextId }).catch(() => null);
+        if (finalReadiness?.zeroTouchReady) {
+            return {
+                id: 'repo_zero_touch',
+                status: 'pass',
+                code: 0,
+                message: 'Current repo is now zero-touch ready for supported agents.',
+                details: {
+                    repoRoot,
+                    workspaceName: finalReadiness.workspaceName,
+                    repaired
+                }
+            };
+        }
+
+        return {
+            id: 'repo_zero_touch',
+            status: 'warn',
+            code: 0,
+            message: 'Current repo still needs one-time automatic-context setup.',
+            details: {
+                repoRoot,
+                workspaceName: finalReadiness?.workspaceName ?? initialReadiness.workspaceName,
+                repaired,
+                nextActionHint: finalReadiness?.nextActionHint ?? initialReadiness.nextActionHint
+            }
+        };
     }
 
     async function commandDoctor(flags: FlagMap): Promise<number> {
@@ -192,6 +336,15 @@ export function createHealthCommands(deps: HealthCommandDeps) {
                 return hookRepairStep.code || 1;
             }
 
+            const repoZeroTouchStep = await repairRepoZeroTouch(flags);
+            if (repoZeroTouchStep) {
+                steps.push(repoZeroTouchStep);
+                if (repoZeroTouchStep.status === 'fail') {
+                    console.log(JSON.stringify({ ok: false, steps }, null, 2));
+                    return repoZeroTouchStep.code || 1;
+                }
+            }
+
             if (deep) {
                 const check = await deps.ensureDaemonCapabilities(['recall']);
                 const recallReady = check.ok;
@@ -260,6 +413,17 @@ export function createHealthCommands(deps: HealthCommandDeps) {
         }
         if (hookRepairStep.status === 'warn') p.log.warn(hookRepairStep.message);
         else p.log.success(hookRepairStep.message);
+
+        const repoZeroTouchStep = await repairRepoZeroTouch(flags);
+        if (repoZeroTouchStep) {
+            if (repoZeroTouchStep.status === 'fail') {
+                p.log.error(repoZeroTouchStep.message);
+                p.outro(color.yellow('Repair partial (repo automatic context failed)'));
+                return repoZeroTouchStep.code || 1;
+            }
+            if (repoZeroTouchStep.status === 'warn') p.log.warn(repoZeroTouchStep.message);
+            else p.log.success(repoZeroTouchStep.message);
+        }
 
         if (deep) {
             p.log.step('Running deep daemon capability checks');

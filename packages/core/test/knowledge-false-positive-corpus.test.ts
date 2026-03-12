@@ -99,7 +99,7 @@ describe('Reviewed insight false-positive corpus', () => {
             const context = graph.createContext('knowledge-false-positive-readiness');
             addSession(graph, context.id, 'session-corpus-3');
             addTurn(graph, context.id, 'session-corpus-3', 'assistant-1', 'assistant', 'Ready: zero-touch for supported agents.', 1700001211000);
-            addTurn(graph, context.id, 'session-corpus-3', 'assistant-2', 'assistant', 'Next step: Register MCP retrieval for Claude and Antigravity.', 1700001212000);
+            addTurn(graph, context.id, 'session-corpus-3', 'assistant-2', 'assistant', 'Next step: Complete one-time context setup for Claude and Antigravity.', 1700001212000);
             addTurn(graph, context.id, 'session-corpus-3', 'assistant-3', 'assistant', 'Automatic context is ready once supported integrations are installed.', 1700001213000);
 
             const preview = graph.previewKnowledgeFromSession(context.id, 'session-corpus-3');
@@ -174,6 +174,30 @@ describe('Reviewed insight false-positive corpus', () => {
             expect(contents).not.toContain('How much of work is remaining now, and are we done?');
             expect(contents).not.toContain('Please continue and update Linear with the child tasks.');
             expect(contents).toContain('How should cross-context retrieval work for agents when two workspaces share reviewed insights?');
+        } finally {
+            db.close();
+        }
+    });
+
+    it('skips reviewed-insight trust summaries and setup policy helper copy during session preview', () => {
+        const { db, graph } = createGraph();
+        try {
+            const context = graph.createContext('knowledge-false-positive-trust-copy');
+            addSession(graph, context.id, 'session-corpus-7');
+            addTurn(graph, context.id, 'session-corpus-7', 'assistant-1', 'assistant', 'Trust summary: Repeated 2 times across user and assistant messages in 2 sessions.', 1700001227000);
+            addTurn(graph, context.id, 'session-corpus-7', 'assistant-2', 'assistant', 'Promotion summary: Review before promoting: 2 corroborating sessions. This insight is usable, but still needs human judgment.', 1700001228000);
+            addTurn(graph, context.id, 'session-corpus-7', 'assistant-3', 'assistant', 'Workspace sync: metadata_only (default) | Machine capture: 14-day retention.', 1700001229000);
+            addTurn(graph, context.id, 'session-corpus-7', 'assistant-4', 'assistant', 'The supported path is active. Use Utilities only when enabling another repo or changing machine defaults deliberately.', 1700001230000);
+            addTurn(graph, context.id, 'session-corpus-7', 'assistant-5', 'assistant', 'We decided raw payload inspection should stay utility-only.', 1700001231000);
+
+            const preview = graph.previewKnowledgeFromSession(context.id, 'session-corpus-7');
+            const contents = preview.candidates.map((candidate) => candidate.content);
+
+            expect(contents).not.toContain('Trust summary: Repeated 2 times across user and assistant messages in 2 sessions.');
+            expect(contents).not.toContain('Promotion summary: Review before promoting: 2 corroborating sessions. This insight is usable, but still needs human judgment.');
+            expect(contents).not.toContain('Workspace sync: metadata_only (default) | Machine capture: 14-day retention.');
+            expect(contents).not.toContain('The supported path is active. Use Utilities only when enabling another repo or changing machine defaults deliberately.');
+            expect(contents).toContain('We decided raw payload inspection should stay utility-only.');
         } finally {
             db.close();
         }

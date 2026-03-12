@@ -1,3 +1,4 @@
+import type { RepoReadinessSummary } from '@0ctx/core';
 import type { DaemonCapabilityCheck, DaemonHealthSummary } from '../../cli-core/daemon';
 
 export type FlagMap = Record<string, string | boolean>;
@@ -36,6 +37,8 @@ export interface HealthCommandDeps {
     KEY_PATH: string;
     isDaemonReachable: () => Promise<DaemonHealthSummary>;
     inferDaemonRecoverySteps: (error?: string) => string[];
+    findGitRepoRoot: (input: string | null) => string | null;
+    collectRepoReadiness: (opts: { repoRoot: string; contextId?: string | null }) => Promise<RepoReadinessSummary | null>;
     getCliOpsLogPath: () => string;
     runBootstrap: (clients: string[], dryRun: boolean) => BootstrapResult[];
     parseClients: (raw: string | boolean | undefined) => string[];

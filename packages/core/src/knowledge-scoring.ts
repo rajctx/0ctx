@@ -118,6 +118,21 @@ function isImplementationStatus(text: string): boolean {
     return false;
 }
 
+function isInsightReviewChatter(text: string): boolean {
+    const normalized = cleanupExtractionText(text).toLowerCase().trim();
+    if (!normalized) return false;
+
+    if (/^(trust|promotion|review tier|auto write|review only|trust summary|promotion summary|evidence preview)\s*[:\-]/.test(normalized)) {
+        return true;
+    }
+
+    if (/\b(review before promoting|blocked: promoted insight has no local corroboration yet|blocked: assistant-only signals stay local|blocked: weak insight candidates need more corroboration|single-session corroboration stays manual|assistant-only signals stay out of automatic checkpoint extraction|auto-persistable\. evidence is strong enough|keep this reviewed manually until corroboration broadens|strong wording, but still too narrow in source coverage|promoted from another workspace\. no local corroboration yet)\b/.test(normalized)) {
+        return true;
+    }
+
+    return false;
+}
+
 function isDesignOrLayoutChatter(text: string): boolean {
     const normalized = text.toLowerCase().trim();
     if (!normalized) return false;
@@ -174,7 +189,7 @@ function isSystemContextChatter(text: string): boolean {
     const normalized = cleanupExtractionText(text).toLowerCase().trim();
     if (!normalized) return false;
 
-    if (/^(workspace|current workstream|recent sessions|latest checkpoints?|capture readiness|automatic context|sync policy|debug artifacts|capture retention|debug retention)\s*:/i.test(text)) {
+    if (/^(workspace|current workstream|recent sessions|latest checkpoints?|capture readiness|automatic context|sync policy|workspace sync|machine capture|policy mode|debug artifacts|capture retention|debug retention)\s*:/i.test(text)) {
         return true;
     }
 
@@ -193,6 +208,8 @@ function isSystemContextChatter(text: string): boolean {
         && !/\b(must|should|need to|default|policy|decision|decided|decide|constraint|goal)\b/.test(normalized)) {
         return true;
     }
+
+    if (/^the supported path is active\b/.test(normalized)) return true;
 
     return false;
 }
@@ -224,6 +241,7 @@ export function scoreKnowledgeCandidate(
     if (!normalized || isExtractionNoise(text)) return null;
     if (isOperationalProcedure(text)) return null;
     if (isImplementationStatus(text)) return null;
+    if (isInsightReviewChatter(text)) return null;
     if (isDesignOrLayoutChatter(text)) return null;
     if (isExecutionPlanningChatter(text)) return null;
     if (isProgressOrCoordinationChatter(text)) return null;
