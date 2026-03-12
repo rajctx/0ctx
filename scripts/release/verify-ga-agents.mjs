@@ -146,6 +146,7 @@ async function main() {
   const keepTemp = process.argv.includes("--keep-temp");
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "0ctx-release-ga-"));
   const fakeHome = path.join(tempRoot, "home");
+  const fakeAppData = path.join(fakeHome, "AppData", "Roaming");
   const repoDir = path.join(tempRoot, "repo");
   const socketPath = isWindows
     ? `\\\\.\\pipe\\0ctx-${randomUUID()}`
@@ -155,11 +156,14 @@ async function main() {
   process.env.CTX_DB_PATH = dbPath;
   fs.mkdirSync(fakeHome, { recursive: true });
   fs.mkdirSync(repoDir, { recursive: true });
+  fs.mkdirSync(path.join(fakeAppData, "Claude"), { recursive: true });
+  fs.mkdirSync(path.join(fakeAppData, "Antigravity", "User"), { recursive: true });
 
   const env = {
     ...process.env,
     HOME: fakeHome,
     USERPROFILE: fakeHome,
+    APPDATA: fakeAppData,
     CTX_SOCKET_PATH: socketPath,
     CTX_DB_PATH: dbPath,
     CTX_SYNC_ENABLED: "false",
@@ -204,16 +208,23 @@ async function main() {
       "connector",
       "hook",
       "install",
-      "--clients=factory,codex,antigravity",
+      "--clients=claude,factory,antigravity",
       `--repo-root=${repoDir}`,
       "--json",
     ], { env }));
+    assert(installResult.claudeHookConfigured === true, "Claude hook install failed");
     assert(installResult.factoryHookConfigured === true, "Factory hook install failed");
     assert(installResult.antigravityHookConfigured === true, "Antigravity hook install failed");
-    assert(installResult.codexNotifyConfigured === true, "Codex notify install failed");
 
+    const claudeTranscript = path.join(fakeHome, "claude-session.jsonl");
     const factoryTranscript = path.join(fakeHome, "factory-session.jsonl");
     const antigravityTranscript = path.join(fakeHome, "antigravity-session.jsonl");
+    writeTranscript(claudeTranscript, {
+      title: "claude-release-check",
+      cwd: repoDir,
+      userText: "summarize the release branch readiness",
+      assistantText: "The release branch is ready for a checkpoint after the latest validation pass.",
+    });
     writeTranscript(factoryTranscript, {
       title: "factory-branch-review",
       cwd: repoDir,
@@ -227,6 +238,13 @@ async function main() {
       assistantText: "Release readiness looks good after the latest validation pass.",
     });
 
+    const claudeResult = runCliIngest(env, "claude", {
+      session_id: "claude-session-e2e",
+      turn_id: "claude-turn-e2e",
+      hook_event_name: "Stop",
+      cwd: repoDir,
+      transcript_path: claudeTranscript,
+    });
     const factoryResult = runCliIngest(env, "factory", {
       session_id: "factory-session-e2e",
       execution_id: "factory-turn-e2e",
@@ -237,25 +255,14 @@ async function main() {
     const antigravityResult = runCliIngest(env, "antigravity", {
       session_id: "antigravity-session-e2e",
       execution_id: "antigravity-turn-e2e",
-      hook_event_name: "Stop",
-      cwd: repoDir,
-      transcript_path: antigravityTranscript,
-    });
-    const codexResult = runCliIngest(env, "codex", {
-      "thread-id": "codex-thread-e2e",
-      "turn-id": "codex-turn-e2e",
-      "thread-title": "codex-checkpoint-pass",
-      cwd: repoDir,
-      "input-messages": [
-        { role: "user", content: [{ type: "text", text: "create a release checkpoint" }] },
-      ],
-      "last-assistant-message": "The release checkpoint has been created and linked to the current branch.",
-      createdAt: 1772799000000,
+        hook_event_name: "Stop",
+        cwd: repoDir,
+        transcript_path: antigravityTranscript,
     });
 
+    assert(claudeResult.insertedCount >= 2, "Claude ingest did not create transcript-backed messages");
     assert(factoryResult.insertedCount >= 2, "Factory ingest did not create transcript-backed messages");
     assert(antigravityResult.insertedCount >= 2, "Antigravity ingest did not create transcript-backed messages");
-    assert(codexResult.insertedCount >= 2, "Codex ingest did not create inline messages");
 
     const lanes = await requestDaemon(fakeHome, "listBranchLanes", { contextId: context.id }, { sessionToken });
     assert(Array.isArray(lanes) && lanes.length === 1, "Expected exactly one branch lane");
@@ -269,15 +276,15 @@ async function main() {
     assert(Array.isArray(sessions) && sessions.length === 3, `Expected 3 sessions, got ${sessions.length}`);
 
     const sessionMap = new Map(sessions.map((entry) => [entry.sessionId, entry]));
+    assert(sessionMap.has("claude-session-e2e"), "Claude session missing");
     assert(sessionMap.has("factory-session-e2e"), "Factory session missing");
     assert(sessionMap.has("antigravity-session-e2e"), "Antigravity session missing");
-    assert(sessionMap.has("codex-thread-e2e"), "Codex session missing");
 
-    const codexMessages = await requestDaemon(fakeHome, "listSessionMessages", {
+    const claudeMessages = await requestDaemon(fakeHome, "listSessionMessages", {
       contextId: context.id,
-      sessionId: "codex-thread-e2e",
+      sessionId: "claude-session-e2e",
     }, { sessionToken });
-    assert(Array.isArray(codexMessages) && codexMessages.length === 2, `Expected 2 Codex messages, got ${codexMessages.length}`);
+    assert(Array.isArray(claudeMessages) && claudeMessages.length === 2, `Expected 2 Claude messages, got ${claudeMessages.length}`);
 
     const handoff = await requestDaemon(fakeHome, "getHandoffTimeline", {
       contextId: context.id,
@@ -288,7 +295,7 @@ async function main() {
 
     const checkpoint = await requestDaemon(fakeHome, "createSessionCheckpoint", {
       contextId: context.id,
-      sessionId: "codex-thread-e2e",
+      sessionId: "claude-session-e2e",
       summary: "release checkpoint",
     }, { sessionToken });
     assert(checkpoint?.id, "Checkpoint creation failed");
@@ -311,9 +318,9 @@ async function main() {
 
     const resumed = await requestDaemon(fakeHome, "resumeSession", {
       contextId: context.id,
-      sessionId: "codex-thread-e2e",
+      sessionId: "claude-session-e2e",
     }, { sessionToken });
-    assert(resumed?.session?.sessionId === "codex-thread-e2e", "Session resume failed");
+    assert(resumed?.session?.sessionId === "claude-session-e2e", "Session resume failed");
 
     const audits = await requestDaemon(fakeHome, "listAuditEvents", {
       contextId: context.id,
@@ -333,14 +340,16 @@ async function main() {
       handoffCount: handoff.length,
       checkpointId: checkpoint.id,
       agents: {
+        claude: {
+          insertedCount: claudeResult.insertedCount,
+          messageIds: claudeMessages.map((message) => message.messageId),
+          summary: sessionMap.get("claude-session-e2e")?.summary ?? null,
+        },
         factory: { insertedCount: factoryResult.insertedCount, summary: sessionMap.get("factory-session-e2e")?.summary ?? null },
         antigravity: { insertedCount: antigravityResult.insertedCount, summary: sessionMap.get("antigravity-session-e2e")?.summary ?? null },
-        codex: {
-          insertedCount: codexResult.insertedCount,
-          messageIds: codexMessages.map((message) => message.messageId),
-        },
       },
       transcripts: {
+        claude: { path: claudeTranscript, sha256: checksum(claudeTranscript) },
         factory: { path: factoryTranscript, sha256: checksum(factoryTranscript) },
         antigravity: { path: antigravityTranscript, sha256: checksum(antigravityTranscript) },
       },

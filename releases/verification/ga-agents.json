@@ -1,12 +1,20 @@
 {
   "ok": true,
-  "tempRoot": "C:\\Users\\Rajesh\\AppData\\Local\\Temp\\0ctx-release-ga-Eko52N",
-  "contextId": "0575229b-df44-4059-809a-a88034424328",
+  "tempRoot": "C:\\Users\\Rajesh\\AppData\\Local\\Temp\\0ctx-release-ga-tTZaBp",
+  "contextId": "0118db84-e144-4eb5-9539-885e4f038982",
   "branch": "main",
   "sessionCount": 3,
   "handoffCount": 3,
-  "checkpointId": "a364e35f-662d-4dad-b09e-c77bf8a7ef93",
+  "checkpointId": "982ed669-6a8b-4f9b-813c-2e6cc216d3d5",
   "agents": {
+    "claude": {
+      "insertedCount": 2,
+      "messageIds": [
+        "claude-release-check-user",
+        "claude-release-check-assistant"
+      ],
+      "summary": "summarize the release branch readiness -> The release branch is ready for a checkpoint after the latest validation pass."
+    },
     "factory": {
       "insertedCount": 2,
       "summary": "review the branch lane timeline -> The branch lane timeline is captured and ready for a checkpoint."
@@ -14,23 +22,20 @@
     "antigravity": {
       "insertedCount": 2,
       "summary": "summarize the release readiness -> Release readiness looks good after the latest validation pass."
-    },
-    "codex": {
-      "insertedCount": 2,
-      "messageIds": [
-        "codex-turn-e2e:assistant",
-        "codex-turn-e2e:user"
-      ]
     }
   },
   "transcripts": {
+    "claude": {
+      "path": "C:\\Users\\Rajesh\\AppData\\Local\\Temp\\0ctx-release-ga-tTZaBp\\home\\claude-session.jsonl",
+      "sha256": "d584ea3a31525f810eb11eee3e96883f834438142fc681c7f23792ced2cf867b"
+    },
     "factory": {
-      "path": "C:\\Users\\Rajesh\\AppData\\Local\\Temp\\0ctx-release-ga-Eko52N\\home\\factory-session.jsonl",
-      "sha256": "06ca68f3b1d87fcb5e9ee9d50981b1d5cb3e4a792768b5b0ff2b3aeaeca57a1b"
+      "path": "C:\\Users\\Rajesh\\AppData\\Local\\Temp\\0ctx-release-ga-tTZaBp\\home\\factory-session.jsonl",
+      "sha256": "c41f4a9b16e55c3bb780badd66f83b01236d38863617e140a8cfc20349b17df1"
     },
     "antigravity": {
-      "path": "C:\\Users\\Rajesh\\AppData\\Local\\Temp\\0ctx-release-ga-Eko52N\\home\\antigravity-session.jsonl",
-      "sha256": "a27bcde68751f5c2e87eeafb952ae43888c6edbb3e24fbd6eba10dbd547b8a00"
+      "path": "C:\\Users\\Rajesh\\AppData\\Local\\Temp\\0ctx-release-ga-tTZaBp\\home\\antigravity-session.jsonl",
+      "sha256": "a93e2a61d1de2f53b7e37163b8b78767a69db5536ab09ae66753231e48137f01"
     }
   }
 }

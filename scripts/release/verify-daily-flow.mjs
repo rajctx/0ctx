@@ -141,6 +141,7 @@ async function main() {
   const keepTemp = process.argv.includes("--keep-temp");
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "0ctx-daily-flow-"));
   const fakeHome = path.join(tempRoot, "home");
+  const fakeAppData = path.join(fakeHome, "AppData", "Roaming");
   const repoDir = path.join(tempRoot, "repo");
   const socketPath = isWindows
     ? `\\\\.\\pipe\\0ctx-${randomUUID()}`
@@ -150,11 +151,14 @@ async function main() {
   process.env.CTX_DB_PATH = dbPath;
   fs.mkdirSync(fakeHome, { recursive: true });
   fs.mkdirSync(repoDir, { recursive: true });
+  fs.mkdirSync(path.join(fakeAppData, "Claude"), { recursive: true });
+  fs.mkdirSync(path.join(fakeAppData, "Antigravity", "User"), { recursive: true });
 
   const env = {
     ...process.env,
     HOME: fakeHome,
     USERPROFILE: fakeHome,
+    APPDATA: fakeAppData,
     CTX_SOCKET_PATH: socketPath,
     CTX_DB_PATH: dbPath,
     CTX_SYNC_ENABLED: "false",
@@ -187,7 +191,8 @@ async function main() {
     const enableResult = runCliJson(env, [
       "enable",
       `--repo-root=${repoDir}`,
-      "--skip-bootstrap",
+      "--clients=ga",
+      "--mcp-clients=ga",
       "--json",
     ]);
     assert(enableResult.ok === true, "Enable did not succeed");

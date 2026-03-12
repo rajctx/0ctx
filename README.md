@@ -129,8 +129,11 @@ That binds the repo, starts or verifies the local runtime, installs supported ca
 ## Documentation
 
 - `AGENTS.md`: implementation guidance and architecture.
-- `docs/INDEX.md`: temporary placeholder while the full docs set is being rewritten.
-- CLI help and in-product setup flows are the current source of truth for usage details.
+- `docs/INDEX.md`: docs entrypoint.
+- `docs/QUICKSTART.md`: repo-first product path.
+- `docs/INTEGRATIONS.md`: GA vs preview integration model.
+- `docs/DATA_POLICY.md`: local-first retention and sync defaults.
+- `docs/RELEASE.md`: release validation and verification flow.
 
 ## Repository Policy
 

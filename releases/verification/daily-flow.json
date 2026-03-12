@@ -1,11 +1,11 @@
 {
   "ok": true,
-  "tempRoot": "C:\\Users\\Rajesh\\AppData\\Local\\Temp\\0ctx-daily-flow-lLoq7B",
-  "contextId": "5ee064f8-1732-4a9d-8d47-eccc8fd809a4",
-  "repoRoot": "C:\\Users\\Rajesh\\AppData\\Local\\Temp\\0ctx-daily-flow-lLoq7B\\repo",
+  "tempRoot": "C:\\Users\\Rajesh\\AppData\\Local\\Temp\\0ctx-daily-flow-Pf5t7f",
+  "contextId": "60474a90-45c3-4544-aa9c-4cdca5e17858",
+  "repoRoot": "C:\\Users\\Rajesh\\AppData\\Local\\Temp\\0ctx-daily-flow-Pf5t7f\\repo",
   "readiness": {
-    "repoRoot": "C:/Users/Rajesh/AppData/Local/Temp/0ctx-daily-flow-lLoq7B/repo",
-    "contextId": "5ee064f8-1732-4a9d-8d47-eccc8fd809a4",
+    "repoRoot": "C:/Users/Rajesh/AppData/Local/Temp/0ctx-daily-flow-Pf5t7f/repo",
+    "contextId": "60474a90-45c3-4544-aa9c-4cdca5e17858",
     "workspaceName": "repo",
     "workstream": "main",
     "sessionCount": 0,
@@ -24,17 +24,26 @@
       "factory",
       "antigravity"
     ],
+    "autoContextMissingAgents": [],
+    "sessionStartMissingAgents": [],
+    "mcpRegistrationMissingAgents": [],
     "captureMissingAgents": [],
     "captureManagedForRepo": true,
     "zeroTouchReady": true,
     "nextActionHint": null,
+    "dataPolicyPreset": "lean",
     "dataPolicyActionHint": null,
     "captureRetentionDays": 14,
     "debugRetentionDays": 7,
-    "debugArtifactsEnabled": false
+    "debugArtifactsEnabled": false,
+    "normalPathSummary": "Lean is the normal default. Workspace sync stays metadata_only and machine capture defaults stay local.",
+    "workspaceSyncSummary": "metadata_only (default)",
+    "workspaceSyncHint": "",
+    "machineCaptureSummary": "14d local capture; debug trails off by default (7d if enabled)",
+    "debugUtilitySummary": "Off in the normal path (7d retention if enabled)"
   },
   "dataPolicy": {
-    "preset": null,
+    "preset": "lean",
     "syncScope": "workspace",
     "captureScope": "machine",
     "debugScope": "machine",
@@ -60,15 +69,15 @@
   "capture": {
     "claude": {
       "insertedCount": 2,
-      "transcriptSha256": "6b6bc6723107d5630975d85cf69ecb40d250ea70d9c9755dcb3a86c18552f4c5"
+      "transcriptSha256": "39f69791cb6da0506e4e17f8c8e2f7d809d3f7c7de026fffe4e09866405d53b5"
     },
     "factory": {
       "insertedCount": 2,
-      "transcriptSha256": "34b54452421a814b47900e0e2d91b9da9d951cfa4ab4209074d6acb93dafd92e"
+      "transcriptSha256": "49160dbbbfa408eddc82c9274da81a1f3a876c1060a41a4218f2c0076240c941"
     },
     "antigravity": {
       "insertedCount": 2,
-      "transcriptSha256": "b6d357d84b17173bff423a25698319b2808d036b61c5af0b157d249d59d87ae9"
+      "transcriptSha256": "758af545198a0d0007375e44fb7365001a1633155999d74ea9461741f0875310"
     }
   },
   "workstream": {
@@ -77,5 +86,5 @@
     "checkpointCount": 1,
     "stateSummary": "Working tree has local uncommitted changes."
   },
-  "checkpointId": "97dfa20f-5866-4ed3-88bd-0850edeeb34a"
+  "checkpointId": "ca8206c3-8c8b-4c95-a2d3-37d06e5ecaba"
 }
