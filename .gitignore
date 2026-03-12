@@ -57,5 +57,8 @@ tsc_errors.txt
 # local scratch artifacts
 .tmp/
 
+# generated verification artifacts
+releases/verification/*.json
+
 # Rust build artifacts
 target/

@@ -23,6 +23,8 @@ This runs the real release gates and writes:
 
 - `releases/verification/release-readiness.json`
 
+These verification JSON files are generated local artifacts and are intentionally ignored by git.
+
 The consolidated report also captures CLI package integrity details:
 
 - package name
