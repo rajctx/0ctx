@@ -84,6 +84,17 @@ function summarizeStep(runResult) {
   };
 }
 
+function summarizeSkippedStep(command, reason) {
+  return {
+    command,
+    ok: null,
+    skipped: true,
+    reason,
+    status: null,
+    durationMs: 0,
+  };
+}
+
 function getVersionAlignment() {
   const corePackage = readJsonFile(corePackagePath);
   const daemonPackage = readJsonFile(daemonPackagePath);
@@ -246,6 +257,14 @@ function main() {
     throw new Error(`Nested git check failed.\nstdout:\n${nestedGit.stdout}\nstderr:\n${nestedGit.stderr}`);
   }
 
+  let publishDryRun = null;
+  if (!git.dirty) {
+    publishDryRun = run("npm", ["run", "release:publish:dry"], { captureOutput: true });
+    if (!publishDryRun.ok) {
+      throw new Error(`Publish dry-run failed.\nstdout:\n${publishDryRun.stdout}\nstderr:\n${publishDryRun.stderr}`);
+    }
+  }
+
   const gaReport = parseJsonOutput(ga);
   const dailyReport = parseJsonOutput(daily);
   const desktopRealReport = desktopReal.ok ? parseJsonOutput(desktopReal) : null;
@@ -267,6 +286,9 @@ function main() {
       desktopRealFlow: summarizeStep(desktopReal),
       desktopSmoke: summarizeStep(desktopSmoke),
       nestedGit: summarizeStep(nestedGit),
+      publishDryRun: publishDryRun
+        ? summarizeStep(publishDryRun)
+        : summarizeSkippedStep("npm run release:publish:dry", "working_tree_dirty"),
     },
     gaAgents: {
       branch: gaReport.branch,

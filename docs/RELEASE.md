@@ -52,6 +52,7 @@ The consolidated report includes:
 - typecheck
 - build
 - CLI package dry-run
+- publish dry-run on clean branches
 - test
 - GA agent e2e
 - daily flow e2e
@@ -74,6 +75,12 @@ Release-file readiness includes:
 
 - required release files present
 - `CHANGELOG.md` contains `## [Unreleased]`
+
+When the working tree is clean, the consolidated report also runs:
+
+- `npm run release:publish:dry`
+
+When the tree is dirty, that publish dry-run step is recorded as an explicit machine-readable skip.
 
 When real captured workspace data is available on the current machine, the desktop real-flow section is populated and `releases/verification/desktop-real-flow.json` is refreshed. Otherwise the report records the skip explicitly.
 
