@@ -47,23 +47,6 @@ try {
     Write-Output "Release validation mode: $(if ($DryRun) { 'dry-run' } else { 'execute' })"
     Write-Output "Repository root: $repoRoot"
 
-    $requiredPaths = @(
-        "CHANGELOG.md",
-        "scripts/release/prepare-changelog.ps1",
-        "scripts/release/tag-preview.ps1"
-    )
-
-    foreach ($path in $requiredPaths) {
-        if (-not (Test-Path -LiteralPath $path)) {
-            throw "Missing required release file: $path"
-        }
-    }
-
-    $changelog = Get-Content -Raw -LiteralPath "CHANGELOG.md"
-    if ($changelog -notmatch "(?m)^## \[Unreleased\]\s*$") {
-        throw "CHANGELOG.md must include a '## [Unreleased]' section."
-    }
-
     $status = git status --porcelain
     if ($status) {
         if ($AllowDirty) {

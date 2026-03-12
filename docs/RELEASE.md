@@ -47,6 +47,7 @@ It also verifies version alignment across:
 
 The consolidated report includes:
 
+- release-file and changelog readiness
 - version alignment
 - typecheck
 - build
@@ -68,6 +69,11 @@ The consolidated report includes:
 - `blockingReasons`
 - `warnings`
 - suggested commands for validation and dry-run publish
+
+Release-file readiness includes:
+
+- required release files present
+- `CHANGELOG.md` contains `## [Unreleased]`
 
 When real captured workspace data is available on the current machine, the desktop real-flow section is populated and `releases/verification/desktop-real-flow.json` is refreshed. Otherwise the report records the skip explicitly.
 

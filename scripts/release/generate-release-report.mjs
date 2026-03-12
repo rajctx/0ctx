@@ -15,6 +15,12 @@ const mcpPackagePath = path.join(repoRoot, "packages", "mcp", "package.json");
 const cliPackagePath = path.join(repoRoot, "packages", "cli", "package.json");
 const desktopPackagePath = path.join(repoRoot, "desktop-app", "package.json");
 const tauriConfigPath = path.join(repoRoot, "desktop-app", "src-tauri", "tauri.conf.json");
+const changelogPath = path.join(repoRoot, "CHANGELOG.md");
+const requiredReleaseFiles = [
+  "CHANGELOG.md",
+  "scripts/release/prepare-changelog.ps1",
+  "scripts/release/tag-preview.ps1",
+];
 
 function run(command, args, options = {}) {
   const startedAt = Date.now();
@@ -104,6 +110,29 @@ function getVersionAlignment() {
   };
 }
 
+function getReleaseFilesReadiness() {
+  const files = requiredReleaseFiles.map((relativePath) => ({
+    path: relativePath,
+    present: fs.existsSync(path.join(repoRoot, relativePath)),
+  }));
+  const allPresent = files.every((file) => file.present);
+
+  let hasUnreleasedSection = false;
+  let changelogChecked = false;
+  if (fs.existsSync(changelogPath)) {
+    changelogChecked = true;
+    const changelog = fs.readFileSync(changelogPath, "utf8");
+    hasUnreleasedSection = /^## \[Unreleased\]\s*$/m.test(changelog);
+  }
+
+  return {
+    files,
+    allPresent,
+    changelogChecked,
+    hasUnreleasedSection,
+  };
+}
+
 function parsePackDryRun(runResult) {
   const text = `${runResult.stdout ?? ""}\n${runResult.stderr ?? ""}`;
   const filename = text.match(/filename:\s+([^\r\n]+)/i)?.[1]?.trim() ?? null;
@@ -123,7 +152,7 @@ function parsePackDryRun(runResult) {
   };
 }
 
-function getPublishReadiness({ git, dailyReport, desktopRealReport, cliPackage, versionAlignment }) {
+function getPublishReadiness({ git, dailyReport, desktopRealReport, cliPackage, versionAlignment, releaseFiles }) {
   const blockingReasons = [];
   const warnings = [];
 
@@ -133,6 +162,14 @@ function getPublishReadiness({ git, dailyReport, desktopRealReport, cliPackage, 
 
   if (!versionAlignment.aligned) {
     blockingReasons.push("version_alignment_failed");
+  }
+
+  if (!releaseFiles.allPresent) {
+    blockingReasons.push("required_release_files_missing");
+  }
+
+  if (releaseFiles.changelogChecked && !releaseFiles.hasUnreleasedSection) {
+    blockingReasons.push("changelog_unreleased_missing");
   }
 
   if (!dailyReport?.readiness?.zeroTouchReady) {
@@ -160,6 +197,7 @@ function getPublishReadiness({ git, dailyReport, desktopRealReport, cliPackage, 
 function main() {
   const git = getGitState();
   const versionAlignment = getVersionAlignment();
+  const releaseFiles = getReleaseFilesReadiness();
   if (!versionAlignment.aligned) {
     throw new Error(
       `Version alignment failed. core=${versionAlignment.coreVersion ?? "?"}, daemon=${versionAlignment.daemonVersion ?? "?"}, mcp=${versionAlignment.mcpVersion ?? "?"}, cli=${versionAlignment.cliVersion ?? "?"}, desktop=${versionAlignment.desktopVersion ?? "?"}, tauri=${versionAlignment.tauriVersion ?? "?"}`
@@ -218,6 +256,7 @@ function main() {
     generatedAt: new Date().toISOString(),
     git,
     versionAlignment,
+    releaseFiles,
     steps: {
       typecheck: summarizeStep(typecheck),
       build: summarizeStep(build),
@@ -264,6 +303,7 @@ function main() {
       desktopRealReport,
       cliPackage,
       versionAlignment,
+      releaseFiles,
     }),
   };
 
