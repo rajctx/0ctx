@@ -28,6 +28,7 @@ export interface ProductCommandDeps {
     parseClients: (raw: string | boolean | undefined) => string[];
     parseHookClients: (raw: string | boolean | undefined) => string[];
     parseEnableMcpClients: (raw: string | boolean | undefined) => string[];
+    deriveEnableMcpClientsFromHookClients: (hookClients: string[]) => string[];
     detectInstalledGaHookClients: () => string[];
     detectInstalledGaMcpClients: () => string[];
     parseOptionalStringFlag: (value: string | boolean | undefined) => string | null;

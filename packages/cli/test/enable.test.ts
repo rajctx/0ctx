@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createEnableCommands } from '../src/commands/product/enable';
-import { detectPreviewSelections, parseEnableMcpClients, parseHookClients, validateExplicitPreviewSelection, validatePreviewOptIn } from '../src/cli-core/clients';
+import { deriveEnableMcpClientsFromHookClients, detectPreviewSelections, parseEnableMcpClients, parseHookClients, validateExplicitPreviewSelection, validatePreviewOptIn } from '../src/cli-core/clients';
 import { parseOptionalStringFlag, parsePositiveIntegerFlag, parsePositiveNumberFlag } from '../src/cli-core/args';
 
 describe('commandEnable', () => {
@@ -29,6 +29,7 @@ describe('commandEnable', () => {
             detectPreviewSelections,
             parseHookClients,
             parseEnableMcpClients,
+            deriveEnableMcpClientsFromHookClients,
             parseOptionalStringFlag,
             parsePositiveIntegerFlag,
             parsePositiveNumberFlag,
@@ -145,6 +146,7 @@ describe('commandEnable', () => {
             detectPreviewSelections,
             parseHookClients,
             parseEnableMcpClients,
+            deriveEnableMcpClientsFromHookClients,
             parseOptionalStringFlag,
             parsePositiveIntegerFlag,
             parsePositiveNumberFlag,
@@ -269,6 +271,7 @@ describe('commandEnable', () => {
             detectPreviewSelections,
             parseHookClients,
             parseEnableMcpClients,
+            deriveEnableMcpClientsFromHookClients,
             parseOptionalStringFlag,
             parsePositiveIntegerFlag,
             parsePositiveNumberFlag,
@@ -334,6 +337,7 @@ describe('commandEnable', () => {
             detectPreviewSelections,
             parseHookClients,
             parseEnableMcpClients,
+            deriveEnableMcpClientsFromHookClients,
             parseOptionalStringFlag,
             parsePositiveIntegerFlag,
             parsePositiveNumberFlag,
@@ -355,6 +359,7 @@ describe('commandEnable', () => {
             detectPreviewSelections,
             parseHookClients,
             parseEnableMcpClients,
+            deriveEnableMcpClientsFromHookClients,
             parseOptionalStringFlag,
             parsePositiveIntegerFlag,
             parsePositiveNumberFlag,

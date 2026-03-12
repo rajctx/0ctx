@@ -50,9 +50,7 @@ export function createEnableCommands(deps: ProductCommandDeps & { commandBootstr
                 : deps.parseHookClients(undefined);
         const mcpClients = (flags['mcp-clients'] ?? flags.mcpClients)
             ? deps.parseEnableMcpClients(flags['mcp-clients'] ?? flags.mcpClients)
-            : detectedMcpClients.length > 0
-                ? detectedMcpClients
-                : deps.parseEnableMcpClients(undefined);
+            : deps.deriveEnableMcpClientsFromHookClients(hookClients);
         const mcpProfile = deps.parseOptionalStringFlag(flags['mcp-profile'] ?? flags.profile) ?? 'core';
         const p = (!quiet && !asJson) ? await import('@clack/prompts') : null;
         const spinner = p?.spinner() ?? null;

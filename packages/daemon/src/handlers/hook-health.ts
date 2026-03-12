@@ -64,11 +64,18 @@ function getHookStatePath(): string {
     return process.env.CTX_HOOK_STATE_PATH || path.join(os.homedir(), '.0ctx', 'hooks-state.json');
 }
 
-function filterHookHealthAgents(agents: HookHealthAgent[], includePreview: boolean): HookHealthAgent[] {
-    if (includePreview) {
-        return agents;
-    }
-    return agents.filter((agent) => GA_HOOK_AGENTS.has(agent.agent));
+function splitHookHealthAgents(agents: HookHealthAgent[], includePreview: boolean): {
+    agents: HookHealthAgent[];
+    previewAgents: HookHealthAgent[];
+} {
+    const gaAgents = agents.filter((agent) => GA_HOOK_AGENTS.has(agent.agent));
+    const previewAgents = includePreview
+        ? agents.filter((agent) => !GA_HOOK_AGENTS.has(agent.agent))
+        : [];
+    return {
+        agents: gaAgents,
+        previewAgents
+    };
 }
 
 export function readHookHealth(options: HookHealthOptions = {}): {
@@ -83,6 +90,7 @@ export function readHookHealth(options: HookHealthOptions = {}): {
         debugArtifactsEnabled: boolean;
     };
     agents: HookHealthAgent[];
+    previewAgents: HookHealthAgent[];
 } {
     const includePreview = options.includePreview === true;
     const defaults: HookHealthAgent[] = [
@@ -109,7 +117,7 @@ export function readHookHealth(options: HookHealthOptions = {}): {
             projectConfigPath: null,
             updatedAt: null,
             capturePolicy,
-            agents: filterHookHealthAgents(defaults, includePreview)
+            ...splitHookHealthAgents(defaults, includePreview)
         };
     }
 
@@ -136,7 +144,7 @@ export function readHookHealth(options: HookHealthOptions = {}): {
             projectConfigPath: typeof parsed.projectConfigPath === 'string' ? parsed.projectConfigPath : null,
             updatedAt: typeof parsed.updatedAt === 'number' ? parsed.updatedAt : null,
             capturePolicy,
-            agents: filterHookHealthAgents(agents, includePreview)
+            ...splitHookHealthAgents(agents, includePreview)
         };
     } catch {
         return {
@@ -146,7 +154,7 @@ export function readHookHealth(options: HookHealthOptions = {}): {
             projectConfigPath: null,
             updatedAt: null,
             capturePolicy,
-            agents: filterHookHealthAgents(defaults, includePreview)
+            ...splitHookHealthAgents(defaults, includePreview)
         };
     }
 }

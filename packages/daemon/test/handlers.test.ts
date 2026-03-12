@@ -161,6 +161,7 @@ describe('daemon request handling', () => {
                     debugArtifactsEnabled: boolean;
                 };
                 agents: Array<{ agent: string; notes: string | null; sessionStartInstalled: boolean }>;
+                previewAgents: Array<{ agent: string }>;
             };
 
             const byAgent = new Map(hookHealth.agents.map((agent) => [agent.agent, agent.notes]));
@@ -174,6 +175,7 @@ describe('daemon request handling', () => {
             expect(byAgent.has('codex')).toBe(false);
             expect(byAgent.has('cursor')).toBe(false);
             expect(byAgent.has('windsurf')).toBe(false);
+            expect(hookHealth.previewAgents).toEqual([]);
             expect(sessionStartByAgent.get('claude')).toBe(false);
             expect(sessionStartByAgent.get('factory')).toBe(false);
             expect(sessionStartByAgent.get('antigravity')).toBe(false);
@@ -199,15 +201,17 @@ describe('daemon request handling', () => {
                 params: { includePreview: true }
             }, runtime()) as {
                 agents: Array<{ agent: string; notes: string | null }>;
+                previewAgents: Array<{ agent: string; notes: string | null }>;
             };
 
             const byAgent = new Map(hookHealth.agents.map((agent) => [agent.agent, agent.notes]));
+            const previewByAgent = new Map(hookHealth.previewAgents.map((agent) => [agent.agent, agent.notes]));
             expect(byAgent.get('claude')).toBe('supported');
             expect(byAgent.get('factory')).toBe('supported');
             expect(byAgent.get('antigravity')).toBe('supported');
-            expect(byAgent.get('codex')).toBe('preview-notify-archive');
-            expect(byAgent.get('cursor')).toBe('preview-hook');
-            expect(byAgent.get('windsurf')).toBe('preview-hook');
+            expect(previewByAgent.get('codex')).toBe('preview-notify-archive');
+            expect(previewByAgent.get('cursor')).toBe('preview-hook');
+            expect(previewByAgent.get('windsurf')).toBe('preview-hook');
         } finally {
             if (previousHookStatePath === undefined) {
                 delete process.env.CTX_HOOK_STATE_PATH;

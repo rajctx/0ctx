@@ -59,6 +59,14 @@ export function parseEnableMcpClients(
     return parseMcpClients(raw);
 }
 
+export function deriveEnableMcpClientsFromHookClients(
+    hookClients: HookInstallClient[],
+    defaultClients: SupportedClient[] = DEFAULT_MCP_CLIENTS
+): SupportedClient[] {
+    const selected = new Set(hookClients);
+    return defaultClients.filter(client => selected.has(client));
+}
+
 export function validateExplicitPreviewSelection(
     raw: string | boolean | undefined,
     previewExample: string,
