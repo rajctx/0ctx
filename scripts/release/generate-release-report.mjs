@@ -9,6 +9,9 @@ import { fileURLToPath } from "node:url";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const verificationRoot = path.join(repoRoot, "releases", "verification");
 const reportPath = path.join(verificationRoot, "release-readiness.json");
+const corePackagePath = path.join(repoRoot, "packages", "core", "package.json");
+const daemonPackagePath = path.join(repoRoot, "packages", "daemon", "package.json");
+const mcpPackagePath = path.join(repoRoot, "packages", "mcp", "package.json");
 const cliPackagePath = path.join(repoRoot, "packages", "cli", "package.json");
 const desktopPackagePath = path.join(repoRoot, "desktop-app", "package.json");
 const tauriConfigPath = path.join(repoRoot, "desktop-app", "src-tauri", "tauri.conf.json");
@@ -76,15 +79,24 @@ function summarizeStep(runResult) {
 }
 
 function getVersionAlignment() {
+  const corePackage = readJsonFile(corePackagePath);
+  const daemonPackage = readJsonFile(daemonPackagePath);
+  const mcpPackage = readJsonFile(mcpPackagePath);
   const cliPackage = readJsonFile(cliPackagePath);
   const desktopPackage = readJsonFile(desktopPackagePath);
   const tauriConfig = readJsonFile(tauriConfigPath);
+  const coreVersion = String(corePackage.version || "").trim() || null;
+  const daemonVersion = String(daemonPackage.version || "").trim() || null;
+  const mcpVersion = String(mcpPackage.version || "").trim() || null;
   const cliVersion = String(cliPackage.version || "").trim() || null;
   const desktopVersion = String(desktopPackage.version || "").trim() || null;
   const tauriVersion = String(tauriConfig.version || "").trim() || null;
-  const versions = [cliVersion, desktopVersion, tauriVersion].filter(Boolean);
+  const versions = [coreVersion, daemonVersion, mcpVersion, cliVersion, desktopVersion, tauriVersion].filter(Boolean);
   const uniqueVersions = Array.from(new Set(versions));
   return {
+    coreVersion,
+    daemonVersion,
+    mcpVersion,
     cliVersion,
     desktopVersion,
     tauriVersion,
@@ -116,7 +128,7 @@ function main() {
   const versionAlignment = getVersionAlignment();
   if (!versionAlignment.aligned) {
     throw new Error(
-      `Version alignment failed. CLI=${versionAlignment.cliVersion ?? "?"}, desktop=${versionAlignment.desktopVersion ?? "?"}, tauri=${versionAlignment.tauriVersion ?? "?"}`
+      `Version alignment failed. core=${versionAlignment.coreVersion ?? "?"}, daemon=${versionAlignment.daemonVersion ?? "?"}, mcp=${versionAlignment.mcpVersion ?? "?"}, cli=${versionAlignment.cliVersion ?? "?"}, desktop=${versionAlignment.desktopVersion ?? "?"}, tauri=${versionAlignment.tauriVersion ?? "?"}`
     );
   }
 

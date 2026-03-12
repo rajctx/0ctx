@@ -1,19 +1,23 @@
 {
   "ok": true,
-  "generatedAt": "2026-03-12T09:16:37.075Z",
+  "generatedAt": "2026-03-12T09:21:58.760Z",
   "git": {
-    "head": "505b9468b69325d4d982d83cd7dfb437da3f7c61",
+    "head": "4c72e62563a70680057cc54b8cc30fc6246d579d",
     "branch": "feat/v1",
     "dirty": true,
     "statusShort": [
-      "M desktop-app/package-lock.json",
-      " M desktop-app/package.json",
-      " M desktop-app/src-tauri/tauri.conf.json",
-      " M docs/RELEASE.md",
-      " M scripts/release/generate-release-report.mjs"
+      "M docs/RELEASE.md",
+      " M packages/core/package.json",
+      " M packages/daemon/package.json",
+      " M packages/mcp/package.json",
+      " M scripts/release/generate-release-report.mjs",
+      " M scripts/release/publish-packages.ps1"
     ]
   },
   "versionAlignment": {
+    "coreVersion": "0.1.16",
+    "daemonVersion": "0.1.16",
+    "mcpVersion": "0.1.16",
     "cliVersion": "0.1.16",
     "desktopVersion": "0.1.16",
     "tauriVersion": "0.1.16",
@@ -24,62 +28,62 @@
       "command": "npm run typecheck",
       "ok": true,
       "status": 0,
-      "durationMs": 540
+      "durationMs": 566
     },
     "build": {
       "command": "npm run build",
       "ok": true,
       "status": 0,
-      "durationMs": 872
+      "durationMs": 873
     },
     "cliPackDryRun": {
       "command": "npm run release:pack:dry",
       "ok": true,
       "status": 0,
-      "durationMs": 1873
+      "durationMs": 1524
     },
     "test": {
       "command": "npm run test",
       "ok": true,
       "status": 0,
-      "durationMs": 33533
+      "durationMs": 33563
     },
     "gaAgents": {
       "command": "npm run release:e2e:ga",
       "ok": true,
       "status": 0,
-      "durationMs": 2321
+      "durationMs": 2343
     },
     "dailyFlow": {
       "command": "npm run release:e2e:daily",
       "ok": true,
       "status": 0,
-      "durationMs": 5611
+      "durationMs": 5628
     },
     "desktopRealFlow": {
       "command": "npm run release:e2e:desktop:real",
       "ok": true,
       "status": 0,
-      "durationMs": 3261
+      "durationMs": 3249
     },
     "desktopSmoke": {
       "command": "npm run desktop:smoke",
       "ok": true,
       "status": 0,
-      "durationMs": 68584
+      "durationMs": 61381
     },
     "nestedGit": {
       "command": "npm run repo:check-nested-git",
       "ok": true,
       "status": 0,
-      "durationMs": 2180
+      "durationMs": 2064
     }
   },
   "gaAgents": {
     "branch": "main",
     "sessionCount": 3,
     "handoffCount": 3,
-    "checkpointId": "d4d06378-4ef9-401e-8e29-e7822bba1789",
+    "checkpointId": "ec8c3b56-8164-466c-b710-38753adf32a9",
     "reportPath": "C:\\Users\\Rajesh\\development\\0ctx-dev\\releases\\verification\\ga-agents.json",
     "agents": {
       "claude": {
@@ -130,7 +134,7 @@
     "branch": "main",
     "sessionId": "desktop-readable-session-3",
     "checkpointId": "1dea34f6-1d2c-47af-80ff-02b746ad853a",
-    "promotedNodeId": "87b05faf-4930-4c1c-8939-9fb7dda8d22a",
+    "promotedNodeId": "11048e70-681b-42e0-aee7-c677dd0a9060",
     "reportPath": "C:\\Users\\Rajesh\\development\\0ctx-dev\\releases\\verification\\desktop-real-flow.json"
   }
 }

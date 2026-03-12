@@ -34,6 +34,9 @@ The consolidated report also captures CLI package integrity details:
 
 It also verifies version alignment across:
 
+- `packages/core/package.json`
+- `packages/daemon/package.json`
+- `packages/mcp/package.json`
 - `packages/cli/package.json`
 - `desktop-app/package.json`
 - `desktop-app/src-tauri/tauri.conf.json`
@@ -100,3 +103,15 @@ Minimum expected state:
 1. `npm run release:validate -- -DryRun -AllowDirty` passes
 2. `npm run release:report` passes and writes `releases/verification/release-readiness.json`
 3. working tree is clean unless intentionally doing a dry-run with `-AllowDirty`
+
+The publish path now also enforces release-surface version alignment. To preview the publish gate:
+
+```bash
+npm run release:publish:dry
+```
+
+Use a version-drift override only for an intentional exceptional case:
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts/release/publish-packages.ps1 -DryRun -AllowVersionDrift
+```
