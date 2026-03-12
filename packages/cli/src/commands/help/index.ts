@@ -151,7 +151,7 @@ Connector:
   0ctx connector register [--force] [--local-only] [--require-cloud] [--json]
   0ctx connector run [--once] [--interval-ms=5000] [--no-daemon-autostart]
   0ctx connector hook install [--clients=ga|claude,factory,antigravity] [--repo-root=<path>] [--global]
-  0ctx connector hook status [--json] [--include-explicit]
+  0ctx connector hook status [--json] [--include-preview]
   0ctx connector hook prune [--days=14] [--json]
   0ctx connector hook session-start --agent=claude|factory|antigravity [--repo-root=<path>]
                                      [--input-file=<path>|--payload='<json>'|stdin] [--json]

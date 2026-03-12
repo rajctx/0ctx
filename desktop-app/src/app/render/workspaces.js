@@ -215,8 +215,7 @@
       const detailItems = [
         { title: 'Policy mode', detail: formatDataPolicyPresetLabel(policy.preset || 'lean') },
         { title: 'Workspace sync (this workspace)', detail: policy.workspaceSyncSummary || workspaceSync.detail },
-        { title: 'Machine capture (this machine)', detail: policy.machineCaptureSummary || capturePolicySummary() },
-        { title: 'Debug trails (utility-only)', detail: policy.debugUtilitySummary || (app.debugArtifactsEnabled() ? 'Enabled locally for troubleshooting' : 'Off in the normal product path') }
+        { title: 'Machine capture (this machine)', detail: policy.machineCaptureSummary || capturePolicySummary() }
       ];
       policyDetailList.innerHTML = detailItems.map((item) => `
         <article>
@@ -233,7 +232,7 @@
         workspaceResolved: workspaceSync.workspaceResolved,
         actionHint,
         workspaceHint: workspaceSync.hint
-      }) + ' Fine-tune retention and debug trails from Utilities only when a workspace needs a deliberate override.';
+      }) + ' Open Utilities only when a workspace needs a deliberate sync, retention, or debug override.';
     }
   }
 

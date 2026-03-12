@@ -35,15 +35,29 @@ export function buildRepoReadinessLines(options: {
         options.formatLabelValue('History', historySummary),
         options.formatLabelValue('Workspace sync', repoReadiness.workspaceSyncSummary || options.formatSyncPolicyLabel(repoReadiness.syncPolicy)),
         options.formatLabelValue('Machine capture', repoReadiness.machineCaptureSummary || options.formatRetentionLabel(repoReadiness)),
-        options.formatLabelValue(
-            'Utility debug',
-            repoReadiness.debugUtilitySummary
-                || (repoReadiness.debugArtifactsEnabled
-                    ? `enabled (${repoReadiness.debugRetentionDays}d retention)`
-                    : `off in the normal path (${repoReadiness.debugRetentionDays}d retention if enabled)`)
-        ),
+        ...buildUtilityDebugLines(options),
         ...(repoReadiness.dataPolicyActionHint ? [options.formatLabelValue('Policy step', repoReadiness.dataPolicyActionHint)] : []),
         ...(repoReadiness.nextActionHint ? [options.formatLabelValue('Next step', repoReadiness.nextActionHint)] : [])
+    ];
+}
+
+function buildUtilityDebugLines(options: {
+    repoReadiness: RepoReadinessSummary;
+    formatLabelValue: (label: string, value: string) => string;
+}): string[] {
+    const preset = String(options.repoReadiness.dataPolicyPreset || '').trim().toLowerCase();
+    if (!options.repoReadiness.debugArtifactsEnabled && preset !== 'debug' && preset !== 'custom') {
+        return [];
+    }
+
+    return [
+        options.formatLabelValue(
+            'Utility debug',
+            options.repoReadiness.debugUtilitySummary
+                || (options.repoReadiness.debugArtifactsEnabled
+                    ? `enabled (${options.repoReadiness.debugRetentionDays}d retention)`
+                    : `off in the normal path (${options.repoReadiness.debugRetentionDays}d retention if enabled)`)
+        )
     ];
 }
 

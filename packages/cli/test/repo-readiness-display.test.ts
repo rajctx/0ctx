@@ -46,6 +46,7 @@ describe('repo readiness display', () => {
         expect(lines).toContain('Policy mode: Shared (workspace override)');
         expect(lines).toContain('Workspace sync: full_sync (opt-in)');
         expect(lines).toContain('Policy step: Return this workspace to Lean when richer cloud sync is no longer needed.');
+        expect(lines.some((line) => line.startsWith('Utility debug:'))).toBe(false);
     });
 
     it('marks review as a machine-default policy mode instead of a workspace override', () => {
@@ -92,6 +93,7 @@ describe('repo readiness display', () => {
         expect(lines).toContain('Policy mode: Review (machine default)');
         expect(lines).toContain('Workspace sync: metadata_only');
         expect(lines).toContain('Machine capture: 30d local capture; debug trails off by default (7d if enabled)');
+        expect(lines.some((line) => line.startsWith('Utility debug:'))).toBe(false);
     });
 
     it('does not accuse undetected GA agents of being missing in the normal readiness display', () => {

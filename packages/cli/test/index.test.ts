@@ -70,7 +70,7 @@ describe('@0ctx/cli build artifact source', () => {
         expect(cliSurface).toContain("Capture support:");
         expect(cliSurface).toContain("GA:                    claude, factory, antigravity");
         expect(cliSurface).toContain("Explicit opt-in only:  non-GA integrations stay outside the normal enable path");
-        expect(cliSurface).toContain("0ctx connector hook status [--json] [--include-explicit]");
+        expect(cliSurface).toContain("0ctx connector hook status [--json] [--include-preview]");
         expect(cliSurface).toContain("0ctx recall [--mode=auto|temporal|topic|graph]");
         expect(cliSurface).toContain("[--start] [--json]");
         expect(cliSurface).toContain("0ctx release publish --version vX.Y.Z [--tag latest|next] [--otp 123456] [--dry-run] [--json]");

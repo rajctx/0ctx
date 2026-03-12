@@ -153,6 +153,8 @@
     const badge = document.getElementById('policySummaryBadge');
     const hint = document.getElementById('policyHint');
     const detailList = document.getElementById('policyDetailList');
+    const policyAdvancedDetails = document.getElementById('policyAdvancedDetails');
+    const utilitiesDetails = document.getElementById('utilitiesDetails');
     const syncInput = document.getElementById('dataPolicySyncPolicy');
     const captureInput = document.getElementById('dataPolicyCaptureRetention');
     const debugInput = document.getElementById('dataPolicyDebugRetention');
@@ -208,17 +210,19 @@
       badge.textContent = formatDataPolicyPresetLabel(policy.preset || 'lean');
     }
 
+    if (policyAdvancedDetails instanceof HTMLDetailsElement) {
+      policyAdvancedDetails.open = preset === 'custom' || preset === 'debug' || preset === 'shared';
+    }
+
+    if (utilitiesDetails instanceof HTMLDetailsElement) {
+      utilitiesDetails.open = Boolean(state.runtimeIssue);
+    }
+
     if (detailList) {
       const detailItems = [
         { title: 'Policy mode', detail: formatDataPolicyPresetLabel(policy.preset || 'lean') },
         { title: 'Workspace sync (this workspace)', detail: policy.workspaceSyncSummary || workspaceSync.detail },
-        { title: 'Machine capture (this machine)', detail: policy.machineCaptureSummary || capturePolicySummary() },
-        {
-          title: 'Debug trails (utility-only)',
-          detail: policy.debugUtilitySummary || (app.debugArtifactsEnabled()
-            ? 'Enabled locally for troubleshooting'
-            : 'Off in the normal product path')
-        }
+        { title: 'Machine capture (this machine)', detail: policy.machineCaptureSummary || capturePolicySummary() }
       ];
       detailList.innerHTML = detailItems.map((item) => `
         <article>
@@ -235,7 +239,7 @@
         workspaceResolved,
         actionHint,
         workspaceHint: workspaceSync.hint
-      }) + ' Open Advanced policy controls only when a workspace needs a deliberate override.';
+      }) + ' Debug trails and richer sync stay behind Advanced controls.';
     }
   }
 

@@ -42,6 +42,8 @@ export interface HookHealthDetails {
     contextIdExists: boolean | null;
     installedAgentCount: number;
     agents: HookHealthAgentCheck[];
+    previewInstalledAgentCount?: number;
+    previewAgents?: HookHealthAgentCheck[];
 }
 
 export interface ParsedArgs {

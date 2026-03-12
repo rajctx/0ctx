@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { isGaHookAgent } from './clients';
 import { getHookConfigPath, type HookSupportedAgent } from '../hooks';
 import type { HookHealthAgentCheck, HookHealthDetails } from './types';
 
@@ -84,7 +85,7 @@ export function resolveRepoScopedHookDetails(options: {
         return options.fallback;
     }
 
-    const agents = managedProject.agents.map((agentState): HookHealthAgentCheck => {
+    const allAgents = managedProject.agents.map((agentState): HookHealthAgentCheck => {
         const configPath = getHookConfigPath(repoRoot, agentState.agent);
         const configExists = fs.existsSync(configPath);
         const content = configExists ? fs.readFileSync(configPath, 'utf8') : '';
@@ -97,6 +98,8 @@ export function resolveRepoScopedHookDetails(options: {
             command: agentState.command
         };
     });
+    const agents = allAgents.filter((agent) => isGaHookAgent(agent.agent));
+    const previewAgents = allAgents.filter((agent) => !isGaHookAgent(agent.agent));
 
     return {
         ...options.fallback,
@@ -109,7 +112,9 @@ export function resolveRepoScopedHookDetails(options: {
             ? options.fallback.contextIdExists
             : null,
         installedAgentCount: agents.length,
-        agents
+        agents,
+        previewInstalledAgentCount: previewAgents.length,
+        previewAgents
     };
 }
 

@@ -632,8 +632,8 @@
                       <span>Temporary debug trails</span>
                     </button>
                   </div>
-                    <details class="advanced-details policy-custom-block">
-                      <summary>Advanced policy controls</summary>
+                    <details id="policyAdvancedDetails" class="advanced-details policy-custom-block">
+                      <summary>Advanced retention, debug, and sync overrides</summary>
                       <div class="advanced-details-body">
                       <div class="section-row small">
                         <div>
@@ -666,34 +666,37 @@
                       <p class="page-copy compact-copy">Use the presets for the normal product path. Open custom controls only when a workspace needs a non-standard local retention or sync override.</p>
                       <div class="row-actions">
                         <button id="applyCustomDataPolicy" class="btn tertiary" type="submit">Apply custom policy</button>
+                        <button class="btn quiet" data-policy-preset="shared" type="button">Opt current workspace into full sync</button>
+                        <button id="copyPolicyCleanupSetup" class="btn quiet" type="button">Copy lean cleanup</button>
                       </div>
                       </div>
                     </details>
                     <div id="policyDetailList" class="info-list compact-info-list"></div>
                     <p id="policyHint" class="page-copy compact-copy">Metadata-only sync is the normal default for this workspace. Raw payloads stay local and debug artifacts stay off unless you explicitly enable them from Utilities.</p>
-                    <div class="row-actions">
-                      <button class="btn quiet" data-policy-preset="shared" type="button">Opt current workspace into full sync</button>
-                      <button id="copyPolicyCleanupSetup" class="btn quiet" type="button">Copy lean cleanup</button>
-                    </div>
                   </form>
                 </section>
 
                 <section class="panel subpanel compact-utility-block">
-                  <div class="section-row small">
-                    <div>
-                  <p class="section-label">Utility actions</p>
-                      <h4>Recover the local runtime</h4>
+                  <details id="utilitiesDetails" class="advanced-details utility-advanced-block">
+                    <summary>Utilities and runtime tools</summary>
+                    <div class="advanced-details-body">
+                      <div class="section-row small">
+                        <div>
+                          <p class="section-label">Utilities</p>
+                          <h4>Repair or inspect the local runtime</h4>
+                        </div>
+                        <div class="row-actions wrap-row">
+                          <button id="refreshUtilities" class="btn quiet" type="button">Refresh runtime</button>
+                          <button id="restartUtilities" class="btn quiet" type="button">Restart runtime</button>
+                          <button id="checkUpdates" class="btn quiet" type="button">Check updates</button>
+                          <button id="copyRepair" class="btn quiet" type="button">Copy 0ctx repair</button>
+                          <button id="copyDoctor" class="btn quiet" type="button">Copy 0ctx doctor</button>
+                        </div>
+                      </div>
+                      <div id="setupSupportList" class="info-list compact-info-list"></div>
+                      <p id="setupSupportCopy" class="page-copy compact-copy">Use utilities only when you need to repair the runtime, inspect machine health, or change a repo deliberately.</p>
                     </div>
-                    <div class="row-actions wrap-row">
-                      <button id="refreshUtilities" class="btn quiet" type="button">Refresh runtime</button>
-                      <button id="restartUtilities" class="btn quiet" type="button">Restart runtime</button>
-                      <button id="checkUpdates" class="btn quiet" type="button">Check updates</button>
-                      <button id="copyRepair" class="btn quiet" type="button">Copy 0ctx repair</button>
-                      <button id="copyDoctor" class="btn quiet" type="button">Copy 0ctx doctor</button>
-                    </div>
-                  </div>
-                  <div id="setupSupportList" class="info-list compact-info-list"></div>
-                <p id="setupSupportCopy" class="page-copy compact-copy">Use utilities only when you need to enable a repo, install integrations, check updates, or repair the runtime.</p>
+                  </details>
                 </section>
               </section>
             </div>

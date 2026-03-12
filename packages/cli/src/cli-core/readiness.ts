@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { isGaHookAgent } from './clients';
 import type { HookSupportedAgent } from '../hooks';
 import type { DoctorCheck, HookHealthDetails, HookHealthAgentCheck } from './types';
 import {
@@ -33,6 +34,8 @@ export function createHookHealthCollector(deps: {
         const projectRoot = state.projectRoot ? path.resolve(state.projectRoot) : null;
         const projectConfigPath = state.projectConfigPath ?? (projectRoot ? path.join(projectRoot, '.0ctx', 'settings.local.json') : null);
         const installedAgents = state.agents.filter(agent => agent.installed);
+        const installedGaAgents = installedAgents.filter(agent => isGaHookAgent(agent.agent));
+        const installedPreviewAgents = installedAgents.filter(agent => !isGaHookAgent(agent.agent));
         const projectRootExists = projectRoot ? fs.existsSync(projectRoot) : false;
         const projectConfigExists = projectConfigPath ? fs.existsSync(projectConfigPath) : false;
         let contextIdExists: boolean | null = null;
@@ -48,7 +51,7 @@ export function createHookHealthCollector(deps: {
             }
         }
 
-        const agents: HookHealthAgentCheck[] = installedAgents.map(agentState => {
+        const allAgents: HookHealthAgentCheck[] = installedAgents.map(agentState => {
             const configPath = projectRoot ? deps.getHookConfigPath(projectRoot, agentState.agent) : deps.getHookConfigPath('.', agentState.agent);
             const configExists = fs.existsSync(configPath);
             const content = configExists ? fs.readFileSync(configPath, 'utf8') : '';
@@ -61,6 +64,8 @@ export function createHookHealthCollector(deps: {
                 command: agentState.command ?? null
             };
         });
+        const agents = allAgents.filter(agent => isGaHookAgent(agent.agent));
+        const previewAgents = allAgents.filter(agent => !isGaHookAgent(agent.agent));
 
         const missingAgents = agents.filter(agent => !agent.configExists || !agent.commandPresent);
         const dumpDir = deps.getHookDumpDir();
@@ -102,8 +107,10 @@ export function createHookHealthCollector(deps: {
             projectConfigExists,
             contextId: state.contextId ?? null,
             contextIdExists,
-            installedAgentCount: installedAgents.length,
-            agents
+            installedAgentCount: installedGaAgents.length,
+            agents,
+            previewInstalledAgentCount: installedPreviewAgents.length,
+            previewAgents
         };
 
         return {
