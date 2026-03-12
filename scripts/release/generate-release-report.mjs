@@ -123,6 +123,40 @@ function parsePackDryRun(runResult) {
   };
 }
 
+function getPublishReadiness({ git, dailyReport, desktopRealReport, cliPackage, versionAlignment }) {
+  const blockingReasons = [];
+  const warnings = [];
+
+  if (git.dirty) {
+    blockingReasons.push("working_tree_dirty");
+  }
+
+  if (!versionAlignment.aligned) {
+    blockingReasons.push("version_alignment_failed");
+  }
+
+  if (!dailyReport?.readiness?.zeroTouchReady) {
+    blockingReasons.push("ga_zero_touch_not_ready");
+  }
+
+  if (!desktopRealReport) {
+    warnings.push("desktop_real_flow_skipped");
+  }
+
+  return {
+    ready: blockingReasons.length === 0,
+    releaseVersion: cliPackage.version ?? null,
+    workingTreeClean: !git.dirty,
+    zeroTouchReady: Boolean(dailyReport?.readiness?.zeroTouchReady),
+    blockingReasons,
+    warnings,
+    commands: {
+      validate: "npm run release:validate",
+      publishDryRun: "npm run release:publish:dry",
+    },
+  };
+}
+
 function main() {
   const git = getGitState();
   const versionAlignment = getVersionAlignment();
@@ -177,6 +211,7 @@ function main() {
   const gaReport = parseJsonOutput(ga);
   const dailyReport = parseJsonOutput(daily);
   const desktopRealReport = desktopReal.ok ? parseJsonOutput(desktopReal) : null;
+  const cliPackage = parsePackDryRun(packDryRun);
 
   const report = {
     ok: true,
@@ -211,7 +246,7 @@ function main() {
       syncPolicy: dailyReport.dataPolicy?.syncPolicy ?? null,
       reportPath: dailyReport.reportPath ?? null,
     },
-    cliPackage: parsePackDryRun(packDryRun),
+    cliPackage,
     desktopRealFlow: desktopRealReport ? {
       workspace: desktopRealReport.source?.contextName ?? null,
       branch: desktopRealReport.source?.branch ?? null,
@@ -223,6 +258,13 @@ function main() {
       skipped: true,
       reason: "No real captured workspace data was available for desktop validation.",
     },
+    publishReadiness: getPublishReadiness({
+      git,
+      dailyReport,
+      desktopRealReport,
+      cliPackage,
+      versionAlignment,
+    }),
   };
 
   fs.mkdirSync(verificationRoot, { recursive: true });

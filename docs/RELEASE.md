@@ -55,6 +55,17 @@ The consolidated report includes:
 - desktop real-flow validation
 - desktop smoke
 - nested git check
+- machine-readable `publishReadiness`
+
+`publishReadiness` is the top-level release decision for automation and human review. It includes:
+
+- `ready`
+- `releaseVersion`
+- `workingTreeClean`
+- `zeroTouchReady`
+- `blockingReasons`
+- `warnings`
+- suggested commands for validation and dry-run publish
 
 When real captured workspace data is available on the current machine, the desktop real-flow section is populated and `releases/verification/desktop-real-flow.json` is refreshed. Otherwise the report records the skip explicitly.
 
