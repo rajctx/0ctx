@@ -1,11 +1,11 @@
 {
   "ok": true,
-  "tempRoot": "C:\\Users\\Rajesh\\AppData\\Local\\Temp\\0ctx-daily-flow-Pf5t7f",
-  "contextId": "60474a90-45c3-4544-aa9c-4cdca5e17858",
-  "repoRoot": "C:\\Users\\Rajesh\\AppData\\Local\\Temp\\0ctx-daily-flow-Pf5t7f\\repo",
+  "tempRoot": "C:\\Users\\Rajesh\\AppData\\Local\\Temp\\0ctx-daily-flow-eMVI0A",
+  "contextId": "ccfc0e03-8e6b-43f5-bcf4-b29223d5fdcc",
+  "repoRoot": "C:\\Users\\Rajesh\\AppData\\Local\\Temp\\0ctx-daily-flow-eMVI0A\\repo",
   "readiness": {
-    "repoRoot": "C:/Users/Rajesh/AppData/Local/Temp/0ctx-daily-flow-Pf5t7f/repo",
-    "contextId": "60474a90-45c3-4544-aa9c-4cdca5e17858",
+    "repoRoot": "C:/Users/Rajesh/AppData/Local/Temp/0ctx-daily-flow-eMVI0A/repo",
+    "contextId": "ccfc0e03-8e6b-43f5-bcf4-b29223d5fdcc",
     "workspaceName": "repo",
     "workstream": "main",
     "sessionCount": 0,
@@ -69,15 +69,15 @@
   "capture": {
     "claude": {
       "insertedCount": 2,
-      "transcriptSha256": "39f69791cb6da0506e4e17f8c8e2f7d809d3f7c7de026fffe4e09866405d53b5"
+      "transcriptSha256": "38c0f39150c0dbadbe1333e7009cec93efbf931f985bd2591d77c02b3f013efb"
     },
     "factory": {
       "insertedCount": 2,
-      "transcriptSha256": "49160dbbbfa408eddc82c9274da81a1f3a876c1060a41a4218f2c0076240c941"
+      "transcriptSha256": "71f96ffdd8a2e8b0a30dd663c797e1ba0cbeb916b0e7b72910f14c909552fc48"
     },
     "antigravity": {
       "insertedCount": 2,
-      "transcriptSha256": "758af545198a0d0007375e44fb7365001a1633155999d74ea9461741f0875310"
+      "transcriptSha256": "c25a18968337983cc18abff4e4d4e32d85c2c9895a0cbb5b6cb06de0586de293"
     }
   },
   "workstream": {
@@ -86,5 +86,5 @@
     "checkpointCount": 1,
     "stateSummary": "Working tree has local uncommitted changes."
   },
-  "checkpointId": "ca8206c3-8c8b-4c95-a2d3-37d06e5ecaba"
+  "checkpointId": "bdd6794b-fec3-4e7f-ad64-ce9476d0bacc"
 }

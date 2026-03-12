@@ -1,0 +1,96 @@
+{
+  "ok": true,
+  "generatedAt": "2026-03-12T07:57:55.408Z",
+  "git": {
+    "head": "39e7df33d30f83e34c7ba23f8a7739bd99cf1d5f",
+    "branch": "feat/v1",
+    "dirty": true,
+    "statusShort": [
+      "M docs/RELEASE.md",
+      " M package.json",
+      " M releases/verification/daily-flow.json",
+      " M releases/verification/ga-agents.json",
+      "?? scripts/release/generate-release-report.mjs"
+    ]
+  },
+  "steps": {
+    "build": {
+      "command": "npm run build",
+      "ok": true,
+      "status": 0,
+      "durationMs": 1023
+    },
+    "test": {
+      "command": "npm run test",
+      "ok": true,
+      "status": 0,
+      "durationMs": 35704
+    },
+    "gaAgents": {
+      "command": "npm run release:e2e:ga",
+      "ok": true,
+      "status": 0,
+      "durationMs": 2452
+    },
+    "dailyFlow": {
+      "command": "npm run release:e2e:daily",
+      "ok": true,
+      "status": 0,
+      "durationMs": 5883
+    },
+    "desktopSmoke": {
+      "command": "npm run desktop:smoke",
+      "ok": true,
+      "status": 0,
+      "durationMs": 72295
+    },
+    "nestedGit": {
+      "command": "npm run repo:check-nested-git",
+      "ok": true,
+      "status": 0,
+      "durationMs": 2372
+    }
+  },
+  "gaAgents": {
+    "branch": "main",
+    "sessionCount": 3,
+    "handoffCount": 3,
+    "checkpointId": "f20f9498-fc52-463c-948c-fb110ce7ddcb",
+    "reportPath": "C:\\Users\\Rajesh\\development\\0ctx-dev\\releases\\verification\\ga-agents.json",
+    "agents": {
+      "claude": {
+        "insertedCount": 2,
+        "messageIds": [
+          "claude-release-check-user",
+          "claude-release-check-assistant"
+        ],
+        "summary": "summarize the release branch readiness -> The release branch is ready for a checkpoint after the latest validation pass."
+      },
+      "factory": {
+        "insertedCount": 2,
+        "summary": "review the branch lane timeline -> The branch lane timeline is captured and ready for a checkpoint."
+      },
+      "antigravity": {
+        "insertedCount": 2,
+        "summary": "summarize the release readiness -> Release readiness looks good after the latest validation pass."
+      }
+    }
+  },
+  "dailyFlow": {
+    "workspace": "repo",
+    "workstream": "main",
+    "zeroTouchReady": true,
+    "captureReadyAgents": [
+      "claude",
+      "factory",
+      "antigravity"
+    ],
+    "autoContextAgents": [
+      "claude",
+      "factory",
+      "antigravity"
+    ],
+    "syncPolicy": "metadata_only (default)",
+    "reportPath": "C:\\Users\\Rajesh\\development\\0ctx-dev\\releases\\verification\\daily-flow.json"
+  }
+}
