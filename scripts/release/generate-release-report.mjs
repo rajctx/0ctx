@@ -71,6 +71,11 @@ function summarizeStep(runResult) {
 function main() {
   const git = getGitState();
 
+  const typecheck = run("npm", ["run", "typecheck"], { captureOutput: true });
+  if (!typecheck.ok) {
+    throw new Error(`Typecheck failed.\nstdout:\n${typecheck.stdout}\nstderr:\n${typecheck.stderr}`);
+  }
+
   const build = run("npm", ["run", "build"], { captureOutput: true });
   if (!build.ok) {
     throw new Error(`Build failed.\nstdout:\n${build.stdout}\nstderr:\n${build.stderr}`);
@@ -112,6 +117,7 @@ function main() {
     generatedAt: new Date().toISOString(),
     git,
     steps: {
+      typecheck: summarizeStep(typecheck),
       build: summarizeStep(build),
       test: summarizeStep(test),
       gaAgents: summarizeStep(ga),

@@ -1,5 +1,5 @@
 import type { RepoReadinessSummary } from '@0ctx/core';
-import { formatScopedDataPolicyPresetLabel } from '../../cli-core/data-policy-display';
+import { describePolicyNormalPath, formatScopedDataPolicyPresetLabel } from '../../cli-core/data-policy-display';
 
 type DisplayMode = 'enable' | 'status';
 

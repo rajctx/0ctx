@@ -69,13 +69,7 @@ try {
     }
 
     $steps = @(
-        @{ Name = "Typecheck"; Command = "npm run typecheck" },
-        @{ Name = "Build"; Command = "npm run build" },
-        @{ Name = "Test"; Command = "npm run test" },
-        @{ Name = "GA agent e2e"; Command = "npm run release:e2e:ga" },
-        @{ Name = "Daily flow e2e"; Command = "npm run release:e2e:daily" },
-        @{ Name = "Desktop smoke"; Command = "npm run desktop:smoke" },
-        @{ Name = "Nested git check"; Command = "npm run repo:check-nested-git" }
+        @{ Name = "Release readiness report"; Command = "npm run release:report" }
     )
 
     foreach ($step in $steps) {

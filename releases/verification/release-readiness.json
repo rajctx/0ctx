@@ -1,67 +1,72 @@
 {
   "ok": true,
-  "generatedAt": "2026-03-12T08:08:50.674Z",
+  "generatedAt": "2026-03-12T08:55:30.966Z",
   "git": {
-    "head": "be8fe92e229da95c9b43a853c42d443d98b86a7e",
+    "head": "b73c2681be9743e416e57b1f3459b310ed376ccc",
     "branch": "feat/v1",
     "dirty": true,
     "statusShort": [
       "M docs/RELEASE.md",
-      " M package.json",
-      " M releases/verification/desktop-real-flow.json",
+      " M packages/cli/src/commands/product/repo-readiness-display.ts",
       " M scripts/release/generate-release-report.mjs",
-      " M scripts/release/verify-desktop-real-flow.mjs"
+      " M scripts/release/validate-release.ps1"
     ]
   },
   "steps": {
+    "typecheck": {
+      "command": "npm run typecheck",
+      "ok": true,
+      "status": 0,
+      "durationMs": 2495
+    },
     "build": {
       "command": "npm run build",
       "ok": true,
       "status": 0,
-      "durationMs": 907
+      "durationMs": 1096
     },
     "test": {
       "command": "npm run test",
       "ok": true,
       "status": 0,
-      "durationMs": 32712
+      "durationMs": 42469
     },
     "gaAgents": {
       "command": "npm run release:e2e:ga",
       "ok": true,
       "status": 0,
-      "durationMs": 2324
+      "durationMs": 2343
     },
     "dailyFlow": {
       "command": "npm run release:e2e:daily",
       "ok": true,
       "status": 0,
-      "durationMs": 5518
+      "durationMs": 5559
     },
     "desktopRealFlow": {
       "command": "npm run release:e2e:desktop:real",
       "ok": true,
       "status": 0,
-      "durationMs": 3154
+      "durationMs": 3252
     },
     "desktopSmoke": {
       "command": "npm run desktop:smoke",
       "ok": true,
       "status": 0,
-      "durationMs": 64497
+      "durationMs": 71750
     },
     "nestedGit": {
       "command": "npm run repo:check-nested-git",
       "ok": true,
       "status": 0,
-      "durationMs": 2202
+      "durationMs": 2512
     }
   },
   "gaAgents": {
     "branch": "main",
     "sessionCount": 3,
     "handoffCount": 3,
-    "checkpointId": "77e7d196-4f78-49f1-9536-e2087feaa7f8",
+    "checkpointId": "24d06a0d-0326-40b9-8f75-3ae881845a9d",
     "reportPath": "C:\\Users\\Rajesh\\development\\0ctx-dev\\releases\\verification\\ga-agents.json",
     "agents": {
       "claude": {
@@ -104,7 +109,7 @@
     "branch": "main",
     "sessionId": "desktop-readable-session-3",
     "checkpointId": "1dea34f6-1d2c-47af-80ff-02b746ad853a",
-    "promotedNodeId": "b801fad9-ca63-4176-af07-bf06c7b1c2a9",
+    "promotedNodeId": "9eac9c02-8050-4d86-a6d8-9db6f68e77b4",
     "reportPath": "C:\\Users\\Rajesh\\development\\0ctx-dev\\releases\\verification\\desktop-real-flow.json"
   }
 }
