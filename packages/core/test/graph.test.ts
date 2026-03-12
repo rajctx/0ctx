@@ -820,6 +820,71 @@ describe('Graph context isolation', () => {
         }
     });
 
+    it('filters quoted and source-attributed statements out of reviewed insights', () => {
+        const { db, graph } = createGraph();
+        try {
+            const ctx = graph.createContext('knowledge-attribution-filter');
+            graph.addNode({
+                contextId: ctx.id,
+                thread: 'session-attribution-1',
+                type: 'artifact',
+                content: 'attribution filtering session',
+                key: 'chat_session:factory:session-attribution-1',
+                tags: ['chat_session', 'agent:factory'],
+                source: 'hook:factory',
+                hidden: true,
+                rawPayload: {
+                    sessionId: 'session-attribution-1',
+                    branch: 'feature/attribution-filter',
+                    commitSha: 'attribution123456',
+                    agent: 'factory'
+                }
+            });
+
+            for (const [key, role, content, createdAt] of [
+                ['assistant-1', 'assistant', 'The roadmap recommends using metadata_only by default for new workspaces.', 1700000220000],
+                ['assistant-2', 'assistant', 'The docs require users to restart the connector after reinstalling.', 1700000221000],
+                ['assistant-3', 'assistant', 'Quote: "Keep raw payload inspection utility-only."', 1700000222000],
+                ['assistant-4', 'assistant', 'We decided raw payload inspection should stay utility-only.', 1700000223000]
+            ] as const) {
+                graph.addNode({
+                    contextId: ctx.id,
+                    thread: 'session-attribution-1',
+                    type: 'artifact',
+                    content,
+                    key: `chat_turn:factory:session-attribution-1:${key}`,
+                    tags: ['chat_turn', `role:${role}`],
+                    source: 'hook:factory',
+                    hidden: true,
+                    rawPayload: {
+                        sessionId: 'session-attribution-1',
+                        messageId: key,
+                        role,
+                        branch: 'feature/attribution-filter',
+                        commitSha: 'attribution123456',
+                        occurredAt: createdAt
+                    }
+                });
+            }
+
+            const preview = graph.previewKnowledgeFromSession(ctx.id, 'session-attribution-1');
+            expect(preview.candidates.some(candidate => /roadmap recommends/i.test(candidate.content))).toBe(false);
+            expect(preview.candidates.some(candidate => /docs require users/i.test(candidate.content))).toBe(false);
+            expect(preview.candidates.some(candidate => /quote:/i.test(candidate.content))).toBe(false);
+            expect(preview.candidates.some(candidate => /raw payload inspection should stay utility-only/i.test(candidate.content))).toBe(true);
+
+            const extraction = graph.extractKnowledgeFromSession(ctx.id, 'session-attribution-1');
+            expect(extraction.nodeCount).toBe(0);
+
+            const permissiveExtraction = graph.extractKnowledgeFromSession(ctx.id, 'session-attribution-1', { minConfidence: 0.68 });
+            expect(permissiveExtraction.nodeCount).toBe(1);
+            expect(permissiveExtraction.nodes[0]?.type).toBe('constraint');
+            expect(permissiveExtraction.nodes[0]?.content).toContain('raw payload inspection should stay utility-only');
+        } finally {
+            db.close();
+        }
+    });
+
     it('filters assistant planning chatter out of reviewed insights', () => {
         const { db, graph } = createGraph();
         try {

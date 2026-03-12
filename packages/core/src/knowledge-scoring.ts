@@ -9,7 +9,7 @@ export interface KnowledgeCandidateClassification {
 const attributedSourcePattern =
     '(?:linear issue|issue|ticket|spec|docs?|document|design doc|brief|roadmap|plan|summary|checkpoint|session|transcript|thread|comment|email|message|slack|user|assistant|agent|customer|reviewer)';
 const attributedVerbPattern =
-    '(?:says|said|states?|stated|notes?|noted|reads?|read|mentions?|mentioned|writes?|wrote|quotes?|quoted|asks?|asked|told|tells)';
+    '(?:says|said|states?|stated|notes?|noted|reads?|read|mentions?|mentioned|writes?|wrote|quotes?|quoted|asks?|asked|told|tells|recommends?|recommended|requires?|required|describes?|described|explains?|explained|indicates?|indicated)';
 
 export function cleanupExtractionText(text: string): string {
     return String(text ?? '')
