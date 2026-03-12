@@ -2251,7 +2251,7 @@ describe('daemon request handling', () => {
             const highConfidencePreview = handleRequest(graph, 'conn-extract', {
                 method: 'previewSessionKnowledge',
                 sessionToken: session.sessionToken,
-                params: { contextId: context.id, sessionId: 'session-extract-1', minConfidence: 0.9 }
+                params: { contextId: context.id, sessionId: 'session-extract-1', minConfidence: 0.97 }
             }, runtime()) as { candidateCount: number };
             expect(highConfidencePreview.candidateCount).toBe(0);
 

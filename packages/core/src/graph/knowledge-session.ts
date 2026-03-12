@@ -25,6 +25,14 @@ type KnowledgeSessionDeps = {
     getSessionDetail: (contextId: string, sessionId: string) => SessionDetail;
     getByKey: (contextId: string, key: string, options?: { includeHidden?: boolean }) => ContextNode | null;
     getInsightSummary: (nodeId: string) => InsightSummary | null;
+    getInsightEvidence: (nodeId: string) => {
+        evidenceCount: number;
+        distinctEvidenceCount: number;
+        distinctSessionCount: number;
+        evidenceKeys: string[];
+        sessionIds: string[];
+        corroboratedRoles: string[];
+    };
     buildKnowledgeKey: (
         contextId: string,
         type: Exclude<NodeType, 'artifact'>,
@@ -108,16 +116,19 @@ function mergeExistingInsightEvidence(
         bestReason: string;
         evidenceCount: number;
         distinctEvidenceCount: number;
+        evidenceKeys: Set<string>;
         roles: Set<string>;
     },
-    existingInsight: InsightSummary | null
+    sessionId: string,
+    existingInsight: InsightSummary | null,
+    existingEvidence: ReturnType<KnowledgeSessionDeps['getInsightEvidence']> | null
 ) {
-    if (!existingInsight || existingInsight.distinctSessionCount <= 1) {
+    if (!existingInsight) {
         return {
             confidence: candidate.bestConfidence,
             evidenceCount: candidate.evidenceCount,
             distinctEvidenceCount: candidate.distinctEvidenceCount,
-            distinctSessionCount: 1,
+            distinctSessionCount: candidate.evidenceCount > 0 ? 1 : 0,
             roles: new Set(candidate.roles),
             reason: candidate.bestReason
         };
@@ -128,11 +139,28 @@ function mergeExistingInsightEvidence(
         if (typeof role === 'string' && role.trim()) mergedRoles.add(role.toLowerCase());
     }
 
+    const mergedSessionIds = new Set(existingEvidence?.sessionIds ?? []);
+    const normalizedSessionId = sessionId.trim();
+    const sessionAlreadyRepresented = normalizedSessionId.length > 0 && mergedSessionIds.has(normalizedSessionId);
+    if (normalizedSessionId.length > 0) mergedSessionIds.add(normalizedSessionId);
+
+    const mergedEvidenceKeys = new Set(existingEvidence?.evidenceKeys ?? []);
+    if (!sessionAlreadyRepresented) {
+        for (const key of candidate.evidenceKeys) mergedEvidenceKeys.add(key);
+    }
+
+    const corroboratesWithExistingEvidence = !sessionAlreadyRepresented
+        && (Math.max(existingInsight.evidenceCount, 0) > 0 || Math.max(existingInsight.distinctSessionCount, 0) > 0);
+
     return {
-        confidence: candidate.bestConfidence + 0.04,
-        evidenceCount: Math.max(candidate.evidenceCount, existingInsight.evidenceCount),
-        distinctEvidenceCount: Math.max(candidate.distinctEvidenceCount, existingInsight.distinctEvidenceCount),
-        distinctSessionCount: Math.max(1, existingInsight.distinctSessionCount),
+        confidence: candidate.bestConfidence + (corroboratesWithExistingEvidence ? 0.04 : 0),
+        evidenceCount: Math.max(existingInsight.evidenceCount, 0) + (sessionAlreadyRepresented ? 0 : candidate.evidenceCount),
+        distinctEvidenceCount: mergedEvidenceKeys.size > 0
+            ? mergedEvidenceKeys.size
+            : Math.max(candidate.distinctEvidenceCount, existingInsight.distinctEvidenceCount),
+        distinctSessionCount: mergedSessionIds.size > 0
+            ? mergedSessionIds.size
+            : Math.max(1, existingInsight.distinctSessionCount),
         roles: mergedRoles,
         reason: `${candidate.bestReason}, corroborated-by-existing-insight`
     };
@@ -241,14 +269,16 @@ function collectSessionKnowledgeCandidates(
             const localDistinctEvidenceCount = candidate.distinctEvidenceKeys.size;
             const existingNode = deps.getByKey(contextId, candidate.key, { includeHidden: true });
             const existingInsight = existingNode ? deps.getInsightSummary(existingNode.id) : null;
+            const existingEvidence = existingNode ? deps.getInsightEvidence(existingNode.id) : null;
             const mergedEvidence = mergeExistingInsightEvidence({
                 type: candidate.type,
                 bestConfidence: candidate.bestConfidence,
                 bestReason: candidate.bestReason,
                 evidenceCount: candidate.evidenceCount,
                 distinctEvidenceCount: localDistinctEvidenceCount,
+                evidenceKeys: candidate.distinctEvidenceKeys,
                 roles: candidate.roles
-            }, existingInsight);
+            }, sessionId, existingInsight, existingEvidence);
             const confidence = deps.boostKnowledgeCandidateConfidence(
                 candidate.type,
                 mergedEvidence.confidence,

@@ -1667,7 +1667,10 @@ describe('Graph context isolation', () => {
               expect(candidate?.reviewTier).toBe('strong');
               expect(candidate?.autoPersist).toBe(true);
               expect(candidate?.trustFlags).toEqual(expect.arrayContaining(['cross_session', 'cross_role']));
-              expect(candidate?.evidenceSummary).toMatch(/2 sessions/i);
+              expect(candidate?.distinctSessionCount).toBe(3);
+              expect(candidate?.evidenceCount).toBe(3);
+              expect(candidate?.evidenceSummary).toMatch(/3 sessions/i);
+              expect(candidate?.promotionSummary).toMatch(/across 3 sessions/i);
               expect(candidate?.reason).toContain('corroborated-by-existing-insight');
           } finally {
               db.close();

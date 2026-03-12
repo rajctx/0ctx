@@ -72,7 +72,7 @@ type InsightDeps = {
     ) => string[];
 };
 
-function getInsightEvidence(deps: InsightDeps, nodeId: string) {
+export function getInsightEvidenceRecord(deps: InsightDeps, nodeId: string) {
     const insight = deps.getNode(nodeId);
     const insightType = insight?.type && insight.type !== 'artifact' ? insight.type : undefined;
     const edges = deps.db.prepare(`
@@ -114,6 +114,8 @@ function getInsightEvidence(deps: InsightDeps, nodeId: string) {
             evidenceCount: 0,
             distinctEvidenceCount: 0,
             distinctSessionCount: 0,
+            evidenceKeys: [] as string[],
+            sessionIds: [] as string[],
             corroboratedRoles: [],
             trustFlags: [],
             latestEvidenceAt: null,
@@ -131,6 +133,8 @@ function getInsightEvidence(deps: InsightDeps, nodeId: string) {
         evidenceCount,
         distinctEvidenceCount,
         distinctSessionCount,
+        evidenceKeys: Array.from(distinctEvidence).sort(),
+        sessionIds: Array.from(distinctSessions).sort(),
         corroboratedRoles: Array.from(roles).sort(),
         trustFlags: deps.buildKnowledgeTrustFlags(evidenceCount, distinctEvidenceCount, roles, {
             distinctSessionCount
@@ -156,7 +160,7 @@ function buildInsightSummaryRecord(
     const worktreePath = deps.extractTagValue(node.tags, 'worktree:');
     const originContextId = deps.extractTagValue(node.tags, 'origin_context:');
     const originNodeId = deps.extractTagValue(node.tags, 'origin_node:');
-    const evidence = getInsightEvidence(deps, node.id);
+    const evidence = getInsightEvidenceRecord(deps, node.id);
     const promotedWithoutLocalEvidence = evidence.evidenceCount === 0 && (originContextId || originNodeId);
     const trustFlags = promotedWithoutLocalEvidence
         ? deps.buildKnowledgeTrustFlags(
@@ -282,7 +286,7 @@ export function promoteInsightNodeRecord(
     const type = sourceNode.type as Exclude<NodeType, 'artifact'>;
     const sourceOriginContextId = deps.extractTagValue(sourceNode.tags, 'origin_context:') ?? null;
     const sourceOriginNodeId = deps.extractTagValue(sourceNode.tags, 'origin_node:') ?? null;
-    const sourceEvidence = getInsightEvidence(deps, sourceNode.id);
+    const sourceEvidence = getInsightEvidenceRecord(deps, sourceNode.id);
     const sourcePromotion = describeKnowledgePromotionState({
         trustTier: sourceEvidence.evidenceCount === 0 && (sourceOriginContextId || sourceOriginNodeId)
             ? 'review'

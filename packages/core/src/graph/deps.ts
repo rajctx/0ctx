@@ -11,7 +11,7 @@ import type {
 } from '../schema';
 import { getCheckpointDetailRecord, saveCheckpointRecord } from './checkpoints';
 import { exportContextDumpRecord } from './dump';
-import { getInsightSummaryRecord, listWorkstreamInsightsRecord } from './insights';
+import { getInsightEvidenceRecord, getInsightSummaryRecord, listWorkstreamInsightsRecord } from './insights';
 import { previewKnowledgeFromCheckpointRecord } from './knowledge-checkpoint';
 import { previewKnowledgeFromSessionRecord } from './knowledge-session';
 import {
@@ -91,6 +91,7 @@ export function buildKnowledgeSessionDeps(
         getSessionDetail: (contextId: string, sessionId: string) => ReturnType<typeof import('./sessions').getSessionDetailRecord>;
         getByKey: (contextId: string, key: string, options?: { includeHidden?: boolean }) => ContextNode | null;
         getInsightSummary: (nodeId: string) => ReturnType<typeof getInsightSummaryRecord>;
+        getInsightEvidence: (nodeId: string) => ReturnType<typeof getInsightEvidenceRecord>;
         addNode: (params: Omit<ContextNode, 'id' | 'createdAt'> & { rawPayload?: unknown; payloadContentType?: string; createdAtOverride?: number }) => ContextNode;
         ensureEdge: (fromId: string, toId: string, relation: 'caused_by') => void;
     }
@@ -99,6 +100,7 @@ export function buildKnowledgeSessionDeps(
         getSessionDetail: ops.getSessionDetail,
         getByKey: ops.getByKey,
         getInsightSummary: ops.getInsightSummary,
+        getInsightEvidence: ops.getInsightEvidence,
         buildKnowledgeKey: (contextId, type, content, options) => buildKnowledgeKey(contextId, type, content, {
             branch: options?.branch,
             worktreePath: options?.worktreePath,
