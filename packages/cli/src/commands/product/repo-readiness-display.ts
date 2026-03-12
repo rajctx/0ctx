@@ -88,19 +88,18 @@ function buildAutoContextLine(options: {
             ? 'Detected supported agents but automatic context is not enabled yet'
             : 'No supported context-enabled agents detected on this machine yet';
     }
-    return 'Run 0ctx enable to install automatic context injection for supported agents';
+    return 'Run 0ctx enable to finish one-time context setup for supported agents';
 }
 
 function buildAutoContextSetupGaps(options: {
     repoReadiness: RepoReadinessSummary;
     formatAgentList: (agents: string[]) => string;
 }): string[] {
-    const parts: string[] = [];
-    if (options.repoReadiness.sessionStartMissingAgents.length > 0) {
-        parts.push(`${options.formatAgentList(options.repoReadiness.sessionStartMissingAgents)} need automatic context injection`);
-    }
-    if (options.repoReadiness.mcpRegistrationMissingAgents.length > 0) {
-        parts.push(`${options.formatAgentList(options.repoReadiness.mcpRegistrationMissingAgents)} need MCP retrieval registration`);
-    }
-    return parts;
+    const missingAgents = [...new Set([
+        ...options.repoReadiness.sessionStartMissingAgents,
+        ...options.repoReadiness.mcpRegistrationMissingAgents
+    ])];
+    return missingAgents.length > 0
+        ? [`${options.formatAgentList(missingAgents)} need one-time setup`]
+        : [];
 }

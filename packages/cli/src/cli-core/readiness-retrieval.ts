@@ -54,12 +54,12 @@ export function buildGaAutoContextActionHint(options: {
     sessionStartMissingAgents: GaAutoContextAgent[];
     mcpRegistrationMissingAgents: GaMcpRegistrationClient[];
 }): string | null {
-    const parts: string[] = [];
-    if (options.sessionStartMissingAgents.length > 0) {
-        parts.push(`Install automatic context injection for ${options.sessionStartMissingAgents.join(', ')}.`);
+    const missingAgents = dedupeAgents([
+        ...options.sessionStartMissingAgents,
+        ...options.mcpRegistrationMissingAgents
+    ]);
+    if (missingAgents.length === 0) {
+        return null;
     }
-    if (options.mcpRegistrationMissingAgents.length > 0) {
-        parts.push(`Register MCP retrieval for ${options.mcpRegistrationMissingAgents.join(', ')}.`);
-    }
-    return parts.length > 0 ? parts.join(' ') : null;
+    return `Complete one-time context setup for ${missingAgents.join(', ')}.`;
 }

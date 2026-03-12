@@ -138,7 +138,7 @@ describe('repo readiness display', () => {
         expect(lines.some((line) => line.includes('not installed'))).toBe(false);
     });
 
-    it('marks zero-touch as incomplete when MCP retrieval registration is still missing', () => {
+    it('marks zero-touch as incomplete when one-time context setup is still missing', () => {
         const lines = buildRepoReadinessLines({
             mode: 'status',
             repoReadiness: {
@@ -160,7 +160,7 @@ describe('repo readiness display', () => {
                 captureScope: 'machine',
                 debugScope: 'machine',
                 zeroTouchReady: false,
-                nextActionHint: 'Register MCP retrieval for claude.',
+                nextActionHint: 'Complete one-time context setup for claude.',
                 dataPolicyPreset: 'lean',
                 dataPolicyActionHint: null,
                 captureRetentionDays: 14,
@@ -179,7 +179,7 @@ describe('repo readiness display', () => {
         });
 
         expect(lines).toContain('Ready: needs one-time setup');
-        expect(lines).toContain('Context: claude need MCP retrieval registration');
-        expect(lines).toContain('Next step: Register MCP retrieval for claude.');
+        expect(lines).toContain('Context: claude need one-time setup');
+        expect(lines).toContain('Next step: Complete one-time context setup for claude.');
     });
 });

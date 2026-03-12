@@ -496,7 +496,7 @@ describe('daemon request handling', () => {
             expect(readiness.autoContextMissingAgents).toEqual(['claude']);
             expect(readiness.mcpRegistrationMissingAgents).toEqual(['claude']);
             expect(readiness.zeroTouchReady).toBe(false);
-            expect(readiness.nextActionHint).toContain('Register MCP retrieval for claude');
+            expect(readiness.nextActionHint).toContain('Complete one-time context setup for claude');
         } finally {
             if (previousUserProfile === undefined) delete process.env.USERPROFILE;
             else process.env.USERPROFILE = previousUserProfile;

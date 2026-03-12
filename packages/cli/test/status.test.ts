@@ -106,7 +106,7 @@ describe('commandStatus', () => {
                 captureMissingAgents: [],
                 captureManagedForRepo: true,
                 zeroTouchReady: false,
-                nextActionHint: 'Register MCP retrieval for Claude.',
+                nextActionHint: 'Complete one-time context setup for Claude.',
                 dataPolicyPreset: 'shared',
                 dataPolicyActionHint: 'Return this workspace to metadata_only when richer cloud sync is no longer needed.',
                 captureRetentionDays: 14,
