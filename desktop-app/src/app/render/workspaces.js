@@ -54,13 +54,13 @@
         ? joinNonEmpty([
             `${context.name} is the current project binding.`,
             Array.isArray(context.paths) && context.paths[0]
-              ? 'Future capture routes here from the active repository path.'
+              ? 'New capture routes here from the active repository path.'
               : 'Bind a repository folder so capture can land here automatically.',
             state.allSessions.length > 0
-              ? `${state.allSessions.length} captured session${state.allSessions.length === 1 ? '' : 's'} already belong to this workspace.`
+              ? `${state.allSessions.length} captured session${state.allSessions.length === 1 ? '' : 's'} already belong here.`
               : 'No captured sessions yet.'
           ])
-        : 'Create a workspace once, bind a repository folder, and let future capture route here automatically.';
+        : 'Create a workspace once and bind its repository folder.';
     }
 
     if (workspaceFactStrip) {
@@ -163,13 +163,6 @@
               hint: zeroTouch.nextAction || 'Use a supported agent in this repo and 0ctx will route capture automatically.'
             };
           })(),
-          {
-            title: 'Repository',
-            detail: Array.isArray(context.paths) && context.paths.length > 0 ? short(context.paths.join(', '), 96) : 'No repository folder bound yet',
-            hint: Array.isArray(context.paths) && context.paths.length > 0
-              ? 'Capture resolves from the active repo path.'
-              : 'Bind a repo path so capture can land here automatically.'
-          },
           {
             title: 'History',
             detail: `${state.allSessions.length} session${state.allSessions.length === 1 ? '' : 's'} · ${state.checkpoints.length} checkpoint${state.checkpoints.length === 1 ? '' : 's'}`,

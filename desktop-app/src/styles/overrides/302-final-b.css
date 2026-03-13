@@ -25,6 +25,22 @@
   overflow: auto;
 }
 
+.surface-head {
+  display: grid;
+  gap: 4px;
+}
+
+.surface-head-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.surface-head h3 {
+  margin: 0;
+}
+
 .session-rail-block {
   gap: 10px;
 }
@@ -83,6 +99,16 @@
   padding-bottom: 10px;
 }
 
+.preview-stage .section-row.small,
+.checkpoint-support-section .section-row.small {
+  margin-bottom: 0;
+  padding-bottom: 2px;
+}
+
+.preview-stage .row-actions {
+  gap: 6px;
+}
+
 .editorial-facts {
   padding: 8px 0 2px;
 }
@@ -114,6 +140,11 @@
 
   .search-wrap {
     width: 240px;
+  }
+
+  .workspace-page-layout,
+  .workstreams-layout {
+    grid-template-columns: 272px minmax(0, 1fr);
   }
 }
 

@@ -1,7 +1,7 @@
 (() => {
   window.OctxDesktop = window.OctxDesktop || {};
   const app = window.OctxDesktop;
-  const { state, matches, activeSession, selectedCheckpoint, activeCheckpointKnowledgePreview, selectedKnowledgeKeys, describeCheckpoint, describeSession, esc, formatRelativeTime, renderMetaLine, commitShort, formatTime, renderKnowledgeCandidates, describeKnowledgePreviewSummary, short, normalizeBranch } = app;
+  const { state, matches, activeSession, selectedCheckpoint, activeCheckpointKnowledgePreview, selectedKnowledgeKeys, describeCheckpoint, describeSession, esc, formatRelativeTime, renderMetaLine, commitShort, renderKnowledgeCandidates, describeKnowledgePreviewSummary, short, normalizeBranch } = app;
 
   function joinNonEmpty(parts) {
     return parts.map((part) => String(part || '').trim()).filter(Boolean).join(' ');
@@ -97,12 +97,11 @@
       const checkpointSummary = describeCheckpoint(checkpoint);
       document.getElementById('checkpointDetailTitle').textContent = short(checkpoint.summary || checkpoint.name || checkpoint.id, 72);
       document.getElementById('checkpointLeadCopy').textContent = joinNonEmpty([
-        checkpointSummary.title,
         checkpoint.branch
-          ? `tracks the ${normalizeBranch(checkpoint.branch)} workstream.`
-          : 'captures a workspace snapshot.',
+          ? `This checkpoint tracks ${normalizeBranch(checkpoint.branch)}.`
+          : 'This checkpoint captures a workspace snapshot.',
         checkpoint.sessionId
-          ? 'It stays linked to the originating conversation so you can explain or rewind it without losing context.'
+          ? 'It stays linked to the originating conversation.'
           : 'It can still be explained or rewound without a linked conversation.'
       ]);
       empty.classList.add('hidden');
@@ -116,7 +115,6 @@
       const meta = [
         { label: 'Kind', value: checkpoint.kind },
         { label: 'Linked session', value: checkpoint.sessionId ? short(checkpoint.sessionId, 28) : 'none' },
-        { label: 'Created', value: formatTime(checkpoint.createdAt) },
         { label: 'Agents', value: checkpoint.agentSet?.length ? checkpoint.agentSet.join(', ') : 'none' }
       ];
     document.getElementById('checkpointMeta').innerHTML = meta.map((item) => `<article><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong></article>`).join('');

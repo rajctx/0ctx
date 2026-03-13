@@ -2,19 +2,19 @@
 .workstreams-layout,
 .sessions-layout {
   display: grid;
-  gap: 18px;
+  gap: 14px;
   align-items: start;
 }
 
 .workspace-page-layout {
-  grid-template-columns: 320px minmax(0, 1fr);
+  grid-template-columns: 296px minmax(0, 1fr);
 }
 
 .workspace-main-stage,
 .workstreams-main-stage,
 .session-reader-stage {
   display: grid;
-  gap: 18px;
+  gap: 14px;
   min-width: 0;
 }
 
@@ -24,7 +24,7 @@
 }
 
 .workspace-primary-surface {
-  padding: 20px;
+  padding: 16px 18px;
 }
 
 .workspace-primary-surface .editorial-facts,
@@ -60,7 +60,7 @@
 .workspace-secondary-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) minmax(260px, 0.95fr);
-  gap: 12px;
+  gap: 10px;
 }
 
 .workspace-secondary-panel {
@@ -70,7 +70,7 @@
 .workspace-card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .workspace-card-item {
@@ -99,30 +99,30 @@
 }
 
 .workstreams-layout {
-  grid-template-columns: 312px minmax(0, 1fr);
+  grid-template-columns: 288px minmax(0, 1fr);
 }
 
 .workstreams-library-panel {
-  padding: 18px 18px 14px;
+  padding: 14px 15px 12px;
 }
 
 .workstream-hero-panel {
-  padding: 22px;
+  padding: 16px 18px;
 }
 
 .workstream-hero-panel .detail-stack {
-  gap: 18px;
+  gap: 14px;
 }
 
 .workstream-support-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
+  gap: 12px;
 }
 
 .workstream-support-panel,
 .workstream-compare-panel {
-  padding: 18px;
+  padding: 14px 15px;
 }
 
 .workstream-compare-panel .compact-meta-grid {

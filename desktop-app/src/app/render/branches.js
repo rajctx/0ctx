@@ -121,8 +121,8 @@
 
       document.getElementById('branchDetailTitle').textContent = describeBranchLane(lane).title;
       document.getElementById('branchLeadCopy').textContent = joinNonEmpty([
-        `${describeBranchLane(lane).title} has ${lane.sessionCount} captured session${lane.sessionCount === 1 ? '' : 's'} and ${lane.checkpointCount} checkpoint${lane.checkpointCount === 1 ? '' : 's'}.`,
-        lane.lastAgent ? `Latest handoff: ${lane.lastAgent}.` : 'No agent handoff has been recorded yet.',
+        `${describeBranchLane(lane).title} has ${lane.sessionCount} session${lane.sessionCount === 1 ? '' : 's'} and ${lane.checkpointCount} checkpoint${lane.checkpointCount === 1 ? '' : 's'}.`,
+        lane.lastAgent ? `Latest handoff: ${lane.lastAgent}.` : 'No agent handoff recorded yet.',
         describeWorkstreamActionHint(lane) ? `Next: ${describeWorkstreamActionHint(lane)}.` : ''
       ]);
       empty.classList.add('hidden');
@@ -135,7 +135,6 @@
       ].join('');
       const meta = [
         { label: 'Checked-out HEAD', value: lane.currentHeadSha ? commitShort(lane.currentHeadSha) : 'unknown' },
-        { label: 'HEAD ref', value: lane.currentHeadRef || (lane.isDetachedHead ? 'detached' : 'unknown') },
         { label: 'Last agent', value: lane.lastAgent || 'unknown' },
         { label: 'Handoff readiness', value: lane.handoffSummary || 'unknown' }
       ];

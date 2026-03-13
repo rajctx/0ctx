@@ -189,8 +189,11 @@
   min-width: 0;
 }
 
-.checkpoint-lead-panel {
-  background: rgba(255, 255, 255, 0.022);
+.checkpoint-lead-stage {
+  display: grid;
+  gap: 12px;
+  padding: 4px 0 10px;
+  border-bottom: 1px solid var(--line-soft);
 }
 
 .checkpoint-support-grid {
@@ -199,13 +202,15 @@
   gap: 16px;
 }
 
-.insights-layout {
-  grid-template-columns: 304px minmax(0, 1fr);
+.checkpoint-support-section {
+  display: grid;
+  gap: 12px;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--line-soft);
 }
 
-.insight-selection-panel,
-.insight-promotion-panel {
-  background: rgba(255, 255, 255, 0.018);
+.insights-layout {
+  grid-template-columns: 304px minmax(0, 1fr);
 }
 
 .insight-selection-panel .compact-meta-grid {

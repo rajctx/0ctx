@@ -75,8 +75,10 @@
 }
 
 .session-utility-inline {
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--line-soft);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 2px 0 10px;
 }
 
 .session-reader-actions {
@@ -91,6 +93,13 @@
   gap: 12px;
   min-height: 620px;
   padding: 18px 20px 20px;
+}
+
+.preview-stage {
+  display: grid;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
 }
 
 .reader-panel .empty-state,

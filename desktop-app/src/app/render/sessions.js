@@ -1,7 +1,7 @@
 (() => {
   window.OctxDesktop = window.OctxDesktop || {};
   const app = window.OctxDesktop;
-  const { state, matches, activeContext, activeBranch, activeSession, activeSessionKnowledgePreview, selectedKnowledgeKeys, selectedTurn, describeSession, describeTurn, describeSelectedTurn, describeBranchLane, describeBodyKind, esc, short, formatRelativeTime, renderMetaLine, humanizeLabel, commitShort, formatTime, renderKnowledgeCandidates, describeKnowledgePreviewSummary, normalizeBranch, renderReadableBody } = app;
+  const { state, matches, activeContext, activeBranch, activeSession, activeSessionKnowledgePreview, selectedKnowledgeKeys, selectedTurn, describeSession, describeTurn, describeSelectedTurn, describeBranchLane, describeBodyKind, esc, short, formatRelativeTime, renderMetaLine, humanizeLabel, commitShort, renderKnowledgeCandidates, describeKnowledgePreviewSummary, normalizeBranch, renderReadableBody } = app;
 
   function renderSessions() {
     const sessions = state.sessions.filter((session) => matches(`${session.sessionId} ${session.summary || ''} ${session.branch || ''} ${session.commitSha || ''} ${session.agent || ''}`));
@@ -119,7 +119,6 @@
     ]);
 
     const meta = [
-      { label: 'Captured', value: formatTime(turn.createdAt) },
       { label: 'Session', value: short(state.sessionDetail?.session?.summary || turn.sessionId || 'No session summary stored', 72) }
     ];
     if (state.sessionDetail?.checkpointCount) {
