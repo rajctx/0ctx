@@ -29,19 +29,6 @@
       : lane
         ? `Selected workstream: ${describeBranchLane(lane).title}. Choose a session to read its message stream and create a checkpoint.`
         : 'Pick a workstream, then choose a session to read the message stream and capture a checkpoint.';
-    const readerTitle = document.getElementById('sessionReaderTitle');
-    const readerMeta = document.getElementById('sessionReaderMeta');
-    if (readerTitle) {
-      readerTitle.textContent = sessionSummary?.title || (lane ? describeBranchLane(lane).title : 'Choose a session');
-    }
-    if (readerMeta) {
-      readerMeta.textContent = session
-        ? `${sessionSummary?.preview || 'Read the stream below.'} ${session.agent ? `Latest agent: ${session.agent}.` : ''}`.trim()
-        : lane
-          ? `Reading ${describeBranchLane(lane).title}. Choose a session to open its message stream and checkpoint the useful state.`
-          : 'Pick a workstream, then choose a session to open the reader.';
-    }
-
     document.getElementById('sessionList').innerHTML = sessions.length > 0
       ? sessions.map((session) => {
         const summary = describeSession(session);

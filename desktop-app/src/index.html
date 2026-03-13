@@ -295,28 +295,11 @@
             <header class="page-head">
               <p class="page-kicker">Captured sessions</p>
               <h1>Read the message stream</h1>
-            <p id="sessionsPageMeta" class="page-copy">Choose a session, read its messages, and capture a checkpoint when the work becomes worth preserving.</p>
+              <p id="sessionsPageMeta" class="page-copy">Choose a session, read its messages, and capture a checkpoint when the work becomes worth preserving.</p>
             </header>
 
             <div class="sessions-layout">
               <aside class="panel session-library-panel session-navigation-panel">
-                <section class="session-rail-block session-focus-block">
-                  <div class="section-row">
-                    <div>
-                      <p class="section-label">Current session</p>
-                      <h3 id="sessionFocusTitle">Choose a session</h3>
-                    </div>
-                  </div>
-                  <p id="sessionFocusMeta" class="page-copy compact-copy">Pick a workstream, then choose a session to read the message stream and capture a checkpoint.</p>
-                  <div class="action-stack">
-                    <button id="createCheckpointBtn" class="btn primary wide" type="button">Create checkpoint</button>
-                  </div>
-                  <div class="utility-inline">
-                    <button id="previewSessionKnowledgeBtn" class="btn quiet" type="button">Preview insights</button>
-                    <button id="extractSessionKnowledgeBtn" class="btn quiet" type="button">Save selected insights</button>
-                  </div>
-                </section>
-
                 <section class="session-rail-block">
                   <div class="section-row">
                     <div>
@@ -341,17 +324,23 @@
               </aside>
 
               <section class="session-reader-stage">
-                <section class="panel session-summary-panel">
-                  <div class="section-row">
+                <section class="panel session-reader-shell">
+                  <header class="session-reader-head">
                     <div>
-                      <p class="section-label">Session overview</p>
-                      <h3 id="sessionReaderTitle">Choose a session</h3>
+                      <p class="section-label">Current session</p>
+                      <h3 id="sessionFocusTitle">Choose a session</h3>
                     </div>
+                    <div class="session-reader-actions">
+                      <button id="createCheckpointBtn" class="btn primary" type="button">Create checkpoint</button>
+                    </div>
+                  </header>
+                  <p id="sessionFocusMeta" class="page-copy compact-copy">Pick a workstream, then choose a session to read the message stream and capture a checkpoint.</p>
+                  <div class="utility-inline">
+                    <button id="previewSessionKnowledgeBtn" class="btn quiet" type="button">Preview insights</button>
+                    <button id="extractSessionKnowledgeBtn" class="btn quiet" type="button">Save selected insights</button>
                   </div>
-                  <p id="sessionReaderMeta" class="page-copy compact-copy">Pick a workstream, then choose a session to read the message stream and capture a checkpoint.</p>
-                </section>
 
-                <section class="panel reader-panel session-reader-panel">
+                  <section class="panel reader-panel session-reader-panel">
                   <div id="turnDetailEmpty" class="empty-state">Select a message to inspect its text and companion context.</div>
 
                   <div id="turnDetailBody" class="reader-body hidden">
@@ -400,6 +389,7 @@
                     </details>
 
                   </div>
+                  </section>
                 </section>
               </section>
             </div>
