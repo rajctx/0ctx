@@ -1,0 +1,221 @@
+.info-list article p,
+.meta-grid article p,
+.inline-note p {
+  font-size: 11px;
+  line-height: 1.58;
+}
+
+.workspace-summary-strip {
+  gap: 6px;
+}
+
+.workspace-fact {
+  padding: 5px 9px;
+  background: rgba(255, 255, 255, 0.035);
+  border-color: var(--line-soft);
+}
+
+.workspace-fact strong {
+  font-size: 12px;
+}
+
+.workspace-fact span {
+  font-size: 10px;
+}
+
+.sidebar-nav,
+.sidebar-utilities {
+  gap: 3px;
+}
+
+.nav-btn {
+  min-height: 36px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+}
+
+.topbar {
+  min-height: 54px;
+  padding: 0 22px;
+  gap: 14px;
+  border-bottom: 1px solid var(--line-soft);
+  background: rgba(10, 10, 11, 0.88);
+}
+
+.topbar-crumbs {
+  font-size: 12px;
+  gap: 8px;
+}
+
+.topbar-tools {
+  gap: 10px;
+}
+
+.search-wrap {
+  position: relative;
+  width: 320px;
+}
+
+.search-wrap::before {
+  content: "";
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--text-soft);
+  border-radius: 999px;
+  transform: translateY(-58%);
+  pointer-events: none;
+}
+
+.search-wrap::after {
+  content: "";
+  position: absolute;
+  left: 24px;
+  top: calc(50% + 4px);
+  width: 6px;
+  height: 1.5px;
+  background: var(--text-soft);
+  transform: rotate(45deg);
+  transform-origin: left center;
+  pointer-events: none;
+}
+
+input[type="search"] {
+  padding-left: 36px;
+}
+
+input[type="search"],
+input[type="text"],
+input[type="number"],
+select {
+  min-height: 36px;
+  border-radius: 10px;
+  background: #101114;
+  border-color: var(--line-soft);
+  font-size: 12px;
+}
+
+.btn {
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 12px;
+}
+
+.btn.primary {
+  background: #fafafa;
+  color: #0b0b0c;
+}
+
+.banner {
+  margin: 14px 22px 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.stage-inner {
+  width: min(100%, 1320px);
+  padding: 22px 22px 32px;
+}
+
+.page-shell {
+  gap: 16px;
+}
+
+.page-head {
+  gap: 6px;
+  max-width: 760px;
+}
+
+.page-head h1 {
+  font-size: 30px;
+  line-height: 1.04;
+  letter-spacing: -0.05em;
+}
+
+.page-kicker,
+.section-label,
+.item-kicker,
+.detail-label {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+}
+
+.page-grid,
+.workspace-layout,
+.utility-layout {
+  gap: 16px;
+}
+
+.page-grid-branches {
+  grid-template-columns: 320px minmax(0, 1fr);
+}
+
+.page-grid-sessions {
+  grid-template-columns: 332px minmax(0, 1fr);
+}
+
+.page-grid-checkpoints {
+  grid-template-columns: 296px minmax(0, 1fr);
+}
+
+.workspace-layout,
+.utility-layout {
+  grid-template-columns: 320px minmax(0, 1fr);
+}
+
+.panel {
+  padding: 16px;
+  border-radius: 16px;
+  background: var(--bg-panel);
+  border-color: var(--line-soft);
+}
+
+.panel-head h3,
+.section-row h2 {
+  font-size: 17px;
+}
+
+.section-row.small h4,
+.detail-head h4 {
+  font-size: 13px;
+}
+
+.list {
+  gap: 4px;
+}
+
+.stack-list {
+  max-height: 380px;
+}
+
+.compact-list-surface {
+  max-height: 280px;
+}
+
+.list-item {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.012);
+  border: 1px solid transparent;
+}
+
+.branch-library-panel .list-item,
+.session-library-panel .list-item,
+#branchSessionList .list-item,
+#handoffList .list-item,
+#checkpointList .list-item {
+  background: transparent;
+  border-color: transparent;
+  border-bottom: 1px solid var(--line-soft);
+  border-radius: 0;
+  padding: 10px 2px;
+}
+
+.branch-library-panel .list-item:last-child,
+.session-library-panel .list-item:last-child,
+#branchSessionList .list-item:last-child,

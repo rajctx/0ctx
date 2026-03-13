@@ -1,0 +1,176 @@
+.insight-library-panel {
+  align-self: start;
+}
+
+.insights-list-stage {
+  padding-top: 10px;
+}
+
+.insight-library-list {
+  max-height: 680px;
+}
+
+.insight-row {
+  gap: 8px;
+}
+
+.insight-row-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.insight-row-head .item-title {
+  font-size: 15px;
+  line-height: 1.28;
+}
+
+.insight-library-list .list-item {
+  background: transparent;
+  border-color: transparent;
+  border-bottom: 1px solid var(--line-soft);
+  border-radius: 0;
+  padding: 10px 1px;
+}
+
+.insight-library-list .list-item:last-child {
+  border-bottom: 0;
+}
+
+.insight-library-list .list-item:hover {
+  background: transparent;
+  border-color: transparent;
+  border-bottom-color: var(--line);
+}
+
+.insight-library-list .list-item.active {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 11px;
+}
+
+.insight-detail-stage .panel {
+  box-shadow: none;
+}
+
+.insight-selection-panel .lead-copy {
+  max-width: 62ch;
+}
+
+.insight-promotion-panel .info-list article {
+  gap: 4px;
+}
+
+.library-summary-line {
+  color: var(--text-soft);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.utility-note {
+  margin-top: -2px;
+  font-size: 11px;
+  color: var(--text-soft);
+}
+
+.insight-row-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.insight-row .item-title {
+  margin: 0;
+}
+
+.insight-row .chip {
+  flex: 0 0 auto;
+}
+
+.setup-page-layout {
+  grid-template-columns: 320px minmax(0, 1fr);
+}
+
+.setup-main-stage {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.setup-primary-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.setup-health-panel,
+.setup-policy-panel,
+.setup-utilities-panel {
+  background: rgba(255, 255, 255, 0.014);
+}
+
+.setup-command-panel .command-card {
+  background: rgba(255, 255, 255, 0.02);
+  border-color: var(--line-soft);
+}
+
+.setup-command-panel .row-actions {
+  gap: 10px;
+}
+
+.setup-health-panel .list-item {
+  padding: 12px 0;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  border-radius: 0;
+}
+
+.setup-health-panel .list-item:last-child {
+  border-bottom: 0;
+}
+
+.setup-health-panel .list-item:hover {
+  background: transparent;
+  border-color: transparent;
+  transform: none;
+}
+
+.setup-policy-panel .advanced-details,
+.setup-utilities-panel .advanced-details {
+  border-color: var(--line-soft);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.setup-health-panel #hookList,
+.setup-hook-list {
+  max-height: none;
+}
+
+.setup-policy-panel .workspace-form {
+  gap: 14px;
+}
+
+.setup-utilities-panel details[open] .advanced-details-body {
+  padding-top: 12px;
+}
+
+@media (max-width: 1180px) {
+  .checkpoints-layout,
+  .insights-layout,
+  .setup-page-layout,
+  .checkpoint-support-grid,
+  .editorial-facts,
+  .setup-primary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .checkpoint-library-panel,
+  .insights-sidebar,
+  .setup-command-panel {
+    position: static;
+  }
+}

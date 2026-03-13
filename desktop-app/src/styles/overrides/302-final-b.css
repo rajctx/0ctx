@@ -1,0 +1,165 @@
+
+.workspaces-library-panel,
+.workstreams-library-panel,
+.session-navigation-panel,
+.checkpoint-library-panel,
+.insights-sidebar,
+.setup-command-panel {
+  position: sticky;
+  top: 18px;
+  align-self: start;
+  max-height: calc(100vh - 96px);
+  overflow: auto;
+}
+
+.session-navigation-panel {
+  gap: 12px;
+  padding: 12px;
+}
+
+.workspace-form-panel {
+  position: sticky;
+  top: 18px;
+  align-self: start;
+  max-height: calc(100vh - 96px);
+  overflow: auto;
+}
+
+.session-rail-block {
+  gap: 10px;
+}
+
+.session-reader-shell {
+  gap: 10px;
+}
+
+.session-reader-head {
+  padding: 12px 14px;
+  border-radius: 14px;
+}
+
+.session-reader-actions {
+  gap: 6px;
+}
+
+.session-reader-panel {
+  min-height: 520px;
+  padding: 0;
+}
+
+.reader-body {
+  gap: 14px;
+  padding: 14px 16px 16px;
+}
+
+.reader-header-block {
+  padding-bottom: 10px;
+}
+
+.reader-block {
+  padding: 12px 0;
+}
+
+.detail-copy,
+.detail-list,
+.detail-quote {
+  font-size: 13px;
+  line-height: 1.72;
+}
+
+.detail-primary {
+  font-size: 14px;
+}
+
+.detail-inline-code,
+.detail-pre,
+.technical-details summary,
+.preview-footnote {
+  font-size: 10.5px;
+}
+
+.editorial-facts,
+.reader-facts,
+.compact-meta-grid {
+  gap: 0 12px;
+}
+
+.editorial-facts {
+  padding: 8px 0 2px;
+}
+
+.editorial-facts article,
+.compact-meta-grid article {
+  padding: 8px 0;
+}
+
+.empty-state {
+  min-height: 64px;
+  padding: 10px 12px;
+  font-size: 10.5px;
+}
+
+.banner {
+  margin: 12px 18px 0;
+}
+
+.statusbar {
+  min-height: 24px;
+  padding: 0 12px;
+}
+
+@media (max-width: 1320px) {
+  .app-shell {
+    grid-template-columns: 216px minmax(0, 1fr);
+  }
+
+  .search-wrap {
+    width: 240px;
+  }
+}
+
+/* Final minimal active-state pass: no bright borders, no inset highlights, no layout shift */
+
+.nav-btn.active,
+.nav-btn.active:hover {
+  background: rgba(255, 255, 255, 0.055);
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.branch-library-panel .list-item,
+.session-library-panel .list-item,
+#branchSessionList .list-item,
+#handoffList .list-item,
+#checkpointList .list-item,
+.insight-library-list .list-item {
+  padding: 10px 8px;
+}
+
+.branch-library-panel .list-item:hover,
+.session-library-panel .list-item:hover,
+#branchSessionList .list-item:hover,
+#handoffList .list-item:hover,
+#checkpointList .list-item:hover,
+.insight-library-list .list-item:hover {
+  background: rgba(255, 255, 255, 0.018);
+  border-color: transparent;
+  border-bottom-color: transparent;
+  border-radius: 10px;
+}
+
+.branch-library-panel .list-item.active,
+.session-library-panel .list-item.active,
+#branchSessionList .list-item.active,
+#handoffList .list-item.active,
+#checkpointList .list-item.active,
+.insight-library-list .list-item.active,
+.session-navigation-panel .list-item.active,
+.session-navigation-panel .list-item.active:hover {
+  background: rgba(255, 255, 255, 0.042);
+  border: 0;
+  border-bottom: 0;
+  border-radius: 10px;
+  box-shadow: none;
+  padding: 10px 8px;
+}

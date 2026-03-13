@@ -1,0 +1,258 @@
+.meta-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.compact-meta-grid {
+  gap: 0 16px;
+  border-top: 0;
+}
+
+.compact-meta-grid article {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.compact-meta-grid article:nth-last-child(-n+2) {
+  border-bottom: 0;
+}
+
+.lead-copy {
+  font-size: 15px;
+  line-height: 1.6;
+  font-weight: 520;
+  max-width: 58ch;
+}
+
+.reader-panel {
+  padding: 0;
+  overflow: hidden;
+}
+
+.reader-body {
+  gap: 16px;
+  padding: 18px 20px 20px;
+}
+
+.reader-header-block {
+  gap: 6px;
+}
+
+.reader-document {
+  gap: 0;
+}
+
+.reader-block {
+  padding: 16px 0;
+}
+
+.detail-copy {
+  max-width: 74ch;
+  font-size: 14px;
+  line-height: 1.76;
+}
+
+.detail-primary {
+  font-size: 15px;
+  color: var(--text-strong);
+}
+
+.empty-state {
+  min-height: 78px;
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px dashed var(--line);
+  background: rgba(255, 255, 255, 0.015);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.empty-flow {
+  gap: 10px;
+}
+
+.empty-flow strong {
+  font-size: 15px;
+}
+
+.preview-row {
+  gap: 10px;
+}
+
+.preview-meta {
+  gap: 6px;
+}
+
+.preview-content {
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.preview-evidence {
+  font-size: 11px;
+}
+
+.preview-footnote {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  margin-top: 6px;
+  color: var(--text-soft);
+  font-size: 11px;
+}
+
+.evidence-list {
+  margin-top: 6px;
+  gap: 4px;
+}
+
+.technical-details {
+  border-radius: 14px;
+  border-color: var(--line-soft);
+}
+
+.technical-details summary {
+  padding: 12px 14px;
+  font-size: 12px;
+}
+
+.tech-grid {
+  padding: 14px;
+}
+
+.toggle {
+  padding: 7px 10px;
+  border-radius: 999px;
+  border-color: var(--line-soft);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.table-wrap {
+  border-radius: 14px;
+  border-color: var(--line-soft);
+}
+
+thead th {
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.018);
+}
+
+tbody td {
+  padding: 12px;
+}
+
+.command-card {
+  padding: 12px 13px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.command-card code {
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.policy-preset-grid {
+  gap: 10px;
+}
+
+.policy-preset-btn {
+  min-height: 66px;
+  gap: 3px;
+  padding-block: 10px;
+}
+
+.policy-custom-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.advanced-details,
+.policy-custom-block {
+  border-radius: 14px;
+  border-color: var(--line-soft);
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.advanced-details > summary {
+  padding: 12px 14px;
+  font-size: 12px;
+}
+
+.advanced-details-body {
+  gap: 12px;
+  padding: 0 14px 14px;
+}
+
+.statusbar {
+  min-height: 30px;
+  padding: 0 16px;
+  border-top: 1px solid var(--line-soft);
+  background: #09090b;
+  font-size: 10px;
+}
+
+@media (max-width: 1320px) {
+  .app-shell {
+    grid-template-columns: 248px minmax(0, 1fr);
+  }
+
+  .page-grid,
+  .workspace-layout,
+  .utility-layout {
+    grid-template-columns: 320px minmax(0, 1fr);
+  }
+
+  .page-grid-branches,
+  .page-grid-checkpoints {
+    grid-template-columns: 290px minmax(0, 1fr);
+  }
+
+  .page-grid-sessions {
+    grid-template-columns: 250px minmax(0, 1fr);
+  }
+
+  .sessions-overview-grid {
+    grid-template-columns: 300px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1120px) {
+  .page-grid,
+  .workspace-layout,
+  .utility-layout,
+  .page-grid-branches,
+  .page-grid-sessions,
+  .page-grid-checkpoints,
+  .page-card-grid.two-up,
+  .sessions-overview-grid,
+  .policy-preset-grid,
+  .policy-custom-grid,
+  .fact-grid,
+  .meta-grid,
+  .compact-meta-grid,
+  .workspace-focus-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-focus-grid article {
+    border-bottom: 1px solid var(--line-soft);
+  }
+
+  .workspace-focus-grid article:last-child {
+    border-bottom: 0;
+  }
+}
+
+@media (max-width: 920px) {
+  .topbar {
+    padding: 0 18px;
+  }
+
+  .stage-inner {
+    padding: 20px 18px 36px;
+  }
+
+  .search-wrap {
+    width: 220px;
+  }
+}
