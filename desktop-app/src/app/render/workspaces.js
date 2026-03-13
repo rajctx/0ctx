@@ -1,7 +1,7 @@
 (() => {
   window.OctxDesktop = window.OctxDesktop || {};
   const app = window.OctxDesktop;
-  const { state, matches, activeContext, zeroTouchState, formatSyncPolicyLabel, formatDataPolicyPresetLabel, describeWorkspaceSyncDisplay, describeDesktopPolicyHint, capturePolicySummary, dataPolicyActionHint, esc, formatRelativeTime, renderChip, renderMetaLine, short, humanizeLabel, contextById, syncWorkspaceComparisonTargetSelection, workspaceComparisonTargetContext, methodSupported } = app;
+  const { state, matches, activeContext, zeroTouchState, formatSyncPolicyLabel, formatDataPolicyPresetLabel, describeWorkspaceSyncDisplay, describeDesktopPolicyHint, capturePolicySummary, dataPolicyActionHint, esc, formatRelativeTime, renderMetaLine, short, humanizeLabel, contextById, syncWorkspaceComparisonTargetSelection, workspaceComparisonTargetContext, methodSupported } = app;
 
   function factStripItem(label, value) {
     return `<article><span>${esc(label)}</span><strong>${esc(value || '-')}</strong></article>`;
@@ -19,7 +19,7 @@
     if (workspacesPageMeta) {
       workspacesPageMeta.textContent = context
         ? `${contexts.length} workspace${contexts.length === 1 ? '' : 's'} on this machine. ${context.name} is the current project binding.`
-        : `${contexts.length} workspace${contexts.length === 1 ? '' : 's'} on this machine. Pick one or bind a new repository.`;
+        : `${contexts.length} workspace${contexts.length === 1 ? '' : 's'} on this machine. Bind one repository and future capture routes automatically.`;
     }
 
     document.getElementById('workspaceList').innerHTML = contexts.length > 0
@@ -35,13 +35,12 @@
                 <p class="item-kicker">${esc(isActive ? 'Current workspace' : createdCopy)}</p>
                 <h4 class="item-title">${esc(item.name || item.id)}</h4>
               </div>
-              ${isActive ? renderChip('Selected', 'green') : ''}
+              ${isActive ? '<span class="item-trailing-meta">Selected</span>' : ''}
             </div>
             <div class="workspace-path text-mono">${esc(repoPath || 'No repository folder bound yet')}</div>
             ${renderMetaLine([
-              repoPath ? 'Automatic capture ready' : 'Needs repository binding',
-              item.syncPolicy ? formatSyncPolicyLabel(item.syncPolicy) : '',
-              pathList.length > 1 ? `${pathList.length} paths` : ''
+              repoPath ? 'Repo bound' : 'Needs repository binding',
+              item.syncPolicy ? formatSyncPolicyLabel(item.syncPolicy) : ''
             ])}
           </article>
         `;
@@ -55,7 +54,7 @@
         ? joinNonEmpty([
             `${context.name} is the current project binding.`,
             Array.isArray(context.paths) && context.paths[0]
-              ? 'Future capture will route here from the active repository path.'
+              ? 'Future capture routes here from the active repository path.'
               : 'Bind a repository folder so capture can land here automatically.',
             state.allSessions.length > 0
               ? `${state.allSessions.length} captured session${state.allSessions.length === 1 ? '' : 's'} already belong to this workspace.`

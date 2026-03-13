@@ -1,7 +1,7 @@
 (() => {
   window.OctxDesktop = window.OctxDesktop || {};
   const app = window.OctxDesktop;
-  const { state, activeContext, activeInsightNode, syncInsightSelection, insightSummary, insightTargetContexts, syncPromotionTargetSelection, contextById, methodSupported, matches, esc, formatTime, renderChip, basenameFromPath, humanizeLabel, short } = app;
+  const { state, activeContext, activeInsightNode, syncInsightSelection, insightSummary, insightTargetContexts, syncPromotionTargetSelection, contextById, methodSupported, matches, esc, formatTime, basenameFromPath, humanizeLabel, short } = app;
 
   function factStripItem(label, value) {
     return `<article><span>${esc(label)}</span><strong>${esc(value || '-')}</strong></article>`;
@@ -37,7 +37,7 @@
       if (knowledgePageMeta) {
         const context = activeContext();
         knowledgePageMeta.textContent = context
-          ? `${context.name} currently has ${nodes.length} reviewed insight${nodes.length === 1 ? '' : 's'}. Keep only memory worth reusing across sessions and checkpoints.`
+          ? `${context.name} currently has ${nodes.length} reviewed insight${nodes.length === 1 ? '' : 's'}. Keep only memory worth reusing across future sessions and checkpoints.`
           : 'Use this page for durable project memory. Keep raw conversation history in Sessions.';
       }
       if (knowledgeSummaryLine) {
@@ -96,9 +96,12 @@
           .map((item) => `<article><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong></article>`)
           .join('');
         const selectedInsightCopy = document.getElementById('selectedInsightCopy');
-        selectedInsightCopy.innerHTML = `<p>${esc(selectedInsight.summary)}</p>`;
+        selectedInsightCopy.innerHTML = `
+          <p class="detail-copy detail-primary">${esc(selectedInsight.summary)}</p>
+          <p class="detail-copy detail-muted">Keep this insight only if it is durable enough to help the next session resume work without rereading the full transcript.</p>
+        `;
         if (selectedInsight.trustSummary) {
-          selectedInsightCopy.insertAdjacentHTML('beforeend', `<div class="preview-footnote">${esc(selectedInsight.trustSummary)}</div>`);
+          selectedInsightCopy.insertAdjacentHTML('beforeend', `<p class="detail-copy detail-muted">${esc(selectedInsight.trustSummary)}</p>`);
         }
         const supportNotes = [
           selectedInsight.branch ? `Workstream: ${selectedInsight.branch}` : '',
@@ -107,7 +110,7 @@
           selectedInsight.corroboratedRoles.length > 0 ? `Corroborated roles: ${selectedInsight.corroboratedRoles.map((role) => humanizeLabel(role)).join(', ')}` : ''
         ].filter(Boolean);
         if (supportNotes.length > 0) {
-          selectedInsightCopy.insertAdjacentHTML('beforeend', `<div class="preview-footnote">${esc(supportNotes.join(' · '))}</div>`);
+          selectedInsightCopy.insertAdjacentHTML('beforeend', `<p class="detail-copy detail-muted">${esc(supportNotes.join(' · '))}</p>`);
         }
         if (selectedInsight.evidencePreview.length > 0) {
           selectedInsightCopy.insertAdjacentHTML('beforeend', `

@@ -56,11 +56,16 @@
       : 'No repository folder bound.';
     pathEl.textContent = short(workspacePath, 56);
     pathEl.title = workspacePath;
-    document.getElementById('sideWorkspaceBranches').textContent = String(state.branches.length);
-    document.getElementById('sideWorkspaceSessions').textContent = String(state.allSessions.length);
-    document.getElementById('sideBinding').textContent = Array.isArray(context?.paths) && context.paths.length > 0
-      ? 'Bound to a repo path. Daily work now flows through workstreams, sessions, and checkpoints.'
-      : 'Choose a repo folder to route future capture here automatically.';
+    const summaryEl = document.getElementById('sideWorkspaceSummary');
+    if (summaryEl) {
+      summaryEl.textContent = `${state.branches.length} workstream${state.branches.length === 1 ? '' : 's'} · ${state.allSessions.length} session${state.allSessions.length === 1 ? '' : 's'}`;
+    }
+    const bindingEl = document.getElementById('sideBinding');
+    if (bindingEl) {
+      bindingEl.textContent = Array.isArray(context?.paths) && context.paths.length > 0
+        ? 'Repo bound. New capture routes here automatically.'
+        : 'Bind a repo folder so future capture can route here automatically.';
+    }
 
     state.auth = { authenticated: true, provider: 'local' };
     document.getElementById('authBanner').classList.add('hidden');

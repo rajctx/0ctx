@@ -290,6 +290,13 @@ pre,
   gap: 10px;
 }
 
+.sidebar-summary-line {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 .sidebar-nav,
 .sidebar-utilities {
   display: grid;
@@ -681,6 +688,10 @@ select:focus {
   border-top: 1px solid var(--line);
 }
 
+.utility-side-note {
+  padding-top: 4px;
+}
+
 .workspace-focus-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -732,6 +743,29 @@ select:focus {
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 16px;
   overflow: visible;
+}
+
+.workspace-card-item {
+  gap: 8px;
+}
+
+.workspace-card-item .item-trailing-meta {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line-soft);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.workspace-card-item .item-meta-line {
+  font-size: 10.5px;
 }
 
 .compact-list-surface {
@@ -982,6 +1016,15 @@ select:focus {
 .preview-footnote {
   color: var(--text-soft);
   font-size: 11px;
+}
+
+#selectedInsightCopy {
+  display: grid;
+  gap: 10px;
+}
+
+#selectedInsightCopy .detail-copy {
+  max-width: 64ch;
 }
 
 .evidence-list {
@@ -3286,13 +3329,53 @@ select {
   min-width: 0;
 }
 
+.setup-primary-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
 .setup-health-panel,
 .setup-policy-panel,
 .setup-utilities-panel {
   background: rgba(255, 255, 255, 0.014);
 }
 
-.setup-health-panel #hookList {
+.setup-command-panel .command-card {
+  background: rgba(255, 255, 255, 0.02);
+  border-color: var(--line-soft);
+}
+
+.setup-command-panel .row-actions {
+  gap: 10px;
+}
+
+.setup-health-panel .list-item {
+  padding: 12px 0;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  border-radius: 0;
+}
+
+.setup-health-panel .list-item:last-child {
+  border-bottom: 0;
+}
+
+.setup-health-panel .list-item:hover {
+  background: transparent;
+  border-color: transparent;
+  transform: none;
+}
+
+.setup-policy-panel .advanced-details,
+.setup-utilities-panel .advanced-details {
+  border-color: var(--line-soft);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.setup-health-panel #hookList,
+.setup-hook-list {
   max-height: none;
 }
 
@@ -3309,7 +3392,8 @@ select {
   .insights-layout,
   .setup-page-layout,
   .checkpoint-support-grid,
-  .editorial-facts {
+  .editorial-facts,
+  .setup-primary-grid {
     grid-template-columns: 1fr;
   }
 

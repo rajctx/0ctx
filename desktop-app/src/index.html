@@ -32,10 +32,7 @@
 
       <p id="sideWorkspacePath" class="sidebar-path">Create a workspace and bind a repository folder so agent integrations can capture automatically.</p>
 
-      <div class="workspace-summary-strip">
-              <div class="workspace-fact"><strong id="sideWorkspaceBranches">0</strong><span>workstreams</span></div>
-        <div class="workspace-fact"><strong id="sideWorkspaceSessions">0</strong><span>sessions</span></div>
-      </div>
+      <p id="sideWorkspaceSummary" class="sidebar-summary-line">0 workstreams · 0 sessions</p>
 
       <p id="sideBinding" class="sidebar-copy">Once a folder and context are bound, future sessions can capture without asking again.</p>
 
@@ -585,7 +582,7 @@
                 <div class="section-row">
                   <div>
                   <p class="section-label">Utility commands</p>
-                    <h2>Repo and machine actions</h2>
+                    <h2>Repo actions</h2>
                   </div>
                 </div>
                 <div class="command-grid">
@@ -598,85 +595,83 @@
                   <button id="copyEnableCommand" class="btn tertiary" type="button">Copy enable command</button>
                   <button id="copyShell" class="btn tertiary" type="button">Copy 0ctx shell</button>
                 </div>
+                <p class="page-copy compact-copy utility-side-note">You should rarely need this page after the repo is enabled and your GA integrations are installed.</p>
               </aside>
               <section class="setup-main-stage">
-                <section class="panel subpanel setup-health-panel">
-                  <div class="section-row small">
-                    <div>
-                      <p class="section-label">Integration health</p>
-                      <h4>Agent setup status</h4>
+                <div class="setup-primary-grid">
+                  <section class="panel subpanel setup-health-panel">
+                    <div class="section-row small">
+                      <div>
+                        <p class="section-label">Integration health</p>
+                        <h4>GA integration status</h4>
+                      </div>
+                      <span id="hookSummary" class="chip">0 ready</span>
                     </div>
-                    <span id="hookSummary" class="chip">0 installed</span>
-                  </div>
-                  <div id="hookList" class="list stack-list"></div>
-                </section>
+                    <p id="setupHealthLead" class="page-copy compact-copy">Only the supported GA integrations should matter here. Preview integrations stay out of the normal path.</p>
+                    <div id="hookList" class="list stack-list compact-list-surface setup-hook-list"></div>
+                  </section>
 
-                <section class="panel subpanel setup-policy-panel">
-                  <div class="section-row small">
-                    <div>
-                      <p class="section-label">Sync and capture policy</p>
-                      <h4>Workspace sync and machine defaults</h4>
+                  <section class="panel subpanel setup-policy-panel">
+                    <div class="section-row small">
+                      <div>
+                        <p class="section-label">Sync and capture policy</p>
+                        <h4>Workspace sync and machine defaults</h4>
+                      </div>
+                      <span id="policySummaryBadge" class="chip">Default</span>
                     </div>
-                    <span id="policySummaryBadge" class="chip">Default</span>
-                  </div>
-                  <form id="dataPolicyForm" class="workspace-form compact-form">
-                    <div class="policy-preset-grid" role="group" aria-label="Choose a data policy preset">
-                      <button class="btn tertiary policy-preset-btn" data-policy-preset="lean" type="button">
-                        <strong>Lean</strong>
-                        <span>Local-first default</span>
-                      </button>
-                      <button class="btn tertiary policy-preset-btn" data-policy-preset="review" type="button">
-                        <strong>Review</strong>
-                        <span>Longer local capture</span>
-                      </button>
-                    <button class="btn tertiary policy-preset-btn" data-policy-preset="debug" type="button">
-                      <strong>Debug</strong>
-                      <span>Temporary debug trails</span>
-                    </button>
-                  </div>
-                    <details id="policyAdvancedDetails" class="advanced-details policy-custom-block">
-                      <summary>Advanced retention, debug, and sync overrides</summary>
-                      <div class="advanced-details-body">
-                      <div class="section-row small">
-                        <div>
-                          <p class="section-label">Custom policy</p>
-                          <h4>Fine-tune retention and sync</h4>
+                    <p id="policyLead" class="page-copy compact-copy">Lean is the normal product path. Local capture stays on this machine unless you deliberately opt a workspace into cloud sync.</p>
+                    <form id="dataPolicyForm" class="workspace-form compact-form">
+                      <div class="policy-preset-grid" role="group" aria-label="Choose a data policy preset">
+                        <button class="btn tertiary policy-preset-btn" data-policy-preset="lean" type="button">
+                          <strong>Lean</strong>
+                          <span>Local-first default</span>
+                        </button>
+                        <button class="btn tertiary policy-preset-btn" data-policy-preset="review" type="button">
+                          <strong>Review</strong>
+                          <span>Longer local capture</span>
+                        </button>
+                        <button class="btn tertiary policy-preset-btn" data-policy-preset="debug" type="button">
+                          <strong>Debug</strong>
+                          <span>Temporary debug trails</span>
+                        </button>
+                      </div>
+                      <details id="policyAdvancedDetails" class="advanced-details policy-custom-block">
+                        <summary>Advanced overrides</summary>
+                        <div class="advanced-details-body">
+                          <div class="policy-custom-grid">
+                            <label>
+                              <span>Workspace sync</span>
+                              <select id="dataPolicySyncPolicy" aria-label="Workspace sync policy">
+                                <option value="local_only">Local only (default)</option>
+                                <option value="metadata_only">Metadata only (opt-in)</option>
+                                <option value="full_sync">Full sync (opt-in)</option>
+                              </select>
+                            </label>
+                            <label>
+                              <span>Capture retention (days)</span>
+                              <input id="dataPolicyCaptureRetention" type="number" min="1" step="1" inputmode="numeric" />
+                            </label>
+                            <label>
+                              <span>Debug retention (days)</span>
+                              <input id="dataPolicyDebugRetention" type="number" min="1" step="1" inputmode="numeric" />
+                            </label>
+                          </div>
+                          <label class="toggle policy-toggle">
+                            <input id="dataPolicyDebugArtifacts" type="checkbox" />
+                            <span>Keep debug artifacts on this machine for troubleshooting</span>
+                          </label>
+                          <div class="row-actions">
+                            <button id="applyCustomDataPolicy" class="btn tertiary" type="submit">Apply custom policy</button>
+                            <button class="btn quiet" data-policy-preset="shared" type="button">Opt current workspace into full sync</button>
+                            <button id="copyPolicyCleanupSetup" class="btn quiet" type="button">Copy lean cleanup</button>
+                          </div>
                         </div>
-                      </div>
-                      <div class="policy-custom-grid">
-                        <label>
-                          <span>Workspace sync</span>
-                          <select id="dataPolicySyncPolicy" aria-label="Workspace sync policy">
-                            <option value="local_only">Local only (default)</option>
-                            <option value="metadata_only">Metadata only (opt-in)</option>
-                            <option value="full_sync">Full sync (opt-in)</option>
-                          </select>
-                        </label>
-                        <label>
-                          <span>Capture retention (days)</span>
-                          <input id="dataPolicyCaptureRetention" type="number" min="1" step="1" inputmode="numeric" />
-                        </label>
-                        <label>
-                          <span>Debug retention (days)</span>
-                          <input id="dataPolicyDebugRetention" type="number" min="1" step="1" inputmode="numeric" />
-                        </label>
-                      </div>
-                      <label class="toggle policy-toggle">
-                        <input id="dataPolicyDebugArtifacts" type="checkbox" />
-                        <span>Keep debug artifacts on this machine for troubleshooting</span>
-                      </label>
-                      <p class="page-copy compact-copy">Use the presets for the normal product path. Open custom controls only when a workspace needs a non-standard local retention or sync override.</p>
-                      <div class="row-actions">
-                        <button id="applyCustomDataPolicy" class="btn tertiary" type="submit">Apply custom policy</button>
-                        <button class="btn quiet" data-policy-preset="shared" type="button">Opt current workspace into full sync</button>
-                        <button id="copyPolicyCleanupSetup" class="btn quiet" type="button">Copy lean cleanup</button>
-                      </div>
-                      </div>
-                    </details>
+                      </details>
                     <div id="policyDetailList" class="info-list compact-info-list"></div>
                     <p id="policyHint" class="page-copy compact-copy">Local-only sync is the normal default for this workspace. Metadata-only and full sync stay opt-in, raw payloads stay local, and debug artifacts stay off unless you explicitly enable them from Utilities.</p>
-                  </form>
-                </section>
+                    </form>
+                  </section>
+                </div>
 
                 <section class="panel subpanel compact-utility-block setup-utilities-panel">
                   <details id="utilitiesDetails" class="advanced-details utility-advanced-block">
@@ -695,8 +690,7 @@
                           <button id="copyDoctor" class="btn quiet" type="button">Copy 0ctx doctor</button>
                         </div>
                       </div>
-                      <div id="setupSupportList" class="info-list compact-info-list"></div>
-                      <p id="setupSupportCopy" class="page-copy compact-copy">Use utilities only when you need to repair the runtime, inspect machine health, or change a repo deliberately.</p>
+                      <p id="setupUtilityLead" class="page-copy compact-copy">Use these tools only when the normal repo-first path stops behaving correctly or you need to inspect this machine on purpose.</p>
                     </div>
                   </details>
                 </section>

@@ -9,7 +9,6 @@
     integrationListText,
     formatIntegrationNote,
     zeroTouchState,
-    formatPosture,
     formatSyncPolicyLabel,
     formatDataPolicyPresetLabel,
     describeWorkspaceSyncDisplay,
@@ -20,7 +19,6 @@
     matches,
     esc,
     renderMetaLine,
-    short,
     methodSupported
   } = app;
 
@@ -63,11 +61,11 @@
       setupPageMeta.textContent = state.runtimeIssue
         ? state.runtimeIssue.detail
         : installedGa.length > 0
-          ? `${installedGa.length} GA integration${installedGa.length === 1 ? '' : 's'} installed. Return here only when you need to enable another repo, add another agent, or change local policy deliberately.`
+          ? `${installedGa.length} GA integration${installedGa.length === 1 ? '' : 's'} installed. Return here only when you need to enable another repo or change local policy deliberately.`
           : 'No GA integrations are installed yet. Use this page only for the supported agents you actually use on this machine.';
     }
 
-    document.getElementById('hookSummary').textContent = `${installedGa.length} GA installed / ${gaHooks.length}`;
+    document.getElementById('hookSummary').textContent = `${installedGa.length} ready`;
     document.getElementById('hookList').innerHTML = filteredHooks.length > 0
       ? filteredHooks.map((hook) => `
             <article class="list-item">
@@ -84,33 +82,22 @@
         : '<div class="empty-state">GA integration health is unavailable until the daemon can read local setup state.</div>';
 
     const zeroTouch = zeroTouchState();
-    const supportItems = [
-      {
-        title: 'Everyday path',
-        detail: `${zeroTouch.label}. ${zeroTouch.detail}`,
-        hint: zeroTouch.nextAction
-      },
-      {
-        title: 'Utilities',
-        detail: `${formatPosture(state.health?.status || 'offline')} runtime. Repair, restart, or inspect this machine only when something is off.`,
-        hint: installedGa.length > 0
-          ? `GA integrations installed: ${integrationListText(installedGa)}`
-          : 'No GA integrations installed yet'
-      }
-    ];
-    document.getElementById('setupSupportList').innerHTML = supportItems.map((item) => `
-      <article>
-        <strong>${esc(item.title)}</strong>
-        <p>${esc(item.detail)}</p>
-        <p>${esc(item.hint)}</p>
-      </article>
-    `).join('');
-    document.getElementById('setupSupportCopy').textContent = state.runtimeIssue
-      ? state.runtimeIssue.detail
-      : zeroTouch.ready
-        ? 'The supported path is active. Come back here only when you are enabling another repo, adding a GA integration, or changing local policy on purpose.'
-        : 'Use this page once to reach the supported path, then keep working from the bound repo in the agent.';
-
+    const setupHealthLead = document.getElementById('setupHealthLead');
+    if (setupHealthLead) {
+      setupHealthLead.textContent = state.runtimeIssue
+        ? state.runtimeIssue.detail
+        : installedGa.length > 0
+          ? `Only the supported GA integrations matter here. ${integrationListText(installedGa)} ${installedGa.length === 1 ? 'is' : 'are'} installed for normal use.`
+          : 'Only the supported GA integrations matter here. Install the ones you actually use and leave preview clients out of the normal path.';
+    }
+    const setupUtilityLead = document.getElementById('setupUtilityLead');
+    if (setupUtilityLead) {
+      setupUtilityLead.textContent = state.runtimeIssue
+        ? state.runtimeIssue.detail
+        : zeroTouch.ready
+          ? 'The normal path is active. Use these utilities only when runtime behavior is clearly off or you are changing machine-level policy on purpose.'
+          : `${zeroTouch.label}. ${zeroTouch.nextAction || zeroTouch.detail}`;
+    }
     const policy = state.dataPolicy || {
       contextId: null,
       workspaceResolved: false,
@@ -210,6 +197,10 @@
         actionHint,
         workspaceHint: workspaceSync.hint
       }) + ' Debug trails and opt-in cloud sync stay behind Utilities.';
+    }
+
+    if (policyAdvancedDetails instanceof HTMLDetailsElement && !supportsMutation) {
+      policyAdvancedDetails.open = false;
     }
   }
 
