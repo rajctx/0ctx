@@ -16,19 +16,19 @@
     const sessionsPageMeta = document.getElementById('sessionsPageMeta');
     if (sessionsPageMeta) {
       sessionsPageMeta.textContent = session
-        ? `${session.agent || 'Agent'} on ${normalizeBranch(session.branch)}. Read the message stream and capture a checkpoint when the session reaches a useful state.`
+        ? `${session.agent || 'Agent'} on ${normalizeBranch(session.branch)}. Read the stream and checkpoint the work when it is worth preserving.`
         : lane
           ? `Reading sessions for ${describeBranchLane(lane).title}. Choose a session to inspect its messages.`
           : context
-          ? `Choose a workstream inside ${context.name}, then open a session to read the message stream.`
+          ? `Choose a workstream inside ${context.name}, then open a session to read its conversation.`
             : 'Choose a workspace and workstream before reading captured sessions.';
     }
     document.getElementById('sessionFocusTitle').textContent = sessionSummary?.title || (lane ? describeBranchLane(lane).title : 'Choose a session');
     document.getElementById('sessionFocusMeta').textContent = session
       ? joinSessionFocusCopy(session, sessionSummary)
       : lane
-        ? `Selected workstream: ${describeBranchLane(lane).title}. Choose a session to read its message stream and create a checkpoint.`
-        : 'Pick a workstream, then choose a session to read the message stream and capture a checkpoint.';
+        ? `${describeBranchLane(lane).title}. Choose a session to read the conversation and create a checkpoint.`
+        : 'Pick a workstream, then choose a session to read the conversation.';
     document.getElementById('sessionList').innerHTML = sessions.length > 0
       ? sessions.map((session) => {
         const summary = describeSession(session);

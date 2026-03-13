@@ -111,7 +111,7 @@
       const meta = [
         { label: 'Commit', value: checkpoint.commitSha ? `#${commitShort(checkpoint.commitSha)}` : 'Unpinned' },
         { label: 'Kind', value: checkpoint.kind },
-        { label: 'Session link', value: checkpoint.sessionId ? 'Attached below' : 'No linked session' }
+        { label: 'Session', value: checkpoint.sessionId ? 'Linked below' : 'No linked session' }
       ];
     document.getElementById('checkpointMeta').innerHTML = meta.map((item) => `<article><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong></article>`).join('');
 

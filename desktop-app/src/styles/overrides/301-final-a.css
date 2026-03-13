@@ -50,8 +50,8 @@
 }
 
 .topbar {
-  min-height: 44px;
-  padding: 0 14px;
+  min-height: 42px;
+  padding: 0 12px;
 }
 
 .topbar-tools {
@@ -59,10 +59,10 @@
 }
 
 .search-wrap {
-  width: 200px;
+  width: 236px;
 }
 
 .stage-inner {
-  width: min(100%, 1220px);
-  padding: 14px 14px 22px;
+  width: min(100%, 1320px);
+  padding: 12px 16px 20px;
 }

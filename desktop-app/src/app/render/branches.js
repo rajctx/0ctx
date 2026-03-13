@@ -193,11 +193,11 @@
           `<article><span>Changed-file overlap</span><strong>${esc(overlapSummary)}</strong></article>`,
           `<article><span>Changed-line overlap</span><strong>${esc(lineOverlapSummary)}</strong></article>`,
           `<article><span>Merge risk</span><strong>${esc(comparison.mergeRiskSummary || 'unknown')}</strong></article>`,
-          `<article><span>Shared agents</span><strong>${esc(comparison.sharedAgents.length > 0 ? comparison.sharedAgents.join(', ') : 'none')}</strong></article>`,
-          { label: 'Shared', value: comparison.sharedAgents },
-          { label: 'Focus areas', value: comparison.sharedChangedAreas || [] },
-          { label: 'Likely conflict files', value: comparison.sharedConflictLikelyFiles || [] },
-          { label: 'Shared files', value: comparison.sharedChangedFiles || [] },
+          { label: 'Shared focus', value: [
+            comparison.sharedAgents.length > 0 ? comparison.sharedAgents.join(', ') : '',
+            Array.isArray(comparison.sharedChangedAreas) && comparison.sharedChangedAreas.length > 0 ? comparison.sharedChangedAreas.join(', ') : ''
+          ].filter(Boolean) },
+          { label: 'Conflict files', value: comparison.sharedConflictLikelyFiles || [] },
           { label: 'Reconcile', value: Array.isArray(comparison.reconcileSteps) && comparison.reconcileSteps.length > 0 ? comparison.reconcileSteps : [comparison.reconcileStrategySummary || 'none'] }
         ].map((item) => {
           if (typeof item === 'string') return item;

@@ -50,7 +50,7 @@
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
-  padding-bottom: 8px;
+  padding-bottom: 10px;
   border-bottom: 1px solid var(--line-soft);
 }
 
@@ -71,14 +71,14 @@
 
 .session-reader-head .page-copy {
   margin: 0;
-  max-width: 72ch;
+  max-width: 64ch;
 }
 
 .session-utility-inline {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 2px 0 10px;
+  padding: 0 0 8px;
 }
 
 .session-reader-actions {
@@ -90,9 +90,9 @@
 
 .session-reader-panel {
   display: grid;
-  gap: 8px;
-  min-height: 560px;
-  padding: 14px 16px 16px;
+  gap: 12px;
+  min-height: 0;
+  padding: 16px 18px 18px;
 }
 
 .preview-stage {
@@ -109,23 +109,17 @@
 
 .reader-header-block {
   gap: 6px;
-  padding-bottom: 10px;
+  max-width: 860px;
+  padding-bottom: 12px;
   border-bottom: 1px solid var(--line-soft);
 }
 
 .reader-block {
-  padding: 14px 0;
+  padding: 16px 0;
 }
 
 .reader-block.secondary {
   border-top: 1px solid var(--line-soft);
-}
-
-.detail-copy {
-  max-width: 66ch;
-  font-size: 14px;
-  line-height: 1.75;
-  margin: 0;
 }
 
 .detail-copy > * {
@@ -140,6 +134,22 @@
 .detail-primary {
   font-size: 15px;
   color: var(--text-strong);
+}
+
+.session-reader-panel .reader-document,
+.session-reader-panel .reader-facts,
+.session-reader-panel .preview-stage,
+.session-reader-panel .technical-details {
+  max-width: 860px;
+}
+
+.session-reader-panel .reader-facts {
+  gap: 10px;
+}
+
+.session-reader-panel .meta-line {
+  font-size: 11px;
+  color: var(--text-soft);
 }
 
 .detail-strong {

@@ -7,7 +7,7 @@
 }
 
 .checkpoints-layout {
-  grid-template-columns: 272px minmax(0, 1fr);
+  grid-template-columns: 260px minmax(0, 1fr);
 }
 
 .checkpoint-stage {
@@ -29,14 +29,14 @@
 
 .checkpoint-support-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(280px, 0.95fr);
-  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .checkpoint-support-section {
   display: grid;
-  gap: 12px;
-  padding: 12px 0 0;
+  gap: 10px;
+  padding: 10px 0 0;
   border-top: 1px solid var(--line-soft);
 }
 
@@ -53,8 +53,8 @@
 
 .insight-section {
   display: grid;
-  gap: 12px;
-  padding: 18px 0;
+  gap: 10px;
+  padding: 16px 0;
 }
 
 .insight-section + .insight-section {
@@ -71,4 +71,10 @@
 
 .insights-stage-shell .section-row.small {
   margin-bottom: 0;
+}
+
+@media (max-width: 1120px) {
+  .checkpoint-support-grid {
+    grid-template-columns: 1fr;
+  }
 }

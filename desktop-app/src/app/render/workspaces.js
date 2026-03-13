@@ -49,16 +49,15 @@
 
     const workspaceFactStrip = document.getElementById('workspaceFactStrip');
     const workspaceLeadCopy = document.getElementById('workspaceLeadCopy');
+    const zeroTouch = zeroTouchState();
     if (workspaceLeadCopy) {
       workspaceLeadCopy.textContent = context
         ? joinNonEmpty([
-            `${context.name} is the active project binding.`,
             Array.isArray(context.paths) && context.paths[0]
-              ? 'New capture routes here from the repository path.'
+              ? 'Capture routes here from the bound repository path.'
               : 'Bind a repository folder so capture can land here automatically.',
-            state.allSessions.length > 0
-              ? `${state.allSessions.length} captured session${state.allSessions.length === 1 ? '' : 's'} already belong here.`
-              : 'No captured sessions yet.'
+            `${state.allSessions.length} session${state.allSessions.length === 1 ? '' : 's'} · ${state.checkpoints.length} checkpoint${state.checkpoints.length === 1 ? '' : 's'}.`,
+            zeroTouch.nextAction || ''
           ])
         : 'Create a workspace once and bind its repository folder.';
     }
@@ -132,31 +131,19 @@
       }
       if (compareFacts) {
         compareFacts.innerHTML = [
-          { label: context.name, value: `${comparison.source.workstreamCount} workstreams · ${comparison.source.sessionCount} sessions · ${comparison.source.checkpointCount} checkpoints` },
-          { label: targetContext.name, value: `${comparison.target.workstreamCount} workstreams · ${comparison.target.sessionCount} sessions · ${comparison.target.checkpointCount} checkpoints` },
+          { label: context.name, value: `${comparison.source.workstreamCount} workstreams · ${comparison.source.sessionCount} sessions` },
+          { label: targetContext.name, value: `${comparison.target.workstreamCount} workstreams · ${comparison.target.sessionCount} sessions` },
           { label: 'Comparison', value: humanizeLabel(comparison.comparisonKind || 'isolated') },
           { label: 'Repository overlap', value: comparison.sharedRepositoryPaths.length > 0 ? comparison.sharedRepositoryPaths.join(', ') : 'none' },
-          { label: 'Shared workstreams', value: comparison.sharedWorkstreams.length > 0 ? comparison.sharedWorkstreams.join(', ') : 'none' },
-          { label: 'Shared insights', value: comparison.sharedInsights.length > 0 ? comparison.sharedInsights.join(', ') : 'none' },
-          { label: 'Shared agents', value: comparison.sharedAgents.length > 0 ? comparison.sharedAgents.join(', ') : 'none' }
+          { label: 'Shared work', value: [
+            comparison.sharedWorkstreams.length > 0 ? `${comparison.sharedWorkstreams.length} workstreams` : '',
+            comparison.sharedInsights.length > 0 ? `${comparison.sharedInsights.length} insights` : '',
+            comparison.sharedAgents.length > 0 ? comparison.sharedAgents.join(', ') : ''
+          ].filter(Boolean).join(' · ') || 'none' }
         ].map((item) => `<article><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong></article>`).join('');
       }
       if (compareEmpty) compareEmpty.classList.add('hidden');
       if (compareBody) compareBody.classList.remove('hidden');
-    }
-
-    if (workspaceLeadCopy) {
-      const zeroTouch = zeroTouchState();
-      const summaryLine = context
-        ? `${zeroTouch.label}. ${state.allSessions.length} session${state.allSessions.length === 1 ? '' : 's'} · ${state.checkpoints.length} checkpoint${state.checkpoints.length === 1 ? '' : 's'}.`
-        : 'Create a workspace and bind its repository path to begin automatic capture.';
-      const nextLine = context
-        ? (zeroTouch.nextAction
-          || (state.allSessions.length > 0
-            ? 'Use Sessions and Checkpoints to continue work without rebuilding context.'
-            : 'Complete one captured run in this repo to start building local project memory.'))
-        : 'Once a repo is bound, future sessions can route into it automatically.';
-      workspaceLeadCopy.textContent = `${workspaceLeadCopy.textContent} ${summaryLine} ${nextLine}`.trim();
     }
 
     const policy = state.dataPolicy || {
