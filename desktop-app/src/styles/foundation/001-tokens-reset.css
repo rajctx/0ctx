@@ -1,32 +1,32 @@
 :root {
-  --bg-app: #050505;
-  --bg-stage: #050505;
-  --bg-sidebar: #080808;
-  --bg-panel: #111113;
-  --bg-panel-soft: #0d0d0f;
-  --bg-hover: rgba(255, 255, 255, 0.03);
-  --bg-active: rgba(255, 255, 255, 0.05);
-  --text: #e5e7eb;
-  --text-strong: #ffffff;
-  --text-muted: #a1a1aa;
-  --text-soft: #71717a;
-  --line: rgba(255, 255, 255, 0.08);
-  --line-strong: rgba(255, 255, 255, 0.14);
+  --bg-app: #0f0d0a;
+  --bg-stage: #12100c;
+  --bg-sidebar: #0e0c09;
+  --bg-panel: #1a1714;
+  --bg-panel-soft: #14120f;
+  --bg-hover: rgba(255, 235, 200, 0.04);
+  --bg-active: rgba(255, 235, 200, 0.065);
+  --text: #e8e0d4;
+  --text-strong: #f5f0e8;
+  --text-muted: #a89e8c;
+  --text-soft: #7a7060;
+  --line: rgba(210, 180, 140, 0.12);
+  --line-strong: rgba(210, 180, 140, 0.2);
   --shadow-panel: 0 18px 48px rgba(0, 0, 0, 0.34);
   --radius-xl: 22px;
   --radius-lg: 18px;
   --radius-md: 14px;
   --radius-sm: 10px;
-  --green: #34d399;
-  --green-soft: rgba(52, 211, 153, 0.12);
-  --blue: #60a5fa;
-  --blue-soft: rgba(96, 165, 250, 0.12);
-  --orange: #fb923c;
-  --orange-soft: rgba(251, 146, 60, 0.14);
-  --purple: #c084fc;
-  --purple-soft: rgba(192, 132, 252, 0.14);
-  --rose: #fda4af;
-  --rose-soft: rgba(244, 63, 94, 0.14);
+  --green: #6ec98c;
+  --green-soft: rgba(110, 201, 140, 0.12);
+  --blue: #d4a54a;
+  --blue-soft: rgba(212, 165, 74, 0.12);
+  --orange: #e8984a;
+  --orange-soft: rgba(232, 152, 74, 0.14);
+  --purple: #c4956a;
+  --purple-soft: rgba(196, 149, 106, 0.14);
+  --rose: #d4756a;
+  --rose-soft: rgba(212, 117, 106, 0.14);
 }
 
 * {
@@ -40,11 +40,14 @@ body {
 }
 
 body {
-  min-height: 100vh;
+  height: 100vh;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   background:
-    radial-gradient(circle at top right, rgba(99, 102, 241, 0.12), transparent 24%),
-    linear-gradient(180deg, #050505, #040404);
+    radial-gradient(circle at top right, rgba(212, 165, 74, 0.1), transparent 24%),
+    linear-gradient(180deg, #0f0d0a, #0c0a07);
   color: var(--text);
   font-family: Inter, "Segoe UI Variable Text", "Segoe UI", Helvetica, Arial, sans-serif;
   font-size: 13px;
@@ -96,10 +99,10 @@ pre,
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #27272a;
+  background: #2e271e;
   border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46;
+  background: #3d3428;
 }

@@ -56,6 +56,7 @@
 
 .session-reader-head > div:first-child {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
   min-width: 0;
 }
@@ -168,8 +169,8 @@
   margin: 0 1px;
   border-radius: 7px;
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.04);
-  color: #c4b5fd;
+  background: rgba(210, 180, 140, 0.06);
+  color: #d4a54a;
   font-size: 12px;
   line-height: 1.45;
 }
@@ -182,7 +183,7 @@
   padding: 0 6px;
   border-radius: 999px;
   border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(210, 180, 140, 0.04);
   color: var(--text-soft);
   font-size: 10px;
   font-weight: 700;
@@ -191,21 +192,21 @@
 }
 
 .preview-kind-code {
-  color: #c4b5fd;
-  border-color: rgba(196, 181, 253, 0.26);
-  background: rgba(196, 181, 253, 0.08);
+  color: #d4a54a;
+  border-color: rgba(212, 165, 74, 0.26);
+  background: rgba(212, 165, 74, 0.08);
 }
 
 .preview-kind-quote {
-  color: #93c5fd;
-  border-color: rgba(147, 197, 253, 0.24);
-  background: rgba(147, 197, 253, 0.08);
+  color: #c4956a;
+  border-color: rgba(196, 149, 106, 0.24);
+  background: rgba(196, 149, 106, 0.08);
 }
 
 .preview-kind-list {
-  color: #86efac;
-  border-color: rgba(134, 239, 172, 0.24);
-  background: rgba(134, 239, 172, 0.08);
+  color: #6ec98c;
+  border-color: rgba(110, 201, 140, 0.24);
+  background: rgba(110, 201, 140, 0.08);
 }
 
 .detail-muted {
@@ -223,3 +224,5 @@
 }
 
 .detail-list li {
+  margin: 0;
+}

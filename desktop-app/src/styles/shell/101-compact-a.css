@@ -1,39 +1,39 @@
 /* 2026 desktop reset: denser shell, calmer rails, and page-specific composition */
 
 :root {
-  --bg-app: #09090b;
-  --bg-stage: #0b0b0d;
-  --bg-sidebar: #0a0a0c;
-  --bg-panel: #111215;
-  --bg-panel-soft: #0d0e11;
-  --bg-hover: rgba(255, 255, 255, 0.035);
-  --bg-active: rgba(255, 255, 255, 0.055);
-  --text: #e4e4e7;
-  --text-strong: #fafafa;
-  --text-muted: #a1a1aa;
-  --text-soft: #71717a;
-  --line: rgba(255, 255, 255, 0.08);
-  --line-strong: rgba(255, 255, 255, 0.14);
-  --line-soft: rgba(255, 255, 255, 0.05);
+  --bg-app: #0f0d0a;
+  --bg-stage: #12100c;
+  --bg-sidebar: #0e0c09;
+  --bg-panel: #1a1714;
+  --bg-panel-soft: #14120f;
+  --bg-hover: rgba(255, 235, 200, 0.04);
+  --bg-active: rgba(255, 235, 200, 0.065);
+  --text: #e8e0d4;
+  --text-strong: #f5f0e8;
+  --text-muted: #a89e8c;
+  --text-soft: #7a7060;
+  --line: rgba(210, 180, 140, 0.12);
+  --line-strong: rgba(210, 180, 140, 0.2);
+  --line-soft: rgba(210, 180, 140, 0.07);
   --shadow-panel: none;
   --radius-xl: 18px;
   --radius-lg: 16px;
   --radius-md: 12px;
   --radius-sm: 10px;
-  --green: #34d399;
-  --green-soft: rgba(52, 211, 153, 0.12);
-  --blue: #60a5fa;
-  --blue-soft: rgba(96, 165, 250, 0.12);
-  --orange: #fb923c;
-  --orange-soft: rgba(251, 146, 60, 0.14);
-  --purple: #c084fc;
-  --purple-soft: rgba(192, 132, 252, 0.14);
-  --rose: #fda4af;
-  --rose-soft: rgba(244, 63, 94, 0.14);
+  --green: #6ec98c;
+  --green-soft: rgba(110, 201, 140, 0.12);
+  --blue: #d4a54a;
+  --blue-soft: rgba(212, 165, 74, 0.12);
+  --orange: #e8984a;
+  --orange-soft: rgba(232, 152, 74, 0.14);
+  --purple: #c4956a;
+  --purple-soft: rgba(196, 149, 106, 0.14);
+  --rose: #d4756a;
+  --rose-soft: rgba(212, 117, 106, 0.14);
 }
 
 body {
-  background: #09090b;
+  background: #0f0d0a;
   color: var(--text);
   font-family:
     "SF Pro Text",
@@ -46,12 +46,12 @@ body {
   letter-spacing: -0.01em;
 }
 
-body[data-view="workspaces"] { --stage-glow: radial-gradient(circle at top right, rgba(59, 130, 246, 0.08), transparent 34%); }
-body[data-view="branches"] { --stage-glow: radial-gradient(circle at top right, rgba(34, 197, 94, 0.075), transparent 34%); }
-body[data-view="sessions"] { --stage-glow: radial-gradient(circle at top right, rgba(249, 115, 22, 0.075), transparent 34%); }
-body[data-view="checkpoints"] { --stage-glow: radial-gradient(circle at top right, rgba(168, 85, 247, 0.07), transparent 34%); }
-body[data-view="knowledge"] { --stage-glow: radial-gradient(circle at top right, rgba(96, 165, 250, 0.06), transparent 34%); }
-body[data-view="setup"] { --stage-glow: radial-gradient(circle at top right, rgba(161, 161, 170, 0.05), transparent 34%); }
+body[data-view="workspaces"] { --stage-glow: radial-gradient(circle at top right, rgba(212, 165, 74, 0.07), transparent 34%); }
+body[data-view="branches"] { --stage-glow: radial-gradient(circle at top right, rgba(110, 201, 140, 0.06), transparent 34%); }
+body[data-view="sessions"] { --stage-glow: radial-gradient(circle at top right, rgba(232, 152, 74, 0.07), transparent 34%); }
+body[data-view="checkpoints"] { --stage-glow: radial-gradient(circle at top right, rgba(196, 149, 106, 0.06), transparent 34%); }
+body[data-view="knowledge"] { --stage-glow: radial-gradient(circle at top right, rgba(212, 165, 74, 0.05), transparent 34%); }
+body[data-view="setup"] { --stage-glow: radial-gradient(circle at top right, rgba(154, 142, 120, 0.05), transparent 34%); }
 
 .app-shell {
   grid-template-columns: 264px minmax(0, 1fr);
@@ -74,7 +74,7 @@ body[data-view="setup"] { --stage-glow: radial-gradient(circle at top right, rgb
   width: 30px;
   height: 30px;
   border-radius: 9px;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(210, 180, 140, 0.08);
   border-color: var(--line);
 }
 
@@ -91,7 +91,7 @@ body[data-view="setup"] { --stage-glow: radial-gradient(circle at top right, rgb
   gap: 12px;
   padding: 14px;
   border-radius: var(--radius-lg);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.01));
+  background: linear-gradient(180deg, rgba(210, 180, 140, 0.04), rgba(210, 180, 140, 0.015));
   border-color: var(--line);
 }
 
@@ -105,7 +105,7 @@ body[data-view="setup"] { --stage-glow: radial-gradient(circle at top right, rgb
 
 .workspace-fact {
   padding: 6px 10px;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(210, 180, 140, 0.04);
   border-color: var(--line-soft);
 }
 
@@ -153,7 +153,7 @@ body[data-view="setup"] { --stage-glow: radial-gradient(circle at top right, rgb
   gap: 16px;
   padding: 0 24px;
   border-bottom: 1px solid var(--line-soft);
-  background: rgba(11, 11, 13, 0.92);
+  background: rgba(18, 16, 12, 0.92);
   backdrop-filter: blur(12px);
 }
 
@@ -188,8 +188,8 @@ input[type="text"]:focus,
 input[type="number"]:focus,
 select:focus {
   border-color: var(--line-strong);
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.04);
-  background: #0f1013;
+  box-shadow: 0 0 0 3px rgba(210, 180, 140, 0.06);
+  background: #16140f;
 }
 
 .btn {
@@ -209,13 +209,13 @@ select:focus {
 }
 
 .btn.primary {
-  background: #fafafa;
-  color: #0a0a0c;
-  border-color: rgba(255, 255, 255, 0.28);
+  background: linear-gradient(135deg, #d4a54a, #c4956a);
+  color: #0f0d0a;
+  border-color: rgba(212, 165, 74, 0.3);
 }
 
 .btn.primary:hover {
-  background: #ffffff;
+  background: linear-gradient(135deg, #dcb058, #cc9d72);
 }
 
 .btn.tertiary,
@@ -235,13 +235,13 @@ select:focus {
 }
 
 .chip {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.07);
+  background: rgba(210, 180, 140, 0.06);
+  border-color: rgba(210, 180, 140, 0.1);
   color: var(--text-muted);
 }
 
 .chip-green {
   background: var(--green-soft);
-  border-color: rgba(52, 211, 153, 0.2);
+  border-color: rgba(110, 201, 140, 0.2);
   color: var(--green);
 }

@@ -71,6 +71,10 @@
   gap: 10px;
 }
 
+.path-picker-row input {
+  min-width: 0;
+}
+
 .inline-note {
   padding-top: 16px;
   border-top: 1px solid var(--line);
@@ -143,7 +147,7 @@
   min-height: 20px;
   padding: 0 8px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(210, 180, 140, 0.04);
   border: 1px solid var(--line-soft);
   color: var(--text-muted);
   font-size: 10px;

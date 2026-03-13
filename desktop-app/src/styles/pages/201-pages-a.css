@@ -78,13 +78,13 @@
   gap: 8px;
   padding: 13px;
   border-radius: 16px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.024), rgba(255, 255, 255, 0.014));
+  background: linear-gradient(180deg, rgba(210, 180, 140, 0.035), rgba(210, 180, 140, 0.015));
   border: 1px solid var(--line-soft);
 }
 
 .workspace-card-item.active {
   border-color: var(--line-strong);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.042), rgba(255, 255, 255, 0.018));
+  background: linear-gradient(180deg, rgba(210, 180, 140, 0.055), rgba(210, 180, 140, 0.025));
 }
 
 .workspace-card-head {
@@ -94,7 +94,7 @@
 .workspace-path {
   padding: 9px 11px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(210, 180, 140, 0.03);
   border: 1px solid var(--line-soft);
 }
 

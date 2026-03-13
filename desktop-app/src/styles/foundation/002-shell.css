@@ -1,8 +1,8 @@
 .app-shell {
+  flex: 1;
+  min-height: 0;
   display: grid;
   grid-template-columns: 284px minmax(0, 1fr);
-  width: 100vw;
-  height: 100vh;
   overflow: hidden;
 }
 
@@ -35,7 +35,7 @@
   display: grid;
   place-items: center;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(210, 180, 140, 0.08);
   border: 1px solid var(--line);
   color: var(--text-strong);
 }
@@ -95,7 +95,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
 }
 
 .workspace-card-head,
@@ -103,7 +103,6 @@
 .detail-head,
 .panel-head {
   justify-content: space-between;
-  align-items: flex-start;
 }
 
 .section-label,
@@ -251,8 +250,8 @@
 }
 
 .nav-dot.workspaces { background: var(--green); }
-.nav-dot.branches { background: #4ade80; }
+.nav-dot.branches { background: #8aba6e; }
 .nav-dot.sessions { background: var(--blue); }
 .nav-dot.checkpoints { background: var(--orange); }
 .nav-dot.knowledge { background: var(--purple); }
-.nav-dot.setup { background: #a1a1aa; }
+.nav-dot.setup { background: #9a8e78; }

@@ -2,24 +2,24 @@
 
 .chip-blue {
   background: var(--blue-soft);
-  border-color: rgba(96, 165, 250, 0.2);
+  border-color: rgba(212, 165, 74, 0.2);
   color: var(--blue);
 }
 
 .chip-orange {
   background: var(--orange-soft);
-  border-color: rgba(251, 146, 60, 0.22);
+  border-color: rgba(232, 152, 74, 0.22);
   color: var(--orange);
 }
 
 .chip-purple {
   background: var(--purple-soft);
-  border-color: rgba(192, 132, 252, 0.2);
+  border-color: rgba(196, 149, 106, 0.2);
   color: var(--purple);
 }
 
 .chip-beige {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.08);
-  color: #d4d4d8;
+  background: rgba(210, 180, 140, 0.08);
+  border-color: rgba(210, 180, 140, 0.1);
+  color: #c8bfaa;
 }

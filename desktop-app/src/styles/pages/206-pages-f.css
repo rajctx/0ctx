@@ -45,7 +45,7 @@
 }
 
 .insight-library-list .list-item.active {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(210, 180, 140, 0.04);
   border: 1px solid transparent;
   border-radius: 12px;
   padding: 10px 1px;
@@ -122,7 +122,7 @@
 }
 
 .setup-command-panel .command-card {
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(210, 180, 140, 0.03);
   border-color: var(--line-soft);
 }
 
@@ -151,7 +151,7 @@
 .setup-policy-panel .advanced-details,
 .setup-utilities-panel .advanced-details {
   border-color: var(--line-soft);
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(210, 180, 140, 0.03);
 }
 
 .setup-health-panel #hookList,

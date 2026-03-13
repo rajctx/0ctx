@@ -19,7 +19,7 @@
   padding: 12px 16px;
   border-left: 2px solid var(--line-strong);
   border-radius: 0 12px 12px 0;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(210, 180, 140, 0.04);
   color: var(--text);
   font-size: 14px;
   line-height: 1.8;
@@ -44,8 +44,8 @@
   padding: 14px 16px;
   border-radius: 14px;
   border: 1px solid var(--line);
-  background: rgba(0, 0, 0, 0.34);
-  color: #ddd6fe;
+  background: rgba(15, 10, 5, 0.4);
+  color: #e8d4b0;
   font-size: 12px;
   line-height: 1.7;
   overflow: auto;

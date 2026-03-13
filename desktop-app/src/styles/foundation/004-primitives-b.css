@@ -47,7 +47,7 @@
 }
 
 .list-item:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 235, 200, 0.04);
   border-color: transparent;
 }
 
@@ -108,7 +108,7 @@
 
 .lead-panel,
 .subpanel {
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(210, 180, 140, 0.03);
 }
 
 .lead-copy {
