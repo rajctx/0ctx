@@ -245,6 +245,3 @@ select:focus {
   border-color: rgba(52, 211, 153, 0.2);
   color: var(--green);
 }
-
-.chip-blue {
-  background: var(--blue-soft);
