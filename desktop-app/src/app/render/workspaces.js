@@ -67,8 +67,7 @@
       workspaceFactStrip.innerHTML = context
         ? [
             factStripItem('Repository', Array.isArray(context.paths) && context.paths[0] ? short(context.paths[0], 42) : 'Not bound'),
-            factStripItem('Workstreams', `${state.branches.length}`),
-            factStripItem('Sessions', `${state.allSessions.length}`),
+            factStripItem('Activity', `${state.branches.length} workstreams · ${state.allSessions.length} sessions`),
             factStripItem('Policy', formatDataPolicyPresetLabel((state.dataPolicy || context).preset || 'lean'))
           ].join('')
         : '';
@@ -144,9 +143,7 @@
         compareOverlap.innerHTML = [
           { label: 'Repository overlap', value: comparison.sharedRepositoryPaths.length > 0 ? comparison.sharedRepositoryPaths.join(', ') : 'none' },
           { label: 'Shared workstreams', value: comparison.sharedWorkstreams.length > 0 ? comparison.sharedWorkstreams.join(', ') : 'none' },
-          { label: 'Shared insights', value: comparison.sharedInsights.length > 0 ? comparison.sharedInsights.join(', ') : 'none' },
-          { label: `${context.name} only`, value: comparison.sourceOnlyAgents.length > 0 ? comparison.sourceOnlyAgents.join(', ') : 'none' },
-          { label: `${targetContext.name} only`, value: comparison.targetOnlyAgents.length > 0 ? comparison.targetOnlyAgents.join(', ') : 'none' }
+          { label: 'Shared insights', value: comparison.sharedInsights.length > 0 ? comparison.sharedInsights.join(', ') : 'none' }
         ].map((item) => `<article><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong></article>`).join('');
       }
       if (compareEmpty) compareEmpty.classList.add('hidden');
@@ -158,18 +155,14 @@
           (() => {
             const zeroTouch = zeroTouchState();
             return {
-              title: 'Status',
-              detail: `${zeroTouch.label}. ${zeroTouch.detail}`,
-              hint: zeroTouch.nextAction || 'Use a supported agent in this repo and 0ctx will route capture automatically.'
+              title: 'Summary',
+              detail: `${zeroTouch.label}. ${state.allSessions.length} session${state.allSessions.length === 1 ? '' : 's'} · ${state.checkpoints.length} checkpoint${state.checkpoints.length === 1 ? '' : 's'}.`,
+              hint: zeroTouch.nextAction
+                || (state.allSessions.length > 0
+                  ? 'Use Sessions and Checkpoints to continue work without rebuilding context.'
+                  : 'Complete one captured run in this repo to start building local project memory.')
             };
-          })(),
-          {
-            title: 'History',
-            detail: `${state.allSessions.length} session${state.allSessions.length === 1 ? '' : 's'} · ${state.checkpoints.length} checkpoint${state.checkpoints.length === 1 ? '' : 's'}`,
-            hint: state.allSessions.length > 0
-              ? 'Use Sessions and Checkpoints to continue work without rebuilding context.'
-              : 'Complete one captured run in this repo to start building local project memory.'
-          }
+          })()
         ]
       : [
           {

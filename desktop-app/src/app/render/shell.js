@@ -63,7 +63,7 @@
     const bindingEl = document.getElementById('sideBinding');
     if (bindingEl) {
       bindingEl.textContent = Array.isArray(context?.paths) && context.paths.length > 0
-        ? 'Repo bound. New capture routes here automatically.'
+        ? ''
         : 'Bind a repo folder so future capture can route here automatically.';
     }
 

@@ -128,14 +128,12 @@
       empty.classList.add('hidden');
       detailBody.classList.remove('hidden');
       document.getElementById('branchFactStrip').innerHTML = [
-        factStripItem('Git state', describeWorkstreamSync(lane) || 'unknown'),
-        factStripItem('Checkout', describeWorkstreamCheckout(lane) || 'unknown'),
+        factStripItem('State', describeWorkstreamSync(lane) || 'unknown'),
         factStripItem('History', `${lane.sessionCount} sessions · ${lane.checkpointCount} checkpoints`),
         factStripItem('Latest commit', lane.lastCommitSha ? `#${commitShort(lane.lastCommitSha)}` : 'Unpinned')
       ].join('');
       const meta = [
-        { label: 'Checked-out HEAD', value: lane.currentHeadSha ? commitShort(lane.currentHeadSha) : 'unknown' },
-        { label: 'Last agent', value: lane.lastAgent || 'unknown' },
+        { label: 'Checkout', value: describeWorkstreamCheckout(lane) || 'unknown' },
         { label: 'Handoff readiness', value: lane.handoffSummary || 'unknown' }
       ];
     document.getElementById('branchMeta').innerHTML = meta.map((item) => `<article><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong></article>`).join('');
@@ -197,33 +195,20 @@
           `<article><span>Source</span><strong>${esc(describeBranchLane(comparison.source).title)}</strong></article>`,
           `<article><span>Target</span><strong>${esc(describeBranchLane(comparison.target).title)}</strong></article>`,
           `<article><span>State</span><strong>${esc((comparison.comparisonKind || 'unknown').replace(/_/g, ' '))}</strong></article>`,
-          `<article><span>Ready</span><strong>${esc(String(comparison.comparisonReadiness || 'unknown'))}</strong></article>`,
           `<article><span>Git divergence</span><strong>${esc(gitSummary)}</strong></article>`,
           `<article><span>Changed-file overlap</span><strong>${esc(overlapSummary)}</strong></article>`,
           `<article><span>Changed-line overlap</span><strong>${esc(lineOverlapSummary)}</strong></article>`,
-          `<article><span>Hotspots</span><strong>${esc(comparison.changeHotspotSummary || 'none')}</strong></article>`,
           `<article><span>Merge risk</span><strong>${esc(comparison.mergeRiskSummary || 'unknown')}</strong></article>`,
-          `<article><span>Reconcile</span><strong>${esc(comparison.reconcileStrategySummary || 'unknown')}</strong></article>`,
-          `<article><span>Reconcile steps</span><strong>${esc(Array.isArray(comparison.reconcileSteps) && comparison.reconcileSteps.length > 0 ? comparison.reconcileSteps.join(' | ') : 'none')}</strong></article>`,
-          `<article><span>Blockers</span><strong>${esc(comparison.comparisonBlockers?.length ? comparison.comparisonBlockers.join(' ') : 'none')}</strong></article>`,
-          `<article><span>Review</span><strong>${esc(comparison.comparisonReviewItems?.length ? comparison.comparisonReviewItems.join(' ') : 'none')}</strong></article>`,
           `<article><span>Shared agents</span><strong>${esc(comparison.sharedAgents.length > 0 ? comparison.sharedAgents.join(', ') : 'none')}</strong></article>`
         ].join('');
       }
       if (comparisonAgents) {
         comparisonAgents.innerHTML = [
           { label: 'Shared', value: comparison.sharedAgents },
-          { label: 'Only on source', value: comparison.sourceOnlyAgents },
-          { label: 'Only on target', value: comparison.targetOnlyAgents },
           { label: 'Focus areas', value: comparison.sharedChangedAreas || [] },
-          { label: 'Shared files', value: comparison.sharedChangedFiles || [] },
           { label: 'Likely conflict files', value: comparison.sharedConflictLikelyFiles || [] },
-          { label: 'Only on source files', value: comparison.sourceOnlyChangedFiles || [] },
-          { label: 'Only on target files', value: comparison.targetOnlyChangedFiles || [] },
-          { label: 'Source status', value: [comparison.source?.stateSummary || 'unknown'] },
-          { label: 'Target status', value: [comparison.target?.stateSummary || 'unknown'] },
-          { label: 'Source handoff', value: [comparison.source?.handoffSummary || 'unknown'] },
-          { label: 'Target handoff', value: [comparison.target?.handoffSummary || 'unknown'] }
+          { label: 'Shared files', value: comparison.sharedChangedFiles || [] },
+          { label: 'Reconcile', value: Array.isArray(comparison.reconcileSteps) && comparison.reconcileSteps.length > 0 ? comparison.reconcileSteps : [comparison.reconcileStrategySummary || 'none'] }
         ].map((item) => `<article><span>${esc(item.label)}</span><strong>${esc(item.value.length > 0 ? item.value.join(', ') : 'none')}</strong></article>`).join('');
       }
       if (compareEmpty) compareEmpty.classList.add('hidden');

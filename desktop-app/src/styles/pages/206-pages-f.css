@@ -46,9 +46,9 @@
 
 .insight-library-list .list-item.active {
   background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--line);
+  border: 1px solid transparent;
   border-radius: 12px;
-  padding: 10px 11px;
+  padding: 10px 1px;
 }
 
 .insight-detail-stage .panel {
@@ -56,7 +56,7 @@
 }
 
 .insight-selection-panel .lead-copy {
-  max-width: 62ch;
+  max-width: 54ch;
 }
 
 .insight-promotion-panel .info-list article {

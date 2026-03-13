@@ -25,7 +25,7 @@
     }
     document.getElementById('sessionFocusTitle').textContent = sessionSummary?.title || (lane ? describeBranchLane(lane).title : 'Choose a session');
     document.getElementById('sessionFocusMeta').textContent = session
-      ? `${sessionSummary?.preview || 'Read the stream below.'} ${session.agent ? `Agent: ${session.agent}.` : ''}`.trim()
+      ? joinSessionFocusCopy(session, sessionSummary)
       : lane
         ? `Selected workstream: ${describeBranchLane(lane).title}. Choose a session to read its message stream and create a checkpoint.`
         : 'Pick a workstream, then choose a session to read the message stream and capture a checkpoint.';
@@ -40,8 +40,7 @@
             <p class="item-preview">${previewKind.label ? `<span class="preview-kind preview-kind-${esc(previewKind.tone)}">${esc(previewKind.label)}</span>` : ''}<span>${esc(summary.preview)}</span></p>
             ${renderMetaLine([
               `${session.turnCount || 0} messages`,
-              session.branch ? normalizeBranch(session.branch) : '',
-              session.commitSha ? `#${commitShort(session.commitSha)}` : ''
+              session.branch ? normalizeBranch(session.branch) : ''
             ])}
           </article>
         `;
@@ -111,18 +110,18 @@
     document.getElementById('turnPrompt').innerHTML = renderReadableBody(detail.primaryText);
     document.getElementById('turnReply').innerHTML = renderReadableBody(detail.secondaryText);
     document.getElementById('turnLeadMeta').innerHTML = renderMetaLine([
-      humanizeLabel(turn.role || 'message'),
       turn.agent || activeSession()?.agent || 'unknown',
       formatRelativeTime(turn.createdAt),
       turn.branch ? normalizeBranch(turn.branch) : '',
       turn.commitSha ? `#${commitShort(turn.commitSha)}` : ''
     ]);
 
-    const meta = [
-      { label: 'Session', value: short(state.sessionDetail?.session?.summary || turn.sessionId || 'No session summary stored', 72) }
-    ];
+    const meta = [];
     if (state.sessionDetail?.checkpointCount) {
       meta.push({ label: 'Checkpoints', value: String(state.sessionDetail.checkpointCount) });
+    }
+    if (state.sessionDetail?.session?.summary) {
+      meta.unshift({ label: 'Session', value: short(state.sessionDetail.session.summary, 72) });
     }
     document.getElementById('turnMeta').innerHTML = meta.map((item) => {
       return `<article><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong></article>`;
@@ -158,4 +157,13 @@
   }
 
   Object.assign(app, { renderSessions });
+
+  function joinSessionFocusCopy(session, summary) {
+    return [
+      summary?.preview || 'Read the stream below.',
+      session.agent ? `${session.agent} session.` : '',
+      session.branch ? `${normalizeBranch(session.branch)}.` : '',
+      session.commitSha ? `#${commitShort(session.commitSha)}.` : ''
+    ].filter(Boolean).join(' ');
+  }
 })();

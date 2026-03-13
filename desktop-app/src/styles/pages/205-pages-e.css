@@ -19,9 +19,9 @@
 #handoffList .list-item.active,
 #checkpointList .list-item.active {
   background: rgba(255, 255, 255, 0.024);
-  border: 1px solid var(--line);
+  border: 1px solid transparent;
   border-radius: 12px;
-  padding: 10px 11px;
+  padding: 10px 1px;
 }
 
 .item-title {
@@ -176,7 +176,7 @@
 }
 
 .checkpoints-layout {
-  grid-template-columns: 296px minmax(0, 1fr);
+  grid-template-columns: 272px minmax(0, 1fr);
 }
 
 .checkpoint-stage {
@@ -199,7 +199,7 @@
 .checkpoint-support-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) minmax(280px, 0.95fr);
-  gap: 16px;
+  gap: 12px;
 }
 
 .checkpoint-support-section {
@@ -210,7 +210,7 @@
 }
 
 .insights-layout {
-  grid-template-columns: 304px minmax(0, 1fr);
+  grid-template-columns: 280px minmax(0, 1fr);
 }
 
 .insight-selection-panel .compact-meta-grid {

@@ -75,6 +75,11 @@
   box-shadow: var(--shadow-panel);
 }
 
+.sidebar-copy:empty,
+.sidebar-summary-line:empty {
+  display: none;
+}
+
 .workspace-card-head,
 .section-row,
 .detail-head,
@@ -198,10 +203,11 @@
 }
 
 .sidebar-nav {
-  margin-top: auto;
+  margin-top: 4px;
 }
 
 .sidebar-utilities {
+  margin-top: auto;
   padding-top: 12px;
   border-top: 1px solid var(--line);
 }
@@ -228,8 +234,8 @@
 .nav-btn.active {
   background: var(--bg-active);
   color: var(--text-strong);
-  border-color: var(--line);
-  box-shadow: inset 2px 0 0 rgba(255, 255, 255, 0.92);
+  border-color: transparent;
+  box-shadow: none;
 }
 
 .utility-btn {

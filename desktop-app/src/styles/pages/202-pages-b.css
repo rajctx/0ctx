@@ -5,8 +5,8 @@
 
 .session-row,
 .message-row {
-  padding: 10px 2px;
-  gap: 4px;
+  padding: 8px 2px;
+  gap: 3px;
 }
 
 .session-row .item-title,
@@ -50,7 +50,7 @@
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
-  padding-bottom: 12px;
+  padding-bottom: 10px;
   border-bottom: 1px solid var(--line-soft);
 }
 
@@ -90,9 +90,9 @@
 
 .session-reader-panel {
   display: grid;
-  gap: 12px;
-  min-height: 620px;
-  padding: 18px 20px 20px;
+  gap: 10px;
+  min-height: 560px;
+  padding: 16px 18px 18px;
 }
 
 .preview-stage {
@@ -108,13 +108,13 @@
 }
 
 .reader-header-block {
-  gap: 8px;
-  padding-bottom: 12px;
+  gap: 6px;
+  padding-bottom: 10px;
   border-bottom: 1px solid var(--line-soft);
 }
 
 .reader-block {
-  padding: 18px 0;
+  padding: 14px 0;
 }
 
 .reader-block.secondary {
@@ -122,7 +122,7 @@
 }
 
 .detail-copy {
-  max-width: 68ch;
+  max-width: 66ch;
   font-size: 14px;
   line-height: 1.75;
   margin: 0;

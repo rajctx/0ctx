@@ -13,8 +13,8 @@
 }
 
 .session-navigation-panel {
-  gap: 10px;
-  padding: 12px;
+  gap: 8px;
+  padding: 10px;
 }
 
 .workspace-form-panel {
@@ -42,7 +42,7 @@
 }
 
 .session-rail-block {
-  gap: 10px;
+  gap: 8px;
 }
 
 .session-reader-head {
@@ -54,8 +54,8 @@
 }
 
 .session-reader-panel {
-  min-height: 520px;
-  padding: 16px 18px 18px;
+  min-height: 500px;
+  padding: 14px 16px 16px;
 }
 
 .reader-body {
@@ -135,7 +135,7 @@
 
 @media (max-width: 1320px) {
   .app-shell {
-    grid-template-columns: 216px minmax(0, 1fr);
+    grid-template-columns: 208px minmax(0, 1fr);
   }
 
   .search-wrap {
@@ -144,7 +144,11 @@
 
   .workspace-page-layout,
   .workstreams-layout {
-    grid-template-columns: 272px minmax(0, 1fr);
+    grid-template-columns: 252px minmax(0, 1fr);
+  }
+
+  .sessions-layout {
+    grid-template-columns: 248px minmax(0, 1fr);
   }
 }
 

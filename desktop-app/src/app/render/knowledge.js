@@ -37,8 +37,8 @@
       if (knowledgePageMeta) {
         const context = activeContext();
         knowledgePageMeta.textContent = context
-          ? `${context.name} currently has ${nodes.length} reviewed insight${nodes.length === 1 ? '' : 's'}. Keep only memory worth reusing across future sessions and checkpoints.`
-          : 'Use this page for durable project memory. Keep raw conversation history in Sessions.';
+          ? `${context.name} currently has ${nodes.length} reviewed insight${nodes.length === 1 ? '' : 's'}. Keep only durable memory worth carrying forward.`
+          : 'Use this page for reviewed memory. Keep raw conversation history in Sessions.';
       }
       if (knowledgeSummaryLine) {
         const context = activeContext();
@@ -50,13 +50,7 @@
         knowledgeSummaryLine.textContent = bits.join(' · ');
       }
 
-      const explainer = [
-        {
-          title: 'Reviewed memory only',
-          detail: 'Sessions feed this layer, but only reviewed insights should stay visible here.'
-        }
-      ];
-      document.getElementById('knowledgeExplainer').textContent = explainer[0].detail;
+      document.getElementById('knowledgeExplainer').textContent = 'Sessions feed this layer, but only reviewed insights should stay visible here.';
 
       const selectedInsightEmpty = document.getElementById('selectedInsightEmpty');
       const selectedInsightBody = document.getElementById('selectedInsightBody');
@@ -83,8 +77,7 @@
         document.getElementById('selectedInsightFactStrip').innerHTML = [
           factStripItem('Trust', humanizeLabel(selectedInsight.trustTier)),
           factStripItem('Promotion', humanizeLabel(selectedInsight.promotionState || 'review')),
-          factStripItem('Evidence', `${selectedInsight.distinctEvidenceCount || selectedInsight.evidenceCount || 0}`),
-          factStripItem('Sessions', `${selectedInsight.distinctSessionCount || 0}`)
+          factStripItem('Evidence', `${selectedInsight.distinctEvidenceCount || selectedInsight.evidenceCount || 0}`)
         ].join('');
         const meta = [
           { label: 'Type', value: humanizeLabel(selectedInsight.type) },
@@ -106,8 +99,7 @@
         const supportNotes = [
           selectedInsight.branch ? `Workstream: ${selectedInsight.branch}` : '',
           selectedInsight.worktreePath ? `Worktree: ${basenameFromPath(selectedInsight.worktreePath)}` : '',
-          selectedInsight.trustFlags.length > 0 ? `Trust flags: ${selectedInsight.trustFlags.map((flag) => humanizeLabel(flag)).join(', ')}` : '',
-          selectedInsight.corroboratedRoles.length > 0 ? `Corroborated roles: ${selectedInsight.corroboratedRoles.map((role) => humanizeLabel(role)).join(', ')}` : ''
+          selectedInsight.trustFlags.length > 0 ? `Trust flags: ${selectedInsight.trustFlags.map((flag) => humanizeLabel(flag)).join(', ')}` : ''
         ].filter(Boolean);
         if (supportNotes.length > 0) {
           selectedInsightCopy.insertAdjacentHTML('beforeend', `<p class="detail-copy detail-muted">${esc(supportNotes.join(' · '))}</p>`);
@@ -168,7 +160,7 @@
       }
       document.getElementById('insightPromotionMeta').innerHTML = promotionMeta.length > 0
         ? promotionMeta.map((item) => `<article><strong>${esc(item.title)}</strong><p>${esc(item.detail)}</p></article>`).join('')
-        : '<article><strong>Promotion is explicit</strong><p>Promote only the reviewed memory another workspace should inherit.</p></article>';
+        : '<article><strong>Promotion is explicit</strong><p>Promote only reviewed memory another workspace should inherit.</p></article>';
 
       document.getElementById('knowledgeTable').innerHTML = nodes.length > 0
         ? nodes.slice(0, 400).map((node) => {

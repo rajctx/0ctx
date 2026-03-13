@@ -98,10 +98,10 @@
       document.getElementById('checkpointDetailTitle').textContent = short(checkpoint.summary || checkpoint.name || checkpoint.id, 72);
       document.getElementById('checkpointLeadCopy').textContent = joinNonEmpty([
         checkpoint.branch
-          ? `This checkpoint tracks ${normalizeBranch(checkpoint.branch)}.`
-          : 'This checkpoint captures a workspace snapshot.',
+          ? `Restore ${normalizeBranch(checkpoint.branch)} from this saved point.`
+          : 'Restore the workspace from this saved point.',
         checkpoint.sessionId
-          ? 'It stays linked to the originating conversation.'
+          ? 'It remains linked to the originating conversation.'
           : 'It can still be explained or rewound without a linked conversation.'
       ]);
       empty.classList.add('hidden');
@@ -109,13 +109,12 @@
       document.getElementById('checkpointFactStrip').innerHTML = [
         factStripItem('Created', formatRelativeTime(checkpoint.createdAt)),
         factStripItem('Workstream', checkpoint.branch ? normalizeBranch(checkpoint.branch) : 'Workspace snapshot'),
-        factStripItem('Snapshot', `${String(detail.snapshotNodeCount || 0)} nodes / ${String(detail.snapshotEdgeCount || 0)} edges`),
-        factStripItem('Commit', checkpoint.commitSha ? `#${commitShort(checkpoint.commitSha)}` : 'Unpinned')
+        factStripItem('Snapshot', `${String(detail.snapshotNodeCount || 0)} nodes · ${String(detail.snapshotEdgeCount || 0)} edges`)
       ].join('');
       const meta = [
-        { label: 'Kind', value: checkpoint.kind },
+        { label: 'Commit', value: checkpoint.commitSha ? `#${commitShort(checkpoint.commitSha)}` : 'Unpinned' },
         { label: 'Linked session', value: checkpoint.sessionId ? short(checkpoint.sessionId, 28) : 'none' },
-        { label: 'Agents', value: checkpoint.agentSet?.length ? checkpoint.agentSet.join(', ') : 'none' }
+        { label: 'Kind', value: checkpoint.kind }
       ];
     document.getElementById('checkpointMeta').innerHTML = meta.map((item) => `<article><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong></article>`).join('');
 
