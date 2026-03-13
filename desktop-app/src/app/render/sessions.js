@@ -1,7 +1,7 @@
 (() => {
   window.OctxDesktop = window.OctxDesktop || {};
   const app = window.OctxDesktop;
-  const { state, matches, activeContext, activeBranch, activeSession, activeSessionKnowledgePreview, selectedKnowledgeKeys, selectedTurn, describeSession, describeTurn, describeSelectedTurn, describeBranchLane, esc, short, formatRelativeTime, renderMetaLine, humanizeLabel, commitShort, renderChip, chipToneForRole, chipToneForAgent, formatTime, renderKnowledgeCandidates, describeKnowledgePreviewSummary, normalizeBranch } = app;
+  const { state, matches, activeContext, activeBranch, activeSession, activeSessionKnowledgePreview, selectedKnowledgeKeys, selectedTurn, describeSession, describeTurn, describeSelectedTurn, describeBranchLane, describeBodyKind, esc, short, formatRelativeTime, renderMetaLine, humanizeLabel, commitShort, renderChip, chipToneForRole, chipToneForAgent, formatTime, renderKnowledgeCandidates, describeKnowledgePreviewSummary, normalizeBranch, renderReadableBody } = app;
 
   function renderSessions() {
     const sessions = state.sessions.filter((session) => matches(`${session.sessionId} ${session.summary || ''} ${session.branch || ''} ${session.commitSha || ''} ${session.agent || ''}`));
@@ -29,18 +29,31 @@
       : lane
         ? `Selected workstream: ${describeBranchLane(lane).title}. Choose a session to read its message stream and create a checkpoint.`
         : 'Pick a workstream, then choose a session to read the message stream and capture a checkpoint.';
+    const readerTitle = document.getElementById('sessionReaderTitle');
+    const readerMeta = document.getElementById('sessionReaderMeta');
+    if (readerTitle) {
+      readerTitle.textContent = sessionSummary?.title || (lane ? describeBranchLane(lane).title : 'Choose a session');
+    }
+    if (readerMeta) {
+      readerMeta.textContent = session
+        ? `${sessionSummary?.preview || 'Read the stream below.'} ${session.agent ? `Latest agent: ${session.agent}.` : ''}`.trim()
+        : lane
+          ? `Reading ${describeBranchLane(lane).title}. Choose a session to open its message stream and checkpoint the useful state.`
+          : 'Pick a workstream, then choose a session to open the reader.';
+    }
 
     document.getElementById('sessionList').innerHTML = sessions.length > 0
       ? sessions.map((session) => {
         const summary = describeSession(session);
+        const previewKind = describeBodyKind(summary.preview);
         return `
-          <article class="list-item conversation-card ${session.sessionId === state.activeSessionId ? 'active' : ''}" data-session-id="${esc(session.sessionId)}">
-            <p class="item-kicker">${esc(formatRelativeTime(session.lastTurnAt || session.startedAt))}</p>
+          <article class="list-item conversation-card session-row ${session.sessionId === state.activeSessionId ? 'active' : ''}" data-session-id="${esc(session.sessionId)}">
+            <p class="item-kicker">${esc(formatRelativeTime(session.lastTurnAt || session.startedAt))} · ${esc(session.agent || 'agent')}</p>
             <h4 class="item-title">${esc(summary.title)}</h4>
-            <p class="item-preview">${esc(summary.preview)}</p>
+            <p class="item-preview">${previewKind.label ? `<span class="preview-kind preview-kind-${esc(previewKind.tone)}">${esc(previewKind.label)}</span>` : ''}<span>${esc(summary.preview)}</span></p>
             ${renderMetaLine([
-              session.agent || '',
               `${session.turnCount || 0} messages`,
+              session.branch ? normalizeBranch(session.branch) : '',
               session.commitSha ? `#${commitShort(session.commitSha)}` : ''
             ])}
           </article>
@@ -51,13 +64,14 @@
     document.getElementById('turnList').innerHTML = newestFirstTurns.length > 0
       ? newestFirstTurns.map((turn) => {
         const summary = describeTurn(turn);
+        const previewKind = describeBodyKind(summary.reply || turn.content || '');
         return `
-          <article class="list-item conversation-card ${turn.nodeId === state.activeTurnId ? 'active' : ''}" data-turn-id="${esc(turn.nodeId)}">
-            <p class="item-kicker">${esc(formatRelativeTime(turn.createdAt))}</p>
-            <h4 class="item-title">${esc(summary.title)}</h4>
-            <p class="item-preview">${esc(summary.preview)}</p>
+          <article class="list-item conversation-card message-row ${turn.nodeId === state.activeTurnId ? 'active' : ''}" data-turn-id="${esc(turn.nodeId)}">
+            <p class="item-kicker">${esc(humanizeLabel(turn.role || 'message'))} · ${esc(formatRelativeTime(turn.createdAt))}</p>
+            <h4 class="item-title">${esc(summary.title || humanizeLabel(turn.role || 'message'))}</h4>
+            <p class="item-preview">${previewKind.label ? `<span class="preview-kind preview-kind-${esc(previewKind.tone)}">${esc(previewKind.label)}</span>` : ''}<span>${esc(summary.preview)}</span></p>
             ${renderMetaLine([
-              humanizeLabel(turn.role || 'message'),
+              turn.agent || '',
               turn.commitSha ? `#${commitShort(turn.commitSha)}` : ''
             ])}
           </article>
@@ -92,7 +106,7 @@
       document.getElementById('turnLeadMeta').innerHTML = '';
       document.getElementById('turnTechnical').innerHTML = '';
       document.getElementById('turnMeta').innerHTML = state.sessionDetail?.session
-        ? `<article><span>Session</span><strong>${esc(short(state.sessionDetail.session.summary || state.sessionDetail.session.sessionId, 72))}</strong></article><article><span>Checkpoint count</span><strong>${esc(String(state.sessionDetail.checkpointCount || 0))}</strong></article>`
+        ? `<article><span>Session</span><strong>${esc(short(state.sessionDetail.session.summary || state.sessionDetail.session.sessionId, 72))}</strong></article>`
         : '';
       document.getElementById('sessionKnowledgePreviewPanel').classList.add('hidden');
       document.getElementById('sessionKnowledgePreviewBadge').textContent = '0 candidates';
@@ -107,8 +121,8 @@
     document.getElementById('turnDetailTitle').textContent = short(detail.title || turn.nodeId, 70);
     document.getElementById('turnPrimaryLabel').textContent = detail.primaryLabel;
     document.getElementById('turnSecondaryLabel').textContent = detail.secondaryLabel;
-    document.getElementById('turnPrompt').textContent = detail.primaryText || 'No visible message text was extracted for this capture.';
-    document.getElementById('turnReply').textContent = detail.secondaryText || 'No adjacent message context is available.';
+    document.getElementById('turnPrompt').innerHTML = renderReadableBody(detail.primaryText);
+    document.getElementById('turnReply').innerHTML = renderReadableBody(detail.secondaryText);
     document.getElementById('turnLeadMeta').innerHTML = [
       renderChip(turn.role || 'message', chipToneForRole(turn.role)),
       renderChip(turn.agent || activeSession()?.agent || 'unknown', chipToneForAgent(turn.agent || activeSession()?.agent)),
@@ -119,9 +133,11 @@
 
     const meta = [
       { label: 'Captured', value: formatTime(turn.createdAt) },
-      { label: 'Session checkpoints', value: String(state.sessionDetail?.checkpointCount || 0) },
-      { label: 'Session summary', value: short(state.sessionDetail?.session?.summary || turn.sessionId || 'No session summary stored', 88) }
+      { label: 'Session', value: short(state.sessionDetail?.session?.summary || turn.sessionId || 'No session summary stored', 72) }
     ];
+    if (state.sessionDetail?.checkpointCount) {
+      meta.push({ label: 'Checkpoints', value: String(state.sessionDetail.checkpointCount) });
+    }
     document.getElementById('turnMeta').innerHTML = meta.map((item) => {
       return `<article><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong></article>`;
     }).join('');

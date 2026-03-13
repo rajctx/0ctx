@@ -36,17 +36,17 @@
 
   function applySetupCopy() {
     setText('section[data-view="setup"] .page-kicker', 'Setup');
-    setText('section[data-view="setup"] h1', 'Enable repo and agents');
+    setText('section[data-view="setup"] h1', 'Enable repo and policy');
     const labels = Array.from(document.querySelectorAll?.('section[data-view="setup"] .section-label') || []);
     if (labels[0]) {
-      labels[0].textContent = 'Setup commands';
+      labels[0].textContent = 'Setup';
     }
     if (labels[3]) {
-      labels[3].textContent = 'Utility actions';
+      labels[3].textContent = 'Utilities';
     }
     const headings = Array.from(document.querySelectorAll?.('section[data-view="setup"] h4') || []);
     if (headings[2]) {
-      headings[2].textContent = 'Runtime utilities';
+      headings[2].textContent = 'Local tools';
     }
   }
 
@@ -63,8 +63,8 @@
       setupPageMeta.textContent = state.runtimeIssue
         ? state.runtimeIssue.detail
         : installedGa.length > 0
-          ? `${installedGa.length} GA integration${installedGa.length === 1 ? '' : 's'} ${installedGa.length === 1 ? 'is' : 'are'} installed on this machine. Use this screen only to enable another repo, add another GA agent, or open runtime utilities when something is off.`
-          : 'No GA integrations are installed on this machine yet. Use this screen to add a supported integration for the normal repo-first path.';
+          ? `${installedGa.length} GA integration${installedGa.length === 1 ? '' : 's'} installed. Return here only when you need to enable another repo, add another agent, or change local policy deliberately.`
+          : 'No GA integrations are installed yet. Use this page only for the supported agents you actually use on this machine.';
     }
 
     document.getElementById('hookSummary').textContent = `${installedGa.length} GA installed / ${gaHooks.length}`;
@@ -72,12 +72,11 @@
       ? filteredHooks.map((hook) => `
             <article class="list-item">
               <h4>${esc(integrationLabel(hook.agent))}</h4>
-              <p>${esc(`${hook.status} | ${hook.installed ? 'Installed' : 'Not installed'}`)}</p>
               ${renderMetaLine([
-                hook.notes ? formatIntegrationNote(hook.notes) : '',
-                hook.command ? 'Command ready' : ''
+                hook.installed ? 'Ready for normal path' : 'Not installed',
+                hook.status || '',
+                hook.notes ? formatIntegrationNote(hook.notes) : ''
               ])}
-              ${hook.command ? `<p>${esc(short(hook.command, 180))}</p>` : ''}
             </article>
           `).join('')
       : gaHooks.length > 0
@@ -87,45 +86,16 @@
     const zeroTouch = zeroTouchState();
     const supportItems = [
       {
-        title: 'Normal path',
-        detail: `${zeroTouch.label} | ${zeroTouch.detail}`,
+        title: 'Everyday path',
+        detail: `${zeroTouch.label}. ${zeroTouch.detail}`,
         hint: zeroTouch.nextAction
       },
       {
-        title: 'Runtime posture',
-        detail: formatPosture(state.health?.status || 'offline'),
-        hint: state.runtimeIssue
-          ? state.runtimeIssue.detail
-          : 'Desktop and local runtime are aligned.'
-      },
-      {
-        title: 'GA integrations',
-        detail: installedGa.length > 0
-          ? integrationListText(installedGa)
-          : 'No GA integrations installed',
+        title: 'Utilities',
+        detail: `${formatPosture(state.health?.status || 'offline')} runtime. Repair, restart, or inspect this machine only when something is off.`,
         hint: installedGa.length > 0
-          ? 'Install only the GA agents you actually use on this machine.'
-          : 'Install only the GA agents you actually use on this machine.'
-      },
-      {
-        title: 'Sync and capture',
-        detail: (() => {
-          const workspaceSync = describeWorkspaceSyncDisplay({
-            policy: state.dataPolicy,
-            hasActiveWorkspace: Boolean(activeContext()?.id),
-            formatSyncPolicyLabel
-          });
-          const machineCapture = state.dataPolicy?.machineCaptureSummary || capturePolicySummary();
-          return `Workspace sync: ${workspaceSync.detail} | Machine capture: ${machineCapture}`;
-        })(),
-        hint: (() => {
-          const workspaceSync = describeWorkspaceSyncDisplay({
-            policy: state.dataPolicy,
-            hasActiveWorkspace: Boolean(activeContext()?.id),
-            formatSyncPolicyLabel
-          });
-          return (workspaceSync.hint || state.dataPolicy?.normalPathSummary || '').trim();
-        })()
+          ? `GA integrations installed: ${integrationListText(installedGa)}`
+          : 'No GA integrations installed yet'
       }
     ];
     document.getElementById('setupSupportList').innerHTML = supportItems.map((item) => `
@@ -138,8 +108,8 @@
     document.getElementById('setupSupportCopy').textContent = state.runtimeIssue
       ? state.runtimeIssue.detail
       : zeroTouch.ready
-        ? 'The supported path is active. Use Utilities only when enabling another repo, adding another GA integration, or changing machine defaults deliberately.'
-        : 'Use setup once to reach the supported path, then work from the bound repo in the agent.';
+        ? 'The supported path is active. Come back here only when you are enabling another repo, adding a GA integration, or changing local policy on purpose.'
+        : 'Use this page once to reach the supported path, then keep working from the bound repo in the agent.';
 
     const policy = state.dataPolicy || {
       contextId: null,
@@ -239,7 +209,7 @@
         workspaceResolved,
         actionHint,
         workspaceHint: workspaceSync.hint
-      }) + ' Debug trails and opt-in cloud sync stay behind Advanced controls.';
+      }) + ' Debug trails and opt-in cloud sync stay behind Utilities.';
     }
   }
 

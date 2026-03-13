@@ -3,6 +3,10 @@
   const app = window.OctxDesktop;
   const { state, activeContext, activeInsightNode, syncInsightSelection, insightSummary, insightTargetContexts, syncPromotionTargetSelection, contextById, methodSupported, matches, esc, formatTime, renderChip, basenameFromPath, humanizeLabel, short } = app;
 
+  function factStripItem(label, value) {
+    return `<article><span>${esc(label)}</span><strong>${esc(value || '-')}</strong></article>`;
+  }
+
   function setText(selector, text) {
     if (typeof document?.querySelector !== 'function') {
       return;
@@ -20,9 +24,6 @@
   function renderKnowledge() {
       applyKnowledgeCopy();
       document.getElementById('inclHidden').checked = state.includeHidden;
-      document.getElementById('knowledgeNodeCount').textContent = String(state.insights.length);
-      document.getElementById('knowledgeEdgeCount').textContent = String(state.graphEdges.length);
-      document.getElementById('knowledgeContext').textContent = `Workspace: ${activeContext()?.name || 'none'}`;
       const nodes = state.insights.filter((node) =>
         matches(`${node.type || ''} ${node.content || ''} ${node.key || ''} ${node.trustSummary || ''} ${Array.isArray(node.corroboratedRoles) ? node.corroboratedRoles.join(' ') : ''}`)
       );
@@ -32,30 +33,30 @@
       const selectedTargetContext = syncPromotionTargetSelection();
       const promoteSupported = methodSupported('promoteInsight');
       const knowledgePageMeta = document.getElementById('knowledgePageMeta');
+      const knowledgeSummaryLine = document.getElementById('knowledgeSummaryLine');
       if (knowledgePageMeta) {
         const context = activeContext();
         knowledgePageMeta.textContent = context
-          ? `${context.name} currently has ${nodes.length} reviewed insight${nodes.length === 1 ? '' : 's'} and ${state.graphNodes.length} total graph node${state.graphNodes.length === 1 ? '' : 's'} in SQLite${state.includeHidden ? ', including hidden capture records.' : '.'}`
-          : 'Inspect reviewed insights when you need durable project memory. Use the broader graph view only when you need node and edge structure.';
+          ? `${context.name} currently has ${nodes.length} reviewed insight${nodes.length === 1 ? '' : 's'}. Keep only memory worth reusing across sessions and checkpoints.`
+          : 'Use this page for durable project memory. Keep raw conversation history in Sessions.';
+      }
+      if (knowledgeSummaryLine) {
+        const context = activeContext();
+        const bits = [
+          `${nodes.length} reviewed insight${nodes.length === 1 ? '' : 's'}`,
+          `${state.graphEdges.length} graph edge${state.graphEdges.length === 1 ? '' : 's'}`,
+          context ? `Workspace: ${context.name}` : 'No workspace selected'
+        ];
+        knowledgeSummaryLine.textContent = bits.join(' · ');
       }
 
       const explainer = [
         {
-          title: 'Use this for reviewed memory',
-          detail: 'Insights are the durable structured layer: decisions, constraints, goals, assumptions, questions, and artifacts already written into the workspace.'
-        },
-        {
-          title: 'Conversations stay separate by default',
-          detail: 'Captured sessions and messages live in the same workspace, but stay hidden here unless you explicitly include hidden capture records.'
-        },
-        {
-          title: 'Sessions and checkpoints feed this layer',
-          detail: 'Use Sessions to read the conversation and Checkpoints to explain or rewind workspace state. Use Insights to inspect the memory that survives beyond a single run.'
+          title: 'Reviewed memory only',
+          detail: 'Sessions feed this layer, but only reviewed insights should stay visible here.'
         }
       ];
-      document.getElementById('knowledgeExplainer').innerHTML = explainer.map((item) => {
-        return `<article><strong>${esc(item.title)}</strong><p>${esc(item.detail)}</p></article>`;
-      }).join('');
+      document.getElementById('knowledgeExplainer').textContent = explainer[0].detail;
 
       const selectedInsightEmpty = document.getElementById('selectedInsightEmpty');
       const selectedInsightBody = document.getElementById('selectedInsightBody');
@@ -63,41 +64,50 @@
         selectedInsightEmpty.classList.remove('hidden');
         selectedInsightBody.classList.add('hidden');
         document.getElementById('selectedInsightTitle').textContent = 'Choose an insight';
+        document.getElementById('selectedInsightLeadCopy').textContent = '';
         document.getElementById('selectedInsightCopy').textContent = '';
+        document.getElementById('selectedInsightFactStrip').innerHTML = '';
         document.getElementById('selectedInsightMeta').innerHTML = '';
       } else {
         selectedInsightEmpty.classList.add('hidden');
         selectedInsightBody.classList.remove('hidden');
         document.getElementById('selectedInsightTitle').textContent = selectedInsight.title;
-        document.getElementById('selectedInsightCopy').textContent = selectedInsight.summary;
+        document.getElementById('selectedInsightLeadCopy').textContent = [
+          `${humanizeLabel(selectedInsight.trustTier)} trust across ${selectedInsight.distinctEvidenceCount || selectedInsight.evidenceCount || 0} evidence point${(selectedInsight.distinctEvidenceCount || selectedInsight.evidenceCount || 0) === 1 ? '' : 's'}.`,
+          selectedInsight.promotionState === 'ready'
+            ? 'Ready to promote if this memory should carry into another project.'
+            : selectedInsight.promotionState === 'review'
+              ? 'Review it before moving it across workspaces.'
+              : 'Promotion is blocked until trust concerns are resolved.'
+        ].join(' ');
+        document.getElementById('selectedInsightFactStrip').innerHTML = [
+          factStripItem('Trust', humanizeLabel(selectedInsight.trustTier)),
+          factStripItem('Promotion', humanizeLabel(selectedInsight.promotionState || 'review')),
+          factStripItem('Evidence', `${selectedInsight.distinctEvidenceCount || selectedInsight.evidenceCount || 0}`),
+          factStripItem('Sessions', `${selectedInsight.distinctSessionCount || 0}`)
+        ].join('');
         const meta = [
           { label: 'Type', value: humanizeLabel(selectedInsight.type) },
-          { label: 'Trust', value: humanizeLabel(selectedInsight.trustTier) },
-          { label: 'Trust flags', value: selectedInsight.trustFlags.length > 0 ? selectedInsight.trustFlags.map((flag) => humanizeLabel(flag)).join(', ') : 'none' },
-          { label: 'Promotion', value: humanizeLabel(selectedInsight.promotionState || 'review') },
-          { label: 'Evidence', value: String(selectedInsight.evidenceCount) },
-          { label: 'Distinct evidence', value: String(selectedInsight.distinctEvidenceCount || selectedInsight.evidenceCount || 0) },
-          { label: 'Distinct sessions', value: String(selectedInsight.distinctSessionCount || 0) },
-          { label: 'Corroborated roles', value: selectedInsight.corroboratedRoles.length > 0 ? selectedInsight.corroboratedRoles.map((role) => humanizeLabel(role)).join(', ') : 'none' },
-          { label: 'Latest evidence', value: selectedInsight.latestEvidenceAt ? formatTime(selectedInsight.latestEvidenceAt) : 'none' },
           { label: 'Source', value: selectedInsight.source },
-          { label: 'Created', value: formatTime(selectedInsight.createdAt) },
-          { label: 'Key', value: selectedInsight.key || 'none' },
-          { label: 'Branch', value: selectedInsight.branch || 'none' },
-          { label: 'Worktree', value: selectedInsight.worktreePath ? basenameFromPath(selectedInsight.worktreePath) : 'none' },
-          { label: 'Origin workspace', value: contextById(selectedInsight.originContextId)?.name || selectedInsight.originContextId || 'current workspace' },
-          { label: 'Origin node', value: selectedInsight.originNodeId || 'local insight' }
+          selectedInsight.latestEvidenceAt ? { label: 'Latest evidence', value: formatTime(selectedInsight.latestEvidenceAt) } : null
         ];
         document.getElementById('selectedInsightMeta').innerHTML = meta
+          .filter(Boolean)
           .map((item) => `<article><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong></article>`)
           .join('');
         const selectedInsightCopy = document.getElementById('selectedInsightCopy');
-        selectedInsightCopy.textContent = selectedInsight.summary;
+        selectedInsightCopy.innerHTML = `<p>${esc(selectedInsight.summary)}</p>`;
         if (selectedInsight.trustSummary) {
           selectedInsightCopy.insertAdjacentHTML('beforeend', `<div class="preview-footnote">${esc(selectedInsight.trustSummary)}</div>`);
         }
-        if (selectedInsight.promotionSummary) {
-          selectedInsightCopy.insertAdjacentHTML('beforeend', `<div class="preview-footnote">${esc(selectedInsight.promotionSummary)}</div>`);
+        const supportNotes = [
+          selectedInsight.branch ? `Workstream: ${selectedInsight.branch}` : '',
+          selectedInsight.worktreePath ? `Worktree: ${basenameFromPath(selectedInsight.worktreePath)}` : '',
+          selectedInsight.trustFlags.length > 0 ? `Trust flags: ${selectedInsight.trustFlags.map((flag) => humanizeLabel(flag)).join(', ')}` : '',
+          selectedInsight.corroboratedRoles.length > 0 ? `Corroborated roles: ${selectedInsight.corroboratedRoles.map((role) => humanizeLabel(role)).join(', ')}` : ''
+        ].filter(Boolean);
+        if (supportNotes.length > 0) {
+          selectedInsightCopy.insertAdjacentHTML('beforeend', `<div class="preview-footnote">${esc(supportNotes.join(' · '))}</div>`);
         }
         if (selectedInsight.evidencePreview.length > 0) {
           selectedInsightCopy.insertAdjacentHTML('beforeend', `
@@ -128,15 +138,15 @@
       if (!promoteSupported) {
         promotionCopy.textContent = 'Update the local runtime to promote reviewed insights across workspaces.';
       } else if (!selectedNode) {
-        promotionCopy.textContent = 'Select an insight first. Promotion is always explicit and keeps project boundaries visible.';
+        promotionCopy.textContent = 'Select an insight first. Promotion stays explicit and never blends project memory silently.';
       } else if (selectedInsight.promotionState === 'blocked') {
         promotionCopy.textContent = selectedInsight.promotionSummary || 'This insight is not ready to promote yet.';
       } else if (!selectedTargetContext) {
         promotionCopy.textContent = 'Create another workspace before promoting reviewed insights across projects.';
       } else {
         promotionCopy.textContent = selectedInsight.promotionState === 'review'
-          ? `Review-tier insight: you can still promote this into ${selectedTargetContext.name}, but it needs human judgment. Provenance stays attached.`
-          : `Promote this reviewed insight into ${selectedTargetContext.name}. The promoted node keeps provenance back to the source workspace and insight.`;
+          ? `This insight can move into ${selectedTargetContext.name}, but it still needs human review first.`
+          : `Promote this reviewed insight into ${selectedTargetContext.name}. Provenance stays attached.`;
       }
 
       const promotionMeta = [];
@@ -155,37 +165,39 @@
       }
       document.getElementById('insightPromotionMeta').innerHTML = promotionMeta.length > 0
         ? promotionMeta.map((item) => `<article><strong>${esc(item.title)}</strong><p>${esc(item.detail)}</p></article>`).join('')
-        : '<article><strong>Promotion is explicit</strong><p>Insights never cross workspaces silently. Promote only the reviewed memory you want another project to inherit.</p></article>';
+        : '<article><strong>Promotion is explicit</strong><p>Promote only the reviewed memory another workspace should inherit.</p></article>';
 
       document.getElementById('knowledgeTable').innerHTML = nodes.length > 0
         ? nodes.slice(0, 400).map((node) => {
             const nodeKey = node.nodeId || node.id;
-            const active = nodeKey === state.activeInsightNodeId ? ' class="active"' : '';
+            const active = nodeKey === state.activeInsightNodeId ? ' active' : '';
             const summary = insightSummary(node);
-            const metaLine = [
+            const summaryMeta = [
+              humanizeLabel(summary.type),
+              summary.branch ? `Workstream ${summary.branch}` : null,
+              summary.originContextId ? 'Promoted insight' : null,
+              summary.latestEvidenceAt ? formatTime(summary.latestEvidenceAt) : null
+            ].filter(Boolean).join(' · ');
+            const trustMeta = [
               `${humanizeLabel(summary.trustTier)} trust`,
-              summary.trustFlags.length > 0 ? summary.trustFlags.slice(0, 2).map((flag) => humanizeLabel(flag)).join(', ') : null,
-              `${humanizeLabel(summary.promotionState || 'review')} promotion`,
-              summary.distinctSessionCount > 1 ? `${summary.distinctSessionCount} sessions` : (summary.distinctSessionCount === 1 && summary.evidenceCount > 1 ? 'single-session corroboration' : null),
-              summary.distinctEvidenceCount > 0
-                ? `${summary.distinctEvidenceCount} distinct / ${summary.evidenceCount} total`
-                : (summary.evidenceCount > 0 ? `${summary.evidenceCount} evidence` : 'no evidence'),
-              summary.branch || null,
-              summary.originContextId ? 'Promoted insight' : null
+              `${summary.distinctEvidenceCount || summary.evidenceCount || 0} evidence`,
+              summary.distinctSessionCount > 1 ? `${summary.distinctSessionCount} sessions` : null,
+              summary.promotionState ? `${humanizeLabel(summary.promotionState)} promotion` : null
             ].filter(Boolean).join(' · ');
             return `
-              <tr data-insight-id="${esc(nodeKey)}"${active}>
-                <td>${renderChip(node.type || 'artifact', 'beige')}</td>
-                <td>
-                  <strong>${esc(short(summary.title, 72))}</strong>
-                  ${metaLine ? `<div class="item-meta-line">${esc(metaLine)}</div>` : ''}
-                </td>
-                <td>${esc(summary.key || '-')}</td>
-                <td>${esc(formatTime(summary.createdAt))}</td>
-              </tr>
+              <article class="list-item insight-row${active}" data-insight-id="${esc(nodeKey)}">
+                <div class="insight-row-head">
+                  <div>
+                    <h4 class="item-title">${esc(short(summary.title, 88))}</h4>
+                    ${summaryMeta ? `<p class="item-meta-line">${esc(summaryMeta)}</p>` : ''}
+                  </div>
+                </div>
+                ${summary.summary ? `<p class="item-preview">${esc(short(summary.summary, 180))}</p>` : ''}
+                ${trustMeta ? `<p class="item-meta-line">${esc(trustMeta)}</p>` : ''}
+              </article>
             `;
           }).join('')
-        : '<tr><td colspan="4"><div class="empty-state">No insight nodes match the current filter.</div></td></tr>';
+        : '<div class="empty-state">No reviewed insights match the current filter.</div>';
   }
 
   Object.assign(app, { applyKnowledgeCopy, renderKnowledge });

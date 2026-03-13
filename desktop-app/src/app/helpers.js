@@ -70,6 +70,123 @@
     };
   }
 
+  function describeBodyKind(value) {
+    const source = String(value ?? '').replace(/\r\n?/g, '\n').trim();
+    if (!source) return { label: '', tone: '' };
+    if (source.includes('```')) return { label: 'Code', tone: 'code' };
+    if (/^\s*>/m.test(source)) return { label: 'Quote', tone: 'quote' };
+    if (/^\s*(?:[-*]|\d+\.)\s+/m.test(source) || ((source.match(/\b\d+\.\s+/g) || []).length >= 2)) {
+      return { label: 'List', tone: 'list' };
+    }
+    return { label: '', tone: '' };
+  }
+
+  function renderInlineList(source, pattern, type) {
+    const items = source
+      .split(pattern)
+      .map((item) => item.trim())
+      .filter(Boolean);
+    if (items.length < 2) return '';
+    const content = items.map((item) => `<li>${esc(item)}</li>`).join('');
+    return `<${type} class="detail-list">${content}</${type}>`;
+  }
+
+  function renderInlineRichText(value) {
+    let text = esc(value);
+    text = text.replace(/`([^`]+)`/g, '<code class="detail-inline-code">$1</code>');
+    text = text.replace(/\*\*([^*]+)\*\*/g, '<strong class="detail-strong">$1</strong>');
+    text = text.replace(/(^|[\s(])_([^_]+)_($|[\s).,!?:;])/g, '$1<em class="detail-emphasis">$2</em>$3');
+    return text;
+  }
+
+  function renderParagraphBlock(block) {
+    const lines = block
+      .split('\n')
+      .map((line) => line.trimEnd())
+      .filter((line) => line.trim().length > 0);
+    if (lines.length === 0) return '';
+
+    if (lines.every((line) => line.trim().startsWith('>'))) {
+      const content = lines
+        .map((line) => line.replace(/^\s*>\s?/, '').trim())
+        .filter(Boolean)
+        .map((line) => renderInlineRichText(line))
+        .join('<br />');
+      return `<blockquote class="detail-quote">${content}</blockquote>`;
+    }
+
+    if (lines.length >= 2 && lines.every((line) => /^\s*\d+\.\s+/.test(line))) {
+      return `<ol class="detail-list">${lines.map((line) => `<li>${renderInlineRichText(line.replace(/^\s*\d+\.\s+/, ''))}</li>`).join('')}</ol>`;
+    }
+
+    if (lines.length >= 2 && lines.every((line) => /^\s*[-*]\s+/.test(line))) {
+      return `<ul class="detail-list">${lines.map((line) => `<li>${renderInlineRichText(line.replace(/^\s*[-*]\s+/, ''))}</li>`).join('')}</ul>`;
+    }
+
+    if (lines.length === 1 && /^#{1,3}\s+/.test(lines[0])) {
+      return `<h5 class="detail-heading">${renderInlineRichText(lines[0].replace(/^#{1,3}\s+/, ''))}</h5>`;
+    }
+
+    const flattened = lines.join(' ').trim();
+    if (!block.includes('\n')) {
+      const numberedMatches = flattened.match(/\b\d+\.\s+/g);
+      if (numberedMatches && numberedMatches.length >= 2) {
+        const inlineOrdered = renderInlineList(flattened.replace(/\b\d+\.\s+/g, '\n'), /\n/g, 'ol');
+        if (inlineOrdered) return inlineOrdered;
+      }
+
+      const bulletMatches = flattened.match(/\s[-*]\s/g);
+      if (bulletMatches && bulletMatches.length >= 2) {
+        const inlineBullets = renderInlineList(flattened.replace(/\s[-*]\s/g, '\n'), /\n/g, 'ul');
+        if (inlineBullets) return inlineBullets;
+      }
+    }
+
+    return `<p class="detail-copy">${renderInlineRichText(lines.join('\n')).replace(/\n/g, '<br />')}</p>`;
+  }
+
+  function renderReadableBody(value) {
+    const source = String(value ?? '').replace(/\r\n?/g, '\n').trim();
+    if (!source) {
+      return '<p class="detail-copy detail-muted">No message text is available for this capture.</p>';
+    }
+
+    const blocks = [];
+    let cursor = 0;
+    const codePattern = /```([^\n`]*)\n([\s\S]*?)```/g;
+    let match;
+    while ((match = codePattern.exec(source)) !== null) {
+      const before = source.slice(cursor, match.index).trim();
+      if (before) {
+        blocks.push({ type: 'text', value: before });
+      }
+      blocks.push({
+        type: 'code',
+        language: String(match[1] || '').trim(),
+        value: String(match[2] || '').replace(/\n$/, '')
+      });
+      cursor = match.index + match[0].length;
+    }
+    const trailing = source.slice(cursor).trim();
+    if (trailing) {
+      blocks.push({ type: 'text', value: trailing });
+    }
+
+    return blocks
+      .map((block) => {
+        if (block.type === 'code') {
+          const label = block.language ? `<figcaption class="detail-code-label">${esc(block.language)}</figcaption>` : '';
+          return `<figure class="detail-code-block">${label}<pre class="detail-pre"><code>${esc(block.value)}</code></pre></figure>`;
+        }
+
+        return block.value
+          .split(/\n{2,}/)
+          .map((paragraph) => renderParagraphBlock(paragraph))
+          .join('');
+      })
+      .join('');
+  }
+
   function findAdjacentTurn(startIndex, step, role) {
     for (let index = startIndex + step; index >= 0 && index < state.turns.length; index += step) {
       const turn = state.turns[index];
@@ -91,10 +208,10 @@
       const priorSummary = priorUser ? describeTurn(priorUser) : null;
       return {
         title: summary.title,
-        primaryLabel: 'Assistant message',
-        primaryText: combinedText,
-        secondaryLabel: 'Previous user message',
-        secondaryText: priorSummary?.combined || priorSummary?.reply || priorUser?.content || 'No earlier user message was captured for this session.'
+        primaryLabel: 'User',
+        primaryText: priorSummary?.combined || priorSummary?.reply || priorUser?.content || 'No earlier user message was captured for this session.',
+        secondaryLabel: 'Assistant',
+        secondaryText: combinedText || 'No assistant message text was extracted for this capture.'
       };
     }
 
@@ -103,9 +220,9 @@
       const nextSummary = nextAssistant ? describeTurn(nextAssistant) : null;
       return {
         title: summary.title,
-        primaryLabel: 'User message',
+        primaryLabel: 'User',
         primaryText: combinedText,
-        secondaryLabel: 'Next assistant message',
+        secondaryLabel: 'Assistant',
         secondaryText: nextSummary?.combined || nextSummary?.reply || nextAssistant?.content || 'No later assistant message is captured yet for this session.'
       };
     }
@@ -114,9 +231,9 @@
     const previousSummary = previousTurn ? describeTurn(previousTurn) : null;
     return {
       title: summary.title,
-      primaryLabel: 'Captured message',
+      primaryLabel: 'Selected message',
       primaryText: combinedText,
-      secondaryLabel: 'Previous message',
+      secondaryLabel: 'Adjacent context',
       secondaryText: previousSummary?.combined || previousTurn?.content || 'No adjacent message available.'
     };
   }
@@ -544,5 +661,5 @@
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  Object.assign(app, { esc, short, cleanConversationText, splitConversationText, describeSession, describeTurn, findAdjacentTurn, describeSelectedTurn, basenameFromPath, humanizeLabel, formatTime, formatRelativeTime, commitShort, chipToneForAgent, chipToneForRole, renderChip, renderMetaLine, summarizeCheckoutPaths, describeWorkstreamCheckout, describeWorkstreamSync, describeWorkstreamActionHint, describeWorkingTreeState, renderAgentChain, activeSessionKnowledgePreview, activeCheckpointKnowledgePreview, selectedKnowledgeKeys, setSelectedKnowledgeKeys, selectKnowledgeCandidates, formatConfidence, confidenceTone, formatReason, formatReviewTier, reviewTierTone, formatEvidenceSummary, prioritizeTrustFlags, candidateDefaultSelectionEligible, describeKnowledgePreviewSummary, renderKnowledgeCandidates, jsonText, delay });
+  Object.assign(app, { esc, short, cleanConversationText, splitConversationText, describeSession, describeTurn, describeBodyKind, renderReadableBody, findAdjacentTurn, describeSelectedTurn, basenameFromPath, humanizeLabel, formatTime, formatRelativeTime, commitShort, chipToneForAgent, chipToneForRole, renderChip, renderMetaLine, summarizeCheckoutPaths, describeWorkstreamCheckout, describeWorkstreamSync, describeWorkstreamActionHint, describeWorkingTreeState, renderAgentChain, activeSessionKnowledgePreview, activeCheckpointKnowledgePreview, selectedKnowledgeKeys, setSelectedKnowledgeKeys, selectKnowledgeCandidates, formatConfidence, confidenceTone, formatReason, formatReviewTier, reviewTierTone, formatEvidenceSummary, prioritizeTrustFlags, candidateDefaultSelectionEligible, describeKnowledgePreviewSummary, renderKnowledgeCandidates, jsonText, delay });
 })();

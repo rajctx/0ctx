@@ -120,9 +120,9 @@
               <p id="workspacesPageMeta" class="page-copy">Create a workspace once, bind its repository folder, and route future capture automatically.</p>
             </header>
 
-            <div class="workspace-layout">
-              <aside class="panel form-panel">
-                <div class="panel-head compact">
+            <div class="workspace-page-layout">
+              <aside class="panel form-panel workspace-form-panel">
+                <div class="panel-head compact workspace-section-head">
                   <div>
                     <p class="section-label">Create workspace</p>
                     <h3>Bind a project once</h3>
@@ -149,57 +149,61 @@
                 </div>
               </aside>
 
-              <section class="workspace-main">
-                <div class="section-row">
+              <section class="workspace-main workspace-main-stage">
+                <div class="section-row workspace-section-head">
                   <h2>Project contexts</h2>
                   <span id="workspaceCount" class="chip">0 workspaces</span>
                 </div>
 
-                <section class="panel hero-panel workspace-focus-panel">
-                  <div class="panel-head">
-                    <div>
-                      <p class="section-label">Selected workspace</p>
-                      <h3>Binding and storage</h3>
+                  <section class="panel hero-panel workspace-focus-panel workspace-primary-surface">
+                    <div class="panel-head">
+                      <div>
+                        <p class="section-label">Selected workspace</p>
+                        <h3>Binding and storage</h3>
+                      </div>
                     </div>
-                  </div>
-                  <div id="workspaceFocus" class="workspace-focus-grid info-list"></div>
-                </section>
+                    <p id="workspaceLeadCopy" class="lead-copy compact-lead"></p>
+                    <div id="workspaceFactStrip" class="fact-grid editorial-facts"></div>
+                    <div id="workspaceFocus" class="info-list compact-info-list workspace-brief-list"></div>
+                  </section>
 
-                <section class="panel subpanel">
-                  <div class="section-row small">
-                    <div>
-                      <p class="section-label">Data handling</p>
-                      <h4>Capture and sync posture</h4>
+                <div class="workspace-secondary-grid">
+                  <section class="panel subpanel workspace-secondary-panel">
+                    <div class="section-row small">
+                      <div>
+                        <p class="section-label">Data handling</p>
+                        <h4>Capture and sync posture</h4>
+                      </div>
+                      <span id="workspacePolicySummaryBadge" class="chip">Default</span>
                     </div>
-                    <span id="workspacePolicySummaryBadge" class="chip">Default</span>
-                  </div>
-                  <div id="workspacePolicyDetailList" class="info-list compact-info-list"></div>
-                  <p id="workspacePolicyHint" class="page-copy compact-copy">Metadata-only sync is the normal default for this workspace. Machine-local capture stays on this machine and debug trails remain off unless you explicitly enable them from Utilities.</p>
-                  <div class="row-actions">
-                    <button class="btn quiet" data-nav="setup" type="button">Open utilities</button>
-                  </div>
-                </section>
-
-                <section class="panel subpanel compare-panel">
-                  <div class="section-row small">
-                    <div>
-                      <p class="section-label">Workspace comparison</p>
-                      <h4 id="workspaceCompareTitle">Choose another workspace</h4>
+                    <div id="workspacePolicyDetailList" class="info-list compact-info-list"></div>
+                    <p id="workspacePolicyHint" class="page-copy compact-copy">Metadata-only sync is the normal default for this workspace. Machine-local capture stays on this machine and debug trails remain off unless you explicitly enable them from Utilities.</p>
+                    <div class="row-actions">
+                      <button class="btn quiet" data-nav="setup" type="button">Open utilities</button>
                     </div>
-                  </div>
-                  <label class="compare-select-wrap">
-                    <span class="sr-only">Choose another workspace to compare</span>
-                    <select id="workspaceCompareSelect" aria-label="Compare workspaces"></select>
-                  </label>
-                  <div id="workspaceCompareEmpty" class="empty-state">Select another workspace to compare overlap, reviewed insights, and repository bindings.</div>
-                  <div id="workspaceCompareBody" class="detail-stack hidden">
-                    <p id="workspaceComparisonSummary" class="page-copy compact-copy"></p>
-                    <div id="workspaceComparisonMeta" class="meta-grid compact-meta-grid"></div>
-                    <div id="workspaceComparisonOverlap" class="meta-grid compact-meta-grid"></div>
-                  </div>
-                </section>
+                  </section>
 
-                <div id="workspaceList" class="workspace-grid list"></div>
+                  <section class="panel subpanel compare-panel workspace-secondary-panel">
+                    <div class="section-row small">
+                      <div>
+                        <p class="section-label">Workspace comparison</p>
+                        <h4 id="workspaceCompareTitle">Choose another workspace</h4>
+                      </div>
+                    </div>
+                    <label class="compare-select-wrap">
+                      <span class="sr-only">Choose another workspace to compare</span>
+                      <select id="workspaceCompareSelect" aria-label="Compare workspaces"></select>
+                    </label>
+                    <div id="workspaceCompareEmpty" class="empty-state">Select another workspace to compare overlap, reviewed insights, and repository bindings.</div>
+                    <div id="workspaceCompareBody" class="detail-stack hidden">
+                      <p id="workspaceComparisonSummary" class="page-copy compact-copy"></p>
+                      <div id="workspaceComparisonMeta" class="meta-grid compact-meta-grid"></div>
+                      <div id="workspaceComparisonOverlap" class="meta-grid compact-meta-grid"></div>
+                    </div>
+                  </section>
+                </div>
+
+                <div id="workspaceList" class="workspace-grid list workspace-card-grid"></div>
               </section>
             </div>
           </div>
@@ -213,8 +217,8 @@
               <p id="branchesPageMeta" class="page-copy">Inspect workstreams, see which agent touched them, and follow the handoff path.</p>
             </header>
 
-            <div class="page-grid page-grid-branches">
-              <aside class="panel branch-library-panel">
+            <div class="workstreams-layout">
+              <aside class="panel branch-library-panel workstreams-library-panel">
                 <div class="section-row">
                   <div>
                     <p class="section-label">Workstream library</p>
@@ -225,8 +229,8 @@
                 <div id="branchList" class="list stack-list compact-list-surface"></div>
               </aside>
 
-              <section class="page-main-stack">
-                <section id="branchDetailPanel" class="panel branch-detail-panel">
+              <section class="workstreams-main-stage">
+                <section id="branchDetailPanel" class="panel branch-detail-panel workstream-hero-panel">
                   <div class="section-row">
                     <div>
                       <p class="section-label">Current workstream</p>
@@ -238,30 +242,13 @@
 
                   <div id="branchDetailBody" class="detail-stack hidden">
                     <p id="branchLeadCopy" class="lead-copy"></p>
+                    <div id="branchFactStrip" class="fact-grid editorial-facts"></div>
                     <div id="branchMeta" class="meta-grid compact-meta-grid"></div>
-                    <div class="subpanel compare-panel">
-                      <div class="section-row small">
-                        <div>
-                          <p class="section-label">Compare workstreams</p>
-                          <h4>Git divergence and agent overlap</h4>
-                        </div>
-                      </div>
-                      <label class="compare-select-wrap">
-                        <span class="sr-only">Choose another workstream to compare</span>
-                        <select id="branchCompareSelect" aria-label="Compare workstreams"></select>
-                      </label>
-                      <div id="branchCompareEmpty" class="empty-state">Choose another workstream to compare git divergence, recent activity, and shared agents.</div>
-                      <div id="branchCompareBody" class="detail-stack hidden">
-                        <p id="branchComparisonSummary" class="page-copy compact-copy"></p>
-                        <div id="branchComparisonMeta" class="meta-grid compact-meta-grid"></div>
-                        <div id="branchComparisonAgents" class="meta-grid compact-meta-grid"></div>
-                      </div>
-                    </div>
                   </div>
                 </section>
 
-                <div class="page-card-grid two-up">
-                  <section class="panel">
+                <div class="workstream-support-grid">
+                  <section class="panel workstream-support-panel">
                     <div class="section-row small">
                       <div>
                         <p class="section-label">Recent sessions</p>
@@ -272,7 +259,7 @@
                     <div id="branchSessionList" class="list stack-list compact-list-surface"></div>
                   </section>
 
-                  <section class="panel">
+                  <section class="panel workstream-support-panel">
                     <div class="section-row small">
                       <div>
                         <p class="section-label">Handoff timeline</p>
@@ -282,6 +269,25 @@
                     <div id="handoffList" class="list stack-list compact-list-surface"></div>
                   </section>
                 </div>
+
+                <section class="panel compare-panel workstream-compare-panel">
+                  <div class="section-row small">
+                    <div>
+                      <p class="section-label">Compare workstreams</p>
+                      <h4>Git divergence and agent overlap</h4>
+                    </div>
+                  </div>
+                  <label class="compare-select-wrap">
+                    <span class="sr-only">Choose another workstream to compare</span>
+                    <select id="branchCompareSelect" aria-label="Compare workstreams"></select>
+                  </label>
+                  <div id="branchCompareEmpty" class="empty-state">Choose another workstream to compare git divergence, recent activity, and shared agents.</div>
+                  <div id="branchCompareBody" class="detail-stack hidden">
+                    <p id="branchComparisonSummary" class="page-copy compact-copy"></p>
+                    <div id="branchComparisonMeta" class="meta-grid compact-meta-grid"></div>
+                    <div id="branchComparisonAgents" class="meta-grid compact-meta-grid"></div>
+                  </div>
+                </section>
               </section>
             </div>
           </div>
@@ -295,8 +301,8 @@
             <p id="sessionsPageMeta" class="page-copy">Choose a session, read its messages, and capture a checkpoint when the work becomes worth preserving.</p>
             </header>
 
-            <div class="page-grid page-grid-sessions">
-              <aside class="panel session-library-panel">
+            <div class="sessions-layout">
+              <aside class="panel session-library-panel session-navigation-panel">
                 <section class="session-rail-block session-focus-block">
                   <div class="section-row">
                     <div>
@@ -337,26 +343,36 @@
                 </section>
               </aside>
 
-              <section class="page-main-stack">
-                <section class="panel reader-panel">
+              <section class="session-reader-stage">
+                <section class="panel session-summary-panel">
+                  <div class="section-row">
+                    <div>
+                      <p class="section-label">Session overview</p>
+                      <h3 id="sessionReaderTitle">Choose a session</h3>
+                    </div>
+                  </div>
+                  <p id="sessionReaderMeta" class="page-copy compact-copy">Pick a workstream, then choose a session to read the message stream and capture a checkpoint.</p>
+                </section>
+
+                <section class="panel reader-panel session-reader-panel">
                   <div id="turnDetailEmpty" class="empty-state">Select a message to inspect its text and companion context.</div>
 
                   <div id="turnDetailBody" class="reader-body hidden">
                     <div class="reader-header-block">
-                      <p class="section-label">Selected message</p>
+                      <p class="section-label">Conversation pair</p>
                       <h4 id="turnDetailTitle">Choose a message</h4>
                       <div id="turnLeadMeta" class="meta-line"></div>
                     </div>
 
                     <div class="reader-document">
                       <section class="reader-block">
-                        <p id="turnPrimaryLabel" class="detail-label">Message</p>
-                        <p id="turnPrompt" class="detail-copy detail-primary"></p>
+                        <p id="turnPrimaryLabel" class="detail-label">User</p>
+                        <div id="turnPrompt" class="detail-copy detail-primary"></div>
                       </section>
 
                       <section class="reader-block secondary">
-                        <p id="turnSecondaryLabel" class="detail-label">Related context</p>
-                        <p id="turnReply" class="detail-copy"></p>
+                        <p id="turnSecondaryLabel" class="detail-label">Assistant</p>
+                        <div id="turnReply" class="detail-copy"></div>
                       </section>
                     </div>
 
@@ -401,8 +417,8 @@
               <p id="checkpointsPageMeta" class="page-copy">Use checkpoints to explain a workstream state or rewind a workspace to a known snapshot.</p>
             </header>
 
-            <div class="page-grid page-grid-checkpoints">
-              <aside class="panel side-focus-panel">
+            <div class="checkpoints-layout">
+              <aside class="panel checkpoint-library-panel">
                 <div class="section-row">
                   <div>
                     <p class="section-label">Checkpoints</p>
@@ -413,8 +429,8 @@
                 <div id="checkpointList" class="list stack-list compact-list-surface"></div>
               </aside>
 
-              <section class="page-main-stack">
-                <section class="panel detail-panel">
+              <section class="checkpoint-stage">
+                <section class="panel checkpoint-hero-panel">
                   <header class="detail-head">
                   <div>
                     <p class="section-label">Selected checkpoint</p>
@@ -434,12 +450,12 @@
                   <div id="checkpointDetailEmpty" class="empty-state">Choose a checkpoint to inspect its summary, linked branch or session, and stored snapshot shape.</div>
 
                   <div id="checkpointDetailBody" class="reader-body hidden">
-                    <section class="panel subpanel lead-panel">
+                    <section class="panel subpanel lead-panel checkpoint-lead-panel">
                       <p id="checkpointLeadCopy" class="lead-copy"></p>
                       <div id="checkpointFactStrip" class="fact-grid editorial-facts"></div>
                     </section>
 
-                    <div class="page-card-grid two-up">
+                    <div class="checkpoint-support-grid">
                       <section class="panel subpanel">
                         <div class="section-row small">
                           <div>
@@ -493,8 +509,8 @@
               <h1>Reviewed insights</h1>
               <p id="knowledgePageMeta" class="page-copy">Inspect the visible graph and reviewed insights stored in SQLite when you need durable project memory, not the raw conversation.</p>
             </header>
-            <div class="utility-layout">
-              <aside class="panel rail-panel utility-rail">
+            <div class="insights-layout">
+              <aside class="panel insights-sidebar insight-library-panel">
                 <div class="section-row">
                   <div>
                     <p class="section-label">Project insights</p>
@@ -505,14 +521,20 @@
                     <span>Include hidden nodes</span>
                   </label>
                 </div>
-                <div class="stats-inline">
-                  <span class="chip">Nodes <strong id="knowledgeNodeCount">0</strong></span>
-                  <span class="chip">Edges <strong id="knowledgeEdgeCount">0</strong></span>
-                  <span id="knowledgeContext" class="chip">Workspace: none</span>
-                </div>
-                <div id="knowledgeExplainer" class="info-list compact-info-list"></div>
-
-                <section class="panel subpanel">
+                <div id="knowledgeSummaryLine" class="library-summary-line">No reviewed insights yet.</div>
+                <p id="knowledgeExplainer" class="page-copy compact-copy utility-note">Reviewed insights stay visible here. Raw captured history stays in Sessions.</p>
+                <section class="panel insights-list-stage">
+                  <div class="section-row">
+                    <div>
+                      <p class="section-label">Insight library</p>
+                      <h2>Reviewed insights</h2>
+                    </div>
+                  </div>
+                  <div id="knowledgeTable" class="list stack-list insight-library-list"></div>
+                </section>
+              </aside>
+              <section class="insights-main-stage insight-detail-stage">
+                <section class="panel subpanel insight-selection-panel">
                   <div class="section-row small">
                     <div>
                       <p class="section-label">Selected insight</p>
@@ -522,15 +544,16 @@
                   <div id="selectedInsightEmpty" class="empty-state">Select an insight to inspect its provenance and decide whether it should be promoted into another workspace.</div>
                   <div id="selectedInsightBody" class="detail-stack hidden">
                     <div class="reader-header-block">
-                      <p class="section-label">Insight summary</p>
                       <h4 id="selectedInsightTitle">Choose an insight</h4>
                     </div>
-                    <p id="selectedInsightCopy" class="page-copy compact-copy"></p>
+                    <p id="selectedInsightLeadCopy" class="lead-copy compact-lead"></p>
+                    <div id="selectedInsightCopy" class="page-copy compact-copy"></div>
+                    <div id="selectedInsightFactStrip" class="fact-grid editorial-facts"></div>
                     <div id="selectedInsightMeta" class="meta-grid compact-meta-grid"></div>
                   </div>
                 </section>
 
-                <section class="panel subpanel">
+                <section class="panel subpanel insight-promotion-panel">
                   <div class="section-row small">
                     <div>
                       <p class="section-label">Cross-workspace promotion</p>
@@ -545,27 +568,6 @@
                   <p id="insightPromotionCopy" class="page-copy compact-copy">Choose another workspace and promote a reviewed insight explicitly. This does not silently merge project memory.</p>
                   <div id="insightPromotionMeta" class="info-list compact-info-list"></div>
                 </section>
-              </aside>
-              <section class="panel utility-table-panel">
-                <div class="section-row">
-                  <div>
-                    <p class="section-label">Current insight snapshot</p>
-                    <h2>Visible nodes</h2>
-                  </div>
-                </div>
-                <div class="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Type</th>
-                        <th>Summary</th>
-                        <th>Key</th>
-                        <th>Created</th>
-                      </tr>
-                    </thead>
-                    <tbody id="knowledgeTable"></tbody>
-                  </table>
-                </div>
               </section>
             </div>
           </div>
@@ -578,8 +580,8 @@
               <h1>Enable and repair</h1>
               <p id="setupPageMeta" class="page-copy">Enable this repo, install the integrations you actually use, or repair the local runtime when something is off.</p>
             </header>
-            <div class="utility-layout setup-layout">
-              <aside class="panel rail-panel utility-rail">
+            <div class="setup-page-layout">
+              <aside class="panel setup-command-panel">
                 <div class="section-row">
                   <div>
                   <p class="section-label">Utility commands</p>
@@ -597,8 +599,8 @@
                   <button id="copyShell" class="btn tertiary" type="button">Copy 0ctx shell</button>
                 </div>
               </aside>
-              <section class="panel utility-stack">
-                <section class="panel subpanel">
+              <section class="setup-main-stage">
+                <section class="panel subpanel setup-health-panel">
                   <div class="section-row small">
                     <div>
                       <p class="section-label">Integration health</p>
@@ -609,7 +611,7 @@
                   <div id="hookList" class="list stack-list"></div>
                 </section>
 
-                <section class="panel subpanel">
+                <section class="panel subpanel setup-policy-panel">
                   <div class="section-row small">
                     <div>
                       <p class="section-label">Sync and capture policy</p>
@@ -676,7 +678,7 @@
                   </form>
                 </section>
 
-                <section class="panel subpanel compact-utility-block">
+                <section class="panel subpanel compact-utility-block setup-utilities-panel">
                   <details id="utilitiesDetails" class="advanced-details utility-advanced-block">
                     <summary>Utilities and runtime tools</summary>
                     <div class="advanced-details-body">

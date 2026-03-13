@@ -3,13 +3,23 @@
   const app = window.OctxDesktop;
   const { state, matches, activeContext, zeroTouchState, formatSyncPolicyLabel, formatDataPolicyPresetLabel, describeWorkspaceSyncDisplay, describeDesktopPolicyHint, capturePolicySummary, dataPolicyActionHint, esc, formatRelativeTime, renderChip, renderMetaLine, short, humanizeLabel, contextById, syncWorkspaceComparisonTargetSelection, workspaceComparisonTargetContext, methodSupported } = app;
 
+  function factStripItem(label, value) {
+    return `<article><span>${esc(label)}</span><strong>${esc(value || '-')}</strong></article>`;
+  }
+
+  function joinNonEmpty(parts) {
+    return parts.filter(Boolean).join(' ');
+  }
+
   function renderWorkspaces() {
     const contexts = state.contexts.filter((context) => matches(`${context.name || ''} ${(context.paths || []).join(' ')}`));
     const context = activeContext();
     document.getElementById('workspaceCount').textContent = `${contexts.length} workspace${contexts.length === 1 ? '' : 's'}`;
     const workspacesPageMeta = document.getElementById('workspacesPageMeta');
     if (workspacesPageMeta) {
-      workspacesPageMeta.textContent = `${contexts.length} workspace${contexts.length === 1 ? '' : 's'} on this machine.${context ? ` Current selection: ${context.name}.` : ''}`;
+      workspacesPageMeta.textContent = context
+        ? `${contexts.length} workspace${contexts.length === 1 ? '' : 's'} on this machine. ${context.name} is the current project binding.`
+        : `${contexts.length} workspace${contexts.length === 1 ? '' : 's'} on this machine. Pick one or bind a new repository.`;
     }
 
     document.getElementById('workspaceList').innerHTML = contexts.length > 0
@@ -27,21 +37,43 @@
               </div>
               ${isActive ? renderChip('Selected', 'green') : ''}
             </div>
-            <p class="item-preview">${esc(
-              repoPath
-                ? 'Repository binding is ready for automatic capture.'
-                : 'Bind a repository folder to route future capture automatically.'
-            )}</p>
             <div class="workspace-path text-mono">${esc(repoPath || 'No repository folder bound yet')}</div>
             ${renderMetaLine([
-              repoPath ? 'Repo bound' : 'Needs repo',
-              item.syncPolicy ? humanizeLabel(item.syncPolicy) : '',
+              repoPath ? 'Automatic capture ready' : 'Needs repository binding',
+              item.syncPolicy ? formatSyncPolicyLabel(item.syncPolicy) : '',
               pathList.length > 1 ? `${pathList.length} paths` : ''
             ])}
           </article>
         `;
       }).join('')
       : '<div class="empty-state">No workspaces yet. Create one with a name and repository path.</div>';
+
+    const workspaceFactStrip = document.getElementById('workspaceFactStrip');
+    const workspaceLeadCopy = document.getElementById('workspaceLeadCopy');
+    if (workspaceLeadCopy) {
+      workspaceLeadCopy.textContent = context
+        ? joinNonEmpty([
+            `${context.name} is the current project binding.`,
+            Array.isArray(context.paths) && context.paths[0]
+              ? 'Future capture will route here from the active repository path.'
+              : 'Bind a repository folder so capture can land here automatically.',
+            state.allSessions.length > 0
+              ? `${state.allSessions.length} captured session${state.allSessions.length === 1 ? '' : 's'} already belong to this workspace.`
+              : 'No captured sessions yet.'
+          ])
+        : 'Create a workspace once, bind a repository folder, and let future capture route here automatically.';
+    }
+
+    if (workspaceFactStrip) {
+      workspaceFactStrip.innerHTML = context
+        ? [
+            factStripItem('Repository', Array.isArray(context.paths) && context.paths[0] ? short(context.paths[0], 42) : 'Not bound'),
+            factStripItem('Workstreams', `${state.branches.length}`),
+            factStripItem('Sessions', `${state.allSessions.length}`),
+            factStripItem('Policy', formatDataPolicyPresetLabel((state.dataPolicy || context).preset || 'lean'))
+          ].join('')
+        : '';
+    }
 
     const compareSelect = document.getElementById('workspaceCompareSelect');
     const compareEmpty = document.getElementById('workspaceCompareEmpty');
@@ -90,7 +122,7 @@
     } else if (!comparison || !targetContext) {
       if (compareTitle) compareTitle.textContent = 'Choose another workspace';
       if (compareEmpty) {
-        compareEmpty.textContent = 'Select another workspace to compare repository overlap, shared workstreams, reviewed insights, and agents.';
+        compareEmpty.textContent = 'Select another workspace to compare repository overlap, shared workstreams, and reviewed insights.';
         compareEmpty.classList.remove('hidden');
       }
       if (compareBody) compareBody.classList.add('hidden');
@@ -114,9 +146,8 @@
           { label: 'Repository overlap', value: comparison.sharedRepositoryPaths.length > 0 ? comparison.sharedRepositoryPaths.join(', ') : 'none' },
           { label: 'Shared workstreams', value: comparison.sharedWorkstreams.length > 0 ? comparison.sharedWorkstreams.join(', ') : 'none' },
           { label: 'Shared insights', value: comparison.sharedInsights.length > 0 ? comparison.sharedInsights.join(', ') : 'none' },
-          { label: `Only in ${context.name}`, value: comparison.sourceOnlyAgents.length > 0 ? comparison.sourceOnlyAgents.join(', ') : 'none' },
-          { label: `Only in ${targetContext.name}`, value: comparison.targetOnlyAgents.length > 0 ? comparison.targetOnlyAgents.join(', ') : 'none' },
-          { label: 'Target sync policy', value: formatSyncPolicyLabel(comparison.target.syncPolicy) }
+          { label: `${context.name} only`, value: comparison.sourceOnlyAgents.length > 0 ? comparison.sourceOnlyAgents.join(', ') : 'none' },
+          { label: `${targetContext.name} only`, value: comparison.targetOnlyAgents.length > 0 ? comparison.targetOnlyAgents.join(', ') : 'none' }
         ].map((item) => `<article><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong></article>`).join('');
       }
       if (compareEmpty) compareEmpty.classList.add('hidden');
@@ -128,48 +159,25 @@
           (() => {
             const zeroTouch = zeroTouchState();
             return {
-              title: 'Normal path',
-              detail: `${zeroTouch.label} | ${zeroTouch.detail}`,
-              hint: zeroTouch.nextAction
+              title: 'Status',
+              detail: `${zeroTouch.label}. ${zeroTouch.detail}`,
+              hint: zeroTouch.nextAction || 'Use a supported agent in this repo and 0ctx will route capture automatically.'
             };
           })(),
           {
-            title: 'Repository binding',
-            detail: Array.isArray(context.paths) && context.paths.length > 0 ? context.paths.join(', ') : 'No repository folder bound yet',
+            title: 'Repository',
+            detail: Array.isArray(context.paths) && context.paths.length > 0 ? short(context.paths.join(', '), 96) : 'No repository folder bound yet',
             hint: Array.isArray(context.paths) && context.paths.length > 0
-              ? 'Installed integrations resolve this workspace from the active repo path.'
-              : 'Bind a repo path so capture can route here automatically.'
+              ? 'Capture resolves from the active repo path.'
+              : 'Bind a repo path so capture can land here automatically.'
           },
           {
-            title: 'Workstreams',
-            detail: `${state.branches.length} tracked workstream${state.branches.length === 1 ? '' : 's'}`,
-            hint: 'Branches and worktrees stay grouped as workstreams inside this workspace.'
-          },
-          {
-            title: 'Captured sessions',
-            detail: `${state.allSessions.length} session${state.allSessions.length === 1 ? '' : 's'}`,
-            hint: 'All captured runs currently linked to this project.'
-          },
-      {
-        title: 'Sync and capture',
-        detail: (() => {
-          const workspaceSync = describeWorkspaceSyncDisplay({
-            policy: state.dataPolicy || context,
-            hasActiveWorkspace: Boolean(context?.id),
-            formatSyncPolicyLabel
-          });
-          const machineCapture = state.dataPolicy?.machineCaptureSummary || capturePolicySummary();
-          return `Workspace sync: ${workspaceSync.detail} | Machine capture: ${machineCapture}`;
-        })(),
-        hint: (() => {
-          const workspaceSync = describeWorkspaceSyncDisplay({
-            policy: state.dataPolicy || context,
-            hasActiveWorkspace: Boolean(context?.id),
-            formatSyncPolicyLabel
-          });
-          return (workspaceSync.hint || state.dataPolicy?.normalPathSummary || '').trim();
-        })()
-      }
+            title: 'History',
+            detail: `${state.allSessions.length} session${state.allSessions.length === 1 ? '' : 's'} · ${state.checkpoints.length} checkpoint${state.checkpoints.length === 1 ? '' : 's'}`,
+            hint: state.allSessions.length > 0
+              ? 'Use Sessions and Checkpoints to continue work without rebuilding context.'
+              : 'Complete one captured run in this repo to start building local project memory.'
+          }
         ]
       : [
           {
@@ -183,7 +191,7 @@
         <article>
           <span>${esc(item.title)}</span>
           <strong>${esc(item.detail)}</strong>
-          <p>${esc(item.hint || '')}</p>
+          ${item.hint ? `<p>${esc(item.hint)}</p>` : ''}
         </article>
       `;
     }).join('');
@@ -213,9 +221,8 @@
 
     if (policyDetailList) {
       const detailItems = [
-        { title: 'Policy mode', detail: formatDataPolicyPresetLabel(policy.preset || 'lean') },
-        { title: 'Workspace sync (this workspace)', detail: policy.workspaceSyncSummary || workspaceSync.detail },
-        { title: 'Machine capture (this machine)', detail: policy.machineCaptureSummary || capturePolicySummary() }
+        { title: 'Workspace sync', detail: policy.workspaceSyncSummary || workspaceSync.detail },
+        { title: 'Machine capture', detail: policy.machineCaptureSummary || capturePolicySummary() }
       ];
       policyDetailList.innerHTML = detailItems.map((item) => `
         <article>
@@ -226,13 +233,14 @@
     }
 
     if (policyHint) {
-      policyHint.textContent = describeDesktopPolicyHint({
+      const baseHint = describeDesktopPolicyHint({
         supportsMutation: true,
         policy,
         workspaceResolved: workspaceSync.workspaceResolved,
         actionHint,
         workspaceHint: workspaceSync.hint
-      }) + ' Open Utilities only when a workspace needs a deliberate sync, retention, or debug override.';
+      });
+      policyHint.textContent = `${baseHint} Utilities are only for deliberate sync, retention, or debug changes.`;
     }
   }
 

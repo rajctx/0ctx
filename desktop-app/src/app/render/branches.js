@@ -3,6 +3,14 @@
   const app = window.OctxDesktop;
   const { state, matches, activeContext, activeBranch, comparisonTargetBranch, branchKey, esc, formatRelativeTime, describeBranchLane, describeSession, renderMetaLine, commitShort, describeWorkstreamSync, describeWorkstreamActionHint, describeWorkstreamCheckout, normalizeBranch, short } = app;
 
+  function joinNonEmpty(parts) {
+    return parts.map((part) => String(part || '').trim()).filter(Boolean).join(' ');
+  }
+
+  function factStripItem(label, value) {
+    return `<article><span>${esc(label)}</span><strong>${esc(value || '-')}</strong></article>`;
+  }
+
   function renderBranches() {
       const branches = state.branches.filter((lane) => matches(`${lane.branch} ${lane.worktreePath || ''} ${lane.lastAgent || ''} ${lane.lastCommitSha || ''}`));
       const context = activeContext();
@@ -28,9 +36,7 @@
             <p class="item-preview">${esc(summary.preview)}</p>
             ${renderMetaLine([
               `${lane.sessionCount} sessions`,
-              `${lane.checkpointCount} checkpoints`,
               lane.lastAgent || '',
-              lane.lastCommitSha ? `#${commitShort(lane.lastCommitSha)}` : '',
               describeWorkstreamSync(lane)
             ])}
           </article>
@@ -65,6 +71,7 @@
       if (state.runtimeIssue && branches.length === 0) {
         document.getElementById('branchDetailTitle').textContent = 'Update the local runtime';
         document.getElementById('branchLeadCopy').textContent = '';
+        document.getElementById('branchFactStrip').innerHTML = '';
         document.getElementById('branchMeta').innerHTML = '';
         document.getElementById('branchSessionList').innerHTML = '<div class="empty-state">Branch sessions will appear here after the local runtime is updated.</div>';
         document.getElementById('handoffList').innerHTML = '<div class="empty-state">Agent handoff history will appear here after the local runtime is updated.</div>';
@@ -96,6 +103,7 @@
       if (!lane) {
         document.getElementById('branchDetailTitle').textContent = 'Choose a workstream';
         document.getElementById('branchLeadCopy').textContent = '';
+        document.getElementById('branchFactStrip').innerHTML = '';
         document.getElementById('branchMeta').innerHTML = '';
         document.getElementById('branchSessionList').innerHTML = '<div class="empty-state">Choose a workstream to see the captured sessions on it.</div>';
         document.getElementById('handoffList').innerHTML = '<div class="empty-state">No handoff history yet.</div>';
@@ -112,33 +120,24 @@
       }
 
       document.getElementById('branchDetailTitle').textContent = describeBranchLane(lane).title;
-      document.getElementById('branchLeadCopy').textContent = [
-        `${describeBranchLane(lane).title} carries ${lane.sessionCount} captured session${lane.sessionCount === 1 ? '' : 's'} and ${lane.checkpointCount} checkpoint${lane.checkpointCount === 1 ? '' : 's'}.`,
-        lane.lastAgent ? `The most recent handoff came from ${lane.lastAgent}` : 'No agent has touched this workstream yet.',
-        lane.handoffSummary ? `${lane.handoffSummary}.` : '',
-        describeWorkstreamSync(lane) ? `${describeWorkstreamSync(lane)}.` : '',
-        describeWorkstreamActionHint(lane) ? `Next: ${describeWorkstreamActionHint(lane)}.` : '',
-        lane.lastActivityAt ? `${formatRelativeTime(lane.lastActivityAt)}.` : ''
-      ].join(' ').trim();
+      document.getElementById('branchLeadCopy').textContent = joinNonEmpty([
+        `${describeBranchLane(lane).title} has ${lane.sessionCount} captured session${lane.sessionCount === 1 ? '' : 's'} and ${lane.checkpointCount} checkpoint${lane.checkpointCount === 1 ? '' : 's'}.`,
+        lane.lastAgent ? `Latest handoff: ${lane.lastAgent}.` : 'No agent handoff has been recorded yet.',
+        describeWorkstreamActionHint(lane) ? `Next: ${describeWorkstreamActionHint(lane)}.` : ''
+      ]);
       empty.classList.add('hidden');
       detailBody.classList.remove('hidden');
+      document.getElementById('branchFactStrip').innerHTML = [
+        factStripItem('Git state', describeWorkstreamSync(lane) || 'unknown'),
+        factStripItem('Checkout', describeWorkstreamCheckout(lane) || 'unknown'),
+        factStripItem('History', `${lane.sessionCount} sessions · ${lane.checkpointCount} checkpoints`),
+        factStripItem('Latest commit', lane.lastCommitSha ? `#${commitShort(lane.lastCommitSha)}` : 'Unpinned')
+      ].join('');
       const meta = [
-        { label: 'Workstream', value: normalizeBranch(lane.branch) },
         { label: 'Checked-out HEAD', value: lane.currentHeadSha ? commitShort(lane.currentHeadSha) : 'unknown' },
         { label: 'HEAD ref', value: lane.currentHeadRef || (lane.isDetachedHead ? 'detached' : 'unknown') },
-        { label: 'Checkout', value: describeWorkstreamCheckout(lane) || 'unknown' },
         { label: 'Last agent', value: lane.lastAgent || 'unknown' },
-        { label: 'Latest commit', value: lane.lastCommitSha || 'none' },
-        { label: 'Handoff readiness', value: lane.handoffSummary || 'unknown' },
-        { label: 'Git state', value: describeWorkstreamSync(lane) || 'unknown' },
-        { label: 'Recommended next step', value: describeWorkstreamActionHint(lane) || 'Continue normally' },
-        { label: 'Blockers', value: lane.handoffBlockers?.length ? lane.handoffBlockers.join(' ') : 'none' },
-        { label: 'Review before handoff', value: lane.handoffReviewItems?.length ? lane.handoffReviewItems.join(' ') : 'none' },
-        { label: 'Capture drift', value: lane.captureDrift?.summary || (lane.headDiffersFromCaptured === true ? 'drift detected' : lane.headDiffersFromCaptured === false ? 'none' : 'unknown') },
-        { label: 'Baseline', value: lane.baseline?.summary || 'No default-branch baseline available' },
-        { label: 'Upstream', value: lane.upstream || 'not configured' },
-        { label: 'Agents on workstream', value: lane.agentSet?.length ? lane.agentSet.join(', ') : 'none' },
-        { label: 'Worktree', value: lane.worktreePath || 'Primary workspace root' }
+        { label: 'Handoff readiness', value: lane.handoffSummary || 'unknown' }
       ];
     document.getElementById('branchMeta').innerHTML = meta.map((item) => `<article><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong></article>`).join('');
 

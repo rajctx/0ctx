@@ -3,6 +3,14 @@
   const app = window.OctxDesktop;
   const { state, matches, activeSession, selectedCheckpoint, activeCheckpointKnowledgePreview, selectedKnowledgeKeys, describeCheckpoint, describeSession, esc, formatRelativeTime, renderMetaLine, commitShort, formatTime, renderKnowledgeCandidates, describeKnowledgePreviewSummary, short, normalizeBranch } = app;
 
+  function joinNonEmpty(parts) {
+    return parts.map((part) => String(part || '').trim()).filter(Boolean).join(' ');
+  }
+
+  function factStripItem(label, value) {
+    return `<article><span>${esc(label)}</span><strong>${esc(value || '-')}</strong></article>`;
+  }
+
   function renderCheckpoints() {
       const checkpoints = state.checkpoints.filter((checkpoint) => matches(`${checkpoint.summary || ''} ${checkpoint.name || ''} ${checkpoint.sessionId || ''} ${checkpoint.commitSha || ''}`));
       document.getElementById('checkpointHeadline').textContent = `${checkpoints.length} checkpoint${checkpoints.length === 1 ? '' : 's'}`;
@@ -88,33 +96,29 @@
       const checkpoint = detail.checkpoint;
       const checkpointSummary = describeCheckpoint(checkpoint);
       document.getElementById('checkpointDetailTitle').textContent = short(checkpoint.summary || checkpoint.name || checkpoint.id, 72);
-      document.getElementById('checkpointLeadCopy').textContent = [
+      document.getElementById('checkpointLeadCopy').textContent = joinNonEmpty([
         checkpointSummary.title,
         checkpoint.branch
-      ? `tracks the ${normalizeBranch(checkpoint.branch)} workstream`
-          : 'captures a workspace snapshot',
-        `from ${formatRelativeTime(checkpoint.createdAt)}.`,
+          ? `tracks the ${normalizeBranch(checkpoint.branch)} workstream.`
+          : 'captures a workspace snapshot.',
         checkpoint.sessionId
-          ? `It stays linked to the originating conversation so you can explain or rewind it without losing the surrounding context.`
-          : `It can still be explained or rewound even without a linked captured conversation.`
-      ].join(' ');
+          ? 'It stays linked to the originating conversation so you can explain or rewind it without losing context.'
+          : 'It can still be explained or rewound without a linked conversation.'
+      ]);
       empty.classList.add('hidden');
       body.classList.remove('hidden');
       document.getElementById('checkpointFactStrip').innerHTML = [
-        { label: 'Snapshot', value: `${String(detail.snapshotNodeCount || 0)} nodes / ${String(detail.snapshotEdgeCount || 0)} edges` },
-        { label: 'Linked session', value: checkpoint.sessionId ? short(checkpoint.sessionId, 28) : 'None' },
-        { label: 'Commit', value: checkpoint.commitSha ? `#${commitShort(checkpoint.commitSha)}` : 'Unpinned' },
-        { label: 'Agents', value: checkpoint.agentSet?.length ? checkpoint.agentSet.join(', ') : 'Unknown' }
-      ].map((item) => `<article><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong></article>`).join('');
+        factStripItem('Created', formatRelativeTime(checkpoint.createdAt)),
+        factStripItem('Workstream', checkpoint.branch ? normalizeBranch(checkpoint.branch) : 'Workspace snapshot'),
+        factStripItem('Snapshot', `${String(detail.snapshotNodeCount || 0)} nodes / ${String(detail.snapshotEdgeCount || 0)} edges`),
+        factStripItem('Commit', checkpoint.commitSha ? `#${commitShort(checkpoint.commitSha)}` : 'Unpinned')
+      ].join('');
       const meta = [
         { label: 'Kind', value: checkpoint.kind },
-        { label: 'Branch', value: checkpoint.branch || 'none' },
-        { label: 'Commit', value: checkpoint.commitSha || 'none' },
-      { label: 'Created', value: formatTime(checkpoint.createdAt) },
-      { label: 'Agents', value: checkpoint.agentSet?.length ? checkpoint.agentSet.join(', ') : 'none' },
-      { label: 'Snapshot', value: `${String(detail.snapshotNodeCount || 0)} nodes, ${String(detail.snapshotEdgeCount || 0)} edges` },
-      { label: 'Session', value: checkpoint.sessionId || 'none' }
-    ];
+        { label: 'Linked session', value: checkpoint.sessionId ? short(checkpoint.sessionId, 28) : 'none' },
+        { label: 'Created', value: formatTime(checkpoint.createdAt) },
+        { label: 'Agents', value: checkpoint.agentSet?.length ? checkpoint.agentSet.join(', ') : 'none' }
+      ];
     document.getElementById('checkpointMeta').innerHTML = meta.map((item) => `<article><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong></article>`).join('');
 
     const preview = activeCheckpointKnowledgePreview();
