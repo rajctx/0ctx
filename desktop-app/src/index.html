@@ -323,24 +323,22 @@
                 </section>
               </aside>
 
-              <section class="session-reader-stage">
-                <section class="panel session-reader-shell">
+              <section class="panel session-reader-panel session-reader-stage">
                   <header class="session-reader-head">
                     <div>
                       <p class="section-label">Current session</p>
                       <h3 id="sessionFocusTitle">Choose a session</h3>
+                      <p id="sessionFocusMeta" class="page-copy compact-copy">Pick a workstream, then choose a session to read the message stream and capture a checkpoint.</p>
                     </div>
                     <div class="session-reader-actions">
                       <button id="createCheckpointBtn" class="btn primary" type="button">Create checkpoint</button>
                     </div>
                   </header>
-                  <p id="sessionFocusMeta" class="page-copy compact-copy">Pick a workstream, then choose a session to read the message stream and capture a checkpoint.</p>
-                  <div class="utility-inline">
+                  <div class="utility-inline session-utility-inline">
                     <button id="previewSessionKnowledgeBtn" class="btn quiet" type="button">Preview insights</button>
                     <button id="extractSessionKnowledgeBtn" class="btn quiet" type="button">Save selected insights</button>
                   </div>
 
-                  <section class="panel reader-panel session-reader-panel">
                   <div id="turnDetailEmpty" class="empty-state">Select a message to inspect its text and companion context.</div>
 
                   <div id="turnDetailBody" class="reader-body hidden">
@@ -389,8 +387,6 @@
                     </details>
 
                   </div>
-                  </section>
-                </section>
               </section>
             </div>
           </div>

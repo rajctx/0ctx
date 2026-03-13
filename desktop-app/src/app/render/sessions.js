@@ -1,7 +1,7 @@
 (() => {
   window.OctxDesktop = window.OctxDesktop || {};
   const app = window.OctxDesktop;
-  const { state, matches, activeContext, activeBranch, activeSession, activeSessionKnowledgePreview, selectedKnowledgeKeys, selectedTurn, describeSession, describeTurn, describeSelectedTurn, describeBranchLane, describeBodyKind, esc, short, formatRelativeTime, renderMetaLine, humanizeLabel, commitShort, renderChip, chipToneForRole, chipToneForAgent, formatTime, renderKnowledgeCandidates, describeKnowledgePreviewSummary, normalizeBranch, renderReadableBody } = app;
+  const { state, matches, activeContext, activeBranch, activeSession, activeSessionKnowledgePreview, selectedKnowledgeKeys, selectedTurn, describeSession, describeTurn, describeSelectedTurn, describeBranchLane, describeBodyKind, esc, short, formatRelativeTime, renderMetaLine, humanizeLabel, commitShort, formatTime, renderKnowledgeCandidates, describeKnowledgePreviewSummary, normalizeBranch, renderReadableBody } = app;
 
   function renderSessions() {
     const sessions = state.sessions.filter((session) => matches(`${session.sessionId} ${session.summary || ''} ${session.branch || ''} ${session.commitSha || ''} ${session.agent || ''}`));
@@ -110,13 +110,13 @@
     document.getElementById('turnSecondaryLabel').textContent = detail.secondaryLabel;
     document.getElementById('turnPrompt').innerHTML = renderReadableBody(detail.primaryText);
     document.getElementById('turnReply').innerHTML = renderReadableBody(detail.secondaryText);
-    document.getElementById('turnLeadMeta').innerHTML = [
-      renderChip(turn.role || 'message', chipToneForRole(turn.role)),
-      renderChip(turn.agent || activeSession()?.agent || 'unknown', chipToneForAgent(turn.agent || activeSession()?.agent)),
-      renderChip(formatRelativeTime(turn.createdAt), 'beige'),
-      turn.branch ? renderChip(normalizeBranch(turn.branch), 'green') : '',
-      turn.commitSha ? renderChip(`#${commitShort(turn.commitSha)}`, 'beige', { mono: true }) : ''
-    ].filter(Boolean).join('');
+    document.getElementById('turnLeadMeta').innerHTML = renderMetaLine([
+      humanizeLabel(turn.role || 'message'),
+      turn.agent || activeSession()?.agent || 'unknown',
+      formatRelativeTime(turn.createdAt),
+      turn.branch ? normalizeBranch(turn.branch) : '',
+      turn.commitSha ? `#${commitShort(turn.commitSha)}` : ''
+    ]);
 
     const meta = [
       { label: 'Captured', value: formatTime(turn.createdAt) },

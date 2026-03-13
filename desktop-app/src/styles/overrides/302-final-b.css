@@ -13,7 +13,7 @@
 }
 
 .session-navigation-panel {
-  gap: 12px;
+  gap: 10px;
   padding: 12px;
 }
 
@@ -29,13 +29,8 @@
   gap: 10px;
 }
 
-.session-reader-shell {
-  gap: 10px;
-}
-
 .session-reader-head {
-  padding: 12px 14px;
-  border-radius: 14px;
+  gap: 10px;
 }
 
 .session-reader-actions {
@@ -44,12 +39,12 @@
 
 .session-reader-panel {
   min-height: 520px;
-  padding: 0;
+  padding: 16px 18px 18px;
 }
 
 .reader-body {
   gap: 14px;
-  padding: 14px 16px 16px;
+  padding: 6px 0 0;
 }
 
 .reader-header-block {
@@ -82,6 +77,10 @@
 .reader-facts,
 .compact-meta-grid {
   gap: 0 12px;
+}
+
+.session-utility-inline {
+  padding-bottom: 10px;
 }
 
 .editorial-facts {

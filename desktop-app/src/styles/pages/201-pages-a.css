@@ -164,20 +164,26 @@
 }
 
 .sessions-layout {
-  grid-template-columns: 320px minmax(0, 1fr);
+  grid-template-columns: 292px minmax(0, 1fr);
+  gap: 14px;
 }
 
 .session-navigation-panel {
   display: grid;
-  gap: 14px;
-  padding: 14px 16px;
+  gap: 12px;
+  padding: 12px 14px;
 }
 
 .session-rail-block {
   display: grid;
-  gap: 12px;
+  gap: 10px;
+}
+
+.session-rail-block + .session-rail-block {
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
 }
 
 .session-navigation-panel .compact-list-surface {
-  max-height: 308px;
+  max-height: 284px;
 }
