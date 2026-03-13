@@ -78,8 +78,7 @@
     const compareBody = document.getElementById('workspaceCompareBody');
     const compareTitle = document.getElementById('workspaceCompareTitle');
     const compareSummary = document.getElementById('workspaceComparisonSummary');
-    const compareMeta = document.getElementById('workspaceComparisonMeta');
-    const compareOverlap = document.getElementById('workspaceComparisonOverlap');
+    const compareFacts = document.getElementById('workspaceComparisonFacts');
     const compareSupported = methodSupported('compareWorkspaces');
     const targetContext = syncWorkspaceComparisonTargetSelection();
     const comparison = state.workspaceComparison;
@@ -131,55 +130,34 @@
           ? `${comparison.comparisonSummary} Next: ${comparison.comparisonActionHint}`
           : comparison.comparisonSummary;
       }
-      if (compareMeta) {
-        compareMeta.innerHTML = [
+      if (compareFacts) {
+        compareFacts.innerHTML = [
           { label: context.name, value: `${comparison.source.workstreamCount} workstreams · ${comparison.source.sessionCount} sessions · ${comparison.source.checkpointCount} checkpoints` },
           { label: targetContext.name, value: `${comparison.target.workstreamCount} workstreams · ${comparison.target.sessionCount} sessions · ${comparison.target.checkpointCount} checkpoints` },
           { label: 'Comparison', value: humanizeLabel(comparison.comparisonKind || 'isolated') },
-          { label: 'Shared agents', value: comparison.sharedAgents.length > 0 ? comparison.sharedAgents.join(', ') : 'none' }
-        ].map((item) => `<article><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong></article>`).join('');
-      }
-      if (compareOverlap) {
-        compareOverlap.innerHTML = [
           { label: 'Repository overlap', value: comparison.sharedRepositoryPaths.length > 0 ? comparison.sharedRepositoryPaths.join(', ') : 'none' },
           { label: 'Shared workstreams', value: comparison.sharedWorkstreams.length > 0 ? comparison.sharedWorkstreams.join(', ') : 'none' },
-          { label: 'Shared insights', value: comparison.sharedInsights.length > 0 ? comparison.sharedInsights.join(', ') : 'none' }
+          { label: 'Shared insights', value: comparison.sharedInsights.length > 0 ? comparison.sharedInsights.join(', ') : 'none' },
+          { label: 'Shared agents', value: comparison.sharedAgents.length > 0 ? comparison.sharedAgents.join(', ') : 'none' }
         ].map((item) => `<article><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong></article>`).join('');
       }
       if (compareEmpty) compareEmpty.classList.add('hidden');
       if (compareBody) compareBody.classList.remove('hidden');
     }
 
-    const focusItems = context
-      ? [
-          (() => {
-            const zeroTouch = zeroTouchState();
-            return {
-              title: 'Summary',
-              detail: `${zeroTouch.label}. ${state.allSessions.length} session${state.allSessions.length === 1 ? '' : 's'} · ${state.checkpoints.length} checkpoint${state.checkpoints.length === 1 ? '' : 's'}.`,
-              hint: zeroTouch.nextAction
-                || (state.allSessions.length > 0
-                  ? 'Use Sessions and Checkpoints to continue work without rebuilding context.'
-                  : 'Complete one captured run in this repo to start building local project memory.')
-            };
-          })()
-        ]
-      : [
-          {
-            title: 'No workspace selected',
-            detail: 'Create a workspace and bind its repository path to begin automatic capture.',
-            hint: 'Once a repo is bound, future sessions can route into it automatically.'
-          }
-        ];
-    document.getElementById('workspaceFocus').innerHTML = focusItems.map((item) => {
-      return `
-        <article>
-          <span>${esc(item.title)}</span>
-          <strong>${esc(item.detail)}</strong>
-          ${item.hint ? `<p>${esc(short(item.hint, 140))}</p>` : ''}
-        </article>
-      `;
-    }).join('');
+    if (workspaceLeadCopy) {
+      const zeroTouch = zeroTouchState();
+      const summaryLine = context
+        ? `${zeroTouch.label}. ${state.allSessions.length} session${state.allSessions.length === 1 ? '' : 's'} · ${state.checkpoints.length} checkpoint${state.checkpoints.length === 1 ? '' : 's'}.`
+        : 'Create a workspace and bind its repository path to begin automatic capture.';
+      const nextLine = context
+        ? (zeroTouch.nextAction
+          || (state.allSessions.length > 0
+            ? 'Use Sessions and Checkpoints to continue work without rebuilding context.'
+            : 'Complete one captured run in this repo to start building local project memory.'))
+        : 'Once a repo is bound, future sessions can route into it automatically.';
+      workspaceLeadCopy.textContent = `${workspaceLeadCopy.textContent} ${summaryLine} ${nextLine}`.trim();
+    }
 
     const policy = state.dataPolicy || {
       contextId: null,
@@ -192,7 +170,6 @@
     };
     const policyBadge = document.getElementById('workspacePolicySummaryBadge');
     const policyHint = document.getElementById('workspacePolicyHint');
-    const policyDetailList = document.getElementById('workspacePolicyDetailList');
     const actionHint = dataPolicyActionHint(policy);
     const workspaceSync = describeWorkspaceSyncDisplay({
       policy,
@@ -204,19 +181,6 @@
       policyBadge.textContent = formatDataPolicyPresetLabel(policy.preset || 'lean');
     }
 
-    if (policyDetailList) {
-      const detailItems = [
-        { title: 'Workspace sync', detail: policy.workspaceSyncSummary || workspaceSync.detail },
-        { title: 'Machine capture', detail: policy.machineCaptureSummary || capturePolicySummary() }
-      ];
-      policyDetailList.innerHTML = detailItems.map((item) => `
-        <article>
-          <strong>${esc(item.title)}</strong>
-          <p>${esc(item.detail)}</p>
-        </article>
-      `).join('');
-    }
-
     if (policyHint) {
       const baseHint = describeDesktopPolicyHint({
         supportsMutation: true,
@@ -225,7 +189,7 @@
         actionHint,
         workspaceHint: workspaceSync.hint
       });
-      policyHint.textContent = `${baseHint} Utilities are only for deliberate sync, retention, or debug changes.`;
+      policyHint.textContent = `${policy.workspaceSyncSummary || workspaceSync.detail} ${policy.machineCaptureSummary || capturePolicySummary()}. ${baseHint} Utilities are only for deliberate sync, retention, or debug changes.`;
     }
   }
 

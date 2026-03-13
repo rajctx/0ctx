@@ -37,8 +37,8 @@
       if (knowledgePageMeta) {
         const context = activeContext();
         knowledgePageMeta.textContent = context
-          ? `${context.name} currently has ${nodes.length} reviewed insight${nodes.length === 1 ? '' : 's'}. Keep only durable memory worth carrying forward.`
-          : 'Use this page for reviewed memory. Keep raw conversation history in Sessions.';
+          ? `${context.name} has ${nodes.length} reviewed insight${nodes.length === 1 ? '' : 's'} in the current view.`
+          : 'Use this page for reviewed memory. Raw conversation stays in Sessions.';
       }
       if (knowledgeSummaryLine) {
         const context = activeContext();
@@ -50,7 +50,7 @@
         knowledgeSummaryLine.textContent = bits.join(' · ');
       }
 
-      document.getElementById('knowledgeExplainer').textContent = 'Sessions feed this layer, but only reviewed insights should stay visible here.';
+      document.getElementById('knowledgeExplainer').textContent = 'Keep only durable memory here.';
 
       const selectedInsightEmpty = document.getElementById('selectedInsightEmpty');
       const selectedInsightBody = document.getElementById('selectedInsightBody');
@@ -70,7 +70,7 @@
           `${humanizeLabel(selectedInsight.trustTier)} trust across ${selectedInsight.distinctEvidenceCount || selectedInsight.evidenceCount || 0} evidence point${(selectedInsight.distinctEvidenceCount || selectedInsight.evidenceCount || 0) === 1 ? '' : 's'}.`,
           selectedInsight.promotionState === 'ready'
             ? 'Ready to promote if this memory should carry into another project.'
-            : selectedInsight.promotionState === 'review'
+          : selectedInsight.promotionState === 'review'
               ? 'Review it before moving it across workspaces.'
               : 'Promotion is blocked until trust concerns are resolved.'
         ].join(' ');
@@ -91,7 +91,6 @@
         const selectedInsightCopy = document.getElementById('selectedInsightCopy');
         selectedInsightCopy.innerHTML = `
           <p class="detail-copy detail-primary">${esc(selectedInsight.summary)}</p>
-          <p class="detail-copy detail-muted">Keep this insight only if it is durable enough to help the next session resume work without rereading the full transcript.</p>
         `;
         if (selectedInsight.trustSummary) {
           selectedInsightCopy.insertAdjacentHTML('beforeend', `<p class="detail-copy detail-muted">${esc(selectedInsight.trustSummary)}</p>`);
@@ -133,7 +132,7 @@
       if (!promoteSupported) {
         promotionCopy.textContent = 'Update the local runtime to promote reviewed insights across workspaces.';
       } else if (!selectedNode) {
-        promotionCopy.textContent = 'Select an insight first. Promotion stays explicit and never blends project memory silently.';
+        promotionCopy.textContent = 'Select an insight first. Promotion is always explicit.';
       } else if (selectedInsight.promotionState === 'blocked') {
         promotionCopy.textContent = selectedInsight.promotionSummary || 'This insight is not ready to promote yet.';
       } else if (!selectedTargetContext) {

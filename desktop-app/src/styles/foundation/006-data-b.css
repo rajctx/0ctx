@@ -3,7 +3,31 @@
 .utility-stack,
 .compact-info-list {
   display: grid;
-  gap: 12px;
+  gap: 8px;
+}
+
+.compact-info-list article {
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--line-soft);
+}
+
+.compact-info-list article span {
+  color: var(--text-soft);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.compact-info-list article strong {
+  color: var(--text-strong);
+  font-size: 12px;
+  line-height: 1.5;
+  font-weight: 600;
 }
 
 .compact-form {

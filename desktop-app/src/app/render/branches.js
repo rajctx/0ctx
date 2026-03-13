@@ -72,7 +72,6 @@
         document.getElementById('branchDetailTitle').textContent = 'Update the local runtime';
         document.getElementById('branchLeadCopy').textContent = '';
         document.getElementById('branchFactStrip').innerHTML = '';
-        document.getElementById('branchMeta').innerHTML = '';
         document.getElementById('branchSessionList').innerHTML = '<div class="empty-state">Branch sessions will appear here after the local runtime is updated.</div>';
         document.getElementById('handoffList').innerHTML = '<div class="empty-state">Agent handoff history will appear here after the local runtime is updated.</div>';
         if (compareSelect) compareSelect.innerHTML = '<option value="">Unavailable</option>';
@@ -104,7 +103,6 @@
         document.getElementById('branchDetailTitle').textContent = 'Choose a workstream';
         document.getElementById('branchLeadCopy').textContent = '';
         document.getElementById('branchFactStrip').innerHTML = '';
-        document.getElementById('branchMeta').innerHTML = '';
         document.getElementById('branchSessionList').innerHTML = '<div class="empty-state">Choose a workstream to see the captured sessions on it.</div>';
         document.getElementById('handoffList').innerHTML = '<div class="empty-state">No handoff history yet.</div>';
         if (compareSelect) compareSelect.innerHTML = '<option value="">Choose a workstream first</option>';
@@ -130,13 +128,10 @@
       document.getElementById('branchFactStrip').innerHTML = [
         factStripItem('State', describeWorkstreamSync(lane) || 'unknown'),
         factStripItem('History', `${lane.sessionCount} sessions · ${lane.checkpointCount} checkpoints`),
-        factStripItem('Latest commit', lane.lastCommitSha ? `#${commitShort(lane.lastCommitSha)}` : 'Unpinned')
+        factStripItem('Latest commit', lane.lastCommitSha ? `#${commitShort(lane.lastCommitSha)}` : 'Unpinned'),
+        factStripItem('Checkout', describeWorkstreamCheckout(lane) || 'unknown'),
+        factStripItem('Handoff readiness', lane.handoffSummary || 'unknown')
       ].join('');
-      const meta = [
-        { label: 'Checkout', value: describeWorkstreamCheckout(lane) || 'unknown' },
-        { label: 'Handoff readiness', value: lane.handoffSummary || 'unknown' }
-      ];
-    document.getElementById('branchMeta').innerHTML = meta.map((item) => `<article><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong></article>`).join('');
 
     if (compareSelect) {
       const sourceKey = branchKey(lane.branch, lane.worktreePath);
@@ -161,8 +156,7 @@
     } else {
       const comparison = state.branchComparison;
       const comparisonSummary = document.getElementById('branchComparisonSummary');
-      const comparisonMeta = document.getElementById('branchComparisonMeta');
-      const comparisonAgents = document.getElementById('branchComparisonAgents');
+      const comparisonFacts = document.getElementById('branchComparisonFacts');
         if (comparisonSummary) {
         const lines = [comparison.comparisonSummary || comparison.comparisonText || 'No comparison summary is available for these workstreams.'];
         if (comparison.comparisonActionHint) {
@@ -176,7 +170,7 @@
         }
         comparisonSummary.textContent = lines.join(' ');
       }
-      if (comparisonMeta) {
+      if (comparisonFacts) {
         const gitSummary = comparison.comparable && comparison.sameRepository
           ? [
               `source ahead ${comparison.sourceAheadCount ?? '?'}`,
@@ -191,7 +185,7 @@
         const lineOverlapSummary = typeof comparison.sharedConflictLikelyCount === 'number'
           ? `shared ${comparison.sharedConflictLikelyCount} · ${comparison.lineOverlapKind || 'unknown'}`
           : 'Changed-line overlap unavailable';
-        comparisonMeta.innerHTML = [
+        comparisonFacts.innerHTML = [
           `<article><span>Source</span><strong>${esc(describeBranchLane(comparison.source).title)}</strong></article>`,
           `<article><span>Target</span><strong>${esc(describeBranchLane(comparison.target).title)}</strong></article>`,
           `<article><span>State</span><strong>${esc((comparison.comparisonKind || 'unknown').replace(/_/g, ' '))}</strong></article>`,
@@ -199,17 +193,16 @@
           `<article><span>Changed-file overlap</span><strong>${esc(overlapSummary)}</strong></article>`,
           `<article><span>Changed-line overlap</span><strong>${esc(lineOverlapSummary)}</strong></article>`,
           `<article><span>Merge risk</span><strong>${esc(comparison.mergeRiskSummary || 'unknown')}</strong></article>`,
-          `<article><span>Shared agents</span><strong>${esc(comparison.sharedAgents.length > 0 ? comparison.sharedAgents.join(', ') : 'none')}</strong></article>`
-        ].join('');
-      }
-      if (comparisonAgents) {
-        comparisonAgents.innerHTML = [
+          `<article><span>Shared agents</span><strong>${esc(comparison.sharedAgents.length > 0 ? comparison.sharedAgents.join(', ') : 'none')}</strong></article>`,
           { label: 'Shared', value: comparison.sharedAgents },
           { label: 'Focus areas', value: comparison.sharedChangedAreas || [] },
           { label: 'Likely conflict files', value: comparison.sharedConflictLikelyFiles || [] },
           { label: 'Shared files', value: comparison.sharedChangedFiles || [] },
           { label: 'Reconcile', value: Array.isArray(comparison.reconcileSteps) && comparison.reconcileSteps.length > 0 ? comparison.reconcileSteps : [comparison.reconcileStrategySummary || 'none'] }
-        ].map((item) => `<article><span>${esc(item.label)}</span><strong>${esc(item.value.length > 0 ? item.value.join(', ') : 'none')}</strong></article>`).join('');
+        ].map((item) => {
+          if (typeof item === 'string') return item;
+          return `<article><span>${esc(item.label)}</span><strong>${esc(item.value.length > 0 ? item.value.join(', ') : 'none')}</strong></article>`;
+        }).join('');
       }
       if (compareEmpty) compareEmpty.classList.add('hidden');
       if (compareBody) compareBody.classList.remove('hidden');

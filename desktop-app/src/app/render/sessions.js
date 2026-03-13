@@ -159,11 +159,14 @@
   Object.assign(app, { renderSessions });
 
   function joinSessionFocusCopy(session, summary) {
+    const facts = [
+      session.agent || '',
+      session.branch ? normalizeBranch(session.branch) : '',
+      session.commitSha ? `#${commitShort(session.commitSha)}` : ''
+    ].filter(Boolean).join(' · ');
     return [
       summary?.preview || 'Read the stream below.',
-      session.agent ? `${session.agent} session.` : '',
-      session.branch ? `${normalizeBranch(session.branch)}.` : '',
-      session.commitSha ? `#${commitShort(session.commitSha)}.` : ''
+      facts ? `${facts}.` : ''
     ].filter(Boolean).join(' ');
   }
 })();

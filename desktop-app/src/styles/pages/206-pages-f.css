@@ -56,7 +56,7 @@
 }
 
 .insight-selection-panel .lead-copy {
-  max-width: 54ch;
+  max-width: 50ch;
 }
 
 .insight-promotion-panel .info-list article {
@@ -91,19 +91,34 @@
 }
 
 .setup-page-layout {
-  grid-template-columns: 320px minmax(0, 1fr);
+  grid-template-columns: 296px minmax(0, 1fr);
 }
 
 .setup-main-stage {
   display: grid;
-  gap: 16px;
+  gap: 0;
   min-width: 0;
+  padding: 18px 20px;
 }
 
 .setup-primary-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 16px;
+  gap: 18px;
+}
+
+.setup-stage-section {
+  display: grid;
+  gap: 12px;
+  padding: 18px 0;
+}
+
+.setup-primary-grid > .setup-stage-section {
+  padding: 0;
+}
+
+.setup-stage-section + .setup-stage-section {
+  border-top: 1px solid var(--line-soft);
 }
 
 .setup-command-panel .command-card {
@@ -146,6 +161,11 @@
 
 .setup-policy-panel .workspace-form {
   gap: 14px;
+}
+
+.setup-policy-panel .section-row.small,
+.setup-utilities-panel .section-row.small {
+  margin-bottom: 0;
 }
 
 .setup-utilities-panel details[open] .advanced-details-body {

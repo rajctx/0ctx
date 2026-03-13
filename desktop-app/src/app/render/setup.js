@@ -61,8 +61,8 @@
       setupPageMeta.textContent = state.runtimeIssue
         ? state.runtimeIssue.detail
         : installedGa.length > 0
-          ? `${installedGa.length} GA integration${installedGa.length === 1 ? '' : 's'} installed. Return here only when you need to enable another repo or change local policy deliberately.`
-          : 'No GA integrations are installed yet. Use this page only for the supported agents you actually use on this machine.';
+          ? `${installedGa.length} GA integration${installedGa.length === 1 ? '' : 's'} installed. Use this page only when you need to change setup or policy.`
+          : 'No GA integrations are installed yet. Use this page only for the supported agents you actually use.';
     }
 
     document.getElementById('hookSummary').textContent = `${installedGa.length} ready`;
@@ -87,15 +87,15 @@
       setupHealthLead.textContent = state.runtimeIssue
         ? state.runtimeIssue.detail
         : installedGa.length > 0
-          ? `Only the supported GA integrations matter here. ${integrationListText(installedGa)} ${installedGa.length === 1 ? 'is' : 'are'} installed for normal use.`
-          : 'Only the supported GA integrations matter here. Install the ones you actually use and leave preview clients out of the normal path.';
+          ? `${integrationListText(installedGa)} ${installedGa.length === 1 ? 'is' : 'are'} installed for normal use.`
+          : 'Install only the supported GA integrations you actually use.';
     }
     const setupUtilityLead = document.getElementById('setupUtilityLead');
     if (setupUtilityLead) {
       setupUtilityLead.textContent = state.runtimeIssue
         ? state.runtimeIssue.detail
         : zeroTouch.ready
-          ? 'The normal path is active. Use these utilities only when runtime behavior is clearly off or you are changing machine-level policy on purpose.'
+          ? 'The normal path is active. Use these tools only when runtime behavior is clearly off.'
           : `${zeroTouch.label}. ${zeroTouch.nextAction || zeroTouch.detail}`;
     }
     const policy = state.dataPolicy || {
@@ -196,7 +196,7 @@
         workspaceResolved,
         actionHint,
         workspaceHint: workspaceSync.hint
-      }) + ' Debug trails and opt-in cloud sync stay behind Utilities.';
+      }) + ' Debug trails and opt-in cloud sync stay in Utilities.';
     }
 
     if (policyAdvancedDetails instanceof HTMLDetailsElement && !supportsMutation) {

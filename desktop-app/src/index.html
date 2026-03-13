@@ -159,7 +159,6 @@
                     </div>
                     <p id="workspaceLeadCopy" class="lead-copy compact-lead"></p>
                     <div id="workspaceFactStrip" class="fact-grid editorial-facts"></div>
-                    <div id="workspaceFocus" class="info-list compact-info-list workspace-brief-list"></div>
                   </section>
 
                 <div class="workspace-secondary-grid">
@@ -171,7 +170,6 @@
                       </div>
                       <span id="workspacePolicySummaryBadge" class="chip">Default</span>
                     </div>
-                    <div id="workspacePolicyDetailList" class="info-list compact-info-list"></div>
                     <p id="workspacePolicyHint" class="page-copy compact-copy">Metadata-only sync is the normal default for this workspace. Machine-local capture stays on this machine and debug trails remain off unless you explicitly enable them from Utilities.</p>
                     <div class="row-actions">
                       <button class="btn quiet" data-nav="setup" type="button">Open utilities</button>
@@ -192,8 +190,7 @@
                     <div id="workspaceCompareEmpty" class="empty-state">Select another workspace to compare overlap, reviewed insights, and repository bindings.</div>
                     <div id="workspaceCompareBody" class="detail-stack hidden">
                       <p id="workspaceComparisonSummary" class="page-copy compact-copy"></p>
-                      <div id="workspaceComparisonMeta" class="meta-grid compact-meta-grid"></div>
-                      <div id="workspaceComparisonOverlap" class="meta-grid compact-meta-grid"></div>
+                      <div id="workspaceComparisonFacts" class="info-list compact-info-list"></div>
                     </div>
                   </section>
                 </div>
@@ -238,7 +235,6 @@
                   <div id="branchDetailBody" class="detail-stack hidden">
                     <p id="branchLeadCopy" class="lead-copy"></p>
                     <div id="branchFactStrip" class="fact-grid editorial-facts"></div>
-                    <div id="branchMeta" class="meta-grid compact-meta-grid"></div>
                   </div>
                 </section>
 
@@ -279,8 +275,7 @@
                   <div id="branchCompareEmpty" class="empty-state">Choose another workstream to compare git divergence, recent activity, and shared agents.</div>
                   <div id="branchCompareBody" class="detail-stack hidden">
                     <p id="branchComparisonSummary" class="page-copy compact-copy"></p>
-                    <div id="branchComparisonMeta" class="meta-grid compact-meta-grid"></div>
-                    <div id="branchComparisonAgents" class="meta-grid compact-meta-grid"></div>
+                    <div id="branchComparisonFacts" class="info-list compact-info-list"></div>
                   </div>
                 </section>
               </section>
@@ -514,8 +509,8 @@
                   <div id="knowledgeTable" class="list stack-list insight-library-list"></div>
                 </section>
               </aside>
-              <section class="insights-main-stage insight-detail-stage">
-                <section class="panel insight-selection-panel">
+              <section class="panel insights-main-stage insight-detail-stage insights-stage-shell">
+                <section class="insight-section insight-selection-panel">
                   <div class="section-row small">
                     <div>
                       <p class="section-label">Selected insight</p>
@@ -534,7 +529,7 @@
                   </div>
                 </section>
 
-                <section class="panel insight-promotion-panel">
+                <section class="insight-section insight-promotion-panel">
                   <div class="section-row small">
                     <div>
                       <p class="section-label">Cross-workspace promotion</p>
@@ -581,9 +576,9 @@
                 </div>
                 <p class="page-copy compact-copy utility-side-note">You should rarely need this page after the repo is enabled and your GA integrations are installed.</p>
               </aside>
-              <section class="setup-main-stage">
+              <section class="panel setup-main-stage setup-stage-shell">
                 <div class="setup-primary-grid">
-                  <section class="panel setup-health-panel">
+                  <section class="setup-stage-section setup-health-panel">
                     <div class="section-row small">
                       <div>
                         <p class="section-label">Integration health</p>
@@ -595,7 +590,7 @@
                     <div id="hookList" class="list stack-list compact-list-surface setup-hook-list"></div>
                   </section>
 
-                  <section class="panel setup-policy-panel">
+                  <section class="setup-stage-section setup-policy-panel">
                     <div class="section-row small">
                       <div>
                         <p class="section-label">Sync and capture policy</p>
@@ -657,7 +652,7 @@
                   </section>
                 </div>
 
-                <section class="panel compact-utility-block setup-utilities-panel">
+                <section class="setup-stage-section compact-utility-block setup-utilities-panel">
                   <details id="utilitiesDetails" class="advanced-details utility-advanced-block">
                     <summary>Utilities and runtime tools</summary>
                     <div class="advanced-details-body">

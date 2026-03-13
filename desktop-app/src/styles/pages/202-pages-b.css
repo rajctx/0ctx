@@ -50,7 +50,7 @@
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
-  padding-bottom: 10px;
+  padding-bottom: 8px;
   border-bottom: 1px solid var(--line-soft);
 }
 
@@ -90,9 +90,9 @@
 
 .session-reader-panel {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   min-height: 560px;
-  padding: 16px 18px 18px;
+  padding: 14px 16px 16px;
 }
 
 .preview-stage {

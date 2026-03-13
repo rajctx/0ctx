@@ -94,15 +94,12 @@
     }
 
       const checkpoint = detail.checkpoint;
-      const checkpointSummary = describeCheckpoint(checkpoint);
       document.getElementById('checkpointDetailTitle').textContent = short(checkpoint.summary || checkpoint.name || checkpoint.id, 72);
       document.getElementById('checkpointLeadCopy').textContent = joinNonEmpty([
         checkpoint.branch
           ? `Restore ${normalizeBranch(checkpoint.branch)} from this saved point.`
           : 'Restore the workspace from this saved point.',
-        checkpoint.sessionId
-          ? 'It remains linked to the originating conversation.'
-          : 'It can still be explained or rewound without a linked conversation.'
+        checkpoint.sessionId ? 'Linked to the originating conversation.' : ''
       ]);
       empty.classList.add('hidden');
       body.classList.remove('hidden');
@@ -113,8 +110,8 @@
       ].join('');
       const meta = [
         { label: 'Commit', value: checkpoint.commitSha ? `#${commitShort(checkpoint.commitSha)}` : 'Unpinned' },
-        { label: 'Linked session', value: checkpoint.sessionId ? short(checkpoint.sessionId, 28) : 'none' },
-        { label: 'Kind', value: checkpoint.kind }
+        { label: 'Kind', value: checkpoint.kind },
+        { label: 'Session link', value: checkpoint.sessionId ? 'Attached below' : 'No linked session' }
       ];
     document.getElementById('checkpointMeta').innerHTML = meta.map((item) => `<article><span>${esc(item.label)}</span><strong>${esc(item.value)}</strong></article>`).join('');
 
