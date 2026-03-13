@@ -75,8 +75,8 @@
     const meta = VIEW_META[state.view] || VIEW_META.branches;
     const context = activeContext();
     document.getElementById('stageCrumbBase').textContent = state.view === 'workspaces'
-      ? 'Workspace Library'
-      : (context?.name || 'Workspace Library');
+      ? 'Projects'
+      : (context?.name || 'Projects');
     document.getElementById('stageCrumbCurrent').textContent = state.view === 'workspaces'
       ? 'Overview'
       : meta.title;

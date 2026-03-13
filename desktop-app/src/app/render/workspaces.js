@@ -18,7 +18,7 @@
     const workspacesPageMeta = document.getElementById('workspacesPageMeta');
     if (workspacesPageMeta) {
       workspacesPageMeta.textContent = context
-        ? `${contexts.length} workspace${contexts.length === 1 ? '' : 's'} on this machine. ${context.name} is the current project binding.`
+        ? `${contexts.length} workspace${contexts.length === 1 ? '' : 's'} on this machine. ${context.name} is active.`
         : `${contexts.length} workspace${contexts.length === 1 ? '' : 's'} on this machine. Bind one repository and future capture routes automatically.`;
     }
 
@@ -52,9 +52,9 @@
     if (workspaceLeadCopy) {
       workspaceLeadCopy.textContent = context
         ? joinNonEmpty([
-            `${context.name} is the current project binding.`,
+            `${context.name} is the active project binding.`,
             Array.isArray(context.paths) && context.paths[0]
-              ? 'New capture routes here from the active repository path.'
+              ? 'New capture routes here from the repository path.'
               : 'Bind a repository folder so capture can land here automatically.',
             state.allSessions.length > 0
               ? `${state.allSessions.length} captured session${state.allSessions.length === 1 ? '' : 's'} already belong here.`
@@ -176,7 +176,7 @@
         <article>
           <span>${esc(item.title)}</span>
           <strong>${esc(item.detail)}</strong>
-          ${item.hint ? `<p>${esc(item.hint)}</p>` : ''}
+          ${item.hint ? `<p>${esc(short(item.hint, 140))}</p>` : ''}
         </article>
       `;
     }).join('');

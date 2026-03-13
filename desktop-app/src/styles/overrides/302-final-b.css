@@ -1,22 +1,11 @@
+/* Final behavior-only overrides. Page spacing and composition live in pages/*. */
 
 .workspaces-library-panel,
 .workstreams-library-panel,
 .session-navigation-panel,
 .checkpoint-library-panel,
 .insights-sidebar,
-.setup-command-panel {
-  position: sticky;
-  top: 18px;
-  align-self: start;
-  max-height: calc(100vh - 96px);
-  overflow: auto;
-}
-
-.session-navigation-panel {
-  gap: 8px;
-  padding: 10px;
-}
-
+.setup-command-panel,
 .workspace-form-panel {
   position: sticky;
   top: 18px;
@@ -41,89 +30,6 @@
   margin: 0;
 }
 
-.session-rail-block {
-  gap: 8px;
-}
-
-.session-reader-head {
-  gap: 10px;
-}
-
-.session-reader-actions {
-  gap: 6px;
-}
-
-.session-reader-panel {
-  min-height: 500px;
-  padding: 14px 16px 16px;
-}
-
-.reader-body {
-  gap: 14px;
-  padding: 6px 0 0;
-}
-
-.reader-header-block {
-  padding-bottom: 10px;
-}
-
-.reader-block {
-  padding: 12px 0;
-}
-
-.detail-copy,
-.detail-list,
-.detail-quote {
-  font-size: 13px;
-  line-height: 1.72;
-}
-
-.detail-primary {
-  font-size: 14px;
-}
-
-.detail-inline-code,
-.detail-pre,
-.technical-details summary,
-.preview-footnote {
-  font-size: 10.5px;
-}
-
-.editorial-facts,
-.reader-facts,
-.compact-meta-grid {
-  gap: 0 12px;
-}
-
-.session-utility-inline {
-  padding-bottom: 10px;
-}
-
-.preview-stage .section-row.small,
-.checkpoint-support-section .section-row.small {
-  margin-bottom: 0;
-  padding-bottom: 2px;
-}
-
-.preview-stage .row-actions {
-  gap: 6px;
-}
-
-.editorial-facts {
-  padding: 8px 0 2px;
-}
-
-.editorial-facts article,
-.compact-meta-grid article {
-  padding: 8px 0;
-}
-
-.empty-state {
-  min-height: 64px;
-  padding: 10px 12px;
-  font-size: 10.5px;
-}
-
 .banner {
   margin: 12px 18px 0;
 }
@@ -133,26 +39,7 @@
   padding: 0 12px;
 }
 
-@media (max-width: 1320px) {
-  .app-shell {
-    grid-template-columns: 208px minmax(0, 1fr);
-  }
-
-  .search-wrap {
-    width: 240px;
-  }
-
-  .workspace-page-layout,
-  .workstreams-layout {
-    grid-template-columns: 252px minmax(0, 1fr);
-  }
-
-  .sessions-layout {
-    grid-template-columns: 248px minmax(0, 1fr);
-  }
-}
-
-/* Final minimal active-state pass: no bright borders, no inset highlights, no layout shift */
+/* Minimal active state: no bright borders, no inset lines, no layout shift. */
 
 .nav-btn.active,
 .nav-btn.active:hover {
@@ -196,4 +83,14 @@
   border-radius: 10px;
   box-shadow: none;
   padding: 10px 8px;
+}
+
+@media (max-width: 1320px) {
+  .app-shell {
+    grid-template-columns: 208px minmax(0, 1fr);
+  }
+
+  .search-wrap {
+    width: 240px;
+  }
 }
