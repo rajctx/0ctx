@@ -1,39 +1,3 @@
-/* 2026 page composition reset */
-
-.stage-inner {
-  width: min(100%, 1360px);
-  padding: 24px 24px 36px;
-}
-
-.page-shell {
-  gap: 18px;
-}
-
-.page-head {
-  max-width: 880px;
-}
-
-.page-head h1 {
-  font-size: 34px;
-  line-height: 1;
-  letter-spacing: -0.06em;
-}
-
-.page-copy {
-  max-width: 78ch;
-}
-
-.compact-lead {
-  font-size: 15px;
-  line-height: 1.72;
-  max-width: 58ch;
-}
-
-.panel {
-  border-radius: 18px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.022), rgba(255, 255, 255, 0.012));
-}
-
 .workspace-page-layout,
 .workstreams-layout,
 .sessions-layout {
