@@ -1,146 +1,263 @@
-:root {
-  --app-shell-sidebar-width: 14.75rem;
-  --app-shell-pad: 0.75rem;
-  --app-panel-pad: 1rem;
-  --app-panel-pad-lg: 1.125rem;
-  --app-gap: 1rem;
-  --app-gap-lg: 1.125rem;
-  --app-control-height: 2.25rem;
-  --app-text-meta: 0.6875rem;
-  --app-text-body: 0.8125rem;
-  --app-text-heading: 1rem;
-  --app-text-title: clamp(1.35rem, 1.8vw, 1.75rem);
-  --app-page-max: 66rem;
-}
+/*
+ * 305-refinement.css
+ * Final reconciliation pass. Resolves conflicts from all previous layers.
+ * Covers: shell dimensions, sidebar, topbar, panel grounding,
+ *         page layouts, info grids, sessions workspace, and media queries.
+ * Do not add new visual design here — fix structural and spacing issues only.
+ */
 
-body {
-  font-size: 12.5px;
-  line-height: 1.56;
-}
+/* ─── Shell ──────────────────────────────────────────────── */
 
 .app-shell {
-  grid-template-columns: var(--app-shell-sidebar-width) minmax(0, 1fr);
+  grid-template-columns: 240px minmax(0, 1fr);
 }
 
+/* ─── Sidebar ────────────────────────────────────────────── */
+
 .sidebar {
-  gap: var(--app-gap);
-  padding: var(--app-shell-pad) var(--app-shell-pad) 0.875rem;
+  gap: 10px;
+  padding: 12px 12px 14px;
 }
 
 .sidebar-brand {
-  padding: 0.25rem 0.375rem 0.5rem;
-}
-
-.brand-icon {
-  width: 2.25rem;
-  height: 2.25rem;
-  border-radius: 0.75rem;
+  padding: 4px 4px 10px;
+  border-bottom: 1px solid var(--line-soft);
 }
 
 .sidebar-brand h1 {
-  font-size: 0.9375rem;
+  font-size: 14px;
+  letter-spacing: -0.025em;
 }
 
 .sidebar-brand p {
-  font-size: 0.625rem;
-  letter-spacing: 0.12em;
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  margin-top: 3px;
 }
 
+/* Workspace card: simple bordered card, no heavy gradient */
 .workspace-sidebar-card {
-  gap: 0.625rem;
-  padding-bottom: 0.75rem;
+  gap: 8px;
+  padding: 10px 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--line-soft);
+  box-shadow: none;
 }
 
-.sidebar-nav,
+:root[data-theme="light"] .workspace-sidebar-card {
+  background: rgba(22, 26, 31, 0.03);
+}
+
+.workspace-card-head h2 {
+  font-size: 13px;
+  letter-spacing: -0.02em;
+}
+
+.workspace-controls select {
+  min-height: 32px;
+  font-size: 12px;
+}
+
+.sidebar-path,
+.sidebar-copy,
+.sidebar-summary-line {
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.sidebar-nav {
+  gap: 2px;
+}
+
 .sidebar-utilities {
-  gap: 0.375rem;
+  gap: 2px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line-soft);
 }
 
-.sidebar-utilities,
 .sidebar-footer {
-  padding-top: 0.875rem;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
 }
 
 .nav-btn {
-  gap: 0.625rem;
-  padding: 0.5625rem 0.625rem;
-  font-size: 0.8125rem;
-  border-radius: 0.75rem;
+  min-height: 34px;
+  padding: 7px 9px;
+  border-radius: 9px;
+  font-size: 12.5px;
 }
 
 .nav-dot {
-  width: 0.375rem;
-  height: 0.375rem;
+  width: 6px;
+  height: 6px;
 }
 
 .theme-toggle {
-  padding: 0.25rem;
+  padding: 3px;
+  gap: 4px;
 }
 
 .theme-option {
-  min-height: 2rem;
-  font-size: 0.75rem;
+  min-height: 30px;
+  font-size: 12px;
 }
 
+/* ─── Topbar ─────────────────────────────────────────────── */
+
+/* 
+ * Remove the width/margin centering trick that misaligns topbar from content.
+ * Topbar should span full main column width — content padding provides alignment.
+ */
 .topbar {
-  min-height: 3.5rem;
-  padding: 0 1.375rem;
+  width: 100%;
+  max-width: none;
+  min-height: 52px;
+  margin: 0;
+  padding: 0 24px;
+  gap: 12px;
+  border-bottom: 1px solid var(--line-soft);
+  background: rgba(14, 16, 18, 0.88);
+  backdrop-filter: blur(10px);
+}
+
+:root[data-theme="light"] .topbar {
+  background: rgba(244, 242, 238, 0.88);
 }
 
 .topbar-crumbs {
-  gap: 0.5rem;
-  font-size: 0.8125rem;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 .topbar-tools {
-  gap: 0.75rem;
+  gap: 8px;
 }
 
 .search-wrap {
-  width: min(16rem, 28vw);
+  width: 220px;
 }
 
-#search {
-  min-height: var(--app-control-height);
-  padding-inline: 0.8125rem;
-  font-size: 0.8125rem;
+/* ─── Banners ────────────────────────────────────────────── */
+
+.banner {
+  margin: 10px 24px 0;
 }
+
+/* ─── Stage inner ────────────────────────────────────────── */
+
+/*
+ * Single consistent padding. Aligns with topbar 24px horizontal pad.
+ */
+.stage-inner {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 20px 24px 28px;
+}
+
+/* ─── Controls ───────────────────────────────────────────── */
 
 .btn {
-  min-height: var(--app-control-height);
-  padding-inline: 0.875rem;
-  font-size: 0.75rem;
-  border-radius: 0.6875rem;
+  min-height: 34px;
+  padding-inline: 11px;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.btn.tertiary,
+.btn.quiet {
+  min-height: 30px;
+  padding-inline: 10px;
+  color: var(--text-muted);
+}
+
+.btn.wide {
+  width: 100%;
 }
 
 .badge,
 .chip {
-  min-height: 1.375rem;
-  padding-inline: 0.625rem;
-  font-size: 0.625rem;
+  min-height: 20px;
+  padding-inline: 8px;
+  font-size: 10px;
+  letter-spacing: 0.07em;
 }
 
+/* ─── Panels — remove floating look ─────────────────────── */
+
+/*
+ * Eliminate shadow stacking: all panels sit flat on the background.
+ * Border alone grounds the panel without visual lift.
+ */
+.panel,
+.sidebar-card,
+.banner,
+.command-card,
+.technical-details,
+.advanced-details {
+  box-shadow: none;
+  border-radius: 14px;
+}
+
+/* Secondary panels: slightly tinted, not glowing */
+.workspace-secondary-panel,
+.workstream-support-panel,
+.workstream-compare-panel,
+.setup-stage-section,
+.insight-section,
+.insights-list-stage {
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid var(--line-soft);
+  box-shadow: none;
+  border-radius: 12px;
+}
+
+:root[data-theme="light"] .workspace-secondary-panel,
+:root[data-theme="light"] .workstream-support-panel,
+:root[data-theme="light"] .workstream-compare-panel,
+:root[data-theme="light"] .setup-stage-section,
+:root[data-theme="light"] .insight-section,
+:root[data-theme="light"] .insights-list-stage {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+/* Library sidebars are transparent — no panel border */
+.session-navigation-panel,
+.workstreams-library-panel,
+.checkpoint-library-panel,
+.insights-sidebar,
+.setup-command-panel {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+/* ─── Page shell ─────────────────────────────────────────── */
+
 .page-shell {
-  gap: var(--app-gap);
-  padding: 0 1.375rem 1.375rem;
+  gap: 16px;
+  padding: 0 0 20px;
 }
 
 .page-head {
-  gap: 0.5rem;
-  max-width: 40ch;
+  gap: 6px;
+  max-width: 46ch;
 }
 
 .page-head h1 {
-  font-size: var(--app-text-title);
-  line-height: 1.08;
+  font-size: clamp(20px, 2vw, 26px);
+  line-height: 1.1;
 }
 
 .section-label,
 .page-kicker,
 .item-kicker,
 .detail-label {
-  font-size: 0.625rem;
-  letter-spacing: 0.1em;
+  font-size: 10px;
+  letter-spacing: 0.09em;
 }
 
 .page-copy,
@@ -155,208 +272,328 @@ body {
 .sidebar-summary-line,
 .library-summary-line,
 .utility-note {
-  font-size: var(--app-text-body);
-  line-height: 1.6;
-}
-
-.panel,
-.sidebar-card,
-.banner,
-.command-card,
-.technical-details,
-.advanced-details {
-  border-radius: 0.9375rem;
-  box-shadow: none;
-}
-
-.panel-head h3,
-.section-row h2,
-.detail-head h3,
-.detail-head h4,
-.panel-head.compact h3,
-.surface-head h3 {
-  font-size: var(--app-text-heading);
-  line-height: 1.15;
-  letter-spacing: -0.025em;
-}
-
-.section-row.small h4 {
-  font-size: 0.9375rem;
-}
-
-.lead-copy,
-.detail-copy,
-.compact-copy {
-  font-size: var(--app-text-body);
+  font-size: 12.5px;
   line-height: 1.62;
 }
+
+.lead-copy {
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+/* ─── Page layout grids ──────────────────────────────────── */
 
 .workspace-page-layout,
 .workstreams-layout,
 .checkpoints-layout,
 .insights-layout,
 .setup-page-layout {
-  gap: var(--app-gap-lg);
+  gap: 20px;
 }
 
+/* Left side panel: fixed-width for stability */
 .workspace-page-layout {
-  grid-template-columns: minmax(14.5rem, 15.75rem) minmax(0, 1fr);
+  grid-template-columns: 248px minmax(0, 1fr);
 }
 
 .workstreams-layout,
 .checkpoints-layout,
 .insights-layout,
 .setup-page-layout {
-  grid-template-columns: minmax(15.5rem, 17.5rem) minmax(0, 1fr);
+  grid-template-columns: 248px minmax(0, 1fr);
 }
 
+/* Main stages */
 .workspace-main-stage,
 .workstreams-main-stage,
 .checkpoint-stage,
 .insights-stage-shell,
 .setup-main-stage {
-  max-width: var(--app-page-max);
-  gap: var(--app-gap);
+  gap: 16px;
 }
 
-.workspace-primary-surface,
-.workspace-secondary-panel,
-.workstream-hero-panel,
-.workstream-support-panel,
-.workstream-compare-panel,
-.checkpoint-hero-panel,
-.checkpoint-sidecar-panel,
-.insight-section,
-.insights-list-stage,
-.setup-stage-section,
+/* Panel padding: consistent, moderate */
 .workspace-form-panel,
 .workstreams-library-panel,
 .checkpoint-library-panel,
 .insights-sidebar,
-.setup-command-panel {
-  padding: var(--app-panel-pad) var(--app-panel-pad-lg);
+.setup-command-panel,
+.workspace-primary-surface,
+.workstream-hero-panel,
+.checkpoint-hero-panel,
+.checkpoint-sidecar-panel,
+.insight-section,
+.insights-list-stage,
+.setup-stage-section {
+  padding: 14px 16px;
 }
 
+.workspace-secondary-panel,
+.workstream-support-panel,
+.workstream-compare-panel {
+  padding: 12px 14px;
+}
+
+/* Sticky panels */
+.workstreams-library-panel,
+.checkpoint-library-panel,
+.insights-sidebar,
+.setup-command-panel,
+.workspace-form-panel {
+  position: sticky;
+  top: 16px;
+  align-self: start;
+  max-height: calc(100vh - 88px);
+  overflow: auto;
+}
+
+/* Support grids inside main stages */
 .workspace-secondary-grid,
 .workstream-support-grid,
 .checkpoint-support-grid,
 .setup-primary-grid {
-  gap: var(--app-gap);
+  gap: 12px;
 }
 
-#workspaceFactStrip {
-  gap: var(--app-gap);
-  padding-top: var(--app-gap);
+/* ─── Lists ──────────────────────────────────────────────── */
+
+.list,
+.stack-list,
+.compact-list-surface {
+  gap: 6px;
 }
 
-#workspaceFactStrip article,
-.compact-info-list article,
-.info-list article {
-  padding-block: 0.75rem;
-}
-
-.workspace-card-grid {
-  gap: 0.75rem;
-}
-
-.workspace-card-item {
-  padding: 0.75rem 0.875rem;
+.list-item {
+  padding: 10px 11px;
+  border-radius: 10px;
 }
 
 .workstreams-layout .list,
 .checkpoints-layout .list,
 .insights-layout .list {
-  gap: 0.625rem;
+  gap: 4px;
 }
 
-.session-navigation-panel,
-.workstreams-library-panel,
-.checkpoint-library-panel,
-.insights-sidebar,
-.setup-command-panel {
-  background: transparent;
+/* Library list items — flat with divider */
+.branch-library-panel .list-item,
+#branchSessionList .list-item,
+#handoffList .list-item,
+#checkpointList .list-item,
+.insight-library-list .list-item {
+  padding: 10px 6px;
 }
 
-body[data-view="sessions"] .main-stage[data-view="sessions"] .stage-scroll {
-  overflow: auto;
+.item-title {
+  font-size: 13px;
 }
 
-body[data-view="sessions"] .main-stage[data-view="sessions"] .stage-inner {
-  height: auto;
-  min-height: 100%;
+.item-meta-line {
+  font-size: 11px;
 }
 
-.main-stage[data-view="sessions"] .stage-inner > .view.active[data-view="sessions"] {
-  min-height: 100%;
+/* ─── Info / fact / meta grids ───────────────────────────── */
+
+.fact-grid article,
+.meta-grid article,
+.info-list article {
+  padding-block: 12px;
+  gap: 5px;
 }
 
-.page-sessions,
-.page-sessions .sessions-layout,
-.page-sessions .sessions-workspace {
-  height: auto;
-  min-height: 100%;
+.fact-grid article strong,
+.meta-grid article strong,
+.info-list article strong {
+  font-size: 12.5px;
 }
+
+.fact-grid article span,
+.meta-grid article span,
+.info-list article strong:first-child {
+  font-size: 10px;
+  letter-spacing: 0.07em;
+}
+
+.compact-info-list article {
+  padding-block: 10px;
+}
+
+/* Workspace fact strip */
+#workspaceFactStrip {
+  gap: 16px;
+  padding-top: 14px;
+}
+
+#workspaceFactStrip article {
+  padding: 0;
+  border: 0;
+  gap: 6px;
+}
+
+/* ─── Empty states ───────────────────────────────────────── */
+
+.empty-state {
+  padding: 14px 16px;
+  border-radius: 12px;
+  font-size: 12.5px;
+}
+
+/* ─── Workspace cards ────────────────────────────────────── */
+
+.workspace-card-grid {
+  gap: 8px;
+}
+
+.workspace-card-item {
+  padding: 11px 13px;
+  border-radius: 12px;
+  border: 1px solid var(--line-soft);
+}
+
+/* ─── Sessions page (dedicated layout) ───────────────────── */
+
+/*
+ * The sessions view has its own tightly controlled layout managed in 304.
+ * We only override the problematic z-fighting / spacing issues here.
+ */
 
 .page-sessions .session-navigation-panel {
-  position: sticky;
-  top: 0;
-  align-self: start;
-  max-height: calc(100vh - 3.5rem);
+  border-right: 1px solid var(--line-soft);
 }
 
-.page-sessions .sessions-main-scroll {
-  overflow: visible;
+.page-sessions .session-nav-head {
+  padding: 14px 16px 12px;
 }
 
 .page-sessions .sessions-main-canvas {
   width: min(100%, 58rem);
-  padding: 1.75rem 2rem 2rem;
+  padding: 24px 28px 28px;
 }
 
-.page-sessions #turnDetailTitle {
-  font-size: clamp(1.375rem, 1.8vw, 1.85rem);
-}
-
-.page-sessions .session-node-head .item-title {
-  font-size: 0.875rem;
-}
-
-.page-sessions .message-node-copy,
-.page-sessions .detail-primary,
-.page-sessions .detail-copy,
-.page-sessions #turnContextLead {
-  font-size: 0.8125rem;
-}
-
-.page-sessions .session-support-grid {
-  gap: 0.875rem;
+.page-sessions .session-workspace-body {
+  gap: 20px;
 }
 
 .page-sessions .session-context-panel,
-.page-sessions .session-insights-panel,
+.page-sessions .session-insights-panel {
+  padding: 12px 14px;
+  gap: 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.012);
+}
+
+:root[data-theme="light"] .page-sessions .session-context-panel,
+:root[data-theme="light"] .page-sessions .session-insights-panel {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.page-sessions .session-support-grid {
+  gap: 10px;
+}
+
 .page-sessions .session-technical-details {
-  padding: 0.9375rem 1rem;
+  border-radius: 12px;
 }
 
 .page-sessions .session-technical-details summary {
-  padding: 0;
+  padding: 10px 14px;
 }
 
-@media (max-width: 82rem) {
-  .search-wrap {
-    width: min(14rem, 24vw);
-  }
+/* ─── Checkpoints ────────────────────────────────────────── */
 
+.checkpoint-sidecar-panel {
+  gap: 14px;
+}
+
+.checkpoint-support-section {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.012);
+  border: 1px solid var(--line-soft);
+}
+
+:root[data-theme="light"] .checkpoint-support-section {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+/* ─── Setup page ─────────────────────────────────────────── */
+
+.advanced-details > summary {
+  padding: 12px 14px;
+  font-size: 12px;
+}
+
+.advanced-details-body {
+  padding: 0 14px 14px;
+}
+
+/* ─── Action stacks ──────────────────────────────────────── */
+
+.action-stack > .btn {
+  width: 100%;
+}
+
+.session-action-stack,
+.checkpoint-action-stack {
+  gap: 6px;
+}
+
+/* ─── Topbar for sessions view ───────────────────────────── */
+
+.main-stage[data-view="sessions"] .topbar {
+  width: 100%;
+  max-width: none;
+  min-height: 52px;
+  margin: 0;
+  padding: 0 20px;
+}
+
+/* ─── Media queries ──────────────────────────────────────── */
+
+@media (max-width: 1260px) {
   .workspace-page-layout,
   .workstreams-layout,
   .checkpoints-layout,
   .insights-layout,
   .setup-page-layout {
-    grid-template-columns: minmax(14.25rem, 16rem) minmax(0, 1fr);
+    grid-template-columns: 228px minmax(0, 1fr);
   }
 }
 
-@media (max-width: 64rem) {
+@media (max-width: 1120px) {
+  .app-shell {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .topbar,
+  .stage-inner {
+    padding-inline: 20px;
+  }
+
+  .search-wrap {
+    width: 180px;
+  }
+}
+
+@media (max-width: 1060px) {
+  .workspace-page-layout,
+  .workstreams-layout,
+  .checkpoints-layout,
+  .insights-layout,
+  .setup-page-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .workstreams-library-panel,
+  .checkpoint-library-panel,
+  .insights-sidebar,
+  .setup-command-panel,
+  .workspace-form-panel {
+    position: static;
+    max-height: none;
+  }
+}
+
+@media (max-width: 960px) {
   .app-shell {
     grid-template-columns: 1fr;
   }
@@ -365,26 +602,32 @@ body[data-view="sessions"] .main-stage[data-view="sessions"] .stage-inner {
     display: none;
   }
 
-  .page-shell {
-    padding-inline: 1rem;
+  .topbar,
+  .stage-inner {
+    padding-inline: 16px;
+  }
+}
+
+@media (max-width: 75rem) {
+  .page-sessions .session-support-grid {
+    grid-template-columns: 1fr;
   }
 
-  .workspace-page-layout,
-  .workstreams-layout,
-  .checkpoints-layout,
-  .insights-layout,
-  .setup-page-layout,
+  .page-sessions .sessions-main-canvas {
+    padding: 20px 20px 24px;
+  }
+}
+
+@media (max-width: 62rem) {
   .page-sessions .sessions-layout {
     grid-template-columns: 1fr;
+    height: auto;
   }
 
   .page-sessions .session-navigation-panel {
     position: static;
-    max-height: none;
-  }
-
-  .page-sessions .sessions-main-canvas {
-    width: 100%;
-    padding: 1.25rem 1.25rem 1.5rem;
+    border-right: 0;
+    border-bottom: 1px solid var(--line-soft);
+    height: auto;
   }
 }
