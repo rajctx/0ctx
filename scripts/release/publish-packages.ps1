@@ -41,8 +41,6 @@ function Assert-VersionsConsistent {
         $versions[$pkg] = Get-PackageVersion -PackageJsonPath $path
     }
     $versions["desktop"] = Get-PackageVersion -PackageJsonPath (Join-Path $RepoRoot "desktop-app/package.json")
-    $tauriConfig = Get-Content -Raw -LiteralPath (Join-Path $RepoRoot "desktop-app/src-tauri/tauri.conf.json") | ConvertFrom-Json
-    $versions["tauri"] = $tauriConfig.version
 
     $unique = @($versions.Values | Sort-Object -Unique)
     if ($unique.Count -gt 1) {

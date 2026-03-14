@@ -1,6 +1,0 @@
-/* View-specific shell accent only. Shared data/utility/reader styling lives in foundation/ and final overrides. */
-
-.main-stage[data-view="branches"] .page-head h1,
-.main-stage[data-view="branches"] .topbar-crumbs span:last-child {
-  color: #f0ebe0;
-}

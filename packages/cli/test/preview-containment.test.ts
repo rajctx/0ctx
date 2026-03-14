@@ -27,15 +27,15 @@ describe('preview integration containment', () => {
 
     it('keeps preview client names out of the desktop normal-path surfaces', () => {
         const setupSource = readFileSync(
-            path.resolve(__dirname, '..', '..', '..', 'desktop-app', 'src', 'app', 'render', 'setup.js'),
+            path.resolve(__dirname, '..', '..', '..', 'desktop-app', 'src', 'renderer', 'screens', 'setup', 'setup-screen.tsx'),
             'utf8'
         );
         const workspacesSource = readFileSync(
-            path.resolve(__dirname, '..', '..', '..', 'desktop-app', 'src', 'app', 'render', 'workspaces.js'),
+            path.resolve(__dirname, '..', '..', '..', 'desktop-app', 'src', 'renderer', 'screens', 'workstreams', 'workstreams-screen.tsx'),
             'utf8'
         );
         const shellSource = readFileSync(
-            path.resolve(__dirname, '..', '..', '..', 'desktop-app', 'src', 'app', 'render', 'shell.js'),
+            path.resolve(__dirname, '..', '..', '..', 'desktop-app', 'src', 'renderer', 'routes', 'route-shell.tsx'),
             'utf8'
         );
         const defaultSurfaces = [setupSource, workspacesSource, shellSource].join('\n');

@@ -51,6 +51,7 @@ npm run dev:ui
 # Build desktop app debug bundle
 cd desktop-app
 npm run build:debug
+npm run package
 
 # Lint packages
 npm run lint
@@ -72,7 +73,7 @@ This is an npm workspaces monorepo. Build/reference order matters:
 
 Current top-level app surfaces outside `packages/`:
 
-- `desktop-app/` - Tauri desktop management surface
+- `desktop-app/` - Electron desktop management surface
 - `ui/` - hosted web UI (contributor/dev surface)
 
 ### `packages/core` (`@0ctx/core`)
@@ -148,12 +149,16 @@ Product-facing command-line surface for install and support workflows.
 
 ### `desktop-app/`
 
-Tauri desktop management surface.
+Electron desktop management surface.
 
-- `src/`:
-  - Desktop frontend
-- `src-tauri/`:
-  - Tauri shell / native bridge
+- `src/main/`:
+  - Electron main-process bootstrap, native services, tray, updater, and daemon bridge
+- `src/preload/`:
+  - Typed `window.octxDesktop` bridge with validation at the renderer boundary
+- `src/shared/`:
+  - Shared IPC contracts, payload types, and validation helpers
+- `src/renderer/`:
+  - React/Vite renderer with modular screens, features, shell components, and design-system tokens
 
 ### `ui/`
 

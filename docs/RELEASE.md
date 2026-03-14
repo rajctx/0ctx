@@ -43,7 +43,6 @@ It also verifies version alignment across:
 - `packages/mcp/package.json`
 - `packages/cli/package.json`
 - `desktop-app/package.json`
-- `desktop-app/src-tauri/tauri.conf.json`
 
 The consolidated report includes:
 
@@ -122,7 +121,11 @@ Desktop packaging and smoke coverage use:
 npm run desktop:smoke
 cd desktop-app
 npm run build:debug
+npm run package
 ```
+
+`npm run build:debug` produces an unpacked Electron build for local validation.
+`npm run package` produces installer artifacts under `desktop-app/release/`.
 
 ## Before publishing
 

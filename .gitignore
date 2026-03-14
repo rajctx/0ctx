@@ -44,6 +44,11 @@ yarn-error.log*
 next-env.d.ts
 
 **/dist
+desktop-app/dist-electron/
+desktop-app/dist-renderer/
+desktop-app/release/
+desktop-app/playwright-report/
+desktop-app/test-results/
 
 # local repo migration artifacts
 .repo-backups/

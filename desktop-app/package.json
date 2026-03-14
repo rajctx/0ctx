@@ -1,21 +1,51 @@
 {
-  "name": "@0ctx/desktop",
+  "name": "@0ctx/desktop-electron",
   "version": "0.1.16",
   "private": true,
-  "description": "0ctx Desktop — Tauri system tray companion",
+  "description": "0ctx Desktop Electron app",
+  "main": "dist-electron/main/bootstrap/index.js",
   "scripts": {
-    "tauri": "tauri",
-    "dev": "node scripts/tauri-run.mjs dev --no-dev-server-wait",
-    "build": "node scripts/tauri-run.mjs build",
-    "build:debug": "node scripts/tauri-run.mjs build --debug",
-    "smoke": "node scripts/smoke-build.mjs"
-  },
-  "devDependencies": {
-    "@tauri-apps/cli": "^2"
+    "clean": "rimraf dist-electron dist-renderer release playwright-report",
+    "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
+    "build:node": "tsc -p tsconfig.node.json",
+    "build:renderer": "vite build",
+    "build": "npm run clean && npm run build:renderer && npm run build:node",
+    "build:debug": "npm run package:dir",
+    "dev:renderer": "vite",
+    "dev:node": "tsc -p tsconfig.node.json --watch --preserveWatchOutput",
+    "dev:electron": "wait-on http://127.0.0.1:5173 dist-electron/main/bootstrap/index.js && cross-env OCTX_ELECTRON_DEV_SERVER_URL=http://127.0.0.1:5173 electron .",
+    "dev": "concurrently -k -n renderer,node,electron -c cyan,magenta,yellow \"npm:dev:renderer\" \"npm:dev:node\" \"npm:dev:electron\"",
+    "package:dir": "npm run build && electron-builder --dir --publish never",
+    "package": "npm run build && electron-builder --publish never",
+    "smoke": "node scripts/smoke-build.mjs",
+    "test:unit": "vitest run --config vitest.config.ts",
+    "test:e2e": "playwright test",
+    "test": "npm run test:unit"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2",
-    "@tauri-apps/plugin-updater": "^2",
-    "@tauri-apps/plugin-shell": "^2"
+    "@tanstack/react-query": "^5.90.21",
+    "electron": "^41.0.2",
+    "electron-builder": "^26.8.1",
+    "electron-updater": "^6.8.3",
+    "lucide-react": "^0.577.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-router-dom": "^7.13.1",
+    "zustand": "^5.0.11"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@tailwindcss/vite": "^4.2.1",
+    "@types/node": "^25.5.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.2.0",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "rimraf": "^6.1.3",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1",
+    "vitest": "^4.1.0",
+    "wait-on": "^9.0.4"
   }
 }

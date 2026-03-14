@@ -14,7 +14,6 @@ const daemonPackagePath = path.join(repoRoot, "packages", "daemon", "package.jso
 const mcpPackagePath = path.join(repoRoot, "packages", "mcp", "package.json");
 const cliPackagePath = path.join(repoRoot, "packages", "cli", "package.json");
 const desktopPackagePath = path.join(repoRoot, "desktop-app", "package.json");
-const tauriConfigPath = path.join(repoRoot, "desktop-app", "src-tauri", "tauri.conf.json");
 const changelogPath = path.join(repoRoot, "CHANGELOG.md");
 const requiredReleaseFiles = [
   "CHANGELOG.md",
@@ -101,14 +100,12 @@ function getVersionAlignment() {
   const mcpPackage = readJsonFile(mcpPackagePath);
   const cliPackage = readJsonFile(cliPackagePath);
   const desktopPackage = readJsonFile(desktopPackagePath);
-  const tauriConfig = readJsonFile(tauriConfigPath);
   const coreVersion = String(corePackage.version || "").trim() || null;
   const daemonVersion = String(daemonPackage.version || "").trim() || null;
   const mcpVersion = String(mcpPackage.version || "").trim() || null;
   const cliVersion = String(cliPackage.version || "").trim() || null;
   const desktopVersion = String(desktopPackage.version || "").trim() || null;
-  const tauriVersion = String(tauriConfig.version || "").trim() || null;
-  const versions = [coreVersion, daemonVersion, mcpVersion, cliVersion, desktopVersion, tauriVersion].filter(Boolean);
+  const versions = [coreVersion, daemonVersion, mcpVersion, cliVersion, desktopVersion].filter(Boolean);
   const uniqueVersions = Array.from(new Set(versions));
   return {
     coreVersion,
@@ -116,7 +113,6 @@ function getVersionAlignment() {
     mcpVersion,
     cliVersion,
     desktopVersion,
-    tauriVersion,
     aligned: uniqueVersions.length === 1 && uniqueVersions.length > 0,
   };
 }
@@ -211,7 +207,7 @@ function main() {
   const releaseFiles = getReleaseFilesReadiness();
   if (!versionAlignment.aligned) {
     throw new Error(
-      `Version alignment failed. core=${versionAlignment.coreVersion ?? "?"}, daemon=${versionAlignment.daemonVersion ?? "?"}, mcp=${versionAlignment.mcpVersion ?? "?"}, cli=${versionAlignment.cliVersion ?? "?"}, desktop=${versionAlignment.desktopVersion ?? "?"}, tauri=${versionAlignment.tauriVersion ?? "?"}`
+      `Version alignment failed. core=${versionAlignment.coreVersion ?? "?"}, daemon=${versionAlignment.daemonVersion ?? "?"}, mcp=${versionAlignment.mcpVersion ?? "?"}, cli=${versionAlignment.cliVersion ?? "?"}, desktop=${versionAlignment.desktopVersion ?? "?"}`
     );
   }
 

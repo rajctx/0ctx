@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { spawnSync } from "node:child_process";
@@ -30,29 +29,12 @@ function run(command, args, options = {}) {
   return result;
 }
 
-function resolveTargetDir() {
-  if (process.env.CARGO_TARGET_DIR) {
-    return path.resolve(process.env.CARGO_TARGET_DIR);
-  }
-  if (process.env.CTX_TAURI_TARGET_DIR) {
-    return path.resolve(process.env.CTX_TAURI_TARGET_DIR);
-  }
-  if (process.platform === "win32") {
-    const localAppData = process.env.LOCALAPPDATA || process.env.TEMP || process.env.TMP;
-    if (!localAppData) {
-      throw new Error("LOCALAPPDATA is required on Windows to locate the Tauri target dir.");
-    }
-    return path.join(localAppData, "0ctx", "tauri-target");
-  }
-  return path.join(desktopRoot, "src-tauri", "target");
-}
-
-function collectBundleFiles(bundleRoot) {
-  if (!fs.existsSync(bundleRoot)) {
+function collectArtifactFiles(artifactsRoot) {
+  if (!fs.existsSync(artifactsRoot)) {
     return [];
   }
   const results = [];
-  const stack = [bundleRoot];
+  const stack = [artifactsRoot];
   while (stack.length > 0) {
     const current = stack.pop();
     if (!current) continue;
@@ -61,6 +43,10 @@ function collectBundleFiles(bundleRoot) {
       for (const entry of fs.readdirSync(current)) {
         stack.push(path.join(current, entry));
       }
+      continue;
+    }
+    const relativePath = path.relative(artifactsRoot, current);
+    if (relativePath.split(path.sep).some((segment) => segment.endsWith("-unpacked"))) {
       continue;
     }
     results.push(current);
@@ -76,19 +62,19 @@ function sha256(filePath) {
 
 async function main() {
   if (!skipBuild) {
-    run("npm", ["run", "build", "--prefix", "desktop-app"]);
+    run("npm", ["run", "package", "--prefix", "desktop-app"]);
   }
 
-  const bundleRoot = path.join(resolveTargetDir(), "release", "bundle");
-  const bundleFiles = collectBundleFiles(bundleRoot);
-  if (bundleFiles.length === 0) {
-    throw new Error(`No desktop bundle artifacts were found under ${bundleRoot}`);
+  const artifactsRoot = path.join(desktopRoot, "release");
+  const artifactFiles = collectArtifactFiles(artifactsRoot);
+  if (artifactFiles.length === 0) {
+    throw new Error(`No Electron desktop artifacts were found under ${artifactsRoot}`);
   }
 
   fs.mkdirSync(outputRoot, { recursive: true });
   const copied = [];
-  for (const sourcePath of bundleFiles) {
-    const relativePath = path.relative(bundleRoot, sourcePath);
+  for (const sourcePath of artifactFiles) {
+    const relativePath = path.relative(artifactsRoot, sourcePath);
     const destPath = path.join(outputRoot, relativePath);
     fs.mkdirSync(path.dirname(destPath), { recursive: true });
     fs.copyFileSync(sourcePath, destPath);
