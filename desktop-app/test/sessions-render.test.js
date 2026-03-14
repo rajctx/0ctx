@@ -243,7 +243,6 @@ describe('desktop sessions redesign', () => {
     expect(markup).toContain('class="panel session-insights-panel"');
     expect(markup).toContain('class="sessions-main-scroll"');
     expect(markup).toContain('class="sessions-main-canvas"');
-    expect(markup).toContain('class="session-statusbar"');
     expect(markup).toContain('id="turnSessionMeta"');
     expect(markup).toContain('class="technical-details support-details session-technical-details"');
     expect(markup).toContain('id="turnContextLead"');
@@ -254,11 +253,13 @@ describe('desktop sessions redesign', () => {
     expect(markup).not.toContain('<h1>Message stream</h1>');
     expect(markup).not.toContain('id="createCheckpointBtn"');
     expect(markup).not.toContain('id="explainCheckpointBtn"');
+    expect(markup).not.toContain('class="session-statusbar"');
+    expect(markup).not.toContain('class="statusbar"');
     expect(css).toContain('.main-stage[data-view="sessions"] .statusbar');
     expect(css).toContain('display: none;');
     expect(css).toContain('.page-sessions .session-support-grid');
     expect(css).toContain('"context insights"');
     expect(css).toContain('"technical technical"');
-    expect(css).toContain('.page-sessions .session-statusbar');
+    expect(css).toContain('.session-statusbar');
   });
 });

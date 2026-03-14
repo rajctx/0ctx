@@ -545,8 +545,14 @@
 
   function setStatus(message) {
     const timestamp = `Updated ${new Date().toLocaleTimeString()}`;
-    document.getElementById('statusTxt').textContent = message;
-    document.getElementById('statusTime').textContent = timestamp;
+    const statusTxt = document.getElementById('statusTxt');
+    const statusTime = document.getElementById('statusTime');
+    if (statusTxt) {
+      statusTxt.textContent = message;
+    }
+    if (statusTime) {
+      statusTime.textContent = timestamp;
+    }
     const sessionStatusTxt = document.getElementById('sessionStatusTxt');
     const sessionStatusTime = document.getElementById('sessionStatusTime');
     if (sessionStatusTxt) {

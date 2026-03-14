@@ -1,0 +1,390 @@
+:root {
+  --app-shell-sidebar-width: 14.75rem;
+  --app-shell-pad: 0.75rem;
+  --app-panel-pad: 1rem;
+  --app-panel-pad-lg: 1.125rem;
+  --app-gap: 1rem;
+  --app-gap-lg: 1.125rem;
+  --app-control-height: 2.25rem;
+  --app-text-meta: 0.6875rem;
+  --app-text-body: 0.8125rem;
+  --app-text-heading: 1rem;
+  --app-text-title: clamp(1.35rem, 1.8vw, 1.75rem);
+  --app-page-max: 66rem;
+}
+
+body {
+  font-size: 12.5px;
+  line-height: 1.56;
+}
+
+.app-shell {
+  grid-template-columns: var(--app-shell-sidebar-width) minmax(0, 1fr);
+}
+
+.sidebar {
+  gap: var(--app-gap);
+  padding: var(--app-shell-pad) var(--app-shell-pad) 0.875rem;
+}
+
+.sidebar-brand {
+  padding: 0.25rem 0.375rem 0.5rem;
+}
+
+.brand-icon {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.75rem;
+}
+
+.sidebar-brand h1 {
+  font-size: 0.9375rem;
+}
+
+.sidebar-brand p {
+  font-size: 0.625rem;
+  letter-spacing: 0.12em;
+}
+
+.workspace-sidebar-card {
+  gap: 0.625rem;
+  padding-bottom: 0.75rem;
+}
+
+.sidebar-nav,
+.sidebar-utilities {
+  gap: 0.375rem;
+}
+
+.sidebar-utilities,
+.sidebar-footer {
+  padding-top: 0.875rem;
+}
+
+.nav-btn {
+  gap: 0.625rem;
+  padding: 0.5625rem 0.625rem;
+  font-size: 0.8125rem;
+  border-radius: 0.75rem;
+}
+
+.nav-dot {
+  width: 0.375rem;
+  height: 0.375rem;
+}
+
+.theme-toggle {
+  padding: 0.25rem;
+}
+
+.theme-option {
+  min-height: 2rem;
+  font-size: 0.75rem;
+}
+
+.topbar {
+  min-height: 3.5rem;
+  padding: 0 1.375rem;
+}
+
+.topbar-crumbs {
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+}
+
+.topbar-tools {
+  gap: 0.75rem;
+}
+
+.search-wrap {
+  width: min(16rem, 28vw);
+}
+
+#search {
+  min-height: var(--app-control-height);
+  padding-inline: 0.8125rem;
+  font-size: 0.8125rem;
+}
+
+.btn {
+  min-height: var(--app-control-height);
+  padding-inline: 0.875rem;
+  font-size: 0.75rem;
+  border-radius: 0.6875rem;
+}
+
+.badge,
+.chip {
+  min-height: 1.375rem;
+  padding-inline: 0.625rem;
+  font-size: 0.625rem;
+}
+
+.page-shell {
+  gap: var(--app-gap);
+  padding: 0 1.375rem 1.375rem;
+}
+
+.page-head {
+  gap: 0.5rem;
+  max-width: 40ch;
+}
+
+.page-head h1 {
+  font-size: var(--app-text-title);
+  line-height: 1.08;
+}
+
+.section-label,
+.page-kicker,
+.item-kicker,
+.detail-label {
+  font-size: 0.625rem;
+  letter-spacing: 0.1em;
+}
+
+.page-copy,
+.item-preview,
+.banner-copy p:last-child,
+.command-card span,
+.info-list article p,
+.meta-grid article span,
+.inline-note p,
+.sidebar-path,
+.sidebar-copy,
+.sidebar-summary-line,
+.library-summary-line,
+.utility-note {
+  font-size: var(--app-text-body);
+  line-height: 1.6;
+}
+
+.panel,
+.sidebar-card,
+.banner,
+.command-card,
+.technical-details,
+.advanced-details {
+  border-radius: 0.9375rem;
+  box-shadow: none;
+}
+
+.panel-head h3,
+.section-row h2,
+.detail-head h3,
+.detail-head h4,
+.panel-head.compact h3,
+.surface-head h3 {
+  font-size: var(--app-text-heading);
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+}
+
+.section-row.small h4 {
+  font-size: 0.9375rem;
+}
+
+.lead-copy,
+.detail-copy,
+.compact-copy {
+  font-size: var(--app-text-body);
+  line-height: 1.62;
+}
+
+.workspace-page-layout,
+.workstreams-layout,
+.checkpoints-layout,
+.insights-layout,
+.setup-page-layout {
+  gap: var(--app-gap-lg);
+}
+
+.workspace-page-layout {
+  grid-template-columns: minmax(14.5rem, 15.75rem) minmax(0, 1fr);
+}
+
+.workstreams-layout,
+.checkpoints-layout,
+.insights-layout,
+.setup-page-layout {
+  grid-template-columns: minmax(15.5rem, 17.5rem) minmax(0, 1fr);
+}
+
+.workspace-main-stage,
+.workstreams-main-stage,
+.checkpoint-stage,
+.insights-stage-shell,
+.setup-main-stage {
+  max-width: var(--app-page-max);
+  gap: var(--app-gap);
+}
+
+.workspace-primary-surface,
+.workspace-secondary-panel,
+.workstream-hero-panel,
+.workstream-support-panel,
+.workstream-compare-panel,
+.checkpoint-hero-panel,
+.checkpoint-sidecar-panel,
+.insight-section,
+.insights-list-stage,
+.setup-stage-section,
+.workspace-form-panel,
+.workstreams-library-panel,
+.checkpoint-library-panel,
+.insights-sidebar,
+.setup-command-panel {
+  padding: var(--app-panel-pad) var(--app-panel-pad-lg);
+}
+
+.workspace-secondary-grid,
+.workstream-support-grid,
+.checkpoint-support-grid,
+.setup-primary-grid {
+  gap: var(--app-gap);
+}
+
+#workspaceFactStrip {
+  gap: var(--app-gap);
+  padding-top: var(--app-gap);
+}
+
+#workspaceFactStrip article,
+.compact-info-list article,
+.info-list article {
+  padding-block: 0.75rem;
+}
+
+.workspace-card-grid {
+  gap: 0.75rem;
+}
+
+.workspace-card-item {
+  padding: 0.75rem 0.875rem;
+}
+
+.workstreams-layout .list,
+.checkpoints-layout .list,
+.insights-layout .list {
+  gap: 0.625rem;
+}
+
+.session-navigation-panel,
+.workstreams-library-panel,
+.checkpoint-library-panel,
+.insights-sidebar,
+.setup-command-panel {
+  background: transparent;
+}
+
+body[data-view="sessions"] .main-stage[data-view="sessions"] .stage-scroll {
+  overflow: auto;
+}
+
+body[data-view="sessions"] .main-stage[data-view="sessions"] .stage-inner {
+  height: auto;
+  min-height: 100%;
+}
+
+.main-stage[data-view="sessions"] .stage-inner > .view.active[data-view="sessions"] {
+  min-height: 100%;
+}
+
+.page-sessions,
+.page-sessions .sessions-layout,
+.page-sessions .sessions-workspace {
+  height: auto;
+  min-height: 100%;
+}
+
+.page-sessions .session-navigation-panel {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  max-height: calc(100vh - 3.5rem);
+}
+
+.page-sessions .sessions-main-scroll {
+  overflow: visible;
+}
+
+.page-sessions .sessions-main-canvas {
+  width: min(100%, 58rem);
+  padding: 1.75rem 2rem 2rem;
+}
+
+.page-sessions #turnDetailTitle {
+  font-size: clamp(1.375rem, 1.8vw, 1.85rem);
+}
+
+.page-sessions .session-node-head .item-title {
+  font-size: 0.875rem;
+}
+
+.page-sessions .message-node-copy,
+.page-sessions .detail-primary,
+.page-sessions .detail-copy,
+.page-sessions #turnContextLead {
+  font-size: 0.8125rem;
+}
+
+.page-sessions .session-support-grid {
+  gap: 0.875rem;
+}
+
+.page-sessions .session-context-panel,
+.page-sessions .session-insights-panel,
+.page-sessions .session-technical-details {
+  padding: 0.9375rem 1rem;
+}
+
+.page-sessions .session-technical-details summary {
+  padding: 0;
+}
+
+@media (max-width: 82rem) {
+  .search-wrap {
+    width: min(14rem, 24vw);
+  }
+
+  .workspace-page-layout,
+  .workstreams-layout,
+  .checkpoints-layout,
+  .insights-layout,
+  .setup-page-layout {
+    grid-template-columns: minmax(14.25rem, 16rem) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 64rem) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    display: none;
+  }
+
+  .page-shell {
+    padding-inline: 1rem;
+  }
+
+  .workspace-page-layout,
+  .workstreams-layout,
+  .checkpoints-layout,
+  .insights-layout,
+  .setup-page-layout,
+  .page-sessions .sessions-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .page-sessions .session-navigation-panel {
+    position: static;
+    max-height: none;
+  }
+
+  .page-sessions .sessions-main-canvas {
+    width: 100%;
+    padding: 1.25rem 1.25rem 1.5rem;
+  }
+}
