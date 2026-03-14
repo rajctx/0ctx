@@ -119,11 +119,17 @@ function renderInline(value: string) {
   });
 }
 
-export function MessageRichText({ content }: { content: string }) {
+export function MessageRichText({
+  content,
+  compact = false
+}: {
+  content: string;
+  compact?: boolean;
+}) {
   const blocks = parseBlocks(content);
 
   return (
-    <div className="msg-rich">
+    <div className={compact ? 'msg-rich compact' : 'msg-rich'}>
       {blocks.map((block, index) => {
         switch (block.kind) {
           case 'heading':

@@ -1,7 +1,9 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { MessageRichText } from '../../components/content/message-rich-text';
 import { useSessions, useWorkstreamComparison, useWorkstreams } from '../../features/runtime/queries';
 import { formatRelativeAge, formatShortSha, pickText, workstreamKey } from '../../lib/format';
+import { deriveSessionTitle } from '../../lib/session-display';
 import { useShellStore } from '../../lib/store';
 
 function formatReadinessBadge(value?: string | null) {
@@ -84,18 +86,24 @@ export function WorkstreamsScreen() {
         </div>
 
         <div className="ws-body">
-          {pickText(
-            activeWorkstream
-              ? `${activeWorkstream.branch} has ${activeWorkstream.sessionCount ?? 0} sessions and ${activeWorkstream.checkpointCount ?? 0} checkpoints. Latest handoff: ${pickText(activeWorkstream.lastAgent, 'unknown')}. Next: ${pickText(activeWorkstream.handoffSummary, activeWorkstream.stateActionHint, 'create a checkpoint before handoff if you need a durable restore point.')}`
-              : null,
-            'Select a workstream to inspect state, recent sessions, and handoff readiness.'
-          )}
+          <MessageRichText
+            compact
+            content={pickText(
+              activeWorkstream?.summary,
+              activeWorkstream
+                ? `${activeWorkstream.branch} has ${activeWorkstream.sessionCount ?? 0} sessions and ${activeWorkstream.checkpointCount ?? 0} checkpoints. Latest handoff: ${pickText(activeWorkstream.lastAgent, 'unknown')}. Next: ${pickText(activeWorkstream.handoffSummary, activeWorkstream.stateActionHint, 'Create a checkpoint before handoff if you need a durable restore point.')}`
+                : null,
+              'Select a workstream to inspect state, recent sessions, and handoff readiness.'
+            )}
+          />
         </div>
 
         <div className="data-rows">
           <div className="data-row">
             <span className="dk">State</span>
-            <span className="dv">{pickText(activeWorkstream?.stateSummary, 'No captured state summary')}</span>
+            <div className="dv dv-rich">
+              <MessageRichText compact content={pickText(activeWorkstream?.stateSummary, 'No captured state summary')} />
+            </div>
             <span className="dk">History</span>
             <span className="dv">{`${activeWorkstream?.sessionCount ?? 0} sessions · ${activeWorkstream?.checkpointCount ?? 0} checkpoints`}</span>
           </div>
@@ -103,7 +111,9 @@ export function WorkstreamsScreen() {
             <span className="dk">Latest Commit</span>
             <span className="dv mono bright">{formatShortSha(activeWorkstream?.lastCommitSha ?? activeWorkstream?.currentHeadSha ?? null)}</span>
             <span className="dk">Handoff</span>
-            <span className="dv bright">{pickText(activeWorkstream?.handoffSummary, formatReadinessBadge(activeWorkstream?.handoffReadiness ?? null))}</span>
+            <div className="dv dv-rich bright">
+              <MessageRichText compact content={pickText(activeWorkstream?.handoffSummary, formatReadinessBadge(activeWorkstream?.handoffReadiness ?? null))} />
+            </div>
           </div>
           <div className="data-row half">
             <span className="dk">Checkout</span>
@@ -134,11 +144,14 @@ export function WorkstreamsScreen() {
               <div className="sess-header">
                 <span className="sess-icon">[↗]</span>
                 <span className={session.sessionId ? 'sess-title' : 'sess-title dim'}>
-                  {pickText(session.title, session.summary, session.sessionId)}
+                  {deriveSessionTitle(session)}
                 </span>
               </div>
               <div className="sess-meta">
                 {`${formatRelativeAge(session.lastTurnAt ?? session.updatedAt ?? session.startedAt ?? session.createdAt)} · ${pickText(session.agent, 'unknown')} · ${session.turnCount ?? session.messageCount ?? 0} messages · ${formatShortSha(session.commitSha ?? null)}`}
+              </div>
+              <div className="sess-preview">
+                <MessageRichText compact content={pickText(session.summary, session.title, session.sessionId)} />
               </div>
             </button>
           ))}
@@ -155,11 +168,13 @@ export function WorkstreamsScreen() {
           </span>
         </div>
         <div className="compare-note">
-          {pickText(
-            comparison.data?.comparisonSummary,
-            compareTarget ? 'Choose another workstream to compare git divergence, recent activity, and shared agents.' : 'Choose another workstream to compare git divergence, recent activity, and shared agents.'
-          )}
-          {comparison.data?.comparisonActionHint ? ` ${comparison.data.comparisonActionHint}` : ''}
+          <MessageRichText
+            compact
+            content={`${pickText(
+              comparison.data?.comparisonSummary,
+              compareTarget ? 'Choose another workstream to compare git divergence, recent activity, and shared agents.' : 'Choose another workstream to compare git divergence, recent activity, and shared agents.'
+            )}${comparison.data?.comparisonActionHint ? `\n\n${comparison.data.comparisonActionHint}` : ''}`}
+          />
         </div>
       </div>
     </>

@@ -11,6 +11,7 @@ interface ShellStore {
   activeCheckpointId: string | null;
   activeInsightId: string | null;
   activeSetupSection: SetupSection;
+  setupSectionScrollRequest: number;
   search: string;
   drawer: DrawerKind;
   theme: ThemeMode;
@@ -20,6 +21,7 @@ interface ShellStore {
   setActiveCheckpointId: (value: string | null) => void;
   setActiveInsightId: (value: string | null) => void;
   setActiveSetupSection: (value: SetupSection) => void;
+  requestSetupSection: (value: SetupSection) => void;
   setSearch: (value: string) => void;
   openDrawer: (value: DrawerKind) => void;
   closeDrawer: () => void;
@@ -33,6 +35,7 @@ export const useShellStore = create<ShellStore>((set) => ({
   activeCheckpointId: null,
   activeInsightId: null,
   activeSetupSection: 'repo-enablement',
+  setupSectionScrollRequest: 0,
   search: '',
   drawer: null,
   theme: 'midnight',
@@ -42,6 +45,11 @@ export const useShellStore = create<ShellStore>((set) => ({
   setActiveCheckpointId: (value) => set({ activeCheckpointId: value }),
   setActiveInsightId: (value) => set({ activeInsightId: value }),
   setActiveSetupSection: (value) => set({ activeSetupSection: value }),
+  requestSetupSection: (value) =>
+    set((state) => ({
+      activeSetupSection: value,
+      setupSectionScrollRequest: state.setupSectionScrollRequest + 1
+    })),
   setSearch: (value) => set({ search: value }),
   openDrawer: (value) => set({ drawer: value }),
   closeDrawer: () => set({ drawer: null }),

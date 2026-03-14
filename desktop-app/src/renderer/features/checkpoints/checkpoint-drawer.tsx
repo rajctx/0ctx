@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { X } from 'lucide-react';
 import { useCheckpointDetail, useCheckpoints } from '../runtime/queries';
 import { useShellStore } from '../../lib/store';
@@ -14,14 +15,29 @@ export function CheckpointDrawer() {
   } = useShellStore();
 
   const [branch, worktreePath] = (activeWorkstreamKey || '::').split('::');
-  const checkpoints = useCheckpoints(activeContextId, branch || null, worktreePath || null, activeWorkstreamKey);
+  const checkpoints = useCheckpoints(
+    activeContextId,
+    branch || null,
+    worktreePath || null,
+    activeWorkstreamKey,
+    { enabled: drawer === 'checkpoint' }
+  );
   const detail = useCheckpointDetail(activeCheckpointId);
+  const items = checkpoints.data ?? [];
+
+  useEffect(() => {
+    if (drawer !== 'checkpoint' || items.length === 0) {
+      return;
+    }
+
+    if (!activeCheckpointId || !items.some((checkpoint) => checkpoint.checkpointId === activeCheckpointId)) {
+      setActiveCheckpointId(items[0].checkpointId);
+    }
+  }, [activeCheckpointId, drawer, items, setActiveCheckpointId]);
 
   if (drawer !== 'checkpoint') {
     return null;
   }
-
-  const items = checkpoints.data ?? [];
 
   return (
     <div className="drawer-backdrop">

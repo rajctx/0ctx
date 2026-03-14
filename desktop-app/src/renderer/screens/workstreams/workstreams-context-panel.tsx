@@ -1,4 +1,5 @@
 import type { WorkstreamSummary } from '../../../shared/types/domain';
+import { MessageRichText } from '../../components/content/message-rich-text';
 import { useDesktopPosture, useDesktopVersion, useHandoff } from '../../features/runtime/queries';
 import { formatRelativeAge, formatShortSha, pickText } from '../../lib/format';
 
@@ -30,13 +31,16 @@ export function WorkstreamsContextPanel({ contextId, workspaceName, workstream }
     <>
       <div className="ctx-section">
         <div className="ctx-header"><span className="brk">[-]</span> Summary</div>
-        <div className="ctx-prose">
-          {pickText(
-            workstream
-              ? `Active workstream for ${workspaceName ?? 'workspace'} on the ${workstream.branch} branch. ${pickText(workstream.stateSummary, workstream.handoffSummary, 'Ready to continue from the captured state.')}`
-              : null,
-            'No active workstream is selected yet.'
-          )}
+        <div className="ctx-prose ctx-rich">
+          <MessageRichText
+            compact
+            content={pickText(
+              workstream
+                ? `Active workstream for ${workspaceName ?? 'workspace'} on the ${workstream.branch} branch.\n\n${pickText(workstream.summary, workstream.stateSummary, workstream.handoffSummary, 'Ready to continue from the captured state.')}`
+                : null,
+              'No active workstream is selected yet.'
+            )}
+          />
         </div>
       </div>
 
@@ -47,7 +51,9 @@ export function WorkstreamsContextPanel({ contextId, workspaceName, workstream }
           {(handoff.data ?? []).slice(0, 4).map((entry, index) => (
             <div key={`${String(entry.sessionId ?? index)}`} className="tl-entry">
               <div className="tl-time">{`${formatRelativeAge(entry.lastTurnAt as string | number | null)} · ${pickText(String(entry.agent ?? ''), 'unknown')}`}</div>
-              <div className="tl-text">{pickText(String(entry.summary ?? ''), 'Continuity event recorded for this workstream.')}</div>
+              <div className="tl-text">
+                <MessageRichText compact content={pickText(String(entry.summary ?? ''), 'Continuity event recorded for this workstream.')} />
+              </div>
               <div className="tl-ref">{`${pickText(String(entry.branch ?? ''), workstream?.branch, 'branch')} · ${pickText(String(entry.agent ?? ''), 'agent')} · ${formatShortSha(String(entry.commitSha ?? ''))}`}</div>
             </div>
           ))}

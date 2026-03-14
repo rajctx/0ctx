@@ -14,7 +14,13 @@ export function InsightDrawer() {
   } = useShellStore();
 
   const [branch, worktreePath] = (activeWorkstreamKey || '::').split('::');
-  const insights = useInsights(activeContextId, branch || null, worktreePath || null, activeWorkstreamKey);
+  const insights = useInsights(
+    activeContextId,
+    branch || null,
+    worktreePath || null,
+    activeWorkstreamKey,
+    { enabled: drawer === 'insight' }
+  );
   const selected = (insights.data ?? []).find((item) => item.nodeId === activeInsightId) ?? insights.data?.[0] ?? null;
 
   if (drawer !== 'insight') {

@@ -689,6 +689,10 @@ button:focus {
   line-height: 1.6;
 }
 
+.sess-preview {
+  padding-left: 28px;
+}
+
 .compare-entry {
   display: flex;
   align-items: center;
@@ -727,6 +731,13 @@ button:focus {
 
 .ctx-prose {
   padding-left: 28px;
+}
+
+.ctx-rich .msg-paragraph,
+.ctx-rich .msg-list,
+.ctx-rich .msg-heading,
+.ctx-rich .msg-code {
+  max-width: 100%;
 }
 
 .ctx-action-list {
@@ -876,8 +887,18 @@ button:focus {
   gap: 10px;
 }
 
+.msg-rich.compact {
+  gap: 6px;
+}
+
 .msg-paragraph {
   margin: 0;
+}
+
+.msg-rich.compact .msg-paragraph,
+.msg-rich.compact .msg-list {
+  font-size: 11px;
+  line-height: 1.55;
 }
 
 .msg-heading {
@@ -886,6 +907,10 @@ button:focus {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-top: 2px;
+}
+
+.msg-rich.compact .msg-heading {
+  font-size: 10px;
 }
 
 .msg-list {
@@ -916,6 +941,11 @@ button:focus {
   overflow-wrap: anywhere;
 }
 
+.msg-rich.compact .msg-code {
+  padding: 8px 10px;
+  font-size: 10px;
+}
+
 .msg-inline-code {
   font-family: var(--font-mono);
   font-size: 11px;
@@ -928,6 +958,19 @@ button:focus {
   align-items: baseline;
   gap: 0;
   padding: 2px 0;
+}
+
+.idx-rich {
+  min-width: 0;
+}
+
+.idx-rich .msg-rich {
+  gap: 4px;
+}
+
+.idx-rich .msg-paragraph,
+.idx-rich .msg-list {
+  color: inherit;
 }
 
 .idx-brk {

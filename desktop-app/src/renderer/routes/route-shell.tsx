@@ -3,9 +3,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { AppShell } from '../components/shell/app-shell';
 import { SidebarNav, type SidebarRoute } from '../components/shell/sidebar-nav';
 import {
-  useCheckpoints,
   useCreateSessionCheckpoint,
-  useInsights,
   useOpenPath,
   useRestartConnector,
   useSessions,
@@ -55,7 +53,7 @@ export function RouteShell() {
     setSearch,
     setActiveWorkstreamKey,
     setActiveSessionId,
-    setActiveSetupSection,
+    requestSetupSection,
     setActiveCheckpointId,
     setActiveInsightId,
     openDrawer
@@ -71,7 +69,6 @@ export function RouteShell() {
   );
   const needsWorkstreams = route !== 'overview';
   const needsSessions = route === 'sessions';
-  const needsWorkstreamContext = route === 'sessions' || route === 'workstreams';
   const workstreamsQuery = useWorkstreams(needsWorkstreams ? (activeWorkspace?.id ?? null) : null);
   const workstreams = workstreamsQuery.data ?? [];
   const selectedWorkstream = workstreams.find((stream) => workstreamKey(stream.branch, stream.worktreePath) === activeWorkstreamKey) ?? workstreams[0] ?? null;
@@ -99,20 +96,6 @@ export function RouteShell() {
     () => route === 'sessions' ? filterSessionsByQuery(routeSessions, search) : routeSessions,
     [route, routeSessions, search]
   );
-  const checkpointsQuery = useCheckpoints(
-    needsWorkstreamContext ? (activeWorkspace?.id ?? null) : null,
-    selectedWorkstream?.branch ?? null,
-    selectedWorkstream?.worktreePath ?? null,
-    selectedWorkstream ? workstreamKey(selectedWorkstream.branch, selectedWorkstream.worktreePath) : null,
-    { enabled: needsWorkstreamContext }
-  );
-  const insightsQuery = useInsights(
-    needsWorkstreamContext ? (activeWorkspace?.id ?? null) : null,
-    selectedWorkstream?.branch ?? null,
-    selectedWorkstream?.worktreePath ?? null,
-    selectedWorkstream ? workstreamKey(selectedWorkstream.branch, selectedWorkstream.worktreePath) : null,
-    { enabled: needsWorkstreamContext }
-  );
 
   useEffect(() => {
     if (!activeContextId && contexts[0]?.id) {
@@ -137,7 +120,13 @@ export function RouteShell() {
   }, [activeSessionId, route, setActiveSessionId, sidebarSessions]);
 
   useEffect(() => {
-    void updatePreferences.mutateAsync({ lastRoute: route }).catch(() => undefined);
+    const timeout = window.setTimeout(() => {
+      void updatePreferences.mutateAsync({ lastRoute: route }).catch(() => undefined);
+    }, 150);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
   }, [route, updatePreferences]);
 
   useEffect(() => {
@@ -196,7 +185,7 @@ export function RouteShell() {
   })();
 
   const openLatestCheckpoint = () => {
-    setActiveCheckpointId(checkpointsQuery.data?.[0]?.checkpointId ?? null);
+    setActiveCheckpointId(null);
     openDrawer('checkpoint');
   };
 
@@ -235,7 +224,7 @@ export function RouteShell() {
   };
 
   const openLatestInsight = () => {
-    setActiveInsightId(insightsQuery.data?.[0]?.nodeId ?? null);
+    setActiveInsightId(null);
     openDrawer('insight');
   };
 
@@ -417,7 +406,7 @@ export function RouteShell() {
             onWorkstreamChange={handleWorkstreamSelection}
             onSessionChange={handleSessionSelection}
             onSetupSectionChange={(section) => {
-              setActiveSetupSection(section);
+              requestSetupSection(section);
             }}
             onOpenCheckpoint={() => {
               void handleCheckpointAction();

@@ -1,4 +1,5 @@
 import type { WorkstreamSummary } from '../../../shared/types/domain';
+import { MessageRichText } from '../../components/content/message-rich-text';
 import { useDesktopPosture, useDesktopVersion, useInsights, useSessionDetail } from '../../features/runtime/queries';
 import { formatShortSha, pickText, workstreamKey } from '../../lib/format';
 import { deriveSessionPreview, deriveSessionTitle } from '../../lib/session-display';
@@ -56,12 +57,16 @@ export function SessionsContextPanel({
         {session ? (
           <div className="ctx-session-title">{deriveSessionTitle(session)}</div>
         ) : null}
-        <div className="ctx-prose">
-          {pickText(
-            session?.summary ? `${deriveSessionPreview(session)}${fallbackApplied ? ' Showing workspace session fallback because the selected workstream had no direct matches.' : ''}` : null,
-            `Session continuity for ${pickText(session?.branch, activeWorkstream?.branch, 'the selected workstream')}.`,
-            'No session is selected yet.'
-          )}
+        <div className="ctx-prose ctx-rich">
+          <MessageRichText
+            compact
+            content={pickText(
+              session?.summary ? `${session.summary}${fallbackApplied ? '\n\nShowing workspace session fallback because the selected workstream had no direct matches.' : ''}` : null,
+              session ? `${deriveSessionPreview(session)}${fallbackApplied ? ' Showing workspace session fallback because the selected workstream had no direct matches.' : ''}` : null,
+              `Session continuity for ${pickText(session?.branch, activeWorkstream?.branch, 'the selected workstream')}.`,
+              'No session is selected yet.'
+            )}
+          />
         </div>
       </div>
 
@@ -85,7 +90,9 @@ export function SessionsContextPanel({
             <div key={insight.nodeId} className="idx-item">
               <span className="idx-letter">{index + 1}</span>
               <span className="idx-brk muted">[↗]</span>
-              <span className="idx-text">{pickText(insight.content, insight.title, insight.key, 'Reviewed insight')}</span>
+              <div className="idx-text idx-rich">
+                <MessageRichText compact content={pickText(insight.content, insight.title, insight.key, 'Reviewed insight')} />
+              </div>
             </div>
           ))}
           {(insights.data ?? []).length === 0 ? (

@@ -17,6 +17,7 @@ function toTitleCase(value: string) {
 export function SetupScreen() {
   const activeContextId = useShellStore((state) => state.activeContextId);
   const activeSetupSection = useShellStore((state) => state.activeSetupSection);
+  const setupSectionScrollRequest = useShellStore((state) => state.setupSectionScrollRequest);
   const setActiveSetupSection = useShellStore((state) => state.setActiveSetupSection);
   const search = useShellStore((state) => state.search);
   const status = useDesktopStatus();
@@ -151,7 +152,7 @@ export function SetupScreen() {
       block: 'start',
       behavior: 'smooth'
     });
-  }, [activeSetupSection]);
+  }, [activeSetupSection, setupSectionScrollRequest]);
 
   useEffect(() => {
     const sectionEntries: Array<[SetupSection, HTMLDivElement | null]> = [
@@ -174,7 +175,7 @@ export function SetupScreen() {
           .sort((left, right) => right.intersectionRatio - left.intersectionRatio)[0];
         const section = next?.target.getAttribute('data-setup-section') as SetupSection | null;
 
-        if (section) {
+        if (section && section !== activeSetupSection) {
           setActiveSetupSection(section);
         }
       },
@@ -194,7 +195,7 @@ export function SetupScreen() {
     return () => {
       observer.disconnect();
     };
-  }, [setActiveSetupSection, visibleSections.integrations, visibleSections.policy, visibleSections.repo, visibleSections.runtime]);
+  }, [activeSetupSection, setActiveSetupSection, visibleSections.integrations, visibleSections.policy, visibleSections.repo, visibleSections.runtime]);
 
   async function applyPreset(preset: 'lean' | 'review' | 'debug') {
     if (!activeContextId || preset === currentPreset || pendingPreset) {
