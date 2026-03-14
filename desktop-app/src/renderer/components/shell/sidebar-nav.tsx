@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import type { ChatSessionSummary, WorkspaceContext, WorkstreamSummary } from '../../../shared/types/domain';
 import { formatRelativeAge, normalizePath, workstreamKey } from '../../lib/format';
 import { deriveSessionPreview, deriveSessionTitle } from '../../lib/session-display';
+import type { SetupSection } from '../../lib/store';
 
 export type SidebarRoute = 'overview' | 'workstreams' | 'sessions' | 'setup';
 
@@ -13,10 +14,12 @@ interface SidebarNavProps {
   activeWorkstreamKey: string | null;
   sessions: ChatSessionSummary[];
   activeSessionId: string | null;
+  activeSetupSection: SetupSection;
   onNavigate: (route: SidebarRoute) => void;
   onContextChange: (contextId: string) => void;
   onWorkstreamChange: (key: string) => void;
   onSessionChange: (sessionId: string) => void;
+  onSetupSectionChange: (section: SetupSection) => void;
   onOpenCheckpoint: () => void;
   onOpenInsight: () => void;
 }
@@ -52,10 +55,12 @@ export function SidebarNav({
   activeWorkstreamKey,
   sessions,
   activeSessionId,
+  activeSetupSection,
   onNavigate,
   onContextChange,
   onWorkstreamChange,
   onSessionChange,
+  onSetupSectionChange,
   onOpenCheckpoint,
   onOpenInsight
 }: SidebarNavProps) {
@@ -67,6 +72,12 @@ export function SidebarNav({
   const visibleContexts = contexts.slice(0, 3);
   const visibleWorkstreams = workstreams.slice(0, 3);
   const visibleSessions = route === 'sessions' ? sessions : sessions.slice(0, 3);
+  const setupSections: Array<{ id: SetupSection; label: string }> = [
+    { id: 'repo-enablement', label: 'repo enablement' },
+    { id: 'integrations', label: 'integrations' },
+    { id: 'policy', label: 'policy' },
+    { id: 'runtime', label: 'runtime' }
+  ];
 
   const workspaceFooter = (
     <div className="sidebar-footer">
@@ -209,10 +220,19 @@ export function SidebarNav({
         </button>
         {route === 'setup' ? (
           <div className="nav-sub">
-            <div className="nav-row active"><span className="brk">[●]</span> repo enablement</div>
-            <div className="nav-row"><span className="brk">[ ]</span> integrations</div>
-            <div className="nav-row"><span className="brk">[ ]</span> policy</div>
-            <div className="nav-row"><span className="brk">[ ]</span> runtime</div>
+            {setupSections.map((section) => {
+              const active = activeSetupSection === section.id;
+              return (
+                <button
+                  key={section.id}
+                  type="button"
+                  className={active ? 'nav-row active' : 'nav-row'}
+                  onClick={() => onSetupSectionChange(section.id)}
+                >
+                  <span className="brk">{active ? '[●]' : '[ ]'}</span> {section.label}
+                </button>
+              );
+            })}
           </div>
         ) : null}
       </nav>

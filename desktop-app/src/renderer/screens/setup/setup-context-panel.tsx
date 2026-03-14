@@ -1,4 +1,13 @@
-import { useDesktopPosture, useDesktopStatus, useDesktopVersion, useDataPolicy, useHookHealth, useOpenPath } from '../../features/runtime/queries';
+import {
+  useConnectorStatus,
+  useDesktopPosture,
+  useDesktopStatus,
+  useDesktopVersion,
+  useDataPolicy,
+  useHookHealth,
+  useOpenPath,
+  useRestartConnector
+} from '../../features/runtime/queries';
 
 function formatStateLabel(value?: string | null) {
   switch (value) {
@@ -29,6 +38,8 @@ export function SetupContextPanel({ contextId }: SetupContextPanelProps) {
   const posture = useDesktopPosture();
   const version = useDesktopVersion();
   const hookHealth = useHookHealth();
+  const connector = useConnectorStatus();
+  const restartConnector = useRestartConnector();
   const status = useDesktopStatus();
   const openPath = useOpenPath();
 
@@ -53,8 +64,13 @@ export function SetupContextPanel({ contextId }: SetupContextPanelProps) {
 
       <div className="ctx-section">
         <div className="ctx-header"><span className="brk">[-]</span> Advanced Overrides</div>
-        <div className="ctx-prose dim">
-          {dataPolicy.data?.normalPathSummary ?? 'Lean is the normal default. Workspace sync stays local_only and machine capture stays local. Debug trails and opt-in cloud sync stay in Utilities.'}
+        <div className="ctx-data ctx-data-wide">
+          <span className="cdk">Capture:</span>
+          <span className="cdv">{dataPolicy.data?.machineCaptureSummary ?? '14d local capture'}</span>
+          <span className="cdk">Debug:</span>
+          <span className="cdv">{dataPolicy.data?.debugUtilitySummary ?? 'Off in normal path'}</span>
+          <span className="cdk">Hint:</span>
+          <span className="cdv muted">{dataPolicy.data?.policyActionHint ?? dataPolicy.data?.normalPathSummary ?? 'Keep lean as the default unless you are actively reviewing or debugging.'}</span>
         </div>
       </div>
 
@@ -63,18 +79,44 @@ export function SetupContextPanel({ contextId }: SetupContextPanelProps) {
         <div className="ctx-prose ctx-spacing">
           Runtime support. The normal path is active. Use these tools only when runtime behavior is clearly off.
         </div>
-        <button
-          type="button"
-          className="ctx-action"
-          onClick={() => {
-            const target = status.data?.storage.dataDir ?? '';
-            if (target) {
-              openPath.mutate(target);
-            }
-          }}
-        >
-          <span className="brk">[→]</span> OPEN RUNTIME TOOLS
-        </button>
+        <div className="ctx-action-list">
+          <button
+            type="button"
+            className="ctx-action"
+            onClick={() => {
+              const target = status.data?.storage.dataDir ?? '';
+              if (target) {
+                openPath.mutate(target);
+              }
+            }}
+            disabled={!status.data?.storage.dataDir}
+          >
+            <span className="brk">[→]</span> OPEN DATA DIRECTORY
+          </button>
+          <button
+            type="button"
+            className="ctx-action"
+            onClick={() => {
+              const target = hookHealth.data?.statePath ?? status.data?.storage.hookStatePath ?? '';
+              if (target) {
+                openPath.mutate(target);
+              }
+            }}
+            disabled={!(hookHealth.data?.statePath ?? status.data?.storage.hookStatePath)}
+          >
+            <span className="brk">[→]</span> OPEN HOOK STATE
+          </button>
+          <button
+            type="button"
+            className="ctx-action"
+            onClick={() => {
+              void restartConnector.mutateAsync().catch(() => undefined);
+            }}
+            disabled={restartConnector.isPending}
+          >
+            <span className="brk">[↻]</span> {restartConnector.isPending ? 'RESTARTING CONNECTOR' : 'RESTART CONNECTOR'}
+          </button>
+        </div>
       </div>
 
       <div className="ctx-section ctx-footer">
@@ -85,6 +127,8 @@ export function SetupContextPanel({ contextId }: SetupContextPanelProps) {
           <span className="cdv bright">{formatStateLabel(posture.data)}</span>
           <span className="cdk">Integrations:</span>
           <span className="cdv">{`${readyCount} / ${(hookHealth.data?.agents ?? []).length || 0} ready`}</span>
+          <span className="cdk">Connector:</span>
+          <span className="cdv">{connector.data?.running ? 'Running' : 'Unavailable'}</span>
           <span className="cdk">Node:</span>
           <span className="cdv">{status.data?.storage.socketPath ?? 'Unavailable'}</span>
           <span className="cdk">Version:</span>

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { WorkspaceContext } from '../../../shared/types/domain';
 import { useCreateWorkspace, useDesktopStatus, useRepoReadiness, useSessions, useWorkstreams } from '../../features/runtime/queries';
 import { useShellStore } from '../../lib/store';
@@ -47,7 +48,7 @@ function WorkspaceRow({
   const meta = active
     ? `Repo bound · ${preset} · ${workstreamCount ?? 0} workstreams · ${sessionCount ?? 0} sessions`
     : isBound
-      ? 'Select to load workstream and session detail.'
+      ? 'Open workspace to load workstream and session detail.'
       : 'No repository folder bound yet. Needs repository binding.';
 
   return (
@@ -64,8 +65,17 @@ function WorkspaceRow({
 }
 
 export function OverviewScreen() {
+  const navigate = useNavigate();
   const { data: status } = useDesktopStatus();
-  const { activeContextId, setActiveContextId, search } = useShellStore();
+  const {
+    activeContextId,
+    search,
+    setActiveContextId,
+    setActiveWorkstreamKey,
+    setActiveSessionId,
+    setActiveCheckpointId,
+    setActiveInsightId
+  } = useShellStore();
   const createWorkspace = useCreateWorkspace();
   const [name, setName] = useState('');
   const [repoPath, setRepoPath] = useState('');
@@ -88,6 +98,15 @@ export function OverviewScreen() {
       setActiveContextId(contexts[0].id);
     }
   }, [activeContextId, contexts, setActiveContextId]);
+
+  const handleWorkspaceSelect = (contextId: string) => {
+    setActiveContextId(contextId);
+    setActiveWorkstreamKey(null);
+    setActiveSessionId(null);
+    setActiveCheckpointId(null);
+    setActiveInsightId(null);
+    navigate('/workstreams');
+  };
 
   const activeStats = activeContext
     ? {
@@ -130,7 +149,7 @@ export function OverviewScreen() {
               key={context.id}
               context={context}
               active={context.id === activeContext?.id}
-              onSelect={setActiveContextId}
+              onSelect={handleWorkspaceSelect}
               activeStats={context.id === activeContext?.id ? activeStats : null}
             />
           ))}

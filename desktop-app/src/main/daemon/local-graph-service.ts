@@ -18,24 +18,81 @@ function isEmptySessionDetail(value: unknown) {
   }
 
   const detail = value as {
-    session?: unknown;
+    session?: {
+      turnCount?: unknown;
+      messageCount?: unknown;
+    } | null;
     messages?: unknown;
     checkpointCount?: unknown;
     latestCheckpoint?: unknown;
   };
+  const sessionTurnCount = Number(detail.session?.turnCount ?? detail.session?.messageCount ?? 0);
+  const hasMissingMessages = Array.isArray(detail.messages) && detail.messages.length === 0 && sessionTurnCount > 0;
 
   return (
-    !detail.session
-    && Array.isArray(detail.messages)
-    && detail.messages.length === 0
-    && Number(detail.checkpointCount ?? 0) === 0
-    && !detail.latestCheckpoint
+    hasMissingMessages
+    || (
+      !detail.session
+      && Array.isArray(detail.messages)
+      && detail.messages.length === 0
+      && Number(detail.checkpointCount ?? 0) === 0
+      && !detail.latestCheckpoint
+    )
   );
 }
 
 export class LocalGraphService {
   private graph: Graph | null = null;
   private db: ReturnType<typeof openDb> | null = null;
+
+  resolvePreferredRead(method: string, params: Record<string, unknown>) {
+    const contextId = readString(params, 'contextId');
+
+    try {
+      switch (method) {
+        case 'listChatSessions':
+          return contextId ? this.getGraph().listChatSessions(contextId, readLimit(params, 250)) : undefined;
+        case 'listBranchLanes':
+          return contextId ? this.getGraph().listBranchLanes(contextId, readLimit(params, 250)) : undefined;
+        case 'listBranchSessions': {
+          const branch = readString(params, 'branch');
+          if (!contextId || !branch) {
+            return undefined;
+          }
+          return this.getGraph().listBranchSessions(contextId, branch, {
+            worktreePath: readString(params, 'worktreePath'),
+            limit: readLimit(params, 250)
+          });
+        }
+        case 'listSessionMessages': {
+          const sessionId = readString(params, 'sessionId');
+          return contextId && sessionId
+            ? this.getGraph().listSessionMessages(contextId, sessionId, readLimit(params, 500))
+            : undefined;
+        }
+        case 'getSessionDetail': {
+          const sessionId = readString(params, 'sessionId');
+          return contextId && sessionId
+            ? this.getGraph().getSessionDetail(contextId, sessionId)
+            : undefined;
+        }
+        case 'listBranchCheckpoints': {
+          const branch = readString(params, 'branch');
+          if (!contextId || !branch) {
+            return undefined;
+          }
+          return this.getGraph().listBranchCheckpoints(contextId, branch, {
+            worktreePath: readString(params, 'worktreePath'),
+            limit: readLimit(params, 250)
+          });
+        }
+        default:
+          return undefined;
+      }
+    } catch {
+      return undefined;
+    }
+  }
 
   resolveReadFallback(method: string, params: Record<string, unknown>, currentResult?: unknown) {
     const contextId = readString(params, 'contextId');

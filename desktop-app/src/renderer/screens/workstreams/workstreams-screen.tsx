@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useSessions, useWorkstreamComparison, useWorkstreams } from '../../features/runtime/queries';
 import { formatRelativeAge, formatShortSha, pickText, workstreamKey } from '../../lib/format';
 import { useShellStore } from '../../lib/store';
@@ -17,7 +18,8 @@ function formatReadinessBadge(value?: string | null) {
 }
 
 export function WorkstreamsScreen() {
-  const { activeContextId, activeWorkstreamKey, setActiveWorkstreamKey, search } = useShellStore();
+  const navigate = useNavigate();
+  const { activeContextId, activeWorkstreamKey, setActiveWorkstreamKey, setActiveSessionId, search } = useShellStore();
   const workstreamsQuery = useWorkstreams(activeContextId);
 
   const filteredWorkstreams = useMemo(() => {
@@ -117,10 +119,18 @@ export function WorkstreamsScreen() {
       </div>
 
       <div>
-        <div className="section-label">Recent Sessions &mdash; <span>{sessions.data?.length ?? 0}</span></div>
+          <div className="section-label">Recent Sessions &mdash; <span>{sessions.data?.length ?? 0}</span></div>
         <div className="sessions-list">
           {(sessions.data ?? []).slice(0, 5).map((session) => (
-            <div key={session.sessionId} className="sess-row">
+            <button
+              key={session.sessionId}
+              type="button"
+              className="sess-row"
+              onClick={() => {
+                setActiveSessionId(session.sessionId);
+                navigate('/sessions');
+              }}
+            >
               <div className="sess-header">
                 <span className="sess-icon">[↗]</span>
                 <span className={session.sessionId ? 'sess-title' : 'sess-title dim'}>
@@ -130,7 +140,7 @@ export function WorkstreamsScreen() {
               <div className="sess-meta">
                 {`${formatRelativeAge(session.lastTurnAt ?? session.updatedAt ?? session.startedAt ?? session.createdAt)} · ${pickText(session.agent, 'unknown')} · ${session.turnCount ?? session.messageCount ?? 0} messages · ${formatShortSha(session.commitSha ?? null)}`}
               </div>
-            </div>
+            </button>
           ))}
           {(sessions.data ?? []).length === 0 ? <div className="compare-note">No sessions have been captured for this workstream yet.</div> : null}
         </div>

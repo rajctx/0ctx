@@ -224,6 +224,25 @@ export function useDataPolicy(contextId: string | null) {
   });
 }
 
+export function useSetDataPolicy() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: { contextId: string; preset: 'lean' | 'review' | 'debug' }) => (
+      desktopBridge.daemon.call<DataPolicy>('setDataPolicy', {
+        contextId: payload.contextId,
+        preset: payload.preset
+      })
+    ),
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({ queryKey: desktopQueryKeys.dataPolicy(variables.contextId) });
+      void queryClient.invalidateQueries({ queryKey: desktopQueryKeys.repoReadiness(variables.contextId, null) });
+      void queryClient.invalidateQueries({ queryKey: desktopQueryKeys.status });
+      void queryClient.invalidateQueries({ queryKey: desktopQueryKeys.hookHealth });
+    }
+  });
+}
+
 export function useRepoReadiness(contextId: string | null, repoRoot: string | null) {
   return useQuery({
     queryKey: desktopQueryKeys.repoReadiness(contextId, repoRoot),

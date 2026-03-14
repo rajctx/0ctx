@@ -6,12 +6,14 @@ import {
   useCheckpoints,
   useCreateSessionCheckpoint,
   useInsights,
+  useOpenPath,
+  useRestartConnector,
   useSessions,
   useUpdatePreferences,
   useWorkstreams,
   useDesktopStatus
 } from '../features/runtime/queries';
-import { useShellStore } from '../lib/store';
+import { useShellStore, type SetupSection } from '../lib/store';
 import { pickText, workstreamKey } from '../lib/format';
 import { filterSessionsByQuery, resolveSessionFeed } from '../lib/session-feed';
 import { CheckpointDrawer } from '../features/checkpoints/checkpoint-drawer';
@@ -39,17 +41,21 @@ export function RouteShell() {
   const navigate = useNavigate();
   const route = resolveRoute(location.pathname);
   const { data: status } = useDesktopStatus();
+  const openPath = useOpenPath();
+  const restartConnector = useRestartConnector();
   const updatePreferences = useUpdatePreferences();
   const createSessionCheckpoint = useCreateSessionCheckpoint();
   const {
     activeContextId,
     activeWorkstreamKey,
     activeSessionId,
+    activeSetupSection,
     search,
     setActiveContextId,
     setSearch,
     setActiveWorkstreamKey,
     setActiveSessionId,
+    setActiveSetupSection,
     setActiveCheckpointId,
     setActiveInsightId,
     openDrawer
@@ -233,11 +239,52 @@ export function RouteShell() {
     openDrawer('insight');
   };
 
+  const handleContextSelection = (value: string | null) => {
+    setActiveContextId(value || null);
+    setSearch('');
+    setActiveWorkstreamKey(null);
+    setActiveSessionId(null);
+    setActiveCheckpointId(null);
+    setActiveInsightId(null);
+
+    if (value) {
+      navigate('/workstreams');
+    }
+  };
+
+  const handleWorkstreamSelection = (value: string) => {
+    setActiveWorkstreamKey(value);
+    setActiveSessionId(null);
+    setActiveCheckpointId(null);
+    setActiveInsightId(null);
+    navigate('/workstreams');
+  };
+
+  const handleSessionSelection = (sessionId: string) => {
+    setActiveSessionId(sessionId);
+    setActiveCheckpointId(null);
+    setActiveInsightId(null);
+    const selectedSession = sidebarSessions.find((session) => session.sessionId === sessionId);
+    if (selectedSession?.branch) {
+      const sessionWorkstreamKey = workstreamKey(selectedSession.branch, selectedSession.worktreePath);
+      if (workstreams.some((stream) => workstreamKey(stream.branch, stream.worktreePath) === sessionWorkstreamKey)) {
+        setActiveWorkstreamKey(sessionWorkstreamKey);
+      }
+    }
+    navigate('/sessions');
+  };
+
   const handleSearch = () => {
     setIsSearchOpen(true);
   };
 
   const enableCommand = `0ctx enable --repo-root "${activeWorkspace?.paths?.[0] ?? '<repo-root>'}"`;
+  const setupSectionLabel: Record<SetupSection, string> = {
+    'repo-enablement': 'REPO ENABLEMENT',
+    integrations: 'INTEGRATIONS',
+    policy: 'POLICY',
+    runtime: 'RUNTIME'
+  };
 
   const topbar = (() => {
     switch (route) {
@@ -279,23 +326,50 @@ export function RouteShell() {
         return (
           <>
             <div className="breadcrumb">
-              SETUP / {String(activeWorkspace?.name ?? 'NO WORKSPACE').toUpperCase()} / <span>REPO ENABLEMENT</span>
+              SETUP / {String(activeWorkspace?.name ?? 'NO WORKSPACE').toUpperCase()} / <span>{setupSectionLabel[activeSetupSection]}</span>
             </div>
             <div className="topbar-actions">
               <button type="button" className="action" onClick={handleSearch}>
                 <span className="brk">[ ]</span> SEARCH
               </button>
-              <button
-                type="button"
-                className="action"
-                onClick={() => {
-                  if (navigator.clipboard) {
-                    void navigator.clipboard.writeText(enableCommand).catch(() => undefined);
-                  }
-                }}
-              >
-                <span className="brk">[↓]</span> COPY ENABLE COMMAND
-              </button>
+              {activeSetupSection === 'repo-enablement' ? (
+                <button
+                  type="button"
+                  className="action"
+                  onClick={() => {
+                    if (navigator.clipboard) {
+                      void navigator.clipboard.writeText(enableCommand).catch(() => undefined);
+                    }
+                  }}
+                >
+                  <span className="brk">[↓]</span> COPY ENABLE COMMAND
+                </button>
+              ) : null}
+              {activeSetupSection === 'integrations' ? (
+                <button
+                  type="button"
+                  className="action"
+                  onClick={() => {
+                    void restartConnector.mutateAsync().catch(() => undefined);
+                  }}
+                >
+                  <span className="brk">[↻]</span> RESTART CONNECTOR
+                </button>
+              ) : null}
+              {activeSetupSection === 'runtime' ? (
+                <button
+                  type="button"
+                  className="action"
+                  onClick={() => {
+                    const target = status?.storage.dataDir ?? '';
+                    if (target) {
+                      openPath.mutate(target);
+                    }
+                  }}
+                >
+                  <span className="brk">[→]</span> OPEN RUNTIME TOOLS
+                </button>
+              ) : null}
             </div>
           </>
         );
@@ -337,33 +411,13 @@ export function RouteShell() {
             activeWorkstreamKey={selectedWorkstream ? workstreamKey(selectedWorkstream.branch, selectedWorkstream.worktreePath) : null}
             sessions={sidebarSessions}
             activeSessionId={activeSessionId}
+            activeSetupSection={activeSetupSection}
             onNavigate={(nextRoute) => navigate(nextRoute === 'overview' ? '/overview' : `/${nextRoute}`)}
-            onContextChange={(value) => {
-              setActiveContextId(value || null);
-              setSearch('');
-              setActiveWorkstreamKey(null);
-              setActiveSessionId(null);
-              setActiveCheckpointId(null);
-              setActiveInsightId(null);
-            }}
-            onWorkstreamChange={(value) => {
-              setActiveWorkstreamKey(value);
-              setActiveSessionId(null);
-              setActiveCheckpointId(null);
-              setActiveInsightId(null);
-            }}
-            onSessionChange={(sessionId) => {
-              setActiveSessionId(sessionId);
-              setActiveCheckpointId(null);
-              setActiveInsightId(null);
-              const selectedSession = sidebarSessions.find((session) => session.sessionId === sessionId);
-              if (!selectedSession?.branch) {
-                return;
-              }
-              const sessionWorkstreamKey = workstreamKey(selectedSession.branch, selectedSession.worktreePath);
-              if (workstreams.some((stream) => workstreamKey(stream.branch, stream.worktreePath) === sessionWorkstreamKey)) {
-                setActiveWorkstreamKey(sessionWorkstreamKey);
-              }
+            onContextChange={handleContextSelection}
+            onWorkstreamChange={handleWorkstreamSelection}
+            onSessionChange={handleSessionSelection}
+            onSetupSectionChange={(section) => {
+              setActiveSetupSection(section);
             }}
             onOpenCheckpoint={() => {
               void handleCheckpointAction();

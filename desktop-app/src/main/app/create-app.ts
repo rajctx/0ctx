@@ -89,6 +89,11 @@ export async function createDesktopApplication() {
     ipcMain.handle(desktopChannels.app.posture, () => callWithDaemonRecovery(() => daemon.getPosture()));
     ipcMain.handle(desktopChannels.app.version, () => app.getVersion());
     ipcMain.handle(desktopChannels.daemon.call, async (_event, method: string, params: Record<string, unknown> = {}) => {
+      const preferredLocalResult = localGraph.resolvePreferredRead(method, params);
+      if (typeof preferredLocalResult !== 'undefined') {
+        return preferredLocalResult;
+      }
+
       try {
         const result = await callWithDaemonRecovery(() => daemon.call(method, params));
         return localGraph.resolveReadFallback(method, params, result);
