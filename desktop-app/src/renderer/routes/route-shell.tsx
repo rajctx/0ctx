@@ -1,9 +1,10 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { AppShell } from '../components/shell/app-shell';
 import { SidebarNav, type SidebarRoute } from '../components/shell/sidebar-nav';
 import {
   useCheckpoints,
+  useCreateSessionCheckpoint,
   useInsights,
   useSessions,
   useUpdatePreferences,
@@ -11,7 +12,8 @@ import {
   useDesktopStatus
 } from '../features/runtime/queries';
 import { useShellStore } from '../lib/store';
-import { workstreamKey } from '../lib/format';
+import { pickText, workstreamKey } from '../lib/format';
+import { filterSessionsByQuery, resolveSessionFeed } from '../lib/session-feed';
 import { CheckpointDrawer } from '../features/checkpoints/checkpoint-drawer';
 import { InsightDrawer } from '../features/insights/insight-drawer';
 import { OverviewContextPanel } from '../screens/overview/overview-context-panel';
@@ -38,10 +40,12 @@ export function RouteShell() {
   const route = resolveRoute(location.pathname);
   const { data: status } = useDesktopStatus();
   const updatePreferences = useUpdatePreferences();
+  const createSessionCheckpoint = useCreateSessionCheckpoint();
   const {
     activeContextId,
     activeWorkstreamKey,
     activeSessionId,
+    search,
     setActiveContextId,
     setSearch,
     setActiveWorkstreamKey,
@@ -50,6 +54,9 @@ export function RouteShell() {
     setActiveInsightId,
     openDrawer
   } = useShellStore();
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchDraft, setSearchDraft] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const contexts = status?.contexts ?? [];
   const activeWorkspace = useMemo(
@@ -66,7 +73,16 @@ export function RouteShell() {
     selectedWorkstream?.worktreePath ?? null,
     selectedWorkstream ? `shell:${workstreamKey(selectedWorkstream.branch, selectedWorkstream.worktreePath)}` : 'shell:none'
   );
-  const sidebarSessions = route === 'sessions' ? (branchSessionsQuery.data ?? []) : (allSessionsQuery.data ?? []);
+  const sessionsFeed = resolveSessionFeed({
+    hasActiveWorkstream: Boolean(selectedWorkstream),
+    workstreamSessions: branchSessionsQuery.data,
+    workspaceSessions: allSessionsQuery.data
+  });
+  const routeSessions = route === 'sessions' ? sessionsFeed.sessions : (allSessionsQuery.data ?? []);
+  const sidebarSessions = useMemo(
+    () => route === 'sessions' ? filterSessionsByQuery(routeSessions, search) : routeSessions,
+    [route, routeSessions, search]
+  );
   const checkpointsQuery = useCheckpoints(
     activeWorkspace?.id ?? null,
     selectedWorkstream?.branch ?? null,
@@ -106,6 +122,33 @@ export function RouteShell() {
     void updatePreferences.mutateAsync({ lastRoute: route }).catch(() => undefined);
   }, [route, updatePreferences]);
 
+  useEffect(() => {
+    if (!isSearchOpen) {
+      return;
+    }
+    setSearchDraft(search);
+  }, [isSearchOpen, search]);
+
+  useEffect(() => {
+    if (!isSearchOpen) {
+      return;
+    }
+
+    searchInputRef.current?.focus();
+    searchInputRef.current?.select();
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsSearchOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [isSearchOpen]);
+
   const contextPanel = (() => {
     switch (route) {
       case 'workstreams':
@@ -123,6 +166,7 @@ export function RouteShell() {
             activeSessionId={activeSessionId}
             activeWorkstream={selectedWorkstream}
             activeWorkstreamKey={selectedWorkstream ? workstreamKey(selectedWorkstream.branch, selectedWorkstream.worktreePath) : null}
+            fallbackApplied={sessionsFeed.fallbackApplied}
           />
         );
       case 'setup':
@@ -138,16 +182,47 @@ export function RouteShell() {
     openDrawer('checkpoint');
   };
 
+  const handleCheckpointAction = async () => {
+    if (route !== 'sessions' || !activeWorkspace?.id || !activeSessionId) {
+      openLatestCheckpoint();
+      return;
+    }
+
+    const selectedSession = sidebarSessions.find((session) => session.sessionId === activeSessionId);
+    if (!selectedSession) {
+      openLatestCheckpoint();
+      return;
+    }
+
+    if (selectedSession.branch) {
+      const sessionWorkstreamKey = workstreamKey(selectedSession.branch, selectedSession.worktreePath);
+      if (workstreams.some((stream) => workstreamKey(stream.branch, stream.worktreePath) === sessionWorkstreamKey)) {
+        setActiveWorkstreamKey(sessionWorkstreamKey);
+      }
+    }
+
+    try {
+      const label = pickText(selectedSession.title, selectedSession.summary, selectedSession.sessionId);
+      const created = await createSessionCheckpoint.mutateAsync({
+        contextId: activeWorkspace.id,
+        sessionId: activeSessionId,
+        name: 'Session checkpoint',
+        summary: label
+      });
+      setActiveCheckpointId(created.checkpointId ?? created.id ?? null);
+      openDrawer('checkpoint');
+    } catch {
+      openLatestCheckpoint();
+    }
+  };
+
   const openLatestInsight = () => {
     setActiveInsightId(insightsQuery.data?.[0]?.nodeId ?? null);
     openDrawer('insight');
   };
 
   const handleSearch = () => {
-    const next = window.prompt(route === 'setup' ? 'Search setup' : 'Filter current surface', '');
-    if (next !== null) {
-      setSearch(next);
-    }
+    setIsSearchOpen(true);
   };
 
   const enableCommand = `0ctx enable --repo-root "${activeWorkspace?.paths?.[0] ?? '<repo-root>'}"`;
@@ -180,7 +255,9 @@ export function RouteShell() {
               <button type="button" className="action" onClick={handleSearch}>
                 <span className="brk">[ ]</span> FILTER
               </button>
-              <button type="button" className="action" onClick={openLatestCheckpoint}>
+              <button type="button" className="action" onClick={() => {
+                void handleCheckpointAction();
+              }}>
                 <span className="brk">[+]</span> CREATE CHECKPOINT
               </button>
             </div>
@@ -263,8 +340,22 @@ export function RouteShell() {
               setActiveCheckpointId(null);
               setActiveInsightId(null);
             }}
-            onSessionChange={setActiveSessionId}
-            onOpenCheckpoint={openLatestCheckpoint}
+            onSessionChange={(sessionId) => {
+              setActiveSessionId(sessionId);
+              setActiveCheckpointId(null);
+              setActiveInsightId(null);
+              const selectedSession = sidebarSessions.find((session) => session.sessionId === sessionId);
+              if (!selectedSession?.branch) {
+                return;
+              }
+              const sessionWorkstreamKey = workstreamKey(selectedSession.branch, selectedSession.worktreePath);
+              if (workstreams.some((stream) => workstreamKey(stream.branch, stream.worktreePath) === sessionWorkstreamKey)) {
+                setActiveWorkstreamKey(sessionWorkstreamKey);
+              }
+            }}
+            onOpenCheckpoint={() => {
+              void handleCheckpointAction();
+            }}
             onOpenInsight={openLatestInsight}
           />
         )}
@@ -274,6 +365,48 @@ export function RouteShell() {
       >
         <Outlet />
       </AppShell>
+
+      {isSearchOpen ? (
+        <div className="search-backdrop" onClick={() => setIsSearchOpen(false)}>
+          <form
+            className="search-shell"
+            onClick={(event) => event.stopPropagation()}
+            onSubmit={(event) => {
+              event.preventDefault();
+              setSearch(searchDraft);
+              setIsSearchOpen(false);
+            }}
+          >
+            <div className="search-label">{route === 'setup' ? 'Search setup' : 'Filter current surface'}</div>
+            <input
+              ref={searchInputRef}
+              className="search-input"
+              value={searchDraft}
+              onChange={(event) => setSearchDraft(event.target.value)}
+              placeholder={route === 'setup' ? 'type to search setup' : 'type to filter this surface'}
+            />
+            <div className="search-meta">
+              {search ? `Current filter: ${search}` : 'No active filter'}
+            </div>
+            <div className="search-actions">
+              <button
+                type="button"
+                className="cmd-action"
+                onClick={() => {
+                  setSearch('');
+                  setSearchDraft('');
+                  setIsSearchOpen(false);
+                }}
+              >
+                <span className="brk">[x]</span> CLEAR
+              </button>
+              <button type="submit" className="cmd-action">
+                <span className="brk">[→]</span> APPLY
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
 
       <CheckpointDrawer />
       <InsightDrawer />

@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import type { ChatSessionSummary, WorkspaceContext, WorkstreamSummary } from '../../../shared/types/domain';
-import { normalizePath, pickText, workstreamKey } from '../../lib/format';
+import { formatRelativeAge, normalizePath, pickText, workstreamKey } from '../../lib/format';
 
 export type SidebarRoute = 'overview' | 'workstreams' | 'sessions' | 'setup';
 
@@ -20,10 +20,29 @@ interface SidebarNavProps {
   onOpenInsight: () => void;
 }
 
-function sessionLabel(session: ChatSessionSummary, index: number, total: number) {
-  const prefix = `Session ${Math.max(1, total - index)}`;
-  const detail = pickText(session.title, session.summary, '').replace(/\s+/g, ' ').trim();
-  return detail ? `${prefix}` : prefix;
+function truncateLine(value: string, max = 44) {
+  return value.length > max ? `${value.slice(0, max - 1)}…` : value;
+}
+
+function sessionLabel(session: ChatSessionSummary, index: number) {
+  return `Session ${index + 1}`;
+}
+
+function sessionSummary(session: ChatSessionSummary) {
+  return truncateLine(
+    pickText(session.title, session.summary, session.sessionId).replace(/\s+/g, ' ').trim()
+  );
+}
+
+function sessionMeta(session: ChatSessionSummary) {
+  const parts = [
+    session.branch || null,
+    session.agent || null,
+    typeof session.turnCount === 'number' ? `${session.turnCount} turns` : null,
+    session.lastTurnAt ? formatRelativeAge(session.lastTurnAt) : null
+  ].filter(Boolean);
+
+  return truncateLine(parts.join(' · '), 52);
 }
 
 export function SidebarNav({
@@ -48,7 +67,7 @@ export function SidebarNav({
 
   const visibleContexts = contexts.slice(0, 3);
   const visibleWorkstreams = workstreams.slice(0, 3);
-  const visibleSessions = sessions.slice(0, 3);
+  const visibleSessions = route === 'sessions' ? sessions : sessions.slice(0, 3);
 
   const workspaceFooter = (
     <div className="sidebar-footer">
@@ -152,17 +171,22 @@ export function SidebarNav({
           <span className="brk">{route === 'sessions' ? '[-]' : '[+]'}</span> SESSIONS
         </button>
         {route === 'sessions' ? (
-          <div className="nav-sub">
+          <div className="nav-sub nav-sub-sessions">
             {visibleSessions.map((session, index) => {
               const active = session.sessionId === activeSessionId;
               return (
                 <button
                   key={session.sessionId}
                   type="button"
-                  className={active ? 'nav-row active' : 'nav-row'}
+                  className={active ? 'nav-session-item active' : 'nav-session-item'}
                   onClick={() => onSessionChange(session.sessionId)}
                 >
-                  <span className="brk">{active ? '[●]' : '[ ]'}</span> {sessionLabel(session, index, visibleSessions.length)}
+                  <div className="nav-session-row">
+                    <span className="brk">{active ? '[●]' : '[ ]'}</span>
+                    <span className="nav-session-title">{sessionLabel(session, index)}</span>
+                  </div>
+                  <div className="nav-session-meta">{sessionMeta(session)}</div>
+                  <div className="nav-session-note">{sessionSummary(session)}</div>
                 </button>
               );
             })}

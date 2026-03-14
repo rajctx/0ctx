@@ -4,7 +4,9 @@ import type { BrowserWindow } from 'electron';
 import { desktopChannels } from '../../shared/ipc/channels';
 import type { DesktopEventMessage } from '../../shared/types/domain';
 import { ConnectorService } from '../connector/connector-service';
+import { DaemonService } from '../daemon/daemon-service';
 import { DaemonClient } from '../daemon/ipc-client';
+import { LocalGraphService } from '../daemon/local-graph-service';
 import { buildOfflineDaemonFallback } from '../daemon/offline-fallbacks';
 import { isDaemonUnavailableError } from '../daemon/ipc-client';
 import { DesktopDialogService } from '../dialog/dialog-service';
@@ -24,7 +26,9 @@ export async function createDesktopApplication() {
 
   const repoRoot = path.resolve(app.getAppPath(), '..');
   const preferences = new PreferencesService();
+  const daemonRuntime = new DaemonService(repoRoot);
   const daemon = new DaemonClient();
+  const localGraph = new LocalGraphService();
   const shell = new DesktopShellService();
   const dialog = new DesktopDialogService();
   const updater = new DesktopUpdaterService();
@@ -54,8 +58,25 @@ export async function createDesktopApplication() {
 
   const getMainWindow = (): BrowserWindow | null => windows.getMainWindow();
 
+  const callWithDaemonRecovery = async <T>(operation: () => Promise<T>) => {
+    try {
+      return await operation();
+    } catch (error) {
+      if (!isDaemonUnavailableError(error)) {
+        throw error;
+      }
+
+      const started = await daemonRuntime.ensureStarted(5_000).catch(() => false);
+      if (!started) {
+        throw error;
+      }
+
+      return operation();
+    }
+  };
+
   const refreshPosture = async () => {
-    const posture = await daemon.getPosture();
+    const posture = await callWithDaemonRecovery(() => daemon.getPosture()).catch(() => 'Offline' as const);
     tray.updatePosture(posture);
     windows.broadcast(desktopChannels.events.push, {
       kind: 'posture',
@@ -64,14 +85,19 @@ export async function createDesktopApplication() {
   };
 
   const registerIpcHandlers = () => {
-    ipcMain.handle(desktopChannels.app.status, () => daemon.getStatus());
-    ipcMain.handle(desktopChannels.app.posture, () => daemon.getPosture());
+    ipcMain.handle(desktopChannels.app.status, () => callWithDaemonRecovery(() => daemon.getStatus()));
+    ipcMain.handle(desktopChannels.app.posture, () => callWithDaemonRecovery(() => daemon.getPosture()));
     ipcMain.handle(desktopChannels.app.version, () => app.getVersion());
     ipcMain.handle(desktopChannels.daemon.call, async (_event, method: string, params: Record<string, unknown> = {}) => {
       try {
-        return await daemon.call(method, params);
+        const result = await callWithDaemonRecovery(() => daemon.call(method, params));
+        return localGraph.resolveReadFallback(method, params, result);
       } catch (error) {
         if (isDaemonUnavailableError(error)) {
+          const graphFallback = localGraph.resolveReadFallback(method, params);
+          if (typeof graphFallback !== 'undefined') {
+            return graphFallback;
+          }
           const fallback = buildOfflineDaemonFallback(method, params);
           if (typeof fallback !== 'undefined') {
             return fallback;
@@ -87,7 +113,7 @@ export async function createDesktopApplication() {
     ipcMain.handle(desktopChannels.updates.check, () => updater.checkForUpdates());
     ipcMain.handle(desktopChannels.events.start, async (_event, contextId?: string | null) => {
       try {
-        return await events.start(contextId);
+        return await callWithDaemonRecovery(() => events.start(contextId));
       } catch (error) {
         if (isDaemonUnavailableError(error)) {
           return { subscriptionId: null };
@@ -119,11 +145,13 @@ export async function createDesktopApplication() {
       postureTimer = null;
     }
     tray.destroy();
+    localGraph.dispose();
     connector.dispose();
     events.dispose();
   });
 
   await app.whenReady();
+  await daemonRuntime.ensureStarted().catch(() => false);
   registerIpcHandlers();
   windows.ensureMainWindow();
   tray.create();

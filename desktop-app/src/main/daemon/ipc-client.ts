@@ -69,10 +69,28 @@ function buildUnavailableStatus(error: unknown): DaemonStatus {
   };
 }
 
+function buildDegradedStatus(error: unknown, contexts: DaemonStatus['contexts'], methods: string[]): DaemonStatus {
+  return {
+    health: {
+      status: 'degraded',
+      error: describeError(error)
+    },
+    contexts,
+    capabilities: {
+      methods
+    },
+    storage: resolveStorage()
+  };
+}
+
 export class DaemonClient {
   private sessionToken: string | null = null;
+  private unavailableUntil = 0;
+  private unavailableReason: string | null = null;
 
   async call<T = unknown>(method: string, params: Record<string, unknown> = {}) {
+    this.throwIfUnavailable();
+
     if (method === 'createSession') {
       return this.rawRequest<T>(method, params);
     }
@@ -95,41 +113,55 @@ export class DaemonClient {
   }
 
   async getStatus(): Promise<DaemonStatus> {
-    try {
-      const [health, contexts, capabilities] = await Promise.all([
-        this.call<Record<string, unknown>>('health', {}),
-        this.call<DaemonStatus['contexts']>('listContexts', {}).catch(() => []),
-        this.call<Record<string, unknown>>('getCapabilities', {}).catch(() => ({ methods: [] }))
-      ]);
+    const [healthResult, contextsResult, capabilitiesResult] = await Promise.allSettled([
+      this.call<Record<string, unknown>>('health', {}),
+      this.call<DaemonStatus['contexts']>('listContexts', {}),
+      this.call<Record<string, unknown>>('getCapabilities', {})
+    ]);
 
+    const contexts = contextsResult.status === 'fulfilled' && Array.isArray(contextsResult.value)
+      ? contextsResult.value
+      : [];
+    const methods = capabilitiesResult.status === 'fulfilled' && Array.isArray((capabilitiesResult.value as { methods?: unknown }).methods)
+      ? ((capabilitiesResult.value as { methods: string[] }).methods)
+      : [];
+
+    if (healthResult.status === 'fulfilled') {
       return {
-        health,
-        contexts: Array.isArray(contexts) ? contexts : [],
+        health: healthResult.value,
+        contexts,
         capabilities: {
-          methods: Array.isArray((capabilities as { methods?: unknown }).methods)
-            ? ((capabilities as { methods: string[] }).methods)
-            : []
+          methods
         },
         storage: resolveStorage()
       };
-    } catch (error) {
-      if (isDaemonUnavailableError(error)) {
-        return buildUnavailableStatus(error);
-      }
-      throw error;
     }
+
+    const error = healthResult.reason;
+    if (isDaemonUnavailableError(error)) {
+      if (contexts.length > 0 || methods.length > 0) {
+        return buildDegradedStatus(error, contexts, methods);
+      }
+      return buildUnavailableStatus(error);
+    }
+
+    throw error;
   }
 
   async getPosture(): Promise<DesktopPosture> {
-    try {
-      await this.call('health', {});
+    const status = await this.getStatus();
+    const healthState = String(status.health?.status ?? '').toLowerCase();
+
+    if (healthState === 'ok') {
       return 'Connected';
-    } catch (error) {
-      if (isDaemonUnavailableError(error)) {
-        return 'Offline';
-      }
+    }
+    if (healthState === 'degraded') {
       return 'Degraded';
     }
+    if (status.contexts.length > 0 || status.capabilities.methods.length > 0) {
+      return 'Degraded';
+    }
+    return 'Offline';
   }
 
   private async ensureSession() {
@@ -154,33 +186,68 @@ export class DaemonClient {
       ...(sessionToken ? { sessionToken } : {})
     };
 
-    const payload = `${JSON.stringify(request)}\n`;
-    const responseLine = await new Promise<string>((resolve, reject) => {
-      const socket = net.createConnection(resolveSocketPath(), () => {
-        socket.write(payload);
-        socket.end();
-      });
-      let buffer = '';
-      socket.on('data', (chunk) => {
-        buffer += chunk.toString('utf8');
-      });
-      socket.on('end', () => resolve(buffer.trim()));
-      socket.on('error', (error) => reject(error));
-    });
-
-    if (!responseLine) {
-      throw new Error(`daemon_empty_response:${method}`);
-    }
-
-    let response: ResponseEnvelope;
     try {
-      response = JSON.parse(responseLine) as ResponseEnvelope;
+      const payload = `${JSON.stringify(request)}\n`;
+      const responseLine = await new Promise<string>((resolve, reject) => {
+        const socket = net.createConnection(resolveSocketPath());
+        let buffer = '';
+        socket.on('connect', () => {
+          socket.write(payload);
+        });
+        socket.on('data', (chunk) => {
+          buffer += chunk.toString('utf8');
+          const newlineIndex = buffer.indexOf('\n');
+          if (newlineIndex === -1) {
+            return;
+          }
+          const message = buffer.slice(0, newlineIndex).trim();
+          socket.destroy();
+          resolve(message);
+        });
+        socket.on('error', (error) => reject(error));
+        socket.on('end', () => {
+          if (buffer.trim()) {
+            resolve(buffer.trim());
+            return;
+          }
+          reject(new Error(`daemon_empty_response:${method}`));
+        });
+      });
+
+      const response = JSON.parse(responseLine) as ResponseEnvelope;
+      this.clearUnavailable();
+      if (!response.ok) {
+        throw new Error(response.error || 'daemon_error');
+      }
+      return (response.result ?? {}) as T;
     } catch (error) {
-      throw new Error(`daemon_invalid_json:${method}:${describeError(error)}`);
+      if (error instanceof SyntaxError) {
+        const parseError = new Error(`daemon_invalid_json:${method}:${describeError(error)}`);
+        this.noteUnavailable(parseError);
+        throw parseError;
+      }
+      this.noteUnavailable(error);
+      throw error;
     }
-    if (!response.ok) {
-      throw new Error(response.error || 'daemon_error');
+  }
+
+  private noteUnavailable(error: unknown) {
+    if (!isDaemonUnavailableError(error)) {
+      return;
     }
-    return (response.result ?? {}) as T;
+    this.sessionToken = null;
+    this.unavailableReason = describeError(error);
+    this.unavailableUntil = Date.now() + 3_000;
+  }
+
+  private clearUnavailable() {
+    this.unavailableReason = null;
+    this.unavailableUntil = 0;
+  }
+
+  private throwIfUnavailable() {
+    if (this.unavailableUntil > Date.now()) {
+      throw new Error(this.unavailableReason ?? 'daemon_unavailable');
+    }
   }
 }

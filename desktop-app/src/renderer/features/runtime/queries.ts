@@ -291,6 +291,28 @@ export function useCreateWorkspace() {
   });
 }
 
+export function useCreateSessionCheckpoint() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: {
+      contextId: string;
+      sessionId: string;
+      name?: string;
+      summary?: string;
+    }) => desktopBridge.daemon.call<{ checkpointId?: string; id?: string }>('createSessionCheckpoint', {
+      contextId: payload.contextId,
+      sessionId: payload.sessionId,
+      ...(payload.name ? { name: payload.name } : {}),
+      ...(payload.summary ? { summary: payload.summary } : {}),
+      kind: 'session'
+    }),
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({ queryKey: desktopQueryKeys.checkpoints(variables.contextId, null) });
+      void queryClient.invalidateQueries({ queryKey: desktopQueryKeys.sessionDetail(variables.contextId, variables.sessionId) });
+    }
+  });
+}
+
 export function useRestartConnector() {
   const queryClient = useQueryClient();
   return useMutation({

@@ -1,6 +1,6 @@
 import type { WorkstreamSummary } from '../../../shared/types/domain';
 import { useDesktopPosture, useDesktopVersion, useInsights, useSessionDetail } from '../../features/runtime/queries';
-import { formatShortSha, pickText } from '../../lib/format';
+import { formatShortSha, pickText, workstreamKey } from '../../lib/format';
 
 function formatStateLabel(value?: string | null) {
   switch (value) {
@@ -20,20 +20,25 @@ interface SessionsContextPanelProps {
   activeSessionId: string | null;
   activeWorkstream: WorkstreamSummary | null;
   activeWorkstreamKey: string | null;
+  fallbackApplied: boolean;
 }
 
 export function SessionsContextPanel({
   contextId,
   activeSessionId,
   activeWorkstream,
-  activeWorkstreamKey
+  activeWorkstreamKey,
+  fallbackApplied
 }: SessionsContextPanelProps) {
   const detail = useSessionDetail(contextId, activeSessionId);
-  const insights = useInsights(contextId, activeWorkstream?.branch ?? null, activeWorkstream?.worktreePath ?? null, activeWorkstreamKey);
   const posture = useDesktopPosture();
   const version = useDesktopVersion();
   const session = detail.data?.session ?? null;
   const messages = detail.data?.messages ?? [];
+  const effectiveBranch = session?.branch ?? activeWorkstream?.branch ?? null;
+  const effectiveWorktreePath = session?.worktreePath ?? activeWorkstream?.worktreePath ?? null;
+  const effectiveWorkstreamKey = effectiveBranch ? workstreamKey(effectiveBranch, effectiveWorktreePath) : activeWorkstreamKey;
+  const insights = useInsights(contextId, effectiveBranch, effectiveWorktreePath, effectiveWorkstreamKey);
 
   const facts = [
     { key: 'A', active: Boolean(session?.branch), text: `Branch: ${pickText(session?.branch, activeWorkstream?.branch, 'Unavailable')}` },
@@ -49,7 +54,7 @@ export function SessionsContextPanel({
         <div className="ctx-header"><span className="brk">[-]</span> Summary</div>
         <div className="ctx-prose">
           {pickText(
-            session?.summary,
+            session?.summary ? `${session.summary}${fallbackApplied ? ' Showing workspace session fallback because the selected workstream had no direct matches.' : ''}` : null,
             `Session continuity for ${pickText(session?.branch, activeWorkstream?.branch, 'the selected workstream')}.`,
             'No session is selected yet.'
           )}
