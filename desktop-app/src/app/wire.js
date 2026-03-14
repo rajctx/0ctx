@@ -1,7 +1,7 @@
 (() => {
   window.OctxDesktop = window.OctxDesktop || {};
   const app = window.OctxDesktop;
-  const { state, bindById, setView, renderAll, selectContext, resetBranchScopedState, loadBranches, loadSessions, loadSessionDetail, loadTurns, loadCheckpoints, loadCheckpointDetail, loadHandoff, loadBranchComparisonSafe, loadWorkspaceComparison, loadGraph, loadInsights, refreshAll, setStatus, invoke, copyText, createContext, applyDataPolicyPreset, applyCustomDataPolicy, performHeroAction, createCheckpointFromActiveSession, previewKnowledgeFromActiveSession, extractKnowledgeFromActiveSession, previewKnowledgeFromActiveCheckpoint, extractKnowledgeFromActiveCheckpoint, promoteActiveInsight, rewindActiveCheckpoint, explainActiveCheckpoint, enableCommand, policyCleanupCommand, selectKnowledgeCandidates, selectedKnowledgeKeys, setSelectedKnowledgeKeys, syncBranchSelectionFromSession, startBackgroundRefreshLoops, basenameFromPath } = app;
+  const { state, bindById, setView, renderAll, selectContext, resetBranchScopedState, loadBranches, loadSessions, loadSessionDetail, loadTurns, loadCheckpoints, loadCheckpointDetail, loadHandoff, loadBranchComparisonSafe, loadWorkspaceComparison, loadGraph, loadInsights, refreshAll, setStatus, invoke, copyText, createContext, applyDataPolicyPreset, applyCustomDataPolicy, performHeroAction, previewKnowledgeFromActiveSession, extractKnowledgeFromActiveSession, previewKnowledgeFromActiveCheckpoint, extractKnowledgeFromActiveCheckpoint, promoteActiveInsight, rewindActiveCheckpoint, enableCommand, policyCleanupCommand, selectKnowledgeCandidates, selectedKnowledgeKeys, setSelectedKnowledgeKeys, syncBranchSelectionFromSession, startBackgroundRefreshLoops, basenameFromPath, setTheme } = app;
 
   function wire() {
     document.querySelectorAll('.nav-btn').forEach((button) => {
@@ -12,6 +12,8 @@
       state.q = String(event.target.value || '').trim();
       renderAll();
     });
+    bindById('themeDarkBtn', 'click', () => setTheme('dark'));
+    bindById('themeLightBtn', 'click', () => setTheme('light'));
 
     bindById('ctxSel', 'change', async (event) => {
       const nextId = String(event.target.value || '');
@@ -71,10 +73,6 @@
         await loadInsights();
         renderAll();
     });
-    const createCheckpointBtn = document.getElementById('createCheckpointBtn');
-    if (createCheckpointBtn) {
-      createCheckpointBtn.addEventListener('click', () => void createCheckpointFromActiveSession());
-    }
     const previewSessionKnowledgeBtn = document.getElementById('previewSessionKnowledgeBtn');
     if (previewSessionKnowledgeBtn) {
       previewSessionKnowledgeBtn.addEventListener('click', () => void previewKnowledgeFromActiveSession());
@@ -93,7 +91,6 @@
     }
     bindById('promoteInsightBtn', 'click', () => void promoteActiveInsight());
     bindById('rewindCheckpointBtn', 'click', () => void rewindActiveCheckpoint());
-    bindById('explainCheckpointBtn', 'click', () => void explainActiveCheckpoint());
 
     bindById('copyEnableCommand', 'click', () => void copyText(enableCommand()));
     bindById('copyPolicyCleanupSetup', 'click', () => void copyText(policyCleanupCommand()));
@@ -146,6 +143,7 @@
       const branchTarget = event.target.closest('[data-branch-key]');
         if (branchTarget) {
           state.activeBranchKey = String(branchTarget.getAttribute('data-branch-key'));
+          state.branchSelectionMode = 'manual';
           state.activeSessionId = null;
           state.sessionDetail = null;
           state.sessionKnowledgePreview = null;

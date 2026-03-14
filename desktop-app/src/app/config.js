@@ -1,6 +1,8 @@
 (() => {
   window.OctxDesktop = window.OctxDesktop || {};
   const app = window.OctxDesktop;
+  const THEMES = ['dark', 'light'];
+  const THEME_STORAGE_KEY = 'octx.desktop.theme';
   const VIEW_META = {
     branches: {
       eyebrow: 'Workstreams',
@@ -12,7 +14,7 @@
     sessions: {
       eyebrow: 'Captured sessions',
       title: 'Sessions and messages',
-      summary: 'Choose a session, read the message stream, and capture a checkpoint when the work becomes worth preserving.',
+      summary: 'Read captured conversations in a calm, document-like layout and create checkpoints from the top bar when the work should be preserved.',
       primaryLabel: 'Create checkpoint',
       primaryAction: 'create-checkpoint'
     },
@@ -39,8 +41,8 @@
     },
     setup: {
       eyebrow: 'Setup',
-      title: 'Repo setup and utilities',
-      summary: 'Enable this repo, install the integrations you actually use, and open utilities only when you need them.',
+      title: 'Enable repo and agents',
+      summary: 'Enable this repo, install the integrations you actually use, and open runtime tools only when the normal path needs help.',
       primaryLabel: 'Copy enable command',
       primaryAction: 'copy-enable'
     }
@@ -95,6 +97,14 @@
   let healthRefreshTimer = null;
   let eventPollInFlight = false;
 
+  function initialTheme() {
+    if (typeof document === 'undefined' || !document.documentElement) {
+      return 'dark';
+    }
+    const candidate = String(document.documentElement.dataset.theme || '').trim().toLowerCase();
+    return THEMES.includes(candidate) ? candidate : 'dark';
+  }
+
   function initialView() {
     if (typeof window === 'undefined') {
       return 'workspaces';
@@ -112,6 +122,7 @@
     activeContextId: null,
     branches: [],
     activeBranchKey: null,
+    branchSelectionMode: 'auto',
     comparisonTargetKey: null,
     branchComparison: null,
     allSessions: [],
@@ -148,12 +159,13 @@
     subscriptionId: null,
     subscriptionContextId: null,
     lastSeq: 0,
-    storage: {}
+    storage: {},
+    theme: initialTheme()
   };
 
   const bridge = window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function'
     ? window.__TAURI__.core.invoke.bind(window.__TAURI__.core)
     : null;
 
-  Object.assign(app, { VIEW_META, SEARCH_HINTS, REQUIRED_RUNTIME_METHODS, MUTATION_EVENT_TYPES, EVENT_POLL_MS, HEALTH_REFRESH_MS, GA_INTEGRATIONS, state, bridge });
+  Object.assign(app, { VIEW_META, SEARCH_HINTS, REQUIRED_RUNTIME_METHODS, MUTATION_EVENT_TYPES, EVENT_POLL_MS, HEALTH_REFRESH_MS, GA_INTEGRATIONS, THEMES, THEME_STORAGE_KEY, state, bridge });
 })();

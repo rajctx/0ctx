@@ -1,7 +1,7 @@
 (() => {
   window.OctxDesktop = window.OctxDesktop || {};
   const app = window.OctxDesktop;
-  const { state, VIEW_META, SEARCH_HINTS, activeContext, formatPosture, postureClass, short, esc } = app;
+  const { state, VIEW_META, SEARCH_HINTS, THEMES, THEME_STORAGE_KEY, activeContext, formatPosture, postureClass, short, esc } = app;
 
   function setText(selector, text) {
     if (typeof document?.querySelector !== 'function') {
@@ -15,11 +15,61 @@
 
   function applyShellCopy() {
     setText('.nav-btn[data-view="setup"] span:last-child', 'Setup');
-    setText('#runtimeBannerSetup', 'Open utilities');
+    setText('#runtimeBannerSetup', 'Open setup');
+  }
+
+  function normalizeTheme(value) {
+    const candidate = String(value || '').trim().toLowerCase();
+    return THEMES.includes(candidate) ? candidate : 'dark';
+  }
+
+  function applyTheme(theme, { persist = true } = {}) {
+    const normalized = normalizeTheme(theme);
+    state.theme = normalized;
+    if (typeof document !== 'undefined' && document.documentElement) {
+      document.documentElement.dataset.theme = normalized;
+    }
+    if (typeof document !== 'undefined' && document.body) {
+      document.body.dataset.theme = normalized;
+    }
+    if (persist) {
+      try {
+        window.localStorage?.setItem(THEME_STORAGE_KEY, normalized);
+      } catch {}
+    }
+    return normalized;
+  }
+
+  function renderThemeToggle() {
+    const activeTheme = applyTheme(state.theme, { persist: false });
+    const summary = document.getElementById('themeSummary');
+    if (summary) {
+      summary.textContent = activeTheme === 'dark'
+        ? 'Dark default. Use light only when you want a brighter reading surface.'
+        : 'Light mode is active. Switch back to dark for the intended shell.';
+    }
+    ['dark', 'light'].forEach((theme) => {
+      const button = document.getElementById(theme === 'dark' ? 'themeDarkBtn' : 'themeLightBtn');
+      if (!button) {
+        return;
+      }
+      const pressed = activeTheme === theme;
+      button.classList.toggle('active', pressed);
+      if (typeof button.setAttribute === 'function') {
+        button.setAttribute('aria-pressed', String(pressed));
+      }
+    });
+  }
+
+  function setTheme(theme) {
+    applyTheme(theme);
+    renderThemeToggle();
+    return state.theme;
   }
 
   function renderChrome() {
     applyShellCopy();
+    renderThemeToggle();
     const posture = String(state.health?.status || 'offline').toLowerCase();
     const postureText = formatPosture(posture);
     document.body.dataset.view = state.view;
@@ -54,11 +104,11 @@
     const workspacePath = Array.isArray(context?.paths) && context.paths.length > 0
       ? context.paths[0]
       : 'No repository folder bound.';
-    pathEl.textContent = short(workspacePath, 56);
+    pathEl.textContent = short(workspacePath, 42);
     pathEl.title = workspacePath;
     const summaryEl = document.getElementById('sideWorkspaceSummary');
     if (summaryEl) {
-      summaryEl.textContent = `${state.branches.length} workstream${state.branches.length === 1 ? '' : 's'} · ${state.allSessions.length} session${state.allSessions.length === 1 ? '' : 's'}`;
+      summaryEl.textContent = `${state.branches.length} stream${state.branches.length === 1 ? '' : 's'} · ${state.allSessions.length} session${state.allSessions.length === 1 ? '' : 's'}`;
     }
     const bindingEl = document.getElementById('sideBinding');
     if (bindingEl) {
@@ -99,5 +149,5 @@
     banner.classList.remove('hidden');
   }
 
-  Object.assign(app, { applyShellCopy, renderChrome, renderHero, renderRuntimeBanner });
+  Object.assign(app, { applyShellCopy, normalizeTheme, applyTheme, renderThemeToggle, setTheme, renderChrome, renderHero, renderRuntimeBanner });
 })();

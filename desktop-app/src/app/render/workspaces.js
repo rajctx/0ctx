@@ -11,6 +11,14 @@
     return parts.filter(Boolean).join(' ');
   }
 
+  function sentence(value) {
+    const text = String(value || '').trim();
+    if (!text) {
+      return '';
+    }
+    return /[.!?]$/.test(text) ? text : `${text}.`;
+  }
+
   function renderWorkspaces() {
     const contexts = state.contexts.filter((context) => matches(`${context.name || ''} ${(context.paths || []).join(' ')}`));
     const context = activeContext();
@@ -19,7 +27,7 @@
     if (workspacesPageMeta) {
       workspacesPageMeta.textContent = context
         ? `${contexts.length} workspace${contexts.length === 1 ? '' : 's'} on this machine. ${context.name} is active.`
-        : `${contexts.length} workspace${contexts.length === 1 ? '' : 's'} on this machine. Bind one repository and future capture routes automatically.`;
+        : `${contexts.length} workspace${contexts.length === 1 ? '' : 's'} on this machine. Create one and bind a repo.`;
     }
 
     document.getElementById('workspaceList').innerHTML = contexts.length > 0
@@ -54,12 +62,12 @@
       workspaceLeadCopy.textContent = context
         ? joinNonEmpty([
             Array.isArray(context.paths) && context.paths[0]
-              ? 'Capture routes here from the bound repository path.'
-              : 'Bind a repository folder so capture can land here automatically.',
-            `${state.allSessions.length} session${state.allSessions.length === 1 ? '' : 's'} · ${state.checkpoints.length} checkpoint${state.checkpoints.length === 1 ? '' : 's'}.`,
-            zeroTouch.nextAction || ''
+              ? 'Bound to the selected repository.'
+              : 'No repository is bound yet.',
+            `${state.allSessions.length} session${state.allSessions.length === 1 ? '' : 's'} · ${(state.checkpoints || []).length} checkpoint${(state.checkpoints || []).length === 1 ? '' : 's'}.`,
+            zeroTouch.ready ? 'Capture is ready.' : short(zeroTouch.nextAction || '', 72)
           ])
-        : 'Create a workspace once and bind its repository folder.';
+        : 'Create a workspace and bind its repository.';
     }
 
     if (workspaceFactStrip) {
@@ -126,7 +134,7 @@
       if (compareTitle) compareTitle.textContent = `Compare ${context.name} with ${targetContext.name}`;
       if (compareSummary) {
         compareSummary.textContent = comparison.comparisonActionHint
-          ? `${comparison.comparisonSummary} Next: ${comparison.comparisonActionHint}`
+          ? `${comparison.comparisonSummary} ${comparison.comparisonActionHint}`
           : comparison.comparisonSummary;
       }
       if (compareFacts) {
@@ -156,6 +164,7 @@
       preset: 'lean'
     };
     const policyBadge = document.getElementById('workspacePolicySummaryBadge');
+    const policyDetailList = document.getElementById('workspacePolicyDetailList');
     const policyHint = document.getElementById('workspacePolicyHint');
     const actionHint = dataPolicyActionHint(policy);
     const workspaceSync = describeWorkspaceSyncDisplay({
@@ -168,6 +177,21 @@
       policyBadge.textContent = formatDataPolicyPresetLabel(policy.preset || 'lean');
     }
 
+    if (policyDetailList) {
+      const detailItems = [
+        { title: 'Policy mode', detail: formatDataPolicyPresetLabel(policy.preset || 'lean') },
+        { title: 'Workspace sync (this workspace)', detail: policy.workspaceSyncSummary || workspaceSync.detail },
+        { title: 'Machine capture (this machine)', detail: policy.machineCaptureSummary || capturePolicySummary() },
+        { title: 'Runtime utilities', detail: policy.debugUtilitySummary || 'Off in the normal path' }
+      ];
+      policyDetailList.innerHTML = detailItems.map((item) => `
+        <article>
+          <strong>${esc(item.title)}</strong>
+          <p>${esc(item.detail)}</p>
+        </article>
+      `).join('');
+    }
+
     if (policyHint) {
       const baseHint = describeDesktopPolicyHint({
         supportsMutation: true,
@@ -176,7 +200,20 @@
         actionHint,
         workspaceHint: workspaceSync.hint
       });
-      policyHint.textContent = `${policy.workspaceSyncSummary || workspaceSync.detail} ${policy.machineCaptureSummary || capturePolicySummary()}. ${baseHint} Utilities are only for deliberate sync, retention, or debug changes.`;
+      const extraHints = [];
+      const unresolvedSyncCopy = 'Metadata-only and full sync are available only after a workspace is active.';
+      if (!workspaceSync.workspaceResolved && !baseHint.includes(unresolvedSyncCopy)) {
+        extraHints.push(unresolvedSyncCopy);
+      }
+      if (workspaceSync.hint && !baseHint.includes(workspaceSync.hint)) {
+        extraHints.push(workspaceSync.hint);
+      }
+      policyHint.textContent = [
+        sentence(policy.workspaceSyncSummary || workspaceSync.detail),
+        sentence(policy.machineCaptureSummary || capturePolicySummary()),
+        actionHint,
+        ...extraHints
+      ].filter(Boolean).join(' ');
     }
   }
 

@@ -517,10 +517,12 @@
     const key = branchKey(normalizeBranch(session.branch), session.worktreePath || null);
     if (state.branches.some((lane) => branchKey(lane.branch, lane.worktreePath) === key)) {
       state.activeBranchKey = key;
+      state.branchSelectionMode = 'manual';
     }
   }
 
   function resetBranchScopedState() {
+    state.branchSelectionMode = 'auto';
     state.comparisonTargetKey = null;
     state.branchComparison = null;
     state.activeSessionId = null;
@@ -542,8 +544,17 @@
   }
 
   function setStatus(message) {
+    const timestamp = `Updated ${new Date().toLocaleTimeString()}`;
     document.getElementById('statusTxt').textContent = message;
-    document.getElementById('statusTime').textContent = `Updated ${new Date().toLocaleTimeString()}`;
+    document.getElementById('statusTime').textContent = timestamp;
+    const sessionStatusTxt = document.getElementById('sessionStatusTxt');
+    const sessionStatusTime = document.getElementById('sessionStatusTime');
+    if (sessionStatusTxt) {
+      sessionStatusTxt.textContent = message;
+    }
+    if (sessionStatusTime) {
+      sessionStatusTime.textContent = timestamp;
+    }
   }
 
   Object.assign(app, { bindById, matches, activeContext, selectedTurn, branchKey, normalizeBranch, activeBranch, comparisonTargetBranch, activeSession, selectedCheckpoint, activeInsightNode, contextById, workspaceComparisonTargetContext, extractTagValue, insightSummary, insightTargetContexts, syncInsightSelection, syncPromotionTargetSelection, workspaceComparisonTargets, syncWorkspaceComparisonTargetSelection, installedAgents, isGaIntegration, installedGaAgents, autoContextGaAgents, currentRepoReadiness, integrationLabel, formatIntegrationNote, methodSupported, missingRequiredMethods, integrationListText, hasLocalRuntimeData, formatPosture, postureClass, formatSyncPolicyLabel, formatDataPolicyPresetLabel, captureState, zeroTouchState, automaticContextState, capturePolicySummary, dataPolicyActionHint, debugArtifactsEnabled, currentRepoRoot, enableCommand, policyCleanupCommand, describeBranchLane, syncComparisonTargetSelection, describeCheckpoint, syncBranchSelectionFromSession, resetBranchScopedState, setStatus });

@@ -51,13 +51,27 @@
     if (!state.activeContextId) {
       state.branches = [];
       state.activeBranchKey = null;
+      state.branchSelectionMode = 'auto';
       return;
     }
     const branches = await daemon('listBranchLanes', { contextId: state.activeContextId, limit: 300 });
     state.branches = Array.isArray(branches) ? branches : [];
-    if (!state.activeBranchKey || !state.branches.some((lane) => branchKey(lane.branch, lane.worktreePath) === state.activeBranchKey)) {
-      const first = state.branches[0] || null;
-      state.activeBranchKey = first ? branchKey(first.branch, first.worktreePath) : null;
+    const hasActiveBranch = Boolean(state.activeBranchKey)
+      && state.branches.some((lane) => branchKey(lane.branch, lane.worktreePath) === state.activeBranchKey);
+    const preferredKey = preferredRepoBranchKey();
+    if (state.branchSelectionMode !== 'manual') {
+      if (preferredKey) {
+        state.activeBranchKey = preferredKey;
+        state.branchSelectionMode = 'auto';
+      } else if (!hasActiveBranch) {
+        const first = state.branches[0] || null;
+        state.activeBranchKey = first ? branchKey(first.branch, first.worktreePath) : null;
+        state.branchSelectionMode = 'auto';
+      }
+    } else if (!hasActiveBranch) {
+      state.activeBranchKey = preferredKey
+        || (state.branches[0] ? branchKey(state.branches[0].branch, state.branches[0].worktreePath) : null);
+      state.branchSelectionMode = 'auto';
     }
     syncComparisonTargetSelection();
   }
@@ -414,6 +428,22 @@
     } finally {
       state.loading = false;
     }
+  }
+
+  function preferredRepoBranchKey() {
+    const preferredBranch = String(state.repoReadiness?.workstream || '').trim();
+    if (!preferredBranch) {
+      return null;
+    }
+    const matching = state.branches.filter((lane) => String(lane?.branch || '').trim() === preferredBranch);
+    if (matching.length === 0) {
+      return null;
+    }
+    const activeMatch = matching.find((lane) => branchKey(lane.branch, lane.worktreePath) === state.activeBranchKey);
+    const preferred = matching.find((lane) => lane.isCurrent === true)
+      || activeMatch
+      || matching[0];
+    return branchKey(preferred.branch, preferred.worktreePath);
   }
 
   Object.assign(app, { resolveContexts, loadBranchComparison, selectContext, loadBranches, loadSessions, loadSessionDetail, getSessionDetailWithFallback, loadTurns, loadCheckpoints, loadCheckpointDetail, loadHandoff, loadBranchComparisonSafe, loadWorkspaceComparison, loadGraph, loadInsights, loadHook, loadDataPolicy, loadRepoReadiness, refreshAll });

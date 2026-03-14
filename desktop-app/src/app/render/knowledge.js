@@ -37,8 +37,8 @@
       if (knowledgePageMeta) {
         const context = activeContext();
         knowledgePageMeta.textContent = context
-          ? `${context.name} has ${nodes.length} reviewed insight${nodes.length === 1 ? '' : 's'} in the current view.`
-          : 'Use this page for reviewed memory. Raw conversation stays in Sessions.';
+          ? `${context.name} has ${nodes.length} reviewed insight${nodes.length === 1 ? '' : 's'} in the broader graph view.`
+          : 'Use this page for reviewed memory and the broader graph view. Raw conversation stays in Sessions.';
       }
       if (knowledgeSummaryLine) {
         const context = activeContext();

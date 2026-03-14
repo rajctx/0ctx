@@ -17,7 +17,7 @@
       const checkpointsPageMeta = document.getElementById('checkpointsPageMeta');
     if (checkpointsPageMeta) {
       checkpointsPageMeta.textContent = state.activeCheckpointId
-        ? 'Explain the selected checkpoint or rewind the workspace to its stored snapshot.'
+        ? 'Explain the selected checkpoint from the top bar or rewind the workspace to its stored snapshot.'
         : `There are ${checkpoints.length} checkpoint${checkpoints.length === 1 ? '' : 's'} in the current view.`;
     }
 
@@ -62,13 +62,9 @@
     const detail = state.checkpointDetail;
     const empty = document.getElementById('checkpointDetailEmpty');
     const body = document.getElementById('checkpointDetailBody');
-    const explainBtn = document.getElementById('explainCheckpointBtn');
     const previewBtn = document.getElementById('previewCheckpointKnowledgeBtn');
     const extractBtn = document.getElementById('extractCheckpointKnowledgeBtn');
     const rewindBtn = document.getElementById('rewindCheckpointBtn');
-    if (explainBtn) {
-      explainBtn.disabled = !state.activeCheckpointId;
-    }
     if (previewBtn) {
       previewBtn.disabled = !state.activeCheckpointId;
     }

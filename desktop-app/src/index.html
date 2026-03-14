@@ -4,7 +4,20 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>0ctx Desktop</title>
-<link rel="stylesheet" href="./styles.css" />
+<script>
+(() => {
+  const storageKey = 'octx.desktop.theme';
+  let theme = 'dark';
+  try {
+    const stored = window.localStorage.getItem(storageKey);
+    if (stored === 'light' || stored === 'dark') {
+      theme = stored;
+    }
+  } catch {}
+  document.documentElement.dataset.theme = theme;
+})();
+</script>
+<link rel="stylesheet" href="./styles.css?v=4" />
 </head>
 <body>
 <div class="app-shell">
@@ -67,9 +80,20 @@
       </button>
       <button class="nav-btn utility-btn" data-view="setup" type="button">
         <span class="nav-dot setup"></span>
-        <span>Utilities</span>
+        <span>Setup</span>
       </button>
     </div>
+
+    <footer class="sidebar-footer">
+      <div class="theme-control">
+        <p class="section-label">Theme</p>
+        <div class="theme-toggle" role="group" aria-label="Choose desktop theme">
+          <button id="themeDarkBtn" class="theme-option" data-theme-choice="dark" type="button">Dark</button>
+          <button id="themeLightBtn" class="theme-option" data-theme-choice="light" type="button">Light</button>
+        </div>
+        <p id="themeSummary" class="sidebar-copy">Dark default. Use light only when you want a brighter reading surface.</p>
+      </div>
+    </footer>
   </aside>
 
   <main class="stage main-stage">
@@ -103,7 +127,7 @@
       </div>
       <div class="banner-actions">
         <button id="runtimeBannerRefresh" class="btn tertiary" type="button">Refresh</button>
-        <button id="runtimeBannerSetup" class="btn tertiary" type="button">Open utilities</button>
+        <button id="runtimeBannerSetup" class="btn tertiary" type="button">Open setup</button>
       </div>
     </section>
 
@@ -121,7 +145,7 @@
               <aside class="panel form-panel workspace-form-panel">
                 <div class="panel-head compact workspace-section-head">
                   <div>
-                    <p class="section-label">Create workspace</p>
+                    <p class="section-label">Workspace editor</p>
                     <h3>Bind a project once</h3>
                   </div>
                 </div>
@@ -138,7 +162,7 @@
                       <button id="pickFolder" class="btn tertiary" type="button">Choose folder</button>
                     </div>
                   </label>
-                  <button class="btn primary wide" type="submit">Create workspace</button>
+                  <button class="btn tertiary wide" type="submit">Save workspace</button>
                 </form>
 
                 <div class="inline-note">
@@ -170,9 +194,10 @@
                       </div>
                       <span id="workspacePolicySummaryBadge" class="chip">Default</span>
                     </div>
+                    <div id="workspacePolicyDetailList" class="info-list compact-info-list"></div>
                     <p id="workspacePolicyHint" class="page-copy compact-copy">Metadata-only sync is the normal default for this workspace. Machine-local capture stays on this machine and debug trails remain off unless you explicitly enable them from Utilities.</p>
                     <div class="row-actions">
-                      <button class="btn quiet" data-nav="setup" type="button">Open utilities</button>
+                      <button class="btn quiet" data-nav="setup" type="button">Open setup</button>
                     </div>
                   </section>
 
@@ -285,101 +310,106 @@
 
         <section class="view" data-view="sessions">
           <div class="page-shell page-sessions">
-            <header class="page-head">
-              <p class="page-kicker">Captured sessions</p>
-              <h1>Read the message stream</h1>
-              <p id="sessionsPageMeta" class="page-copy">Choose a session, read its messages, and capture a checkpoint when the work becomes worth preserving.</p>
-            </header>
-
             <div class="sessions-layout">
-              <aside class="panel session-library-panel session-navigation-panel">
-                <section class="session-rail-block">
-                  <div class="section-row">
-                    <div>
-                      <p class="section-label">Conversation</p>
-                      <h2>Sessions</h2>
-                    </div>
+              <aside class="panel session-navigation-panel session-conversation-nav">
+                <div class="session-nav-head">
+                  <p class="section-label">Conversations</p>
+                  <div class="session-nav-stats">
                     <span id="sessionHeadline" class="chip">0 sessions</span>
-                  </div>
-                  <div id="sessionList" class="list stack-list compact-list-surface"></div>
-                </section>
-
-                <section class="session-rail-block">
-                  <div class="section-row">
-                    <div>
-                      <p class="section-label">Messages</p>
-                      <h2>Message stream</h2>
-                    </div>
                     <span id="turnCount" class="chip">0 messages</span>
                   </div>
-                  <div id="turnList" class="list stack-list compact-list-surface"></div>
-                </section>
+                </div>
+                <p id="sessionsPageMeta" class="page-copy compact-copy hidden">Choose a workspace to inspect captured conversations.</p>
+                <div id="sessionList" class="session-tree"></div>
               </aside>
 
-              <section class="panel session-reader-panel session-reader-stage">
-                  <header class="session-reader-head">
-                    <div>
-                      <p class="section-label">Current session</p>
-                      <h3 id="sessionFocusTitle">Choose a session</h3>
-                      <p id="sessionFocusMeta" class="page-copy compact-copy">Pick a workstream, then choose a session to read the message stream and capture a checkpoint.</p>
-                    </div>
-                    <div class="session-reader-actions">
-                      <button id="createCheckpointBtn" class="btn primary" type="button">Create checkpoint</button>
-                    </div>
-                  </header>
-                  <div class="utility-inline session-utility-inline">
-                    <button id="previewSessionKnowledgeBtn" class="btn quiet" type="button">Preview insights</button>
-                    <button id="extractSessionKnowledgeBtn" class="btn quiet" type="button">Save selected insights</button>
-                  </div>
+              <section class="sessions-workspace">
+                <div class="sessions-main-scroll">
+                  <div class="sessions-main-canvas">
+                    <div class="session-workspace-body">
+                      <div class="session-primary-grid">
+                        <div class="session-reader-column">
+                          <div id="turnDetailEmpty" class="empty-state">Select a message to inspect its text and companion context.</div>
 
-                  <div id="turnDetailEmpty" class="empty-state">Select a message to inspect its text and companion context.</div>
+                          <section id="turnDetailBody" class="session-reader-main hidden">
+                            <div class="reader-header-block">
+                              <div id="turnSessionMeta" class="meta-line session-focus-meta"></div>
+                              <h2 id="turnDetailTitle">Choose a message</h2>
+                              <div id="turnLeadMeta" class="meta-line"></div>
+                            </div>
 
-                  <div id="turnDetailBody" class="reader-body hidden">
-                    <div class="reader-header-block">
-                      <p class="section-label">Conversation pair</p>
-                      <h4 id="turnDetailTitle">Choose a message</h4>
-                      <div id="turnLeadMeta" class="meta-line"></div>
-                    </div>
+                            <div class="reader-document">
+                              <section class="reader-block">
+                                <p id="turnPrimaryLabel" class="detail-label">User</p>
+                                <div id="turnPrompt" class="detail-copy detail-primary"></div>
+                              </section>
 
-                    <div class="reader-document">
-                      <section class="reader-block">
-                        <p id="turnPrimaryLabel" class="detail-label">User</p>
-                        <div id="turnPrompt" class="detail-copy detail-primary"></div>
-                      </section>
-
-                      <section class="reader-block secondary">
-                        <p id="turnSecondaryLabel" class="detail-label">Assistant</p>
-                        <div id="turnReply" class="detail-copy"></div>
-                      </section>
-                    </div>
-
-                    <div id="turnMeta" class="fact-grid reader-facts"></div>
-
-                    <section id="sessionKnowledgePreviewPanel" class="preview-stage hidden">
-                      <div class="section-row small">
-                        <div>
-                          <p class="section-label">Insights preview</p>
-                          <h4>Review extracted candidates</h4>
-                          <p id="sessionKnowledgePreviewMeta" class="section-copy preview-summary">0 strong · 0 review · 0 weak</p>
+                              <section class="reader-block secondary">
+                                <p id="turnSecondaryLabel" class="detail-label">Assistant</p>
+                                <div id="turnReply" class="detail-copy"></div>
+                              </section>
+                            </div>
+                          </section>
                         </div>
-                          <div class="row-actions">
-                            <span id="sessionKnowledgePreviewBadge" class="chip">0 selected</span>
-                            <button class="btn tertiary" type="button" data-preview-action="all" data-preview-scope="session">All</button>
-                            <button class="btn tertiary" type="button" data-preview-action="new" data-preview-scope="session">Suggested</button>
-                            <button class="btn tertiary" type="button" data-preview-action="auto" data-preview-scope="session">Auto write</button>
-                            <button class="btn tertiary" type="button" data-preview-action="ready" data-preview-scope="session">Ready</button>
-                            <button class="btn tertiary" type="button" data-preview-action="none" data-preview-scope="session">None</button>
-                          </div>
                       </div>
-                      <div id="sessionKnowledgePreviewList" class="list preview-list"></div>
-                    </section>
 
-                    <details class="technical-details">
-                      <summary>Technical details</summary>
-                      <div id="turnTechnical" class="meta-grid tech-grid"></div>
-                    </details>
+                      <div class="session-support-grid">
+                        <aside class="panel session-context-panel">
+                          <div class="section-row small">
+                            <div>
+                              <p class="section-label">Session context</p>
+                              <h4>Summary and facts</h4>
+                            </div>
+                          </div>
+                          <p id="turnContextLead" class="page-copy compact-copy">Select a session to inspect its summary, workstream, and checkpoints.</p>
+                          <div id="turnMeta" class="meta-grid compact-meta-grid reader-facts reader-meta-grid"></div>
+                        </aside>
 
+                        <section class="panel session-insights-panel">
+                          <div class="section-row small">
+                            <div>
+                              <p class="section-label">Insights</p>
+                              <h4>Preview and save</h4>
+                            </div>
+                          </div>
+                          <p class="page-copy compact-copy">Create a checkpoint from the top bar, then review candidate insights below.</p>
+                          <div class="action-stack session-action-stack">
+                            <button id="previewSessionKnowledgeBtn" class="btn quiet" type="button">Preview insights</button>
+                            <button id="extractSessionKnowledgeBtn" class="btn tertiary" type="button">Save selected insights</button>
+                          </div>
+
+                          <section id="sessionKnowledgePreviewPanel" class="preview-stage hidden">
+                            <div class="section-row small">
+                              <div>
+                                <p class="section-label">Insights preview</p>
+                                <h4>Review extracted candidates</h4>
+                                <p id="sessionKnowledgePreviewMeta" class="section-copy preview-summary">0 strong · 0 review · 0 weak</p>
+                              </div>
+                              <div class="row-actions">
+                                <span id="sessionKnowledgePreviewBadge" class="chip">0 selected</span>
+                                <button class="btn tertiary" type="button" data-preview-action="all" data-preview-scope="session">All</button>
+                                <button class="btn tertiary" type="button" data-preview-action="new" data-preview-scope="session">Suggested</button>
+                                <button class="btn tertiary" type="button" data-preview-action="auto" data-preview-scope="session">Auto write</button>
+                                <button class="btn tertiary" type="button" data-preview-action="ready" data-preview-scope="session">Ready</button>
+                                <button class="btn tertiary" type="button" data-preview-action="none" data-preview-scope="session">None</button>
+                              </div>
+                            </div>
+                            <div id="sessionKnowledgePreviewList" class="list preview-list"></div>
+                          </section>
+                        </section>
+
+                        <details class="technical-details support-details session-technical-details">
+                          <summary>Technical details</summary>
+                          <div id="turnTechnical" class="meta-grid tech-grid session-tech-grid"></div>
+                        </details>
+                      </div>
+                    </div>
                   </div>
+                </div>
+                <footer class="session-statusbar">
+                  <span id="sessionStatusTxt">Ready.</span>
+                  <span id="sessionStatusTime">-</span>
+                </footer>
               </section>
             </div>
           </div>
@@ -406,52 +436,61 @@
               </aside>
 
               <section class="checkpoint-stage">
-                <section class="panel checkpoint-hero-panel">
-                  <header class="detail-head">
-                  <div>
-                    <p class="section-label">Selected checkpoint</p>
-                    <h3 id="checkpointDetailTitle">Choose a checkpoint</h3>
-                  </div>
-                  <div class="reader-actions">
-                    <button id="explainCheckpointBtn" class="btn primary" type="button">Explain checkpoint</button>
-                    <button id="rewindCheckpointBtn" class="btn tertiary" type="button">Rewind</button>
-                  </div>
-                  </header>
+                <div class="checkpoint-stage-grid">
+                  <section class="panel checkpoint-hero-panel">
+                    <header class="detail-head">
+                    <div>
+                      <p class="section-label">Selected checkpoint</p>
+                      <h3 id="checkpointDetailTitle">Choose a checkpoint</h3>
+                    </div>
+                    <div class="reader-actions">
+                      <button id="rewindCheckpointBtn" class="btn tertiary" type="button">Rewind</button>
+                    </div>
+                    </header>
 
-                  <div class="utility-inline">
-                    <button id="previewCheckpointKnowledgeBtn" class="btn quiet" type="button">Preview insights</button>
-                    <button id="extractCheckpointKnowledgeBtn" class="btn quiet" type="button">Save selected insights</button>
-                  </div>
+                    <div id="checkpointDetailEmpty" class="empty-state">Choose a checkpoint to inspect its summary, linked branch or session, and stored snapshot shape.</div>
 
-                  <div id="checkpointDetailEmpty" class="empty-state">Choose a checkpoint to inspect its summary, linked branch or session, and stored snapshot shape.</div>
-
-                  <div id="checkpointDetailBody" class="reader-body hidden">
-                    <section class="checkpoint-lead-stage">
-                      <p id="checkpointLeadCopy" class="lead-copy"></p>
-                      <div id="checkpointFactStrip" class="fact-grid editorial-facts"></div>
-                    </section>
-
-                    <div class="checkpoint-support-grid">
-                      <section class="checkpoint-support-section">
-                        <div class="section-row small">
-                          <div>
-                            <p class="section-label">Linked session</p>
-                            <h4>Source conversation</h4>
-                          </div>
-                        </div>
-                        <div id="checkpointSessionCard" class="list compact-list compact-list-surface"></div>
-                      </section>
-
-                      <section class="checkpoint-support-section">
-                        <div class="section-row small">
-                          <div>
-                            <p class="section-label">Checkpoint facts</p>
-                            <h4>Stored snapshot shape</h4>
-                          </div>
-                        </div>
-                        <div id="checkpointMeta" class="meta-grid compact-meta-grid"></div>
+                    <div id="checkpointDetailBody" class="detail-stack hidden">
+                      <section class="checkpoint-lead-stage">
+                        <p id="checkpointLeadCopy" class="lead-copy"></p>
+                        <div id="checkpointFactStrip" class="fact-grid editorial-facts"></div>
                       </section>
                     </div>
+                  </section>
+
+                  <aside class="panel checkpoint-sidecar-panel">
+                    <div class="section-row small">
+                      <div>
+                        <p class="section-label">Checkpoint workflow</p>
+                        <h4>Support, facts, and insight extraction</h4>
+                      </div>
+                    </div>
+                    <p class="page-copy compact-copy">Explain the selected checkpoint from the top bar. Keep rewind, metadata, and insight extraction in the support rail so the summary stays readable.</p>
+
+                    <div class="action-stack checkpoint-action-stack">
+                      <button id="previewCheckpointKnowledgeBtn" class="btn quiet" type="button">Preview insights</button>
+                      <button id="extractCheckpointKnowledgeBtn" class="btn tertiary" type="button">Save selected insights</button>
+                    </div>
+
+                    <section class="checkpoint-support-section">
+                      <div class="section-row small">
+                        <div>
+                          <p class="section-label">Linked session</p>
+                          <h4>Source conversation</h4>
+                        </div>
+                      </div>
+                      <div id="checkpointSessionCard" class="list compact-list compact-list-surface"></div>
+                    </section>
+
+                    <section class="checkpoint-support-section">
+                      <div class="section-row small">
+                        <div>
+                          <p class="section-label">Checkpoint facts</p>
+                          <h4>Stored snapshot shape</h4>
+                        </div>
+                      </div>
+                      <div id="checkpointMeta" class="meta-grid compact-meta-grid"></div>
+                    </section>
 
                     <section id="checkpointKnowledgePreviewPanel" class="preview-stage hidden">
                       <div class="section-row small">
@@ -471,8 +510,8 @@
                       </div>
                       <div id="checkpointKnowledgePreviewList" class="list preview-list"></div>
                     </section>
-                  </div>
-                </section>
+                  </aside>
+                </div>
               </section>
             </div>
           </div>
@@ -481,7 +520,7 @@
         <section class="view" data-view="knowledge">
           <div class="page-shell utility-page">
             <header class="page-head compact-head">
-              <p class="page-kicker">Insights utility</p>
+              <p class="page-kicker">Reviewed memory</p>
               <h1>Reviewed insights</h1>
               <p id="knowledgePageMeta" class="page-copy">Inspect the visible graph and reviewed insights stored in SQLite when you need durable project memory, not the raw conversation.</p>
             </header>
@@ -552,15 +591,15 @@
         <section class="view" data-view="setup">
           <div class="page-shell utility-page">
             <header class="page-head compact-head">
-            <p class="page-kicker">Utilities</p>
-              <h1>Enable and repair</h1>
+            <p class="page-kicker">Setup</p>
+              <h1>Enable repo and agents</h1>
               <p id="setupPageMeta" class="page-copy">Enable this repo, install the integrations you actually use, or repair the local runtime when something is off.</p>
             </header>
             <div class="setup-page-layout">
               <aside class="panel setup-command-panel">
                 <div class="section-row">
                   <div>
-                  <p class="section-label">Utility commands</p>
+                  <p class="section-label">Setup commands</p>
                     <h2>Repo actions</h2>
                   </div>
                 </div>
@@ -574,7 +613,7 @@
                   <button id="copyEnableCommand" class="btn tertiary" type="button">Copy enable command</button>
                   <button id="copyShell" class="btn tertiary" type="button">Copy 0ctx shell</button>
                 </div>
-                <p class="page-copy compact-copy utility-side-note">You should rarely need this page after the repo is enabled and your GA integrations are installed.</p>
+                <p id="setupSupportCopy" class="page-copy compact-copy utility-side-note">Use setup only when enabling another repo or when the local runtime clearly needs attention.</p>
               </aside>
               <section class="panel setup-main-stage setup-stage-shell">
                 <div class="setup-primary-grid">
@@ -686,23 +725,23 @@
     </footer>
   </main>
 </div>
-<script src="./app/config.js" defer></script>
-<script src="./app/helpers.js" defer></script>
-<script src="./app/selectors.js" defer></script>
-<script src="./app/policy-view.js" defer></script>
-<script src="./app/render/shell.js" defer></script>
-<script src="./app/render/branches.js" defer></script>
-<script src="./app/render/sessions.js" defer></script>
-<script src="./app/render/workspaces.js" defer></script>
-<script src="./app/render/checkpoints.js" defer></script>
-<script src="./app/render/knowledge.js" defer></script>
-<script src="./app/render/setup.js" defer></script>
-<script src="./app/render/index.js" defer></script>
-<script src="./app/runtime.js" defer></script>
-<script src="./app/loaders.js" defer></script>
-<script src="./app/policy-actions.js" defer></script>
-<script src="./app/actions.js" defer></script>
-<script src="./app/wire.js" defer></script>
+<script src="./app/config.js?v=4" defer></script>
+<script src="./app/helpers.js?v=4" defer></script>
+<script src="./app/selectors.js?v=4" defer></script>
+<script src="./app/policy-view.js?v=4" defer></script>
+<script src="./app/render/shell.js?v=4" defer></script>
+<script src="./app/render/branches.js?v=4" defer></script>
+<script src="./app/render/sessions.js?v=4" defer></script>
+<script src="./app/render/workspaces.js?v=4" defer></script>
+<script src="./app/render/checkpoints.js?v=4" defer></script>
+<script src="./app/render/knowledge.js?v=4" defer></script>
+<script src="./app/render/setup.js?v=4" defer></script>
+<script src="./app/render/index.js?v=4" defer></script>
+<script src="./app/runtime.js?v=4" defer></script>
+<script src="./app/loaders.js?v=4" defer></script>
+<script src="./app/policy-actions.js?v=4" defer></script>
+<script src="./app/actions.js?v=4" defer></script>
+<script src="./app/wire.js?v=4" defer></script>
 </body>
 </html>
 

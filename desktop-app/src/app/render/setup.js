@@ -34,17 +34,17 @@
 
   function applySetupCopy() {
     setText('section[data-view="setup"] .page-kicker', 'Setup');
-    setText('section[data-view="setup"] h1', 'Enable repo and policy');
+    setText('section[data-view="setup"] h1', 'Enable repo and agents');
     const labels = Array.from(document.querySelectorAll?.('section[data-view="setup"] .section-label') || []);
     if (labels[0]) {
-      labels[0].textContent = 'Setup';
+      labels[0].textContent = 'Setup commands';
     }
     if (labels[3]) {
-      labels[3].textContent = 'Utilities';
+      labels[3].textContent = 'Utility actions';
     }
     const headings = Array.from(document.querySelectorAll?.('section[data-view="setup"] h4') || []);
     if (headings[2]) {
-      headings[2].textContent = 'Local tools';
+      headings[2].textContent = 'Runtime utilities';
     }
   }
 
@@ -57,12 +57,18 @@
     const installedGa = gaHooks.filter((hook) => hook.installed);
     const filteredHooks = gaHooks.filter((hook) => matches(`${hook.agent} ${hook.status} ${hook.notes || ''} ${hook.command || ''}`));
     const setupPageMeta = document.getElementById('setupPageMeta');
+    const setupSupportCopy = document.getElementById('setupSupportCopy');
     if (setupPageMeta) {
       setupPageMeta.textContent = state.runtimeIssue
         ? state.runtimeIssue.detail
         : installedGa.length > 0
-          ? `${installedGa.length} GA integration${installedGa.length === 1 ? '' : 's'} installed. Use this page only when you need to change setup or policy.`
-          : 'No GA integrations are installed yet. Use this page only for the supported agents you actually use.';
+          ? `${installedGa.length} GA integration${installedGa.length === 1 ? '' : 's'} installed. Use setup only when enabling another repo or when you need to open runtime support when something is off.`
+          : 'No GA integrations are installed yet. Use setup for supported agents only, and open runtime support only when something is off.';
+    }
+    if (setupSupportCopy) {
+      setupSupportCopy.textContent = state.runtimeIssue
+        ? 'Use setup to repair the local runtime, then go back to the normal repo-first path.'
+        : 'Use setup only when enabling another repo or when the local runtime clearly needs attention.';
     }
 
     document.getElementById('hookSummary').textContent = `${installedGa.length} ready`;
@@ -167,11 +173,11 @@
       badge.textContent = formatDataPolicyPresetLabel(policy.preset || 'lean');
     }
 
-    if (policyAdvancedDetails instanceof HTMLDetailsElement) {
+    if (typeof HTMLDetailsElement !== 'undefined' && policyAdvancedDetails instanceof HTMLDetailsElement) {
       policyAdvancedDetails.open = preset === 'custom' || preset === 'debug' || preset === 'shared';
     }
 
-    if (utilitiesDetails instanceof HTMLDetailsElement) {
+    if (typeof HTMLDetailsElement !== 'undefined' && utilitiesDetails instanceof HTMLDetailsElement) {
       utilitiesDetails.open = Boolean(state.runtimeIssue);
     }
 
@@ -179,7 +185,8 @@
       const detailItems = [
         { title: 'Policy mode', detail: formatDataPolicyPresetLabel(policy.preset || 'lean') },
         { title: 'Workspace sync (this workspace)', detail: policy.workspaceSyncSummary || workspaceSync.detail },
-        { title: 'Machine capture (this machine)', detail: policy.machineCaptureSummary || capturePolicySummary() }
+        { title: 'Machine capture (this machine)', detail: policy.machineCaptureSummary || capturePolicySummary() },
+        { title: 'Runtime utilities', detail: policy.debugUtilitySummary || 'Off in the normal path' }
       ];
       detailList.innerHTML = detailItems.map((item) => `
         <article>
@@ -190,16 +197,27 @@
     }
 
     if (hint) {
-      hint.textContent = describeDesktopPolicyHint({
+      const baseHint = describeDesktopPolicyHint({
         supportsMutation,
         policy,
         workspaceResolved,
         actionHint,
         workspaceHint: workspaceSync.hint
-      }) + ' Debug trails and opt-in cloud sync stay in Utilities.';
+      });
+      const extraHints = [];
+      const unresolvedSyncCopy = 'Metadata-only and full sync are available only after a workspace is active.';
+      if (!workspaceResolved && !baseHint.includes(unresolvedSyncCopy)) {
+        extraHints.push(unresolvedSyncCopy);
+      }
+      if (workspaceSync.hint && !baseHint.includes(workspaceSync.hint)) {
+        extraHints.push(workspaceSync.hint);
+      }
+      hint.textContent = [baseHint, ...extraHints, 'Debug trails and opt-in cloud sync stay in Utilities.']
+        .filter(Boolean)
+        .join(' ');
     }
 
-    if (policyAdvancedDetails instanceof HTMLDetailsElement && !supportsMutation) {
+    if (typeof HTMLDetailsElement !== 'undefined' && policyAdvancedDetails instanceof HTMLDetailsElement && !supportsMutation) {
       policyAdvancedDetails.open = false;
     }
   }
