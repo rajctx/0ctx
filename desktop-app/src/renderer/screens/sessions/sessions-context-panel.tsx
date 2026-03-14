@@ -1,6 +1,7 @@
 import type { WorkstreamSummary } from '../../../shared/types/domain';
 import { useDesktopPosture, useDesktopVersion, useInsights, useSessionDetail } from '../../features/runtime/queries';
 import { formatShortSha, pickText, workstreamKey } from '../../lib/format';
+import { deriveSessionPreview, deriveSessionTitle } from '../../lib/session-display';
 
 function formatStateLabel(value?: string | null) {
   switch (value) {
@@ -52,9 +53,12 @@ export function SessionsContextPanel({
     <>
       <div className="ctx-section">
         <div className="ctx-header"><span className="brk">[-]</span> Summary</div>
+        {session ? (
+          <div className="ctx-session-title">{deriveSessionTitle(session)}</div>
+        ) : null}
         <div className="ctx-prose">
           {pickText(
-            session?.summary ? `${session.summary}${fallbackApplied ? ' Showing workspace session fallback because the selected workstream had no direct matches.' : ''}` : null,
+            session?.summary ? `${deriveSessionPreview(session)}${fallbackApplied ? ' Showing workspace session fallback because the selected workstream had no direct matches.' : ''}` : null,
             `Session continuity for ${pickText(session?.branch, activeWorkstream?.branch, 'the selected workstream')}.`,
             'No session is selected yet.'
           )}

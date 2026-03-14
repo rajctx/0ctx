@@ -93,6 +93,7 @@ export function useWorkstreams(contextId: string | null) {
   return useQuery({
     queryKey: desktopQueryKeys.workstreams(contextId),
     enabled: Boolean(contextId),
+    staleTime: 30_000,
     queryFn: () => desktopBridge.daemon.call<WorkstreamSummary[]>('listBranchLanes', {
       contextId,
       limit: 250
@@ -100,10 +101,17 @@ export function useWorkstreams(contextId: string | null) {
   });
 }
 
-export function useSessions(contextId: string | null, branch: string | null, worktreePath: string | null, key: string | null) {
+export function useSessions(
+  contextId: string | null,
+  branch: string | null,
+  worktreePath: string | null,
+  key: string | null,
+  options: { enabled?: boolean } = {}
+) {
   return useQuery({
     queryKey: desktopQueryKeys.sessions(contextId, key),
-    enabled: Boolean(contextId),
+    enabled: Boolean(contextId) && (options.enabled ?? true),
+    staleTime: 30_000,
     queryFn: () => {
       if (branch) {
         return desktopBridge.daemon.call<ChatSessionSummary[]>('listBranchSessions', {
@@ -126,6 +134,7 @@ export function useSessionDetail(contextId: string | null, sessionId: string | n
   return useQuery({
     queryKey: desktopQueryKeys.sessionDetail(contextId, sessionId),
     enabled: Boolean(contextId && sessionId),
+    staleTime: 30_000,
     queryFn: () => desktopBridge.daemon.call<ChatSessionDetail>('getSessionDetail', {
       contextId,
       sessionId
@@ -137,6 +146,7 @@ export function useSessionMessages(contextId: string | null, sessionId: string |
   return useQuery({
     queryKey: desktopQueryKeys.sessionMessages(contextId, sessionId),
     enabled: Boolean(contextId && sessionId),
+    staleTime: 30_000,
     queryFn: () => desktopBridge.daemon.call<ChatMessage[]>('listSessionMessages', {
       contextId,
       sessionId,
@@ -145,10 +155,17 @@ export function useSessionMessages(contextId: string | null, sessionId: string |
   });
 }
 
-export function useCheckpoints(contextId: string | null, branch: string | null, worktreePath: string | null, key: string | null) {
+export function useCheckpoints(
+  contextId: string | null,
+  branch: string | null,
+  worktreePath: string | null,
+  key: string | null,
+  options: { enabled?: boolean } = {}
+) {
   return useQuery({
     queryKey: desktopQueryKeys.checkpoints(contextId, key),
-    enabled: Boolean(contextId),
+    enabled: Boolean(contextId) && (options.enabled ?? true),
+    staleTime: 30_000,
     queryFn: () => {
       if (branch) {
         return desktopBridge.daemon.call<CheckpointSummary[]>('listBranchCheckpoints', {
@@ -176,10 +193,17 @@ export function useCheckpointDetail(checkpointId: string | null) {
   });
 }
 
-export function useInsights(contextId: string | null, branch: string | null, worktreePath: string | null, key: string | null) {
+export function useInsights(
+  contextId: string | null,
+  branch: string | null,
+  worktreePath: string | null,
+  key: string | null,
+  options: { enabled?: boolean } = {}
+) {
   return useQuery({
     queryKey: desktopQueryKeys.insights(contextId, key),
-    enabled: Boolean(contextId),
+    enabled: Boolean(contextId) && (options.enabled ?? true),
+    staleTime: 30_000,
     queryFn: () => desktopBridge.daemon.call<InsightSummary[]>('listWorkstreamInsights', {
       contextId,
       branch,
@@ -193,6 +217,7 @@ export function useDataPolicy(contextId: string | null) {
   return useQuery({
     queryKey: desktopQueryKeys.dataPolicy(contextId),
     enabled: Boolean(contextId),
+    staleTime: 30_000,
     queryFn: () => desktopBridge.daemon.call<DataPolicy>('getDataPolicy', {
       contextId
     })
@@ -203,6 +228,7 @@ export function useRepoReadiness(contextId: string | null, repoRoot: string | nu
   return useQuery({
     queryKey: desktopQueryKeys.repoReadiness(contextId, repoRoot),
     enabled: Boolean(contextId || repoRoot),
+    staleTime: 30_000,
     queryFn: () => desktopBridge.daemon.call<RepoReadiness>('getRepoReadiness', {
       ...(contextId ? { contextId } : {}),
       ...(repoRoot ? { repoRoot } : {})
@@ -214,6 +240,7 @@ export function useWorkspaceComparison(sourceContextId: string | null, targetCon
   return useQuery({
     queryKey: desktopQueryKeys.workspaceComparison(sourceContextId, targetContextId),
     enabled: Boolean(sourceContextId && targetContextId),
+    staleTime: 30_000,
     queryFn: () => desktopBridge.daemon.call<WorkspaceComparison>('compareWorkspaces', {
       sourceContextId,
       targetContextId
@@ -235,6 +262,7 @@ export function useWorkstreamComparison(
       targetBranch ? `${targetBranch}::${String(targetWorktreePath || '')}` : null
     ),
     enabled: Boolean(contextId && sourceBranch && targetBranch),
+    staleTime: 30_000,
     queryFn: () => desktopBridge.daemon.call<WorkstreamComparison>('compareWorkstreams', {
       contextId,
       sourceBranch,
@@ -248,6 +276,7 @@ export function useWorkstreamComparison(
 export function useHookHealth() {
   return useQuery({
     queryKey: desktopQueryKeys.hookHealth,
+    staleTime: 30_000,
     queryFn: async () => {
       const response = await desktopBridge.daemon.call<HookHealth>('getHookHealth', {});
       return {
@@ -262,6 +291,7 @@ export function useHandoff(contextId: string | null, branch: string | null, work
   return useQuery({
     queryKey: desktopQueryKeys.handoff(contextId, branch, worktreePath),
     enabled: Boolean(contextId && branch),
+    staleTime: 30_000,
     queryFn: () => desktopBridge.daemon.call<Array<Record<string, unknown>>>('getHandoffTimeline', {
       contextId,
       branch,

@@ -27,25 +27,27 @@ function formatPresetLabel(value?: string | null) {
 function WorkspaceRow({
   context,
   active,
-  onSelect
+  onSelect,
+  activeStats
 }: {
   context: WorkspaceContext;
   active: boolean;
   onSelect: (contextId: string) => void;
+  activeStats?: {
+    workstreamCount: number;
+    sessionCount: number;
+    preset: string;
+  } | null;
 }) {
-  const workstreams = useWorkstreams(context.id);
-  const sessions = useSessions(context.id, null, null, `workspace-row:${context.id}`);
-  const readiness = useRepoReadiness(context.id, context.paths?.[0] ?? null);
-
-  const workstreamCount = workstreams.data?.length ?? 0;
-  const sessionCount = sessions.data?.length ?? 0;
   const isBound = Boolean(context.paths?.[0]);
-  const preset = formatPresetLabel(readiness.data?.dataPolicyPreset);
-  const status = active ? 'Selected' : isBound ? `${workstreamCount} ws · ${sessionCount} sess` : 'Unbound';
+  const workstreamCount = active ? (activeStats?.workstreamCount ?? 0) : null;
+  const sessionCount = active ? (activeStats?.sessionCount ?? 0) : null;
+  const preset = active ? (activeStats?.preset ?? 'lean') : null;
+  const status = active ? 'Selected' : isBound ? 'Repo bound' : 'Unbound';
   const meta = active
-    ? `Repo bound · ${preset} · ${workstreamCount} workstreams · ${sessionCount} sessions`
+    ? `Repo bound · ${preset} · ${workstreamCount ?? 0} workstreams · ${sessionCount ?? 0} sessions`
     : isBound
-      ? `Repo bound${preset ? ` · ${preset}` : ''}`
+      ? 'Select to load workstream and session detail.'
       : 'No repository folder bound yet. Needs repository binding.';
 
   return (
@@ -69,6 +71,9 @@ export function OverviewScreen() {
   const [repoPath, setRepoPath] = useState('');
   const contexts = status?.contexts ?? [];
   const activeContext = contexts.find((context) => context.id === activeContextId) ?? contexts[0] ?? null;
+  const activeWorkstreams = useWorkstreams(activeContext?.id ?? null);
+  const activeSessions = useSessions(activeContext?.id ?? null, null, null, `overview-active:${activeContext?.id ?? 'none'}`);
+  const activeReadiness = useRepoReadiness(activeContext?.id ?? null, activeContext?.paths?.[0] ?? null);
 
   const filteredContexts = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -83,6 +88,14 @@ export function OverviewScreen() {
       setActiveContextId(contexts[0].id);
     }
   }, [activeContextId, contexts, setActiveContextId]);
+
+  const activeStats = activeContext
+    ? {
+      workstreamCount: activeWorkstreams.data?.length ?? 0,
+      sessionCount: activeSessions.data?.length ?? 0,
+      preset: formatPresetLabel(activeReadiness.data?.dataPolicyPreset)
+    }
+    : null;
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -118,6 +131,7 @@ export function OverviewScreen() {
               context={context}
               active={context.id === activeContext?.id}
               onSelect={setActiveContextId}
+              activeStats={context.id === activeContext?.id ? activeStats : null}
             />
           ))}
         </div>

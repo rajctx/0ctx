@@ -1,4 +1,5 @@
 import type { ChatSessionSummary } from '../../shared/types/domain';
+import { deriveSessionPreview, deriveSessionTitle } from './session-display';
 
 export interface SessionFeedResolution {
   sessions: ChatSessionSummary[];
@@ -48,8 +49,8 @@ export function filterSessionsByQuery(
 
   return sessions.filter((session) => (
     [
-      session.title,
-      session.summary,
+      deriveSessionTitle(session),
+      deriveSessionPreview(session),
       session.branch,
       session.agent,
       session.worktreePath,

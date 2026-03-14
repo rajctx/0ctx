@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import type { ChatSessionSummary, WorkspaceContext, WorkstreamSummary } from '../../../shared/types/domain';
-import { formatRelativeAge, normalizePath, pickText, workstreamKey } from '../../lib/format';
+import { formatRelativeAge, normalizePath, workstreamKey } from '../../lib/format';
+import { deriveSessionPreview, deriveSessionTitle } from '../../lib/session-display';
 
 export type SidebarRoute = 'overview' | 'workstreams' | 'sessions' | 'setup';
 
@@ -29,9 +30,7 @@ function sessionLabel(session: ChatSessionSummary, index: number) {
 }
 
 function sessionSummary(session: ChatSessionSummary) {
-  return truncateLine(
-    pickText(session.title, session.summary, session.sessionId).replace(/\s+/g, ' ').trim()
-  );
+  return truncateLine(deriveSessionPreview(session));
 }
 
 function sessionMeta(session: ChatSessionSummary) {
@@ -186,7 +185,8 @@ export function SidebarNav({
                     <span className="nav-session-title">{sessionLabel(session, index)}</span>
                   </div>
                   <div className="nav-session-meta">{sessionMeta(session)}</div>
-                  <div className="nav-session-note">{sessionSummary(session)}</div>
+                  <div className="nav-session-note">{truncateLine(deriveSessionTitle(session), 46)}</div>
+                  <div className="nav-session-summary">{sessionSummary(session)}</div>
                 </button>
               );
             })}

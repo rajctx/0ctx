@@ -1,12 +1,14 @@
 import { useMemo } from 'react';
 import type { ChatSessionSummary, ChatMessage } from '../../../shared/types/domain';
+import { MessageRichText } from '../../components/content/message-rich-text';
 import { useSessionDetail, useSessions, useWorkstreams } from '../../features/runtime/queries';
 import { formatClockTime, formatRelativeLabel, pickText, workstreamKey } from '../../lib/format';
 import { filterSessionsByQuery, resolveSessionFeed } from '../../lib/session-feed';
+import { deriveSessionTitle } from '../../lib/session-display';
 import { useShellStore } from '../../lib/store';
 
 function sessionHeading(session: ChatSessionSummary, index: number) {
-  return `Session ${index + 1}: ${pickText(session.title, session.summary, session.sessionId)}`;
+  return `Session ${index + 1}: ${deriveSessionTitle(session)}`;
 }
 
 function messageMatchesQuery(message: ChatMessage, query: string) {
@@ -83,7 +85,9 @@ function SessionTranscript({
               <span className="msg-time">{formatClockTime(message.createdAt)}</span>
               <span className="msg-sender">{sender}</span>
             </div>
-            <div className={isSystem ? 'msg-body sys' : 'msg-body'}>{body}</div>
+            <div className={isSystem ? 'msg-body sys' : 'msg-body'}>
+              {isSystem ? body : <MessageRichText content={body} />}
+            </div>
           </div>
         );
       })}

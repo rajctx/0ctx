@@ -63,15 +63,25 @@ export function RouteShell() {
     () => contexts.find((context) => context.id === activeContextId) ?? contexts[0] ?? null,
     [contexts, activeContextId]
   );
-  const workstreamsQuery = useWorkstreams(activeWorkspace?.id ?? null);
+  const needsWorkstreams = route !== 'overview';
+  const needsSessions = route === 'sessions';
+  const needsWorkstreamContext = route === 'sessions' || route === 'workstreams';
+  const workstreamsQuery = useWorkstreams(needsWorkstreams ? (activeWorkspace?.id ?? null) : null);
   const workstreams = workstreamsQuery.data ?? [];
   const selectedWorkstream = workstreams.find((stream) => workstreamKey(stream.branch, stream.worktreePath) === activeWorkstreamKey) ?? workstreams[0] ?? null;
-  const allSessionsQuery = useSessions(activeWorkspace?.id ?? null, null, null, `shell:${activeWorkspace?.id ?? 'none'}`);
+  const allSessionsQuery = useSessions(
+    needsSessions ? (activeWorkspace?.id ?? null) : null,
+    null,
+    null,
+    `shell:${activeWorkspace?.id ?? 'none'}`,
+    { enabled: needsSessions }
+  );
   const branchSessionsQuery = useSessions(
-    activeWorkspace?.id ?? null,
+    needsSessions ? (activeWorkspace?.id ?? null) : null,
     selectedWorkstream?.branch ?? null,
     selectedWorkstream?.worktreePath ?? null,
-    selectedWorkstream ? `shell:${workstreamKey(selectedWorkstream.branch, selectedWorkstream.worktreePath)}` : 'shell:none'
+    selectedWorkstream ? `shell:${workstreamKey(selectedWorkstream.branch, selectedWorkstream.worktreePath)}` : 'shell:none',
+    { enabled: needsSessions }
   );
   const sessionsFeed = resolveSessionFeed({
     hasActiveWorkstream: Boolean(selectedWorkstream),
@@ -84,16 +94,18 @@ export function RouteShell() {
     [route, routeSessions, search]
   );
   const checkpointsQuery = useCheckpoints(
-    activeWorkspace?.id ?? null,
+    needsWorkstreamContext ? (activeWorkspace?.id ?? null) : null,
     selectedWorkstream?.branch ?? null,
     selectedWorkstream?.worktreePath ?? null,
-    selectedWorkstream ? workstreamKey(selectedWorkstream.branch, selectedWorkstream.worktreePath) : null
+    selectedWorkstream ? workstreamKey(selectedWorkstream.branch, selectedWorkstream.worktreePath) : null,
+    { enabled: needsWorkstreamContext }
   );
   const insightsQuery = useInsights(
-    activeWorkspace?.id ?? null,
+    needsWorkstreamContext ? (activeWorkspace?.id ?? null) : null,
     selectedWorkstream?.branch ?? null,
     selectedWorkstream?.worktreePath ?? null,
-    selectedWorkstream ? workstreamKey(selectedWorkstream.branch, selectedWorkstream.worktreePath) : null
+    selectedWorkstream ? workstreamKey(selectedWorkstream.branch, selectedWorkstream.worktreePath) : null,
+    { enabled: needsWorkstreamContext }
   );
 
   useEffect(() => {
