@@ -8,6 +8,14 @@ import {
   useOpenPath,
   useRestartConnector
 } from '../../features/runtime/queries';
+import { getGaIntegrationCounts } from '../../lib/setup-integrations';
+
+function getMutationErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message.trim();
+  }
+  return 'The connector restart did not complete.';
+}
 
 function formatStateLabel(value?: string | null) {
   switch (value) {
@@ -43,7 +51,8 @@ export function SetupContextPanel({ contextId }: SetupContextPanelProps) {
   const status = useDesktopStatus();
   const openPath = useOpenPath();
 
-  const readyCount = hookHealth.data?.readyCount ?? (hookHealth.data?.agents ?? []).filter((agent) => agent.installed).length;
+  const { readyCount, totalCount } = getGaIntegrationCounts(hookHealth.data);
+  const restartError = restartConnector.isError ? getMutationErrorMessage(restartConnector.error) : null;
 
   return (
     <>
@@ -110,13 +119,14 @@ export function SetupContextPanel({ contextId }: SetupContextPanelProps) {
             type="button"
             className="ctx-action"
             onClick={() => {
-              void restartConnector.mutateAsync().catch(() => undefined);
+              restartConnector.mutate();
             }}
             disabled={restartConnector.isPending}
           >
             <span className="brk">[↻]</span> {restartConnector.isPending ? 'RESTARTING CONNECTOR' : 'RESTART CONNECTOR'}
           </button>
         </div>
+        {restartError ? <div className="ctx-prose ctx-error">Connector restart failed: {restartError}</div> : null}
       </div>
 
       <div className="ctx-section ctx-footer">
@@ -126,7 +136,7 @@ export function SetupContextPanel({ contextId }: SetupContextPanelProps) {
           <span className="cdk">State:</span>
           <span className="cdv bright">{formatStateLabel(posture.data)}</span>
           <span className="cdk">Integrations:</span>
-          <span className="cdv">{`${readyCount} / ${(hookHealth.data?.agents ?? []).length || 0} ready`}</span>
+          <span className="cdv">{`${readyCount} / ${totalCount} ready`}</span>
           <span className="cdk">Connector:</span>
           <span className="cdv">{connector.data?.running ? 'Running' : 'Unavailable'}</span>
           <span className="cdk">Node:</span>

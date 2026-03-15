@@ -8,10 +8,18 @@ import {
   useRestartConnector,
   useSetDataPolicy
 } from '../../features/runtime/queries';
+import { getGaIntegrationCounts } from '../../lib/setup-integrations';
 import { useShellStore, type SetupSection } from '../../lib/store';
 
 function toTitleCase(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function getMutationErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message.trim();
+  }
+  return 'The connector restart did not complete.';
 }
 
 export function SetupScreen() {
@@ -37,8 +45,8 @@ export function SetupScreen() {
   const repoRoot = status.data?.contexts.find((context) => context.id === activeContextId)?.paths?.[0] ?? '<repo-root>';
   const enableCommand = `0ctx enable --repo-root "${repoRoot}"`;
   const currentPreset = String(dataPolicy.data?.preset ?? 'lean').toLowerCase();
-  const integrations = (hookHealth.data?.agents ?? []).filter((agent) => ['claude', 'factory', 'antigravity'].includes(String(agent.agent ?? '')));
-  const readyCount = hookHealth.data?.readyCount ?? integrations.filter((agent) => agent.installed).length;
+  const { integrations, readyCount, totalCount } = getGaIntegrationCounts(hookHealth.data);
+  const restartError = restartConnector.isError ? getMutationErrorMessage(restartConnector.error) : null;
   const runtimeActions = [
     {
       key: 'data-dir',
@@ -74,7 +82,7 @@ export function SetupScreen() {
         ? `Connector running${connector.data?.pid ? ` · PID ${connector.data.pid}` : ''}`
         : 'Connector is stopped or unavailable',
       onClick: () => {
-        void restartConnector.mutateAsync().catch(() => undefined);
+        restartConnector.mutate();
       },
       disabled: restartConnector.isPending
     }
@@ -101,7 +109,7 @@ export function SetupScreen() {
     integrations: shouldRenderSection(
       'integrations',
       'integration health claude factory antigravity supported installed',
-      ...integrations.flatMap((integration) => [String(integration.agent ?? ''), String(integration.status ?? ''), String(integration.notes ?? '')])
+      ...integrations.flatMap((integration) => [integration.id, integration.label, String(integration.status ?? ''), String(integration.notes ?? '')])
     ),
     policy: shouldRenderSection(
       'policy',
@@ -216,7 +224,7 @@ export function SetupScreen() {
         <div className="page-eyebrow">Setup</div>
         <div className="page-title">Enable repo and agents</div>
         <div className="page-desc">
-          {`${readyCount} GA integrations installed. Use setup only when enabling another repo or when you need to open runtime support when something is off.`}
+          {`${readyCount} / ${totalCount} GA integrations ready. Use setup only when enabling another repo or when you need to open runtime support when something is off.`}
         </div>
       </div>
 
@@ -267,15 +275,14 @@ export function SetupScreen() {
 
       {visibleSections.integrations ? (
         <div ref={integrationsSectionRef} className="int-section setup-section" data-setup-section="integrations">
-          <div className="section-label">Integration Health &mdash; <span>{`${readyCount} Ready`}</span></div>
+          <div className="section-label">Integration Health &mdash; <span>{`${readyCount} / ${totalCount} Ready`}</span></div>
           <div className="int-subtitle">GA integration status. Claude, Factory, Antigravity are installed for normal use.</div>
           <div className="int-list">
             {integrations.map((integration) => {
-              const name = toTitleCase(String(integration.agent ?? 'integration'));
               const ready = integration.installed;
               return (
-                <div key={name} className="int-row">
-                  <span className="int-name">{name}</span>
+                <div key={integration.id} className="int-row">
+                  <span className="int-name">{integration.label}</span>
                   <span className="int-meta">
                     {ready
                       ? 'Ready for normal path · Supported · Installed'
@@ -291,7 +298,7 @@ export function SetupScreen() {
               type="button"
               className="cmd-action"
               onClick={() => {
-                void restartConnector.mutateAsync().catch(() => undefined);
+                restartConnector.mutate();
               }}
               disabled={restartConnector.isPending}
             >
@@ -311,6 +318,7 @@ export function SetupScreen() {
               <span className="brk">[→]</span> OPEN HOOK STATE
             </button>
           </div>
+          {restartError ? <div className="cmd-note cmd-note-error">Connector restart failed: {restartError}</div> : null}
         </div>
       ) : null}
 

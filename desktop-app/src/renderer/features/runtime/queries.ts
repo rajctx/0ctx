@@ -19,6 +19,148 @@ import type {
 } from '../../../shared/types/domain';
 import { desktopBridge } from '../../lib/bridge';
 
+const ACTIVE_CONTEXT_QUERY_KINDS = new Set([
+  'workstreams',
+  'sessions',
+  'session-detail',
+  'session-messages',
+  'checkpoints',
+  'checkpoint-detail',
+  'insights',
+  'workspace-comparison',
+  'workstream-comparison',
+  'handoff'
+]);
+
+const POLICY_QUERY_KINDS = new Set([
+  'data-policy',
+  'repo-readiness',
+  'hook-health'
+]);
+
+const CONTEXT_MUTATION_TYPES = new Set([
+  'ContextCreated',
+  'ContextDeleted',
+  'ContextSwitched'
+]);
+
+const CONTEXT_MUTATION_METHODS = new Set([
+  'createContext',
+  'deleteContext',
+  'switchContext'
+]);
+
+const POLICY_MUTATION_METHODS = new Set([
+  'setDataPolicy',
+  'setSyncPolicy',
+  'syncNow'
+]);
+
+const CHECKPOINT_MUTATION_TYPES = new Set([
+  'CheckpointSaved',
+  'CheckpointRewound'
+]);
+
+const CHECKPOINT_MUTATION_METHODS = new Set([
+  'saveCheckpoint',
+  'rewind',
+  'createSessionCheckpoint'
+]);
+
+function getDesktopQueryKind(queryKey: readonly unknown[]) {
+  return queryKey[0] === 'desktop' ? String(queryKey[1] ?? '') : null;
+}
+
+function getDesktopQueryContextIds(queryKey: readonly unknown[]) {
+  const kind = getDesktopQueryKind(queryKey);
+  if (!kind) {
+    return [];
+  }
+
+  switch (kind) {
+    case 'workstreams':
+    case 'sessions':
+    case 'session-detail':
+    case 'session-messages':
+    case 'checkpoints':
+    case 'insights':
+    case 'data-policy':
+    case 'repo-readiness':
+    case 'workstream-comparison':
+    case 'handoff':
+      return [queryKey[2]];
+    case 'workspace-comparison':
+      return [queryKey[2], queryKey[3]];
+    default:
+      return [];
+  }
+}
+
+function invalidateDesktopQueryKinds(
+  queryClient: ReturnType<typeof useQueryClient>,
+  kinds: Set<string>,
+  activeContextId: string | null
+) {
+  void queryClient.invalidateQueries({
+    predicate: (query) => {
+      const kind = getDesktopQueryKind(query.queryKey);
+      if (!kind || !kinds.has(kind)) {
+        return false;
+      }
+
+      if (kind === 'status' || kind === 'posture' || kind === 'connector' || kind === 'hook-health' || kind === 'checkpoint-detail') {
+        return true;
+      }
+
+      if (!activeContextId) {
+        return true;
+      }
+
+      return getDesktopQueryContextIds(query.queryKey).some((contextId) => contextId === activeContextId);
+    }
+  });
+}
+
+function invalidateDesktopEventQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  activeContextId: string | null,
+  event: { kind: 'daemon-event' | 'posture'; posture?: DesktopPosture; payload?: Record<string, unknown> }
+) {
+  if (event.kind === 'posture') {
+    queryClient.setQueryData(desktopQueryKeys.posture, event.posture ?? 'Offline');
+    void queryClient.invalidateQueries({ queryKey: desktopQueryKeys.status });
+    return;
+  }
+
+  const type = String(event.payload?.type || '');
+  const method = String(event.payload?.method || '');
+
+  if (CONTEXT_MUTATION_TYPES.has(type) || CONTEXT_MUTATION_METHODS.has(method)) {
+    void queryClient.invalidateQueries({ queryKey: desktopQueryKeys.status });
+    invalidateDesktopQueryKinds(queryClient, ACTIVE_CONTEXT_QUERY_KINDS, activeContextId);
+    invalidateDesktopQueryKinds(queryClient, POLICY_QUERY_KINDS, activeContextId);
+    return;
+  }
+
+  if (POLICY_MUTATION_METHODS.has(method)) {
+    void queryClient.invalidateQueries({ queryKey: desktopQueryKeys.status });
+    void queryClient.invalidateQueries({ queryKey: desktopQueryKeys.posture });
+    invalidateDesktopQueryKinds(queryClient, POLICY_QUERY_KINDS, activeContextId);
+    return;
+  }
+
+  if (CHECKPOINT_MUTATION_TYPES.has(type) || CHECKPOINT_MUTATION_METHODS.has(method)) {
+    void queryClient.invalidateQueries({ queryKey: desktopQueryKeys.status });
+    invalidateDesktopQueryKinds(queryClient, ACTIVE_CONTEXT_QUERY_KINDS, activeContextId);
+    return;
+  }
+
+  if (DESKTOP_MUTATION_TYPES.has(type) || method) {
+    void queryClient.invalidateQueries({ queryKey: desktopQueryKeys.status });
+    invalidateDesktopQueryKinds(queryClient, ACTIVE_CONTEXT_QUERY_KINDS, activeContextId);
+  }
+}
+
 export const desktopQueryKeys = {
   status: ['desktop', 'status'] as const,
   posture: ['desktop', 'posture'] as const,
@@ -368,6 +510,9 @@ export function useRestartConnector() {
     mutationFn: () => desktopBridge.connector.restart(),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: desktopQueryKeys.connector });
+      void queryClient.invalidateQueries({ queryKey: desktopQueryKeys.hookHealth });
+      void queryClient.invalidateQueries({ queryKey: desktopQueryKeys.status });
+      void queryClient.invalidateQueries({ queryKey: desktopQueryKeys.posture });
     }
   });
 }
@@ -389,16 +534,7 @@ export function useDesktopEventBridge(activeContextId: string | null) {
 
   useEffect(() => {
     const unsubscribe = desktopBridge.events.subscribe((event) => {
-      if (event.kind === 'posture') {
-        void queryClient.invalidateQueries({ queryKey: desktopQueryKeys.status });
-        return;
-      }
-
-      const type = String(event.payload?.type || '');
-      const method = String(event.payload?.method || '');
-      if (DESKTOP_MUTATION_TYPES.has(type) || method) {
-        void queryClient.invalidateQueries();
-      }
+      invalidateDesktopEventQueries(queryClient, activeContextId, event);
     });
 
     void desktopBridge.events.start(activeContextId).catch(() => undefined);

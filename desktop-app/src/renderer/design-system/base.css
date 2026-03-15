@@ -416,6 +416,7 @@ button:focus {
 .form-note,
 .cmd-subtitle,
 .cmd-note,
+.cmd-note-error,
 .int-subtitle,
 .policy-subtitle,
 .ctx-prose,
@@ -1193,6 +1194,11 @@ button:focus {
   font-size: 11px;
   color: var(--text-muted);
   line-height: 1.5;
+}
+
+.cmd-note-error,
+.ctx-error {
+  color: #d9a5a5;
 }
 
 .search-actions {

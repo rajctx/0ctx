@@ -339,10 +339,11 @@ export function RouteShell() {
                   type="button"
                   className="action"
                   onClick={() => {
-                    void restartConnector.mutateAsync().catch(() => undefined);
+                    restartConnector.mutate();
                   }}
+                  disabled={restartConnector.isPending}
                 >
-                  <span className="brk">[↻]</span> RESTART CONNECTOR
+                  <span className="brk">[↻]</span> {restartConnector.isPending ? 'RESTARTING CONNECTOR' : 'RESTART CONNECTOR'}
                 </button>
               ) : null}
               {activeSetupSection === 'runtime' ? (
