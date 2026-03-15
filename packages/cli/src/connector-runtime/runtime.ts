@@ -1,9 +1,5 @@
-import os from 'os';
-import { syncCommandBridge } from './command-bridge.js';
 import { getRuntimeDependencies } from './deps.js';
-import { deriveRecoveryState, normalizeIntervalMs, sleep } from './helpers.js';
-import { syncEventBridge } from './event-bridge.js';
-import { persistRuntimeState, updateQueueMetrics } from './state.js';
+import { normalizeIntervalMs, sleep } from './helpers.js';
 import type {
     ConnectorRuntimeDependencies,
     ConnectorRuntimeOptions,
@@ -40,244 +36,64 @@ async function getSyncStatusIfAvailable(
     return daemonOk ? deps.getSyncStatus() : null;
 }
 
-function ensureLocalRegistration(deps: ConnectorRuntimeDependencies, tenantId: string | null, dashboardUrl: string) {
-    return deps.registerConnector({
-        tenantId,
-        uiUrl: dashboardUrl
-    }).state;
+function ensureLocalRegistration(deps: ConnectorRuntimeDependencies, hostedUiUrl: string) {
+    return deps.registerConnector({ uiUrl: hostedUiUrl }).state;
 }
 
-async function promoteRegistrationToCloud(
-    deps: ConnectorRuntimeDependencies,
-    accessToken: string,
-    dashboardUrl: string,
-    registration: NonNullable<ReturnType<ConnectorRuntimeDependencies['readConnectorState']>>
-): Promise<string | null> {
-    const cloudRegistration = await deps.registerConnectorInCloud(accessToken, {
-        machineId: registration.machineId,
-        tenantId: registration.tenantId,
-        uiUrl: registration.uiUrl || dashboardUrl,
-        platform: os.platform()
-    });
-
-    if (cloudRegistration.ok) {
-        Object.assign(registration, {
-            tenantId: cloudRegistration.data?.tenantId ?? registration.tenantId,
-            registrationMode: 'cloud',
-            cloud: {
-                registrationId: cloudRegistration.data?.registrationId ?? registration.cloud.registrationId,
-                streamUrl: cloudRegistration.data?.streamUrl ?? registration.cloud.streamUrl,
-                capabilities: cloudRegistration.data?.capabilities ?? registration.cloud.capabilities,
-                lastHeartbeatAt: registration.cloud.lastHeartbeatAt,
-                lastError: null
-            }
-        });
-        return null;
-    }
-
-    const lastError = cloudRegistration.error ?? 'cloud_registration_failed';
-    registration.registrationMode = 'local';
-    registration.cloud.lastError = lastError;
-    return lastError;
-}
-
-async function refreshCloudCapabilitiesAndHeartbeat(params: {
+function persistLocalRuntimeState(params: {
     deps: ConnectorRuntimeDependencies;
     registration: NonNullable<ReturnType<ConnectorRuntimeDependencies['readConnectorState']>>;
-    accessToken: string;
     daemonOk: boolean;
-    sync: ConnectorRuntimeSyncStatus | null;
     lastError: string | null;
-}): Promise<{ cloudConnected: boolean; lastError: string | null }> {
-    const { deps, registration, accessToken, daemonOk, sync } = params;
-    let { lastError } = params;
-    let cloudConnected = false;
+}): void {
+    const { deps, registration, daemonOk, lastError } = params;
+    const recoveryState = !daemonOk
+        ? 'blocked'
+        : (registration.runtime.eventQueueBackoff > 0 || Boolean(lastError))
+            ? 'backoff'
+            : 'healthy';
 
-    const capabilitiesResult = await deps.fetchConnectorCapabilities(accessToken, registration.machineId);
-    if (capabilitiesResult.ok) {
-        registration.cloud.capabilities =
-            capabilitiesResult.data?.capabilities ??
-            capabilitiesResult.data?.features ??
-            registration.cloud.capabilities;
-        cloudConnected = true;
-        lastError = null;
-    } else if (capabilitiesResult.statusCode === 404) {
-        registration.registrationMode = 'local';
-        registration.cloud.registrationId = null;
-        registration.cloud.streamUrl = null;
-        registration.cloud.capabilities = [];
-        lastError = 'connector_not_found_in_cloud';
-    } else {
-        lastError = capabilitiesResult.error ?? 'cloud_capabilities_failed';
-    }
-
-    const postureForHeartbeat: 'connected' | 'degraded' | 'offline' = daemonOk ? 'connected' : 'offline';
-    const heartbeatResult =
-        registration.registrationMode === 'cloud'
-            ? await deps.sendConnectorHeartbeat(accessToken, {
-                  machineId: registration.machineId,
-                  tenantId: registration.tenantId,
-                  posture: postureForHeartbeat,
-                  daemonRunning: daemonOk,
-                  syncEnabled: Boolean(sync?.enabled),
-                  syncRunning: Boolean(sync?.running),
-                  queue: sync?.queue
-              })
-            : { ok: false as const, error: 'connector_not_found_in_cloud' };
-
-    if (heartbeatResult.ok) {
-        cloudConnected = true;
-        registration.cloud.lastHeartbeatAt = deps.now();
-        if (lastError === 'cloud_capabilities_failed') lastError = null;
-    } else {
-        lastError = heartbeatResult.error ?? lastError ?? 'cloud_heartbeat_failed';
-        cloudConnected = false;
-    }
-
-    return { cloudConnected, lastError };
-}
-
-async function ensureDaemonSession(
-    deps: ConnectorRuntimeDependencies,
-    registration: NonNullable<ReturnType<ConnectorRuntimeDependencies['readConnectorState']>>,
-    daemonOk: boolean,
-    lastError: string | null
-): Promise<{ daemonSessionToken: string | null; lastError: string | null }> {
-    let daemonSessionToken = registration.runtime.daemonSessionToken;
-    if (
-        daemonOk &&
-        registration.registrationMode === 'cloud' &&
-        (registration.runtime.eventBridgeSupported || registration.runtime.commandBridgeSupported) &&
-        !daemonSessionToken
-    ) {
-        try {
-            const session = await deps.createDaemonSession();
-            daemonSessionToken = session.sessionToken;
-            registration.runtime.daemonSessionToken = daemonSessionToken;
-            registration.runtime.eventSubscriptionId = null;
-        } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            registration.runtime.eventBridgeError = message;
-            registration.runtime.commandBridgeError = message;
-            lastError = message;
-        }
-    }
-    return { daemonSessionToken, lastError };
+    registration.runtime.recoveryState = recoveryState;
+    registration.runtime.consecutiveFailures =
+        recoveryState === 'healthy' ? 0 : (registration.runtime.consecutiveFailures ?? 0) + 1;
+    if (recoveryState === 'healthy') registration.runtime.lastHealthyAt = deps.now();
+    else registration.runtime.lastRecoveryAt = deps.now();
+    registration.updatedAt = deps.now();
+    deps.writeConnectorState(registration);
 }
 
 export async function runConnectorRuntimeCycle(
     options: ConnectorRuntimeOptions = {},
     deps: ConnectorRuntimeDependencies = getRuntimeDependencies()
 ): Promise<ConnectorRuntimeSummary> {
-    const { daemon, lastError: initialError } = await ensureDaemonHealth(options, deps);
-    let lastError = initialError;
-    const token = deps.resolveToken();
-    let registration = deps.readConnectorState();
-    const dashboardUrl = deps.getDashboardUrl();
-
-    if (token && !registration) {
-        registration = ensureLocalRegistration(deps, token.tenantId || null, dashboardUrl);
-    }
-
+    const { daemon, lastError } = await ensureDaemonHealth(options, deps);
+    const hostedUiUrl = deps.getHostedUiUrl();
+    const registration = deps.readConnectorState() ?? ensureLocalRegistration(deps, hostedUiUrl);
     const sync = await getSyncStatusIfAvailable(daemon.ok, deps);
-    let cloudConnected = false;
 
-    if (registration && token) {
-        deps.pruneQueue(deps.now());
-
-        if (registration.registrationMode !== 'cloud') {
-            lastError = await promoteRegistrationToCloud(deps, token.accessToken, dashboardUrl, registration);
-        }
-
-        if (registration.registrationMode === 'cloud') {
-            ({ cloudConnected, lastError } = await refreshCloudCapabilitiesAndHeartbeat({
-                deps,
-                registration,
-                accessToken: token.accessToken,
-                daemonOk: daemon.ok,
-                sync,
-                lastError
-            }));
-
-            let daemonSessionToken: string | null;
-            ({ daemonSessionToken, lastError } = await ensureDaemonSession(deps, registration, daemon.ok, lastError));
-
-            if (daemon.ok && registration.runtime.eventBridgeSupported) {
-                ({ daemonSessionToken, lastError } = await syncEventBridge({
-                    deps,
-                    registration,
-                    accessToken: token.accessToken,
-                    daemonSessionToken,
-                    lastError
-                }));
-            }
-
-            if (daemon.ok && registration.runtime.commandBridgeSupported) {
-                ({ daemonSessionToken, lastError } = await syncCommandBridge({
-                    deps,
-                    registration,
-                    accessToken: token.accessToken,
-                    daemonSessionToken,
-                    lastError
-                }));
-            }
-
-            registration.runtime.daemonSessionToken = daemonSessionToken;
-            updateQueueMetrics(deps, registration);
-        }
-
-        persistRuntimeState({
-            deps,
-            registration,
-            daemonOk: daemon.ok,
-            token,
-            cloudConnected,
-            lastError
-        });
-    } else if (registration && !token) {
-        deps.pruneQueue(deps.now());
-        updateQueueMetrics(deps, registration);
-        registration.cloud.lastError = 'auth_required';
-        persistRuntimeState({
-            deps,
-            registration,
-            daemonOk: daemon.ok,
-            token: null,
-            cloudConnected,
-            lastError
-        });
-        lastError = 'auth_required';
-    }
+    const queueStats = deps.getQueueStats(deps.now());
+    registration.runtime.eventQueuePending = queueStats.pending;
+    registration.runtime.eventQueueReady = queueStats.ready;
+    registration.runtime.eventQueueBackoff = queueStats.backoff;
+    persistLocalRuntimeState({
+        deps,
+        registration,
+        daemonOk: daemon.ok,
+        lastError
+    });
 
     const posture: 'connected' | 'degraded' | 'offline' = !daemon.ok
         ? 'offline'
-        : (!token || !registration)
-            ? 'degraded'
-            : (registration.registrationMode === 'cloud' &&
-               (!cloudConnected ||
-                Boolean(registration.runtime.eventBridgeError) ||
-                Boolean(registration.runtime.commandBridgeError)))
-                ? 'degraded'
-                : ((sync?.enabled === false || sync == null || sync?.running) ? 'connected' : 'degraded');
-
-    const recoveryState = deriveRecoveryState({
-        daemonOk: daemon.ok,
-        token,
-        registration,
-        cloudConnected,
-        lastError
-    });
+        : ((sync?.enabled === false || sync == null || sync?.running) ? 'connected' : 'degraded');
+    const recoveryState = registration.runtime.recoveryState ?? (daemon.ok ? 'healthy' : 'blocked');
 
     return {
         posture,
         recoveryState,
         daemonRunning: daemon.ok,
-        cloudConnected,
-        registrationMode: registration ? registration.registrationMode : 'none',
-        auth: Boolean(token),
-        machineId: registration?.machineId ?? null,
+        machineId: registration.machineId,
         lastError,
-        consecutiveFailures: registration?.runtime.consecutiveFailures ?? (recoveryState === 'healthy' ? 0 : 1)
+        consecutiveFailures: registration.runtime.consecutiveFailures ?? (recoveryState === 'healthy' ? 0 : 1)
     };
 }
 
@@ -300,7 +116,6 @@ export async function runConnectorRuntime(
                 if (!options.quiet) {
                     deps.log(
                         `connector_runtime_tick posture=${summary.posture} daemon=${summary.daemonRunning} ` +
-                            `cloud=${summary.cloudConnected} mode=${summary.registrationMode} ` +
                             `machine_id=${summary.machineId ?? 'n/a'}`
                     );
                     if (summary.lastError) {

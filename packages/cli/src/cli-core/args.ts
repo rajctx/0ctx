@@ -93,10 +93,3 @@ export function parseOptionalBooleanLikeFlag(value: string | boolean | undefined
 export function sleepMs(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
-
-export function applyDashboardQuery(url: string, queryRaw: string | boolean | undefined): string {
-    if (!queryRaw || typeof queryRaw !== 'string') return url;
-    const query = queryRaw.trim();
-    if (!query) return url;
-    return query.startsWith('?') ? `${url}${query}` : `${url}?${query}`;
-}

@@ -74,13 +74,12 @@ describe('@0ctx/cli build artifact source', () => {
         expect(cliSurface).toContain("0ctx recall [--mode=auto|temporal|topic|graph]");
         expect(cliSurface).toContain("[--start] [--json]");
         expect(cliSurface).toContain("0ctx release publish --version vX.Y.Z [--tag latest|next] [--otp 123456] [--dry-run] [--json]");
-        expect(cliSurface).toContain("0ctx setup [--clients=ga|claude,factory,antigravity] [--no-open] [--json] [--validate]");
+        expect(cliSurface).toContain("0ctx setup [--clients=ga|claude,factory,antigravity] [--json] [--validate]");
         expect(cliSurface).toContain("[--skip-service] [--skip-bootstrap]");
         expect(cliSurface).toContain("[--hooks-dry-run]");
-        expect(cliSurface).toContain("[--dashboard-query[=k=v&...]]");
         expect(cliSurface).toContain("0ctx status [--json] [--compact]");
         expect(cliSurface).toContain("0ctx repair [--clients=...] [--deep] [--json]");
-        expect(cliSurface).toContain("0ctx reset [--confirm] [--full] [--include-auth] [--json]");
+        expect(cliSurface).toContain("0ctx reset [--confirm] [--full] [--json]");
         expect(cliSurface).toContain("0ctx workstreams [--repo-root=<path>] [--limit=100] [--json]");
         expect(cliSurface).toContain("0ctx workstreams current [--repo-root=<path>] [--branch=<name>] [--worktree-path=<path>]");
         expect(cliSurface).toContain("0ctx workstreams compare [--repo-root=<path>] --source=<branch> --target=<branch>");
@@ -104,9 +103,9 @@ describe('@0ctx/cli build artifact source', () => {
         expect(clientsSource).toContain("export const DEFAULT_MCP_CLIENTS: SupportedClient[] = ['claude', 'antigravity'];");
         expect(registrySource).toContain("const defaultEnableMcpClients: SupportedClient[] = DEFAULT_MCP_CLIENTS;");
         expect(cliSurface).toContain("0ctx connector service install|enable|disable|uninstall|status|start|stop|restart");
-        expect(cliSurface).toContain("0ctx connector status [--json] [--cloud] [--require-bridge]");
-        expect(cliSurface).toContain("0ctx connector verify [--require-cloud] [--json]");
-        expect(cliSurface).toContain("0ctx connector register [--force] [--local-only] [--require-cloud] [--json]");
+        expect(cliSurface).toContain("0ctx connector status [--json]");
+        expect(cliSurface).toContain("0ctx connector verify [--json]");
+        expect(cliSurface).toContain("0ctx connector register [--force] [--json]");
         expect(cliSurface).toContain("0ctx sync policy get [--repo-root=<path>] [--json]");
         expect(cliSurface).toContain("0ctx data-policy [--repo-root=<path>] [--json]");
         expect(cliSurface).toContain("0ctx data-policy presets [--json]");
@@ -116,7 +115,7 @@ describe('@0ctx/cli build artifact source', () => {
         expect(policySource).toContain("commandDataPolicyCleanup");
         expect(policySource).toContain("Preset catalog");
         expect(policySource).toContain("Apply machine presets with: 0ctx data-policy <lean|review|debug> [--repo-root=<path>] [--json]");
-        expect(policySource).toContain("Opt a workspace into richer cloud sync with: 0ctx data-policy shared --repo-root=<path> --confirm-full-sync [--json]");
+        expect(policySource).toContain("Opt a workspace into richer hosted sync with: 0ctx data-policy shared --repo-root=<path> --confirm-full-sync [--json]");
         expect(policySource).toContain("0ctx data-policy <lean|review|debug> [--repo-root=<path>] [--json]");
         expect(policySource).toContain("0ctx data-policy shared --repo-root=<path> --confirm-full-sync [--json]");
         expect(policySource).toContain("formatScopedDataPolicyPresetLabel");
@@ -150,7 +149,6 @@ describe('@0ctx/cli build artifact source', () => {
         expect(cliSurface).toContain("0ctx connector queue status [--json]");
         expect(cliSurface).toContain("0ctx sync policy get [--repo-root=<path>] [--json]");
         expect(cliSurface).toContain("0ctx sync policy set <local_only|metadata_only|full_sync> [--repo-root=<path>] [--confirm-full-sync] [--json]");
-        expect(cliSurface).toContain("0ctx connector queue drain [--max-batches=10] [--batch-size=200] [--wait] [--strict|--fail-on-retry] [--timeout-ms=120000] [--poll-ms=1000] [--json]");
         expect(cliSurface).toContain("0ctx connector queue logs [--limit=50] [--json] [--clear --confirm|--dry-run]");
         expect(cliSurface).toContain("0ctx connector logs [--service|--system] [--no-open] [--snapshot] [--limit=50] [--since-hours=N] [--grep=text] [--errors-only]");
         expect(cliSurface).toContain("0ctx recall feedback --node-id=<id> (--helpful|--not-helpful)");
@@ -184,7 +182,7 @@ describe('@0ctx/cli build artifact source', () => {
         expect(repoSource).toContain("function findGitRepoRoot(input: string | null): string | null {");
         expect(noArgsSource).toContain("Detected git repo. Enabling 0ctx for");
         expect(noArgsSource).toContain("0ctx works repo-first. Move into a project repo and run `0ctx enable`.");
-        expect(dispatchSource).toContain("Use `0ctx enable` inside a repo for the normal product flow. Use `0ctx dashboard` only for hosted support surfaces.");
+        expect(dispatchSource).toContain("Hosted docs and install guidance live on 0ctx.com.");
     });
 });
 

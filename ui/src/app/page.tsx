@@ -155,8 +155,8 @@ export default function HomePage() {
           <div style={{ fontWeight: 700, letterSpacing: "-1px" }}>0CTX // MEMORY_ENGINE</div>
           <div style={{ display: "flex", gap: "2rem", fontSize: "0.8rem" }}>
             <Link href="/docs" style={{ color: "inherit", textDecoration: "none" }}>[DOCS]</Link>
+            <Link href="/install" style={{ color: "inherit", textDecoration: "none" }}>[INSTALL]</Link>
             <a href="https://github.com/0ctx-com/0ctx" target="_blank" rel="noopener noreferrer" style={{ color: "inherit", textDecoration: "none" }}>[GITHUB]</a>
-            <Link href="/dashboard" style={{ color: "inherit", textDecoration: "none" }}>[LOGIN]</Link>
           </div>
         </nav>
 
@@ -172,9 +172,9 @@ export default function HomePage() {
             <p className="hero-description">
               The persistent memory layer for autonomous agents.
               0ctx acts as a durable brain, storing project context in a traversable graph
-              so your AI never hallucinates or forgets.
+              so agents can recover prior decisions, constraints, and workstream state across sessions.
             </p>
-            <Link href="/dashboard" className="btn">Initialize Daemon</Link>
+            <Link href="/install" className="btn">Open Install Guide</Link>
           </div>
 
           <div style={{ position: "absolute", bottom: "4rem", right: 0, width: "300px", textAlign: "right" }}>
@@ -205,8 +205,8 @@ export default function HomePage() {
                 0ctx sits alongside your IDE and your AI. As a native MCP server, it exposes your project's historical context, constraints, and decisions. Agents dynamically query the graph via strict traversal to pull in relevant "memories" before generating a single token.
               </p>
               <div className="terminal">
-                <div className="prompt">0ctx query "auth system"</div>
-                <div style={{ color: "var(--text-secondary)", marginTop: "0.5rem" }}>&gt; Retrieving nodes: [Auth0, JWT, UserSchema]</div>
+                <div className="prompt">0ctx recall --query="auth system"</div>
+                <div style={{ color: "var(--text-secondary)", marginTop: "0.5rem" }}>&gt; Retrieving nodes: [LocalNotes, Decisions, WorkstreamState]</div>
                 <div style={{ color: "var(--text-secondary)" }}>&gt; Found constraint: "No 3rd party auth provider" (2023-09-12)</div>
                 <div style={{ color: "var(--text-secondary)" }}>&gt; Context injected into prompt.</div>
                 <div className="prompt"><span className="cursor"></span></div>
@@ -231,15 +231,15 @@ export default function HomePage() {
               <div className="feature-icon" style={{ borderRadius: 0 }}>C</div>
               <h3 style={{ fontSize: "1rem", marginBottom: "1rem" }}>CLI Integration</h3>
               <p style={{ fontSize: "0.8rem", margin: 0 }}>
-                Pipe context directly into standard inputs. Works with Copilot, GPT-4, and local LLAMA instances.
+                Repo-first enablement and automatic capture for the current GA path: Claude, Factory, and Antigravity.
               </p>
             </div>
 
             <div className="feature-card">
               <div className="feature-icon" style={{ borderRadius: "50%" }}>G</div>
-              <h3 style={{ fontSize: "1rem", marginBottom: "1rem" }}>Memory Graph</h3>
+              <h3 style={{ fontSize: "1rem", marginBottom: "1rem" }}>Queryable Memory</h3>
               <p style={{ fontSize: "0.8rem", margin: 0 }}>
-                Visualize the brain of your project. Identify orphaned logic and contradictory requirements via the web dashboard.
+                Traverse decisions, constraints, and artifacts without rebuilding context from scratch every session.
               </p>
             </div>
 
@@ -257,7 +257,8 @@ export default function HomePage() {
           <h2 style={{ border: "none", justifyContent: "center", fontSize: "3rem", marginBottom: "1rem" }}>CURE AMNESIA</h2>
           <p style={{ margin: "0 auto", marginBottom: "3rem" }}>Start building with a permanent memory.</p>
           <div style={{ display: "flex", justifyContent: "center", gap: "1rem" }}>
-            <Link href="/dashboard" className="btn">Download v0.9.2</Link>
+            <Link href="/install" className="btn">Start Setup</Link>
+            <Link href="/docs" className="btn" style={{ borderStyle: "dashed" }}>Read Docs</Link>
             <a href="https://github.com/0ctx-com/0ctx#manifesto" target="_blank" rel="noopener noreferrer" className="btn" style={{ borderStyle: "dashed" }}>Read The Manifesto</a>
           </div>
         </section>

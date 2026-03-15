@@ -1,24 +1,18 @@
+import { NextResponse } from 'next/server';
+
 /**
- * Auth0 SDK v4 proxy for Next.js 16.
+ * Public hosted UI compatibility redirects.
  *
- * Next.js 16 uses proxy.ts (standard Request type) instead of middleware.ts.
- * This file mounts all Auth0 managed routes automatically:
- *   /auth/login        → redirect to Auth0 Universal Login
- *   /auth/callback     → exchange code for tokens, set session cookie
- *   /auth/logout       → clear session, redirect to Auth0 logout
- *   /auth/profile      → return session user as JSON
- *   /auth/access-token → return / refresh access token
- *
- * Dashboard route protection is handled in the dashboard layout server
- * component via auth0.getSession() — the recommended approach per Auth0 docs.
- *
- * The broad matcher is required for rolling sessions to work correctly.
- * Narrowing it will break session refresh on any non-matched request.
+ * The current hosted surface is docs/install only. Older dashboard URLs
+ * redirect to /install so stale links do not 404.
  */
-import { auth0 } from '@/lib/auth0';
 
 export async function proxy(request: Request): Promise<Response> {
-  return auth0.middleware(request);
+  const url = new URL(request.url);
+  if (url.pathname === '/dashboard' || url.pathname.startsWith('/dashboard/')) {
+    return Response.redirect(new URL('/install', url), 307);
+  }
+  return NextResponse.next();
 }
 
 export const config = {

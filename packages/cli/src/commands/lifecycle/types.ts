@@ -54,22 +54,15 @@ export interface HealthCommandDeps {
 }
 
 export interface SetupCommandDeps {
-    resolveToken: () => unknown | null;
-    readConnectorState: () => { machineId: string; tenantId?: string | null; registrationMode: string } | null;
+    readConnectorState: () => { machineId: string } | null;
     commandConnector: (action: string, flags: FlagMap) => Promise<number>;
-    sleepMs: (ms: number) => Promise<void>;
-    getHostedDashboardUrl: () => string;
-    parsePositiveIntegerFlag: (value: string | boolean | undefined, fallback: number) => number;
     parseOptionalStringFlag: (value: string | boolean | undefined) => string | null | undefined;
     validateExplicitPreviewSelection: (raw: string | boolean | undefined, previewList: string) => string | null;
     validatePreviewOptIn: (raw: string | boolean | undefined, allowPreview: boolean, previewList: string, gaExample?: string) => string | null;
-    commandAuthLogin: (flags: FlagMap) => Promise<number>;
     commandInstall: (flags: FlagMap) => Promise<number>;
     commandConnectorHook: (action: string, flags: FlagMap) => Promise<number>;
     resolveRepoRoot: (input: string | null) => string;
     sendToDaemon: <T = unknown>(method: string, params?: Record<string, unknown>) => Promise<T>;
-    applyDashboardQuery: (url: string, query?: string) => string;
-    commandDashboard: (flags: FlagMap) => Promise<number>;
 }
 
 export interface ResetCommandDeps {

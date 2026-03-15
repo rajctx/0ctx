@@ -53,10 +53,8 @@ Recommended daily flow:
               [--skip-bootstrap] [--skip-hooks] [--mcp-profile=core|recall|ops]
 
 Advanced / machine management:
-  0ctx setup [--clients=ga|claude,factory,antigravity] [--no-open] [--json] [--validate]
-             [--require-cloud] [--wait-cloud-ready]
-             [--cloud-wait-timeout-ms=60000] [--cloud-wait-interval-ms=2000]
-             [--create-context=<name>] [--dashboard-query[=k=v&...]]
+  0ctx setup [--clients=ga|claude,factory,antigravity] [--json] [--validate]
+             [--create-context=<name>]
              [--skip-service] [--skip-bootstrap] [--skip-hooks] [--hooks-dry-run]
              [--mcp-profile=all|core|recall|ops]
   0ctx install [--clients=ga|claude,factory,antigravity] [--json] [--skip-bootstrap] [--mcp-profile=all|core|recall|ops]
@@ -68,7 +66,7 @@ Advanced / machine management:
   0ctx doctor [--json] [--clients=...]
   0ctx status [--json] [--compact]
   0ctx repair [--clients=...] [--deep] [--json]
-  0ctx reset [--confirm] [--full] [--include-auth] [--json]
+  0ctx reset [--confirm] [--full] [--json]
   0ctx workstreams [--repo-root=<path>] [--limit=100] [--json]
   0ctx workstreams current [--repo-root=<path>] [--branch=<name>] [--worktree-path=<path>]
                            [--session-limit=3] [--checkpoint-limit=2] [--json]
@@ -94,7 +92,6 @@ Advanced / machine management:
   0ctx recall [--mode=auto|temporal|topic|graph] [--query="..."] [--since-hours=24] [--limit=10] [--depth=2] [--max-nodes=30] [--start] [--json]
   0ctx recall feedback --node-id=<id> (--helpful|--not-helpful) [--reason="..."] [--context-id=<id>] [--json]
   0ctx recall feedback list|stats [--context-id=<id>] [--node-id=<id>] [--helpful|--not-helpful] [--limit=50] [--json]
-  0ctx dashboard [--no-open] [--dashboard-query=k=v&...]
   0ctx release publish --version vX.Y.Z [--tag latest|next] [--otp 123456] [--dry-run] [--json]
   0ctx daemon start
 
@@ -109,12 +106,6 @@ Client scope defaults:
 Preview overrides:
   Use --allow-preview only when you explicitly name preview integrations such as codex,cursor,windsurf.
   Keep preview installs and preview retrieval out of the normal enable/bootstrap path.
-
-Optional cloud authentication:
-  0ctx auth login    Start device-code login flow for account-backed features
-  0ctx auth logout   Clear stored credentials
-  0ctx auth status   Show current auth state
-  0ctx auth status --json
 
 Configuration:
   0ctx config list              Show all settings
@@ -141,9 +132,9 @@ Sync:
 Connector:
   0ctx connector service install|enable|disable|uninstall|status|start|stop|restart
   0ctx connector install|enable|disable|uninstall|status|start|stop|restart
-  0ctx connector status [--json] [--cloud] [--require-bridge]
-  0ctx connector verify [--require-cloud] [--json]
-  0ctx connector register [--force] [--local-only] [--require-cloud] [--json]
+  0ctx connector status [--json]
+  0ctx connector verify [--json]
+  0ctx connector register [--force] [--json]
   0ctx connector run [--once] [--interval-ms=5000] [--no-daemon-autostart]
   0ctx connector hook install [--clients=ga|claude,factory,antigravity] [--repo-root=<path>] [--global]
   0ctx connector hook status [--json] [--include-preview]
@@ -154,7 +145,6 @@ Connector:
                               [--input-file=<path>|--payload='<json>'|stdin]
   0ctx hook install|status|prune|session-start|ingest  Alias for "0ctx connector hook ..."
   0ctx connector queue status [--json]
-  0ctx connector queue drain [--max-batches=10] [--batch-size=200] [--wait] [--strict|--fail-on-retry] [--timeout-ms=120000] [--poll-ms=1000] [--json]
   0ctx connector queue purge [--all|--older-than-hours=N|--min-attempts=N] [--dry-run|--confirm] [--json]
   0ctx connector queue logs [--limit=50] [--json] [--clear --confirm|--dry-run]
   0ctx connector logs [--service|--system] [--no-open] [--snapshot] [--limit=50] [--since-hours=N] [--grep=text] [--errors-only]

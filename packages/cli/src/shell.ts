@@ -224,7 +224,7 @@ export async function runInteractiveShell(options: ShellOptions): Promise<number
             appendShellHistoryEntry(line);
 
             // Strip leading '/' from non-built-in slash commands so that
-            // e.g. `/auth login` runs as `auth login`
+            // e.g. `/status` runs as `status`
             const commandLine = line.startsWith('/') ? line.slice(1) : line;
 
             let tokens: string[];

@@ -65,7 +65,7 @@ const DATA_POLICY_PRESETS: DataPolicyPresetDefinition[] = [
         captureRetentionDays: 14,
         debugRetentionDays: 7,
         debugArtifactsEnabled: false,
-        recommendation: 'Use only when you explicitly want richer cloud sync for this workspace.'
+        recommendation: 'Use only when you explicitly want richer hosted sync for this workspace.'
     }
 ];
 
@@ -119,13 +119,13 @@ function printPresetCatalog(
     }
 
     console.log('  Apply machine presets with: 0ctx data-policy <lean|review|debug> [--repo-root=<path>] [--json]');
-    console.log('  Opt a workspace into richer cloud sync with: 0ctx data-policy shared --repo-root=<path> --confirm-full-sync [--json]');
+    console.log('  Opt a workspace into richer hosted sync with: 0ctx data-policy shared --repo-root=<path> --confirm-full-sync [--json]');
     console.log('');
 }
 
 function printPolicyGuidance(payload: DataPolicyPayload): void {
     if (payload.preset === 'custom') {
-        console.log('  Next step:               Normalize machine defaults with `0ctx data-policy lean|review|debug`. Use `0ctx data-policy shared --repo-root=<path> --confirm-full-sync` only when a workspace explicitly needs richer cloud sync.');
+        console.log('  Next step:               Normalize machine defaults with `0ctx data-policy lean|review|debug`. Use `0ctx data-policy shared --repo-root=<path> --confirm-full-sync` only when a workspace explicitly needs richer hosted sync.');
         console.log('  Need presets?:           Run `0ctx data-policy presets`.');
         return;
     }
@@ -134,7 +134,7 @@ function printPolicyGuidance(payload: DataPolicyPayload): void {
     console.log(`  Recommended for:         ${definition.recommendation}`);
 
     if (payload.preset === 'shared') {
-        console.log('  Next step:               Keep Shared only for workspaces that explicitly need metadata-only cloud sync, then return this workspace to Lean when that is no longer needed.');
+        console.log('  Next step:               Keep Shared only for workspaces that explicitly need metadata-only hosted sync, then return this workspace to Lean when that is no longer needed.');
         return;
     }
 
@@ -238,7 +238,7 @@ export function createDataPolicyCommands(deps: PolicyCommandDeps) {
         const confirmFullSync = Boolean(flags['confirm-full-sync']) || Boolean(flags.confirmFullSync);
         const enablingCloudSync = syncPolicy === 'full_sync' || preset === 'shared';
         if (enablingCloudSync && !confirmFullSync) {
-            console.error('Cloud sync opt-in requires explicit confirmation. Re-run with --confirm-full-sync if this workspace should send metadata to the cloud.');
+            console.error('Hosted sync opt-in requires explicit confirmation. Re-run with --confirm-full-sync if this workspace should send metadata remotely.');
             return 1;
         }
 

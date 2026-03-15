@@ -7,6 +7,11 @@ Current product docs:
 - [DATA_POLICY.md](C:/Users/Rajesh/development/0ctx-dev/docs/DATA_POLICY.md)
 - [RELEASE.md](C:/Users/Rajesh/development/0ctx-dev/docs/RELEASE.md)
 
+Hosted web entrypoints:
+
+- `/docs`
+- `/install`
+
 Contributor and implementation references:
 
 - `docs/PRODUCT_REMEDIATION_PLAN.md`

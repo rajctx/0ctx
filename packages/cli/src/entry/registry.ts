@@ -2,11 +2,8 @@ import os from 'os';
 import path from 'path';
 import { getConfigPath, getConfigValue, isValidConfigKey, listConfig, setConfigValue } from '@0ctx/core';
 import { sendToDaemon } from '@0ctx/mcp/dist/client';
-import { commandAuthLogin, commandAuthLogout, commandAuthRotate, commandAuthStatus, getEnvToken, isTokenExpired, refreshAccessToken, resolveToken } from '../auth';
-import { fetchConnectorCapabilities, registerConnectorInCloud, sendConnectorEvents, sendConnectorHeartbeat } from '../cloud';
 import { getConnectorStatePath, readConnectorState, registerConnector, writeConnectorState } from '../connector';
-import { getConnectorQueuePath, getConnectorQueueStats, getReadyConnectorEvents, listQueuedConnectorEvents, markConnectorEventsDelivered, markConnectorEventsFailed, purgeConnectorQueue } from '../connector-queue';
-import { drainConnectorQueue } from '../connector-queue-drain';
+import { getConnectorQueuePath, getConnectorQueueStats, listQueuedConnectorEvents, purgeConnectorQueue } from '../connector-queue';
 import { runConnectorRuntime } from '../connector-runtime';
 import { appendHookEventLog, getHookDebugRetentionDays, getHookDumpDir, getHookDumpRetentionDays, isHookDebugArtifactsEnabled, persistHookDump, persistHookTranscriptHistory, persistHookTranscriptSnapshot, pruneHookDumps } from '../hook-dumps';
 import { getHookConfigPath, getHookStatePath, installHooks, matchesHookCaptureRoot, normalizeHookPayload, readCodexArchiveCapture, readCodexCapture, readHookInstallState, readInlineHookCapture, readTranscriptCapture, resolveCodexSessionArchivePath, resolveHookCaptureRoot, resolveHookTranscriptPath, selectHookContextId } from '../hooks';
@@ -15,14 +12,14 @@ import { appendCliOpsLogEntry, clearCliOpsLog, getCliOpsLogPath, readCliOpsLog }
 import { runReleasePublish } from '../release';
 import { runInteractiveShell } from '../shell';
 import { createCommandContextResolver, getContextIdFlag, resolveCommandRepoRoot } from '../cli-core/command-context';
-import { applyDashboardQuery, parseOptionalBooleanLikeFlag, parseOptionalPositiveNumberFlag, parseOptionalStringFlag, parsePositiveIntegerFlag, parsePositiveNumberFlag, sleepMs } from '../cli-core/args';
+import { parseOptionalBooleanLikeFlag, parseOptionalPositiveNumberFlag, parseOptionalStringFlag, parsePositiveIntegerFlag, parsePositiveNumberFlag } from '../cli-core/args';
 import { ALL_SUPPORTED_CLIENTS, DEFAULT_HOOK_INSTALL_CLIENTS, DEFAULT_MCP_CLIENTS, SESSION_START_AGENTS, deriveEnableMcpClientsFromHookClients, detectPreviewSelections, isGaHookAgent, parseClients, parseEnableMcpClients, parseHookClients, validateExplicitPreviewSelection, validatePreviewOptIn } from '../cli-core/clients';
 import { checkDaemonCapabilities, ensureDaemonCapabilities, inferDaemonRecoverySteps, isDaemonReachable, printCapabilityMismatch, startDaemonDetached, waitForDaemon } from '../cli-core/daemon';
 import { detectInstalledGaHookClients, detectInstalledGaMcpClients, detectRegisteredGaMcpClients } from '../cli-core/detect-clients';
 import { formatAgentList, formatDebugArtifactsLabel, formatLabelValue, formatRetentionLabel, formatSyncPolicyLabel } from '../cli-core/format';
 import { createOpsSummaryRunner } from '../cli-core/ops';
 import { printJsonOrValue } from '../cli-core/output';
-import { buildDefaultDashboardQuery, getHostedDashboardUrl, openUrl, printBootstrapResults, resolveCliEntrypoint, runBootstrap } from '../cli-core/platform';
+import { getHostedUiUrl, openUrl, printBootstrapResults, resolveCliEntrypoint, runBootstrap } from '../cli-core/platform';
 import { createHookHealthCollector, createRepoReadinessCollector } from '../cli-core/readiness';
 import { findGitRepoRoot, getCurrentWorkstream, resolveRepoRoot, safeGitValue } from '../cli-core/repo';
 import { commandDaemonService } from '../cli-core/service';
@@ -82,7 +79,7 @@ export function createCliRegistry() {
     });
     const runCommandWithOpsSummary = createOpsSummaryRunner(appendCliOpsLogEntry);
     const { commandConnectorQueue } = createQueueCommands({
-        getConnectorQueueStats, listQueuedConnectorEvents, getConnectorQueuePath, getCliOpsLogPath, readCliOpsLog, clearCliOpsLog, appendCliOpsLogEntry, parsePositiveIntegerFlag, parsePositiveNumberFlag, resolveToken, readConnectorState, purgeConnectorQueue, drainConnectorQueue, sendConnectorEvents, getReadyConnectorEvents, markConnectorEventsDelivered, markConnectorEventsFailed, writeConnectorState
+        getConnectorQueueStats, listQueuedConnectorEvents, getConnectorQueuePath, getCliOpsLogPath, readCliOpsLog, clearCliOpsLog, appendCliOpsLogEntry, parsePositiveIntegerFlag, parsePositiveNumberFlag, purgeConnectorQueue
     });
     const { commandHook: commandConnectorHook } = createHookCommands({
         resolveRepoRoot, parseOptionalStringFlag, resolveContextIdForHookIngest: (repoRoot, explicitContextId) => resolveContextIdForHookIngest(repoRoot, explicitContextId), validateExplicitPreviewSelection, validatePreviewOptIn, parseHookClients: raw => parseHookClients(raw), installHooks, readHookInstallState, parsePositiveIntegerFlag, getHookDumpRetentionDays, pruneHookDumps, extractSupportedHookAgent, readStdinPayload, normalizeHookPayload, resolveHookTranscriptPath, resolveCodexSessionArchivePath, readCodexArchiveCapture, readTranscriptCapture, readCodexCapture, readInlineHookCapture, persistHookTranscriptSnapshot, persistHookTranscriptHistory, appendHookEventLog, persistHookDump, resolveHookCaptureRoot, validateHookIngestWorkspace, buildHookCaptureMeta, ensureChatSessionNode, ensureChatCommitNode, asRecord, safeGitValue, sendToDaemon
@@ -90,14 +87,14 @@ export function createCliRegistry() {
     const { commandDataPolicy, commandSyncStatus, commandSyncPolicyGet, commandSyncPolicySet } = createPolicyCommands({
         requireCommandContextId, resolveCommandContextId, parseOptionalStringFlag, parseOptionalPositiveNumberFlag, parseOptionalBooleanLikeFlag, ensureDaemonCapabilities, printCapabilityMismatch, formatSyncPolicyLabel, formatDebugArtifactsLabel, printJsonOrValue, pruneHookDumps
     });
-    const { commandStatus, commandBootstrap, commandMcp, commandInstall, commandEnable, commandDashboard, commandLogs, commandWorkspaces } = createProductCommands({
-        DB_PATH: dbPath, KEY_PATH: keyPath, SOCKET_PATH: socketPath, DEFAULT_MCP_CLIENTS: defaultEnableMcpClients, isDaemonReachable, startDaemonDetached, waitForDaemon, inferDaemonRecoverySteps, sendToDaemon, findGitRepoRoot, collectRepoReadiness, validateExplicitPreviewSelection, validatePreviewOptIn, detectPreviewSelections, parseClients: raw => parseClients(raw), parseHookClients: raw => parseHookClients(raw), parseEnableMcpClients: raw => parseEnableMcpClients(raw), deriveEnableMcpClientsFromHookClients: hookClients => deriveEnableMcpClientsFromHookClients(hookClients as HookInstallClient[]), detectInstalledGaHookClients, detectInstalledGaMcpClients, parseOptionalStringFlag, parsePositiveIntegerFlag, parseOptionalPositiveNumberFlag, runBootstrap: (clients, dryRun, explicitEntrypoint, profile) => runBootstrap(clients as SupportedClient[], dryRun, explicitEntrypoint, profile), printBootstrapResults, resolveRepoRoot, selectHookContextId, installHooks, commandInstall: flags => commandInstall(flags), buildDefaultDashboardQuery: () => buildDefaultDashboardQuery({ sendToDaemon, selectHookContextId }), applyDashboardQuery, getHostedDashboardUrl, openUrl, getConnectorStatePath, readConnectorState, getConnectorQueuePath, listQueuedConnectorEvents, getConnectorQueueStats, getCliOpsLogPath, readCliOpsLog, startLogsServer, formatAgentList, formatLabelValue, formatRetentionLabel, formatSyncPolicyLabel, printJsonOrValue
+    const { commandStatus, commandBootstrap, commandMcp, commandInstall, commandEnable, commandLogs, commandWorkspaces } = createProductCommands({
+        DB_PATH: dbPath, KEY_PATH: keyPath, SOCKET_PATH: socketPath, DEFAULT_MCP_CLIENTS: defaultEnableMcpClients, isDaemonReachable, startDaemonDetached, waitForDaemon, inferDaemonRecoverySteps, sendToDaemon, findGitRepoRoot, collectRepoReadiness, validateExplicitPreviewSelection, validatePreviewOptIn, detectPreviewSelections, parseClients: raw => parseClients(raw), parseHookClients: raw => parseHookClients(raw), parseEnableMcpClients: raw => parseEnableMcpClients(raw), deriveEnableMcpClientsFromHookClients: hookClients => deriveEnableMcpClientsFromHookClients(hookClients as HookInstallClient[]), detectInstalledGaHookClients, detectInstalledGaMcpClients, parseOptionalStringFlag, parsePositiveIntegerFlag, parseOptionalPositiveNumberFlag, runBootstrap: (clients, dryRun, explicitEntrypoint, profile) => runBootstrap(clients as SupportedClient[], dryRun, explicitEntrypoint, profile), printBootstrapResults, resolveRepoRoot, selectHookContextId, installHooks, commandInstall: flags => commandInstall(flags), openUrl, getConnectorStatePath, readConnectorState, getConnectorQueuePath, listQueuedConnectorEvents, getConnectorQueueStats, getCliOpsLogPath, readCliOpsLog, startLogsServer, formatAgentList, formatLabelValue, formatRetentionLabel, formatSyncPolicyLabel, printJsonOrValue
     });
     const { commandConnector } = createConnectorCommands({
-        isDaemonReachable, readConnectorState, resolveToken, fetchConnectorCapabilities, sendConnectorHeartbeat, getHostedDashboardUrl, getConnectorStatePath, writeConnectorState, sendToDaemon, inferDaemonRecoverySteps, runConnectorRuntime, parsePositiveIntegerFlag, commandLogs, commandDaemonService, commandConnectorQueue, registerConnector, registerConnectorInCloud
+        isDaemonReachable, readConnectorState, getHostedUiUrl, getConnectorStatePath, writeConnectorState, sendToDaemon, inferDaemonRecoverySteps, runConnectorRuntime, parsePositiveIntegerFlag, commandLogs, commandDaemonService, commandConnectorQueue, registerConnector
     });
     const { collectDoctorChecks, commandDoctor, commandRepair, commandReset, commandSetup } = createLifecycleCommands({
-        DB_PATH: dbPath, KEY_PATH: keyPath, isDaemonReachable, findGitRepoRoot, collectRepoReadiness, getHookDumpDir, getConnectorQueuePath, getConnectorStatePath, getHookStatePath, inferDaemonRecoverySteps, getCliOpsLogPath, runBootstrap: (clients, dryRun) => runBootstrap(clients as SupportedClient[], dryRun), parseClients: raw => parseClients(raw), collectHookHealth, readHookInstallState, resolveContextIdForHookIngest: (projectRoot, preferredContextId) => resolveContextIdForHookIngest(projectRoot, preferredContextId ?? null), installHooks, commandBootstrap, waitForDaemon, startDaemonDetached, ensureDaemonCapabilities, resolveToken, readConnectorState, commandConnector, sleepMs, getHostedDashboardUrl, parsePositiveIntegerFlag, parseOptionalStringFlag, validateExplicitPreviewSelection, validatePreviewOptIn, commandAuthLogin, commandInstall, commandConnectorHook, resolveRepoRoot, sendToDaemon, applyDashboardQuery, commandDashboard
+        DB_PATH: dbPath, KEY_PATH: keyPath, isDaemonReachable, findGitRepoRoot, collectRepoReadiness, getHookDumpDir, getConnectorQueuePath, getConnectorStatePath, getHookStatePath, inferDaemonRecoverySteps, getCliOpsLogPath, runBootstrap: (clients, dryRun) => runBootstrap(clients as SupportedClient[], dryRun), parseClients: raw => parseClients(raw), collectHookHealth, readHookInstallState, resolveContextIdForHookIngest: (projectRoot, preferredContextId) => resolveContextIdForHookIngest(projectRoot, preferredContextId ?? null), installHooks, commandBootstrap, waitForDaemon, startDaemonDetached, ensureDaemonCapabilities, readConnectorState, commandConnector, parseOptionalStringFlag, validateExplicitPreviewSelection, validatePreviewOptIn, commandInstall, commandConnectorHook, resolveRepoRoot, sendToDaemon
     });
     const { commandRecall } = createRecallCommands({
         parseOptionalStringFlag, parsePositiveIntegerFlag, parsePositiveNumberFlag, getContextIdFlag, checkDaemonCapabilities, printCapabilityMismatch, sendToDaemon
@@ -114,10 +111,6 @@ export function createCliRegistry() {
         collectDoctorChecks,
         runCommandWithOpsSummary,
         printHelp,
-        resolveToken,
-        isTokenExpired,
-        refreshAccessToken,
-        getEnvToken,
         readConnectorState,
         findGitRepoRoot,
         isDaemonReachable,
@@ -125,10 +118,6 @@ export function createCliRegistry() {
         waitForDaemon,
         commandEnable,
         commandBranches,
-        commandAuthLogin,
-        commandAuthLogout,
-        commandAuthStatus,
-        commandAuthRotate,
         commandSetup,
         commandInstall,
         commandBootstrap,
@@ -160,7 +149,6 @@ export function createCliRegistry() {
         commandConnectorQueue,
         commandConnectorHook,
         commandLogs,
-        commandDashboard,
         commandShell,
         commandReleasePublish
     };

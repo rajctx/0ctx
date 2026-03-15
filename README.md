@@ -14,7 +14,7 @@
 - `@0ctx/daemon`: Local socket service that owns graph state.
 - `@0ctx/mcp`: MCP server that bridges tools to the daemon.
 - `@0ctx/cli`: Product CLI (`0ctx`) for repo enablement, repair, bootstrap, and support workflows.
-- `ui/`: Hosted UI codebase (contributor/dev surface, not packaged in end-user runtime).
+- `ui/`: Hosted web surface for docs and install guidance (not required for normal repo-first daily use).
 
 ## Installation Models
 
@@ -60,14 +60,14 @@ cd <repo>
 0ctx bootstrap --clients=ga --dry-run
 
 # Advanced machine workflow
-0ctx setup --no-open
+0ctx setup
 0ctx doctor --json
 0ctx repair
 
 # Check connector posture (advanced)
 0ctx connector status --json
 0ctx connector status --json --require-bridge
-0ctx connector verify --require-cloud --json
+0ctx connector verify --json
 
 # Get/set per-context sync policy
 0ctx sync policy get --repo-root=.
@@ -95,16 +95,6 @@ cd <repo>
 0ctx workstreams --repo-root .
 0ctx sessions --repo-root .
 0ctx checkpoints --repo-root .
-```
-
-## Cloud and Control Plane (advanced only)
-
-Only use these when you intentionally need hosted machine registration or cloud-required setup.
-
-```bash
-0ctx connector register --require-cloud
-0ctx connector register --require-cloud --json
-0ctx setup --require-cloud --wait-cloud-ready --create-context="Default Workspace"
 ```
 
 ## Supported path

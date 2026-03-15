@@ -7,7 +7,6 @@ export function createResetCommand(deps: ResetCommandDeps) {
     return async function commandReset(flags: FlagMap): Promise<number> {
         const asJson = Boolean(flags.json);
         const full = Boolean(flags.full);
-        const includeAuth = Boolean(flags['include-auth']);
         const confirmed = Boolean(flags.confirm);
 
         if (!confirmed && !asJson) {
@@ -34,9 +33,7 @@ export function createResetCommand(deps: ResetCommandDeps) {
             return 1;
         }
 
-        const homeRoot = path.join(os.homedir(), '.0ctx');
-        const authFile = process.env.CTX_AUTH_FILE ?? path.join(homeRoot, 'auth.json');
-        const backupDir = process.env.CTX_BACKUP_DIR ?? path.join(homeRoot, 'backups');
+        const backupDir = process.env.CTX_BACKUP_DIR ?? path.join(os.homedir(), '.0ctx', 'backups');
         const targets = [
             deps.DB_PATH,
             `${deps.DB_PATH}-shm`,
@@ -46,8 +43,7 @@ export function createResetCommand(deps: ResetCommandDeps) {
             deps.getCliOpsLogPath(),
             full ? deps.getConnectorStatePath() : null,
             full ? deps.getHookStatePath() : null,
-            full ? backupDir : null,
-            includeAuth ? authFile : null
+            full ? backupDir : null
         ].filter((value): value is string => typeof value === 'string' && value.length > 0);
 
         const removed: string[] = [];
@@ -62,7 +58,7 @@ export function createResetCommand(deps: ResetCommandDeps) {
         }
 
         if (asJson) {
-            console.log(JSON.stringify({ ok: true, full, includeAuth, removed, skipped }, null, 2));
+            console.log(JSON.stringify({ ok: true, full, removed, skipped }, null, 2));
             return 0;
         }
 

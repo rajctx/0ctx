@@ -13,12 +13,11 @@ type DispatchDeps = Pick<CliRegistry,
     | 'commandDoctor' | 'commandStatus' | 'commandRepair' | 'commandReset' | 'commandVersion'
     | 'commandBranches' | 'commandWorkspaces' | 'commandAgentContext' | 'commandSessions'
     | 'commandCheckpoints' | 'commandInsights' | 'commandExtract' | 'commandResume'
-    | 'commandRewind' | 'commandExplain' | 'commandRecall' | 'commandAuthLogin'
-    | 'commandAuthLogout' | 'commandAuthStatus' | 'commandAuthRotate' | 'startDaemonDetached'
+    | 'commandRewind' | 'commandExplain' | 'commandRecall' | 'startDaemonDetached'
     | 'waitForDaemon' | 'commandDaemonService' | 'printHelp' | 'commandConfigList'
     | 'commandConfigGet' | 'commandConfigSet' | 'commandDataPolicy' | 'commandSyncStatus'
     | 'commandSyncPolicyGet' | 'commandSyncPolicySet' | 'commandConnector'
-    | 'commandConnectorQueue' | 'commandConnectorHook' | 'commandLogs' | 'commandDashboard'
+    | 'commandConnectorQueue' | 'commandConnectorHook' | 'commandLogs'
     | 'commandShell' | 'commandReleasePublish'
 >;
 
@@ -47,18 +46,9 @@ export async function runParsedCommand(parsed: ParsedArgs, deps: DispatchDeps): 
         case 'rewind': return deps.commandRewind(parsed.flags);
         case 'explain': return deps.commandExplain(parsed.flags);
         case 'recall': return deps.commandRecall(parsed.flags, parsed.positionalArgs);
-        case 'auth': {
-            const sub = parsed.subcommand;
-            if (sub === 'login') return deps.commandAuthLogin(parsed.flags);
-            if (sub === 'logout') return deps.commandAuthLogout();
-            if (sub === 'status') return deps.commandAuthStatus(parsed.flags);
-            if (sub === 'rotate') return deps.commandAuthRotate(parsed.flags);
-            console.log(`\nAuthentication commands:\n`);
-            console.log(`  auth login    Start device-code login flow`);
-            console.log(`  auth logout   Clear stored credentials`);
-            console.log(`  auth status   Show current auth state\n`);
-            return sub ? 1 : 0;
-        }
+        case 'auth':
+            console.error('`0ctx auth` has been removed from the current local-first product path.');
+            return 1;
         case 'daemon':
             if (parsed.subcommand === 'start') {
                 try {
@@ -105,7 +95,6 @@ export async function runParsedCommand(parsed: ParsedArgs, deps: DispatchDeps): 
             return deps.commandConnector(parsed.subcommand, parsed.flags);
         case 'hook': return deps.commandConnectorHook(parsed.positionalArgs[0], parsed.flags);
         case 'logs': return deps.commandLogs(parsed.flags);
-        case 'dashboard': return deps.commandDashboard(parsed.flags);
         case 'shell': return deps.commandShell();
         case 'release':
             if (parsed.subcommand === 'publish') return deps.commandReleasePublish(parsed.flags);
@@ -113,7 +102,7 @@ export async function runParsedCommand(parsed: ParsedArgs, deps: DispatchDeps): 
             return 1;
         case 'ui':
             console.error('`0ctx ui` has been removed from the end-user flow.');
-            console.error('Use `0ctx enable` inside a repo for the normal product flow. Use `0ctx dashboard` only for hosted support surfaces.');
+            console.error('Use `0ctx enable` inside a repo for the normal product flow. Hosted docs and install guidance live on 0ctx.com.');
             return 1;
         case 'help':
             deps.printHelp(Boolean(parsed.flags.advanced));

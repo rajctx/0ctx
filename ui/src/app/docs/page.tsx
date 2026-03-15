@@ -5,30 +5,37 @@ import { Panel } from '@/components/ui/panel';
 
 const REPO_BASE = 'https://github.com/0ctx-com/0ctx/blob/main';
 
+type DocItem = {
+  label: string;
+  href: string;
+  description: string;
+  external?: boolean;
+};
+
 const SECTIONS = [
   {
     title: 'Start Here',
     items: [
-      { label: 'Quickstart', href: `${REPO_BASE}/docs/QUICKSTART.md`, description: 'Fastest path from install to first working setup.' },
-      { label: 'Install Guide', href: `${REPO_BASE}/docs/INSTALL.md`, description: 'Full install, setup, troubleshooting, and environment variables.' },
-      { label: 'Environment Reference', href: `${REPO_BASE}/docs/ENV_REFERENCE.md`, description: 'Canonical runtime env var and config key contract.' },
-      { label: 'Onboarding', href: `${REPO_BASE}/docs/ONBOARDING.md`, description: 'Contributor and maintainer onboarding guide.' }
-    ]
+      { label: 'Install Guide', href: '/install', description: 'Machine readiness and the repo-first install path for the current product surface.' },
+      { label: 'Quickstart', href: `${REPO_BASE}/docs/QUICKSTART.md`, description: 'Fastest path from install to first working setup.', external: true },
+      { label: 'README', href: `${REPO_BASE}/README.md`, description: 'High-level product overview, commands, and architecture.', external: true }
+    ] satisfies DocItem[]
+  },
+  {
+    title: 'Product Model',
+    items: [
+      { label: 'Integrations', href: `${REPO_BASE}/docs/INTEGRATIONS.md`, description: 'GA versus preview agents and how capture/retrieval works.', external: true },
+      { label: 'Data Policy', href: `${REPO_BASE}/docs/DATA_POLICY.md`, description: 'Local-first defaults, retention, and sync posture.', external: true },
+      { label: 'Documentation Index', href: `${REPO_BASE}/docs/INDEX.md`, description: 'Canonical entrypoint for maintained repo docs.', external: true }
+    ] satisfies DocItem[]
   },
   {
     title: 'Operate',
     items: [
-      { label: 'Documentation Index', href: `${REPO_BASE}/docs/INDEX.md`, description: 'Canonical entrypoint for all maintained docs.' },
-      { label: 'Release Guide', href: `${REPO_BASE}/docs/RELEASE.md`, description: 'Release preparation and package publish flow.' }
-    ]
-  },
-  {
-    title: 'Architecture',
-    items: [
-      { label: 'Connector Service', href: `${REPO_BASE}/docs/CONNECTOR_SERVICE_ARCHITECTURE.md`, description: 'Connector runtime and bridge model.' },
-      { label: 'Storage & Sync', href: `${REPO_BASE}/docs/HYBRID_STORAGE_AND_SYNC_MODEL.md`, description: 'Local/cloud storage and sync policy model.' },
-      { label: 'Semantic Blackboard', href: `${REPO_BASE}/docs/SEMANTIC_BLACKBOARD_ARCHITECTURE.md`, description: 'Blackboard runtime and event model.' }
-    ]
+      { label: 'Release Guide', href: `${REPO_BASE}/docs/RELEASE.md`, description: 'Release preparation and validation flow for maintainers.', external: true },
+      { label: 'GitHub Issues', href: 'https://github.com/0ctx-com/0ctx/issues', description: 'Report bugs, track work, or follow current issues.', external: true },
+      { label: 'Source Repository', href: 'https://github.com/0ctx-com/0ctx', description: 'Browse the source, scripts, and current documentation set.', external: true }
+    ] satisfies DocItem[]
   }
 ];
 
@@ -63,7 +70,7 @@ export default function DocsPage() {
           </Badge>
           <h1 className="mt-2 text-2xl font-semibold">0ctx Documentation</h1>
           <p className="mt-1 text-sm text-[var(--text-muted)]">
-            Product, platform, and operational documentation for 0ctx.
+            Docs, install guidance, and operating references for the current repo-first product path.
           </p>
         </div>
 
@@ -71,13 +78,8 @@ export default function DocsPage() {
           <section key={section.title}>
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">{section.title}</h2>
             <div className="space-y-2">
-              {section.items.map(item => (
-                <a
-                  key={item.label}
-                  href={item.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
+              {section.items.map(item => {
+                const content = (
                   <Panel className="flex items-center justify-between p-3 transition-colors hover:bg-[var(--surface-subtle)]">
                     <div>
                       <p className="text-sm font-medium text-[var(--text-primary)]">{item.label}</p>
@@ -85,8 +87,22 @@ export default function DocsPage() {
                     </div>
                     <ArrowLeft className="h-4 w-4 rotate-180 text-[var(--text-muted)]" />
                   </Panel>
-                </a>
-              ))}
+                );
+
+                if (item.external) {
+                  return (
+                    <a key={item.label} href={item.href} target="_blank" rel="noopener noreferrer">
+                      {content}
+                    </a>
+                  );
+                }
+
+                return (
+                  <Link key={item.label} href={item.href}>
+                    {content}
+                  </Link>
+                );
+              })}
             </div>
           </section>
         ))}

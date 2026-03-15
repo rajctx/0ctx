@@ -50,7 +50,7 @@ export function createSyncCommands(deps: PolicyCommandDeps) {
             if (result.syncPolicy === 'metadata_only') {
                 console.log('  Note:    Syncs lean metadata only. Raw payloads stay local by default.');
             } else if (result.syncPolicy === 'full_sync') {
-                console.log('  Note:    Richer cloud sync is explicitly enabled for this workspace.');
+                console.log('  Note:    Richer hosted sync is explicitly enabled for this workspace.');
             }
             console.log('');
             return 0;
@@ -71,7 +71,7 @@ export function createSyncCommands(deps: PolicyCommandDeps) {
         }
         const confirmFullSync = Boolean(flags['confirm-full-sync']) || Boolean(flags.confirmFullSync);
         if (policy === 'full_sync' && !confirmFullSync) {
-            console.error('full_sync requires explicit confirmation. Re-run with --confirm-full-sync if this workspace should send richer metadata to the cloud.');
+            console.error('full_sync requires explicit confirmation. Re-run with --confirm-full-sync if this workspace should send richer metadata remotely.');
             return 1;
         }
 

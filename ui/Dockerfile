@@ -2,9 +2,6 @@
 FROM node:20-alpine AS deps
 WORKDIR /app
 
-# Install OpenSSL for Prisma
-RUN apk add --no-cache openssl
-
 COPY package.json package-lock.json ./
 RUN npm ci
 
@@ -12,13 +9,8 @@ RUN npm ci
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-RUN apk add --no-cache openssl
-
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-
-# Generate Prisma client
-RUN npx prisma generate
 
 # Build Next.js (standalone output)
 RUN npm run build
@@ -30,7 +22,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-RUN apk add --no-cache openssl curl
+RUN apk add --no-cache curl
 
 # Create non-root user
 RUN addgroup --system --gid 1001 nodejs
@@ -41,12 +33,7 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 
-# Copy prisma schema + migrations for runtime migration support
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
-
-# Entrypoint: run migrations then start server
+# Entrypoint: start server
 COPY docker-entrypoint.sh ./
 RUN chmod +x docker-entrypoint.sh
 

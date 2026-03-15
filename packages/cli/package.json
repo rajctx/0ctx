@@ -36,7 +36,6 @@
   "dependencies": {
     "@clack/prompts": "^1.0.1",
     "better-sqlite3": "^11.8.1",
-    "cross-keychain": "^1.1.0",
     "posthog-node": "^5.26.1"
   },
   "devDependencies": {

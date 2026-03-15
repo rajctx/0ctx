@@ -16,36 +16,22 @@ export const LOGS_UI_SCRIPT_SECONDARY = `  function kv(label, value, cls) {
 
     const registeredAt = state.registeredAt ? new Date(state.registeredAt).toISOString() : '--';
     const updatedAt = state.updatedAt ? new Date(state.updatedAt).toISOString() : '--';
-    const lastHb = state.cloud?.lastHeartbeatAt ? fmtAgo(state.cloud.lastHeartbeatAt) : '--';
 
     el.innerHTML =
       section('Identity', [
         kv('Machine ID', state.machineId),
-        kv('Tenant ID', state.tenantId ?? 'none', state.tenantId ? '' : 'dim'),
-        kv('Mode', state.registrationMode),
-        kv('Dashboard URL', state.uiUrl),
+        kv('Hosted URL', state.uiUrl),
         kv('Registered', registeredAt, 'dim'),
         kv('Updated', updatedAt, 'dim'),
       ].join('')) +
-      section('Cloud State', [
-        kv('Registration ID', state.cloud?.registrationId ?? 'none', state.cloud?.registrationId ? '' : 'dim'),
-        kv('Stream URL', state.cloud?.streamUrl ?? 'none', state.cloud?.streamUrl ? '' : 'dim'),
-        kv('Last Heartbeat', lastHb, lastHb === '--' ? 'dim' : ''),
-        kv('Last Error', state.cloud?.lastError ?? 'none', state.cloud?.lastError ? 'red' : 'dim'),
-        kv('Capabilities', (state.cloud?.capabilities || []).join(', ') || 'none', 'dim'),
-      ].join('')) +
       section('Runtime State', [
-        kv('Last Event Sequence', state.runtime?.lastEventSequence ?? 0),
-        kv('Last Event Sync', state.runtime?.lastEventSyncAt ? fmtAgo(state.runtime.lastEventSyncAt) : '--', 'dim'),
         kv('Event Queue Pending', state.runtime?.eventQueuePending ?? 0, state.runtime?.eventQueuePending > 0 ? 'amber' : ''),
         kv('Event Queue Ready', state.runtime?.eventQueueReady ?? 0, state.runtime?.eventQueueReady > 0 ? 'green' : ''),
         kv('Event Queue Backoff', state.runtime?.eventQueueBackoff ?? 0, state.runtime?.eventQueueBackoff > 0 ? 'red' : ''),
-        kv('Event Bridge', state.runtime?.eventBridgeSupported ? 'supported' : 'not supported', state.runtime?.eventBridgeSupported ? 'green' : 'red'),
-        kv('Event Bridge Error', state.runtime?.eventBridgeError ?? 'none', state.runtime?.eventBridgeError ? 'red' : 'dim'),
-        kv('Last Command Cursor', state.runtime?.lastCommandCursor ?? 0),
-        kv('Last Command Sync', state.runtime?.lastCommandSyncAt ? fmtAgo(state.runtime.lastCommandSyncAt) : '--', 'dim'),
-        kv('Command Bridge', state.runtime?.commandBridgeSupported ? 'supported' : 'not supported', state.runtime?.commandBridgeSupported ? 'green' : 'red'),
-        kv('Command Bridge Error', state.runtime?.commandBridgeError ?? 'none', state.runtime?.commandBridgeError ? 'red' : 'dim'),
+        kv('Recovery State', state.runtime?.recoveryState ?? 'healthy'),
+        kv('Consecutive Failures', state.runtime?.consecutiveFailures ?? 0),
+        kv('Last Healthy', state.runtime?.lastHealthyAt ? fmtAgo(state.runtime.lastHealthyAt) : '--', 'dim'),
+        kv('Last Recovery', state.runtime?.lastRecoveryAt ? fmtAgo(state.runtime.lastRecoveryAt) : '--', 'dim'),
       ].join(''));
   }
 
@@ -132,8 +118,7 @@ export const LOGS_UI_SCRIPT_SECONDARY = `  function kv(label, value, cls) {
 
     el.innerHTML =
       card('Daemon Status', '<div class="stat-val" style="color:var(--status-green)">ONLINE</div><div class="stat-sub">Uptime: ' + escape(uptime) + '</div>') +
-      card('Authentication', '<div class="stat-val" style="color:' + (h.authenticated ? 'var(--status-green)' : 'var(--status-amber)') + '">' + (h.authenticated ? 'AUTHED' : 'ANON') + '</div><div class="stat-sub">Sub: ' + escape(h.sub || 'none') + '</div>') +
-      card('Sync Engine', '<div class="stat-val" style="color:' + (s.running ? 'var(--status-green)' : 'var(--status-amber)') + '">' + (s.running ? 'RUNNING' : s.enabled ? 'IDLE' : 'DISABLED') + '</div>' + (s.lastError ? '<div class="stat-sub" style="color:var(--status-red)">' + escape(s.lastError) + '</div>' : '<div class="stat-sub">No errors</div>')) +
+      card('Sync Engine', '<div class="stat-val" style="color:' + (s.running ? 'var(--status-green)' : 'var(--status-amber)') + '">' + (s.running ? 'RUNNING' : s.enabled ? 'IDLE' : 'LOCAL ONLY') + '</div>' + (s.lastError ? '<div class="stat-sub" style="color:var(--status-red)">' + escape(s.lastError) + '</div>' : '<div class="stat-sub">No errors</div>')) +
       card('Capabilities', '<div class="stat-val">' + escape(methodCount) + '</div><div class="stat-sub">API v' + escape(c.apiVersion || '?') + ' &nbsp;·&nbsp; ' + escape((c.features || []).slice(0,3).join(', ') || 'none') + '</div>');
 
     document.getElementById('sf-daemon').textContent = 'UP';

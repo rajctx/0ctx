@@ -4,15 +4,15 @@ import { getBestShellSuggestion, getShellCompletionCandidates } from '../src/she
 describe('shell UI helpers', () => {
     it('includes slash-prefixed variants for normal commands', () => {
         const candidates = getShellCompletionCandidates();
-        expect(candidates).toContain('auth login');
-        expect(candidates).toContain('/auth login');
+        expect(candidates).toContain('status');
+        expect(candidates).toContain('/status');
         expect(candidates).toContain('/help');
     });
 
     it('returns the first matching completion as a suggestion', () => {
         const candidates = getShellCompletionCandidates();
-        expect(getBestShellSuggestion('auth', candidates)).toBe('auth login');
-        expect(getBestShellSuggestion('auth login', candidates)).toBe('');
+        expect(getBestShellSuggestion('sta', candidates)).toBe('status');
+        expect(getBestShellSuggestion('status', candidates)).toBe('status --json');
         expect(getBestShellSuggestion('', candidates)).toBe('');
     });
 });

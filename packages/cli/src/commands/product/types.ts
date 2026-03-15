@@ -40,9 +40,6 @@ export interface ProductCommandDeps {
     selectHookContextId: (contexts: Array<{ id?: string; name?: string; paths?: string[] }>, repoRoot: string, preferredContextId: string | null) => string | null;
     installHooks: (opts: { projectRoot: string; contextId: string | null; clients: string[]; installClaudeGlobal?: boolean; dryRun?: boolean; cliCommand?: string }) => { changed?: unknown; statePath?: string; projectConfigPath?: string; warnings?: string[] };
     commandInstall: (flags: FlagMap) => Promise<number>;
-    buildDefaultDashboardQuery: () => Promise<string | undefined>;
-    applyDashboardQuery: (url: string, queryRaw: string | boolean | undefined) => string;
-    getHostedDashboardUrl: () => string;
     openUrl: (url: string) => void;
     getConnectorStatePath: () => string;
     readConnectorState: () => unknown;

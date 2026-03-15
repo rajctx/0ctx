@@ -5,8 +5,6 @@ import { execSync } from 'child_process';
 import color from 'picocolors';
 import { bootstrapMcpRegistration } from '@0ctx/mcp/dist/bootstrap';
 import { getConfigValue } from '@0ctx/core';
-import { readConnectorState } from '../connector';
-import { findGitRepoRoot } from './repo';
 import type { BootstrapResult, SupportedClient } from './types';
 
 export function resolveMcpEntrypointForBootstrap(explicitEntrypoint?: string): string {
@@ -43,7 +41,7 @@ export function resolveCliEntrypoint(): string {
     return __filename;
 }
 
-function normalizeDashboardBaseUrl(input: string): string {
+function normalizeHostedUiBaseUrl(input: string): string {
     try {
         const parsed = new URL(input);
         const host = parsed.hostname.toLowerCase();
@@ -53,7 +51,7 @@ function normalizeDashboardBaseUrl(input: string): string {
         const isRootPath = parsed.pathname === '' || parsed.pathname === '/';
         if (isLegacyHost && isRootPath) {
             parsed.hostname = 'www.0ctx.com';
-            parsed.pathname = '/dashboard/workspace';
+            parsed.pathname = '/install';
             return parsed.toString();
         }
         return parsed.toString();
@@ -62,45 +60,12 @@ function normalizeDashboardBaseUrl(input: string): string {
     }
 }
 
-export function getHostedDashboardUrl(): string {
+export function getHostedUiUrl(): string {
     const configured = getConfigValue('ui.url');
     if (typeof configured === 'string' && configured.trim().length > 0) {
-        return normalizeDashboardBaseUrl(configured.trim());
+        return normalizeHostedUiBaseUrl(configured.trim());
     }
-    return normalizeDashboardBaseUrl('https://www.0ctx.com/dashboard/workspace');
-}
-
-export async function buildDefaultDashboardQuery(deps: {
-    sendToDaemon: <T = unknown>(method: string, params?: Record<string, unknown>) => Promise<T>;
-    selectHookContextId: (
-        contexts: Array<{ id?: string; paths?: string[] }>,
-        repoRoot: string | null,
-        explicitContextId: string | null
-    ) => string | null;
-}): Promise<string | undefined> {
-    const params = new URLSearchParams();
-    const state = readConnectorState();
-
-    if (state?.machineId) params.set('machineId', state.machineId);
-    if (state?.tenantId) params.set('tenantId', state.tenantId);
-
-    try {
-        const repoRoot = findGitRepoRoot(null);
-        if (repoRoot) {
-            const contexts = await deps.sendToDaemon<Array<{ id?: string; name?: string; paths?: string[] }>>('listContexts', {});
-            const contextId = deps.selectHookContextId(contexts, repoRoot, null);
-            const context = contextId ? contexts.find(item => item.id === contextId) : null;
-            if (context?.id) {
-                params.set('contextId', context.id);
-                if (context.name) params.set('contextName', context.name);
-            }
-        }
-    } catch {
-        // best effort; dashboard can still open with machine-only query
-    }
-
-    const query = params.toString();
-    return query.length > 0 ? query : undefined;
+    return normalizeHostedUiBaseUrl('https://www.0ctx.com/install');
 }
 
 export function openUrl(url: string): void {

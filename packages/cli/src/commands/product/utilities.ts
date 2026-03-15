@@ -1,20 +1,4 @@
 export function createUtilityCommands(deps: import('./types').ProductCommandDeps) {
-    async function commandDashboard(flags: import('./types').FlagMap): Promise<number> {
-        const explicitQuery = deps.parseOptionalStringFlag(flags['dashboard-query']);
-        const fallbackQuery = explicitQuery ?? await deps.buildDefaultDashboardQuery();
-        const url = deps.applyDashboardQuery(deps.getHostedDashboardUrl(), fallbackQuery ?? undefined);
-        console.log(`dashboard_url: ${url}`);
-
-        if (Boolean(flags['no-open'])) {
-            console.log('Open the URL above in your browser.');
-            return 0;
-        }
-
-        deps.openUrl(url);
-        console.log('Opened dashboard URL in your default browser (best effort).');
-        return 0;
-    }
-
     async function commandLogs(flags: import('./types').FlagMap): Promise<number> {
         if (Boolean(flags.snapshot)) {
             const limit = deps.parsePositiveIntegerFlag(flags.limit, 50);
@@ -81,5 +65,5 @@ export function createUtilityCommands(deps: import('./types').ProductCommandDeps
         return 0;
     }
 
-    return { commandDashboard, commandLogs };
+    return { commandLogs };
 }

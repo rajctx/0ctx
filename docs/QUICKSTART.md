@@ -27,13 +27,10 @@ For supported GA agents, the intended flow is:
 2. use the agent normally in that repo
 3. let 0ctx capture sessions and inject retrieval context automatically
 
-Desktop is optional. It is the management surface for:
+Hosted web pages are optional and currently limited to:
 
-- workspaces
-- workstreams
-- sessions
-- checkpoints
-- reviewed insights
+- docs
+- install guidance
 
 ## Useful commands
 
