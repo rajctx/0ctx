@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Manrope, Space_Grotesk, Inter, Space_Mono } from 'next/font/google';
+import { Manrope, Space_Grotesk, Inter, Space_Mono, Cormorant_Garamond } from 'next/font/google';
 import './globals.css';
 import { ThemeProvider } from '@/components/theme/theme-provider';
 
@@ -26,6 +26,14 @@ const spaceMono = Space_Mono({
   style: ['normal', 'italic'],
   subsets: ['latin'],
   variable: '--font-mono',
+  display: 'swap'
+});
+
+const cormorantGaramond = Cormorant_Garamond({
+  weight: ['500', '600'],
+  style: ['normal'],
+  subsets: ['latin'],
+  variable: '--font-hero',
   display: 'swap'
 });
 
@@ -59,7 +67,7 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeBootstrapScript }} />
       </head>
-      <body className={`${manrope.variable} ${spaceGrotesk.variable} ${inter.variable} ${spaceMono.variable} min-h-screen antialiased`}>
+      <body className={`${manrope.variable} ${spaceGrotesk.variable} ${inter.variable} ${spaceMono.variable} ${cormorantGaramond.variable} min-h-screen antialiased`}>
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>

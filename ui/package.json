@@ -7,12 +7,12 @@
     ".next/standalone"
   ],
   "scripts": {
-    "dev": "next dev",
-    "build": "node scripts/reset-next-types.js && next build --webpack",
+    "dev": "node scripts/run-next.js dev",
+    "build": "node scripts/reset-next-types.js && node scripts/run-next.js build --webpack",
     "postbuild": "node scripts/copy-assets.js",
     "postinstall": "node -e \"process.exit(0)\"",
-    "start": "next start",
-    "typecheck": "node scripts/reset-next-types.js && next typegen && tsc --project tsconfig.typecheck.json --noEmit",
+    "start": "node scripts/run-next.js start",
+    "typecheck": "node scripts/reset-next-types.js && node scripts/run-next.js typegen && tsc --project tsconfig.typecheck.json --noEmit",
     "lint": "eslint"
   },
   "dependencies": {
