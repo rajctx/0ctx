@@ -14,6 +14,9 @@ npm run smoke
 npm run test
 ```
 
+Current OSS desktop packages are unsigned. Local `npm run package` builds the
+installer artifacts without code-signing metadata.
+
 ## Architecture
 
 - `src/main/*` owns Electron, tray, updater, shell access, connector supervision, and daemon IPC.

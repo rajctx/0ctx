@@ -92,7 +92,10 @@ Advanced / machine management:
   0ctx recall [--mode=auto|temporal|topic|graph] [--query="..."] [--since-hours=24] [--limit=10] [--depth=2] [--max-nodes=30] [--start] [--json]
   0ctx recall feedback --node-id=<id> (--helpful|--not-helpful) [--reason="..."] [--context-id=<id>] [--json]
   0ctx recall feedback list|stats [--context-id=<id>] [--node-id=<id>] [--helpful|--not-helpful] [--limit=50] [--json]
-  0ctx release publish --version vX.Y.Z [--tag latest|next] [--otp 123456] [--dry-run] [--json]
+  0ctx release publish --version vX.Y.Z [--tag latest|next] [--otp 123456] [--dry-run]
+                       [--allow-dirty] [--skip-validate] [--skip-changelog] [--json]
+                       Bumps packages/core, daemon, mcp, cli, and desktop-app together,
+                       packages desktop release artifacts locally, and publishes @0ctx/cli.
   0ctx daemon start
 
 Capture support:

@@ -2,6 +2,24 @@
 
 Release validation is script-driven.
 
+## Unified manual release command
+
+Use the CLI release command as the canonical manual release entrypoint:
+
+```bash
+0ctx release publish --version vX.Y.Z --dry-run
+```
+
+That command:
+
+1. bumps `packages/core`, `packages/daemon`, `packages/mcp`, `packages/cli`, and `desktop-app` to the same version
+2. runs release validation, changelog prep, and tag preview
+3. dry-runs and verifies the public CLI tarball
+4. runs desktop smoke coverage and packages desktop artifacts under `releases/desktop/vX.Y.Z/`
+5. publishes `@0ctx/cli` to npm unless `--dry-run` is set
+
+Tag creation and the GitHub release remain manual follow-up steps.
+
 ## Dry-run validation
 
 ```bash
@@ -137,6 +155,9 @@ npm run package
 
 `npm run build:debug` produces an unpacked Electron build for local validation.
 `npm run package` produces installer artifacts under `desktop-app/release/`.
+Current OSS desktop builds are unsigned. Windows packaging skips executable
+editing and update-signature verification until release signing infrastructure
+is in place.
 
 ## Before publishing
 
@@ -145,6 +166,18 @@ Minimum expected state:
 1. `npm run release:validate -- -DryRun -AllowDirty` passes
 2. `npm run release:report` passes and writes `releases/verification/release-readiness.json`
 3. working tree is clean unless intentionally doing a dry-run with `-AllowDirty`
+
+Recommended release command:
+
+```bash
+0ctx release publish --version vX.Y.Z --dry-run
+```
+
+For an actual publish:
+
+```bash
+0ctx release publish --version vX.Y.Z --tag latest
+```
 
 The publish path now also enforces release-surface version alignment. To preview the publish gate:
 

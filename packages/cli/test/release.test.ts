@@ -40,16 +40,22 @@ describe('bumpAllPackageVersions', () => {
                 'utf-8'
             );
         }
+        fs.mkdirSync(path.join(tmpDir, 'desktop-app'), { recursive: true });
+        fs.writeFileSync(
+            path.join(tmpDir, 'desktop-app', 'package.json'),
+            JSON.stringify({ name: '@0ctx/desktop-electron', version: '0.1.0', private: true }, null, 2) + '\n',
+            'utf-8'
+        );
     });
 
     afterEach(() => {
         fs.rmSync(tmpDir, { recursive: true, force: true });
     });
 
-    it('bumps all 4 packages to the target version', () => {
+    it('bumps all release surfaces to the target version', () => {
         const result = bumpAllPackageVersions(tmpDir, 'v0.2.0');
         expect(result.version).toBe('0.2.0');
-        expect(result.bumped).toHaveLength(4);
+        expect(result.bumped).toHaveLength(5);
 
         for (const pkg of ['core', 'daemon', 'mcp', 'cli']) {
             const content = JSON.parse(fs.readFileSync(
@@ -58,6 +64,12 @@ describe('bumpAllPackageVersions', () => {
             ));
             expect(content.version).toBe('0.2.0');
         }
+
+        const desktopContent = JSON.parse(fs.readFileSync(
+            path.join(tmpDir, 'desktop-app', 'package.json'),
+            'utf-8'
+        ));
+        expect(desktopContent.version).toBe('0.2.0');
     });
 
     it('strips v prefix for package.json versions', () => {
@@ -99,5 +111,16 @@ describe('bumpAllPackageVersions', () => {
             'utf-8'
         );
         expect(raw.endsWith('\n')).toBe(true);
+    });
+
+    it('updates the desktop app version along with the CLI release surface', () => {
+        const result = bumpAllPackageVersions(tmpDir, 'v0.6.0');
+        expect(result.bumped).toContain('@0ctx/desktop-electron 0.1.0 -> 0.6.0');
+
+        const desktopContent = JSON.parse(fs.readFileSync(
+            path.join(tmpDir, 'desktop-app', 'package.json'),
+            'utf-8'
+        ));
+        expect(desktopContent.version).toBe('0.6.0');
     });
 });

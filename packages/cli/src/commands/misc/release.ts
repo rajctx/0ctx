@@ -5,7 +5,9 @@ export function createReleasePublishCommand(deps: MiscCommandDeps) {
         const versionRaw = deps.parseOptionalStringFlag(flags.version);
         if (!versionRaw) {
             console.error('Missing required --version argument.');
-            console.error('Usage: 0ctx release publish --version vX.Y.Z [--tag latest] [--otp 123456] [--dry-run] [--allow-dirty] [--json]');
+            console.error(
+                'Usage: 0ctx release publish --version vX.Y.Z [--tag latest|next] [--otp 123456] [--dry-run] [--allow-dirty] [--skip-validate] [--skip-changelog] [--json]'
+            );
             return 1;
         }
 

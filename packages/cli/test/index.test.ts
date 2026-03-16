@@ -73,7 +73,10 @@ describe('@0ctx/cli build artifact source', () => {
         expect(cliSurface).toContain("0ctx connector hook status [--json] [--include-preview]");
         expect(cliSurface).toContain("0ctx recall [--mode=auto|temporal|topic|graph]");
         expect(cliSurface).toContain("[--start] [--json]");
-        expect(cliSurface).toContain("0ctx release publish --version vX.Y.Z [--tag latest|next] [--otp 123456] [--dry-run] [--json]");
+        expect(cliSurface).toContain("0ctx release publish --version vX.Y.Z [--tag latest|next] [--otp 123456] [--dry-run]");
+        expect(cliSurface).toContain("[--allow-dirty] [--skip-validate] [--skip-changelog] [--json]");
+        expect(cliSurface).toContain("Bumps packages/core, daemon, mcp, cli, and desktop-app together,");
+        expect(cliSurface).toContain("packages desktop release artifacts locally, and publishes @0ctx/cli.");
         expect(cliSurface).toContain("0ctx setup [--clients=ga|claude,factory,antigravity] [--json] [--validate]");
         expect(cliSurface).toContain("[--skip-service] [--skip-bootstrap]");
         expect(cliSurface).toContain("[--hooks-dry-run]");

@@ -145,6 +145,23 @@ export async function runReleasePublish(options: ReleasePublishOptions): Promise
     }
 
     {
+        const ok = await pushAndCheck(runNpmScript('desktop_smoke', 'desktop:smoke', [], repoRoot, outputMode));
+        if (!ok) {
+            return { ok: false, repoRoot, version, tag, dryRun, steps };
+        }
+    }
+
+    {
+        const desktopArtifactArgs = outputMode === 'capture' ? ['--json'] : [];
+        const ok = await pushAndCheck(
+            runNpmScript('desktop_artifacts', 'release:desktop:artifacts', desktopArtifactArgs, repoRoot, outputMode)
+        );
+        if (!ok) {
+            return { ok: false, repoRoot, version, tag, dryRun, steps };
+        }
+    }
+
+    {
         const ok = await pushAndCheck(
             runPublishScript(
                 'publish',

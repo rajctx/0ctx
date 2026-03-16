@@ -1,7 +1,13 @@
 import fs from 'fs';
 import path from 'path';
 
-const WORKSPACE_PACKAGES = ['core', 'daemon', 'mcp', 'cli'] as const;
+const RELEASE_SURFACES = [
+    { name: '@0ctx/core', packageJsonPath: ['packages', 'core', 'package.json'] },
+    { name: '@0ctx/daemon', packageJsonPath: ['packages', 'daemon', 'package.json'] },
+    { name: '@0ctx/mcp', packageJsonPath: ['packages', 'mcp', 'package.json'] },
+    { name: '@0ctx/cli', packageJsonPath: ['packages', 'cli', 'package.json'] },
+    { name: '@0ctx/desktop-electron', packageJsonPath: ['desktop-app', 'package.json'] }
+] as const;
 
 export interface VersionBumpResult {
     bumped: string[];
@@ -26,8 +32,8 @@ export function bumpAllPackageVersions(repoRoot: string, taggedVersion: string):
     const bareVersion = taggedVersion.startsWith('v') ? taggedVersion.slice(1) : taggedVersion;
     const bumped: string[] = [];
 
-    for (const pkg of WORKSPACE_PACKAGES) {
-        const packageJsonPath = path.join(repoRoot, 'packages', pkg, 'package.json');
+    for (const surface of RELEASE_SURFACES) {
+        const packageJsonPath = path.join(repoRoot, ...surface.packageJsonPath);
         if (!fs.existsSync(packageJsonPath)) {
             throw new Error(`Package file not found: ${packageJsonPath}`);
         }
@@ -36,7 +42,7 @@ export function bumpAllPackageVersions(repoRoot: string, taggedVersion: string):
         const oldVersion = parsed.version;
         parsed.version = bareVersion;
         fs.writeFileSync(packageJsonPath, JSON.stringify(parsed, null, 2) + '\n', 'utf-8');
-        bumped.push(`@0ctx/${pkg} ${oldVersion} → ${bareVersion}`);
+        bumped.push(`${surface.name} ${oldVersion} -> ${bareVersion}`);
     }
 
     return { bumped, version: bareVersion };
