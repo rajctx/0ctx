@@ -50,7 +50,7 @@ const DEFAULTS: AppConfig = {
     'integration.chatgpt.requireApproval': true,
     'integration.autoBootstrap': true,
     'audit.hmacSecret': '',
-    'telemetry.enabled': true
+    'telemetry.enabled': false
 };
 
 /** Map of config keys to env var overrides */

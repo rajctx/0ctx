@@ -2,23 +2,29 @@
 
 0ctx is a local-first project memory runtime for AI workflows. It captures work by repo, keeps workstreams and checkpoints attached to the right project, and makes the same memory available to supported agents through the local runtime.
 
+`@0ctx/cli` is the primary open-source entrypoint. The daemon owns local state,
+and the other surfaces in this monorepo build on top of the same runtime.
+
 ## Why this exists
 
 - Most AI workflows lose context between sessions, tools, and branches.
 - 0ctx keeps one durable workspace per repo and groups activity into workstreams, sessions, checkpoints, and reviewed insights.
 - The daemon is the source of truth. Supported agents retrieve through the local runtime after `0ctx enable`.
 
-## Packages
+## Repository Surfaces
 
-- `@0ctx/core`: Graph model, SQLite schema/migrations, query logic.
-- `@0ctx/daemon`: Local socket service that owns graph state.
-- `@0ctx/mcp`: MCP server that bridges tools to the daemon.
-- `@0ctx/cli`: Product CLI (`0ctx`) for repo enablement, repair, bootstrap, and support workflows.
-- `ui/`: Hosted web surface for docs and install guidance (not required for normal repo-first daily use).
+- `@0ctx/cli`: Official installable OSS surface for repo enablement, repair,
+  bootstrap, and support workflows.
+- `packages/core`, `packages/daemon`, `packages/mcp`: Internal runtime packages
+  that power the CLI and local daemon.
+- `desktop-app/`: Contributor and dev-focused Electron management surface.
+- `ui/`: Hosted web surface for docs and install guidance.
+- `cloud/`: Dev/reference services and release helpers for hosted or managed
+  integrations.
 
-## Installation Models
+## Open-Source Quickstart
 
-Enterprise packaged install (target no-clone path on npm):
+Install the published CLI:
 
 ```bash
 npm install -g @0ctx/cli
@@ -97,7 +103,17 @@ cd <repo>
 0ctx checkpoints --repo-root .
 ```
 
-## Supported path
+For monorepo development:
+
+```bash
+npm install
+npm run build
+npm run cli:install-local
+cd <repo>
+0ctx enable
+```
+
+## Supported OSS Path
 
 GA integrations:
 
@@ -117,6 +133,16 @@ cd <repo>
 
 That binds the repo, starts or verifies the local runtime, installs supported capture integrations, and turns on automatic retrieval for supported agents.
 
+The official open-source story is the repo-first CLI/runtime path:
+
+```bash
+cd <repo>
+0ctx enable
+```
+
+That binds the repo, starts or verifies the local runtime, installs supported
+capture integrations, and turns on automatic retrieval for supported agents.
+
 ## Documentation
 
 - `AGENTS.md`: implementation guidance and architecture.
@@ -125,6 +151,18 @@ That binds the repo, starts or verifies the local runtime, installs supported ca
 - `docs/INTEGRATIONS.md`: GA vs preview integration model.
 - `docs/DATA_POLICY.md`: local-first retention and sync defaults.
 - `docs/RELEASE.md`: release validation and verification flow.
+
+## Contributing And Support
+
+- See `CONTRIBUTING.md` for fork/PR workflow and validation expectations.
+- See `CODE_OF_CONDUCT.md` for repository participation standards.
+- See `SECURITY.md` for vulnerability reporting.
+- See `SUPPORT.md` for public support boundaries.
+
+## Privacy Defaults
+
+- A clean source build does not send CLI telemetry unless it is explicitly enabled and configured.
+- The hosted UI does not initialize Sentry unless `NEXT_PUBLIC_SENTRY_DSN` is set.
 
 ## Repository Policy
 
@@ -139,4 +177,4 @@ npm run repo:adopt-ui
 
 ## License
 
-See package-level licensing policy before publishing externally.
+Apache-2.0. See [LICENSE](./LICENSE).

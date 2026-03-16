@@ -32,7 +32,7 @@
     "local-first"
   ],
   "author": "",
-  "license": "ISC",
+  "license": "Apache-2.0",
   "dependencies": {
     "@0ctx/core": "*",
     "@0ctx/daemon": "*",

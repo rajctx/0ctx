@@ -4,7 +4,9 @@
 /packages/daemon/ @rajctx
 /packages/mcp/ @rajctx
 /packages/cli/ @rajctx
-/packages/ui/ @rajctx
+/desktop-app/ @rajctx
+/ui/ @rajctx
+/cloud/ @rajctx
 
 /.github/ @rajctx
 /docs/ @rajctx

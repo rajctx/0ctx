@@ -138,6 +138,13 @@ export async function runReleasePublish(options: ReleasePublishOptions): Promise
     }
 
     {
+        const ok = await pushAndCheck(runNpmScript('pack_verify', 'release:pack:verify', [], repoRoot, outputMode));
+        if (!ok) {
+            return { ok: false, repoRoot, version, tag, dryRun, steps };
+        }
+    }
+
+    {
         const ok = await pushAndCheck(
             runPublishScript(
                 'publish',

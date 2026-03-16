@@ -226,6 +226,11 @@ function main() {
     throw new Error(`CLI pack dry-run failed.\nstdout:\n${packDryRun.stdout}\nstderr:\n${packDryRun.stderr}`);
   }
 
+  const packVerify = run("npm", ["run", "release:pack:verify"], { captureOutput: true });
+  if (!packVerify.ok) {
+    throw new Error(`CLI pack verification failed.\nstdout:\n${packVerify.stdout}\nstderr:\n${packVerify.stderr}`);
+  }
+
   const test = run("npm", ["run", "test"], { captureOutput: true });
   if (!test.ok) {
     throw new Error(`Tests failed.\nstdout:\n${test.stdout}\nstderr:\n${test.stderr}`);
@@ -265,6 +270,7 @@ function main() {
   const dailyReport = parseJsonOutput(daily);
   const desktopRealReport = desktopReal.ok ? parseJsonOutput(desktopReal) : null;
   const cliPackage = parsePackDryRun(packDryRun);
+  const cliPackageVerification = parseJsonOutput(packVerify);
 
   const report = {
     ok: true,
@@ -276,6 +282,7 @@ function main() {
       typecheck: summarizeStep(typecheck),
       build: summarizeStep(build),
       cliPackDryRun: summarizeStep(packDryRun),
+      cliPackVerification: summarizeStep(packVerify),
       test: summarizeStep(test),
       gaAgents: summarizeStep(ga),
       dailyFlow: summarizeStep(daily),
@@ -304,6 +311,7 @@ function main() {
       reportPath: dailyReport.reportPath ?? null,
     },
     cliPackage,
+    cliPackageVerification,
     desktopRealFlow: desktopRealReport ? {
       workspace: desktopRealReport.source?.contextName ?? null,
       branch: desktopRealReport.source?.branch ?? null,

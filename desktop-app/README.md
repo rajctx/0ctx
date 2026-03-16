@@ -1,6 +1,6 @@
 # 0ctx Desktop Electron
 
-Primary Electron desktop surface for 0ctx.
+Contributor and dev-focused Electron surface for 0ctx.
 
 ## Commands
 

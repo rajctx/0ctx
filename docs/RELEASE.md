@@ -51,6 +51,7 @@ The consolidated report includes:
 - typecheck
 - build
 - CLI package dry-run
+- CLI package verification
 - publish dry-run on clean branches
 - test
 - GA agent e2e
@@ -114,6 +115,16 @@ GA validation is based on:
 Preview integrations are not part of the normal release gate.
 
 ## Packaging
+
+Validate the published CLI surface with:
+
+```bash
+npm run release:pack:dry
+npm run release:pack:verify
+```
+
+`release:pack:verify` checks that the CLI tarball includes the expected
+README/license material and excludes internal-only files.
 
 Desktop packaging and smoke coverage use:
 

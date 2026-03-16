@@ -2,6 +2,7 @@
   "name": "@0ctx/desktop-electron",
   "version": "0.1.16",
   "private": true,
+  "license": "Apache-2.0",
   "description": "0ctx Desktop Electron app",
   "main": "dist-electron/main/bootstrap/index.js",
   "scripts": {

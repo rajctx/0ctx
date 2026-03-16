@@ -7,6 +7,8 @@
     "0ctx": "dist/index.js"
   },
   "files": [
+    "LICENSE",
+    "README.md",
     "dist/index.js",
     "dist/daemon.js",
     "dist/mcp-server.js",
@@ -24,10 +26,17 @@
   "keywords": [
     "context",
     "cli",
+    "mcp",
+    "sqlite",
+    "local-first",
     "0ctx"
   ],
   "author": "",
-  "license": "ISC",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/0ctx-com/0ctx#readme",
+  "bugs": {
+    "url": "https://github.com/0ctx-com/0ctx/issues"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/0ctx-com/0ctx.git",

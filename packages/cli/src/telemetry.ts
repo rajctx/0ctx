@@ -24,14 +24,19 @@ const SENSITIVE_KEYS = new Set([
 ]);
 
 const HOME_DIR = os.homedir();
+const DEFAULT_POSTHOG_HOST = 'https://us.i.posthog.com';
 
 let posthog: PostHog | null = null;
 let isTelemetryEnabled = false;
 let distinctId = 'cli-anonymous';
 
-// The PostHog project API key is write-only (client-safe).
-const POSTHOG_API_KEY = process.env.CTX_POSTHOG_API_KEY || 'phc_xDBVuUE95GT4nKyqFmT7gRq5gfYj4flQzuIyoe3a9Wb';
-const POSTHOG_HOST = process.env.CTX_POSTHOG_HOST || 'https://us.i.posthog.com';
+function getPostHogApiKey(): string {
+    return String(process.env.CTX_POSTHOG_API_KEY || '').trim();
+}
+
+function getPostHogHost(): string {
+    return String(process.env.CTX_POSTHOG_HOST || '').trim() || DEFAULT_POSTHOG_HOST;
+}
 
 // ── CLI version (read once) ──────────────────────────────────────────────────
 let cliVersion = 'unknown';
@@ -78,6 +83,9 @@ function checkTelemetryEnabled(): boolean {
     if (process.env.CTX_DISABLE_TELEMETRY === '1' || process.env.CTX_DISABLE_TELEMETRY === 'true') {
         return false;
     }
+    if (!getPostHogApiKey()) {
+        return false;
+    }
     const enabled = getConfigValue('telemetry.enabled');
     if (enabled === false) {
         return false;
@@ -88,18 +96,17 @@ function checkTelemetryEnabled(): boolean {
 // ── Public API ───────────────────────────────────────────────────────────────
 
 export function initTelemetry(deviceId?: string) {
-    if (deviceId) {
-        distinctId = deviceId;
-    }
+    distinctId = deviceId || 'cli-anonymous';
 
     isTelemetryEnabled = checkTelemetryEnabled();
     if (!isTelemetryEnabled) {
+        posthog = null;
         return;
     }
 
     try {
-        posthog = new PostHog(POSTHOG_API_KEY, {
-            host: POSTHOG_HOST,
+        posthog = new PostHog(getPostHogApiKey(), {
+            host: getPostHogHost(),
             flushAt: 1,
             flushInterval: 0,
         });
@@ -141,4 +148,6 @@ export async function shutdownTelemetry() {
             // Ignore shutdown errors
         }
     }
+    posthog = null;
+    isTelemetryEnabled = false;
 }
