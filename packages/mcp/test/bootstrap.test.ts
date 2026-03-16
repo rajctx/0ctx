@@ -2,7 +2,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { bootstrapMcpRegistration } from '../src/bootstrap';
+import { bootstrapMcpRegistration, parseBootstrapClients, validateBootstrapClientSelection } from '../src/bootstrap';
 
 const tempDirs: string[] = [];
 
@@ -170,7 +170,35 @@ describe('bootstrapMcpRegistration', () => {
             mcpServers: Record<string, { command: string; args: string[] }>;
         };
         expect(config.mcpServers['0ctx']).toBeTruthy();
-        expect(config.mcpServers['0ctx'].args).toEqual([entrypoint]);
+        expect(config.mcpServers['0ctx'].args).toEqual([entrypoint, '--profile', 'core']);
+    });
+
+    it('creates Antigravity config in ~/.gemini when that is the detected install shape', () => {
+        const root = createTempRoot('0ctx-mcp-bootstrap-');
+        const homeDir = path.join(root, 'home');
+        const appDataDir = path.join(root, 'AppData', 'Roaming');
+        const geminiDir = path.join(homeDir, '.gemini');
+        const entrypoint = createEntrypoint(root);
+        fs.mkdirSync(geminiDir, { recursive: true });
+
+        const results = bootstrapMcpRegistration({
+            clients: ['antigravity'],
+            entrypoint,
+            platform: 'win32',
+            homeDir,
+            appDataDir
+        });
+
+        expect(results).toHaveLength(1);
+        expect(results[0].status).toBe('created');
+
+        const configPath = path.join(geminiDir, 'mcp.json');
+        const config = JSON.parse(fs.readFileSync(configPath, 'utf8')) as {
+            mcpServers: Record<string, { command: string; args: string[] }>;
+        };
+        expect(results[0].configPath).toBe(configPath);
+        expect(config.mcpServers['0ctx']).toBeTruthy();
+        expect(config.mcpServers['0ctx'].args).toEqual([entrypoint, '--profile', 'core']);
     });
 
     it('writes Codex MCP server block into ~/.codex/config.toml and stays idempotent', () => {
@@ -207,5 +235,22 @@ describe('bootstrapMcpRegistration', () => {
         expect(configToml).toContain('[mcp_servers.0ctx]');
         expect(configToml).toContain(`command = ${JSON.stringify(process.execPath)}`);
         expect(configToml).toContain(`args = [${JSON.stringify(entrypoint)}, "--profile", "ops"]`);
+    });
+
+    it('defaults bootstrap client parsing to GA clients only', () => {
+        expect(parseBootstrapClients(undefined)).toEqual(['claude', 'antigravity']);
+        expect(parseBootstrapClients('ga')).toEqual(['claude', 'antigravity']);
+        expect(parseBootstrapClients('preview')).toEqual([]);
+        expect(parseBootstrapClients('all')).toEqual([]);
+        expect(parseBootstrapClients('cursor')).toEqual(['cursor']);
+        expect(parseBootstrapClients('')).toEqual(['claude', 'antigravity']);
+    });
+
+    it('rejects preview and all bootstrap shorthands in the normal product path', () => {
+        expect(validateBootstrapClientSelection('preview')).toContain('--clients=ga');
+        expect(validateBootstrapClientSelection('all')).toContain('--clients=codex,cursor,windsurf');
+        expect(validateBootstrapClientSelection('cursor')).toContain('--allow-preview');
+        expect(validateBootstrapClientSelection('cursor', true)).toBeNull();
+        expect(validateBootstrapClientSelection(undefined)).toBeNull();
     });
 });

@@ -1,0 +1,20 @@
+appId: com.octx.desktop.electron
+productName: 0ctx Desktop
+directories:
+  output: release
+files:
+  - dist-electron/**
+  - dist-renderer/**
+  - package.json
+mac:
+  target:
+    - dmg
+  category: public.app-category.developer-tools
+win:
+  target:
+    - nsis
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+publish: null

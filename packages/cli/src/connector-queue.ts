@@ -2,7 +2,16 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { randomUUID } from 'crypto';
-import type { ConnectorEventPayload } from './cloud';
+
+export interface ConnectorEventPayload {
+    eventId: string;
+    sequence: number;
+    contextId?: string | null;
+    type: string;
+    timestamp: number;
+    source: string;
+    payload?: Record<string, unknown>;
+}
 
 const QUEUE_FILE_VERSION = 1;
 const DEFAULT_QUEUE_LIMIT = 20_000;

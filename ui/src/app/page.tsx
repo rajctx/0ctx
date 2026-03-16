@@ -1,278 +1,112 @@
-"use client";
-
+import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useRef } from "react";
 import "./landing.css";
 
+const heroMeta = [
+  "Local daemon",
+  "/",
+  "SQLite graph",
+  "/",
+  "Repo-first setup",
+  "/",
+  "MCP-native",
+];
+
 export default function HomePage() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const chartContainerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    // Canvas Animation Logic
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    let width: number, height: number;
-    let nodes: Node[] = [];
-    const NODE_COUNT = 60;
-    const CONNECTION_DISTANCE = 150;
-    let animationId: number;
-
-    function resize() {
-      if (!canvas) return;
-      width = window.innerWidth;
-      height = window.innerHeight;
-      canvas.width = width;
-      canvas.height = height;
-    }
-
-    class Node {
-      x: number;
-      y: number;
-      vx: number;
-      vy: number;
-      radius: number;
-
-      constructor() {
-        this.x = Math.random() * width;
-        this.y = Math.random() * height;
-        this.vx = (Math.random() - 0.5) * 0.5;
-        this.vy = (Math.random() - 0.5) * 0.5;
-        this.radius = Math.random() * 2 + 1;
-      }
-
-      update() {
-        this.x += this.vx;
-        this.y += this.vy;
-
-        if (this.x < 0 || this.x > width) this.vx *= -1;
-        if (this.y < 0 || this.y > height) this.vy *= -1;
-      }
-
-      draw() {
-        if (!ctx) return;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-        ctx.fillStyle = "rgba(249, 115, 22, 0.8)";
-        ctx.fill();
-      }
-    }
-
-    function initCanvas() {
-      resize();
-      nodes = [];
-      for (let i = 0; i < NODE_COUNT; i++) {
-        nodes.push(new Node());
-      }
-      animate();
-    }
-
-    function animate() {
-      if (!ctx || !canvas) return;
-      ctx.clearRect(0, 0, width, height);
-
-      ctx.lineWidth = 0.5;
-      for (let i = 0; i < nodes.length; i++) {
-        nodes[i].update();
-        nodes[i].draw();
-
-        for (let j = i + 1; j < nodes.length; j++) {
-          const dx = nodes[i].x - nodes[j].x;
-          const dy = nodes[i].y - nodes[j].y;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-
-          if (distance < CONNECTION_DISTANCE) {
-            ctx.beginPath();
-            ctx.moveTo(nodes[i].x, nodes[i].y);
-            ctx.lineTo(nodes[j].x, nodes[j].y);
-
-            const alpha = 1 - distance / CONNECTION_DISTANCE;
-            ctx.strokeStyle = `rgba(249, 115, 22, ${alpha * 0.3})`;
-            ctx.stroke();
-          }
-        }
-      }
-
-      if (Math.random() > 0.95) {
-        ctx.strokeStyle = "rgba(249, 115, 22, 0.1)";
-        ctx.beginPath();
-        const rx = Math.random() * width;
-        ctx.moveTo(rx, 0);
-        ctx.lineTo(rx, height);
-        ctx.stroke();
-      }
-
-      animationId = requestAnimationFrame(animate);
-    }
-
-    window.addEventListener("resize", resize);
-    initCanvas();
-
-    // Chart Animation Logic
-    const chartContainer = chartContainerRef.current;
-    let chartInterval: NodeJS.Timeout;
-
-    if (chartContainer) {
-      // Clear container in case of strict mode double run
-      chartContainer.innerHTML = '';
-
-      for (let i = 0; i < 20; i++) {
-        const bar = document.createElement("div");
-        bar.className = "chart-bar";
-        bar.style.height = Math.random() * 100 + "%";
-        chartContainer.appendChild(bar);
-      }
-
-      chartInterval = setInterval(() => {
-        const bars = chartContainer.querySelectorAll(".chart-bar") as NodeListOf<HTMLElement>;
-        bars.forEach((bar) => {
-          if (Math.random() > 0.7) {
-            bar.style.height = Math.random() * 100 + "%";
-            bar.classList.toggle("active", Math.random() > 0.8);
-          }
-        });
-      }, 500);
-    }
-
-    // Cleanup
-    return () => {
-      window.removeEventListener("resize", resize);
-      cancelAnimationFrame(animationId);
-      if (chartInterval) clearInterval(chartInterval);
-    };
-  }, []);
-
   return (
     <div id="landing-page">
-      <div id="noise-layer"></div>
-      <canvas id="graph-canvas" ref={canvasRef}></canvas>
+      <div className="landing-bg">
+        <Image
+          src="/images/background.png"
+          alt="Cosmic background"
+          fill
+          priority
+          sizes="100vw"
+          className="landing-bg-image"
+        />
+        <div className="landing-bg-overlay" />
+      </div>
 
-      <div className="container">
-        <nav style={{ display: "flex", justifyContent: "space-between", padding: "2rem 0", borderBottom: "1px solid var(--dim-color)" }}>
-          <div style={{ fontWeight: 700, letterSpacing: "-1px" }}>0CTX // MEMORY_ENGINE</div>
-          <div style={{ display: "flex", gap: "2rem", fontSize: "0.8rem" }}>
-            <Link href="/docs" style={{ color: "inherit", textDecoration: "none" }}>[DOCS]</Link>
-            <a href="https://github.com/0ctx-com/0ctx" target="_blank" rel="noopener noreferrer" style={{ color: "inherit", textDecoration: "none" }}>[GITHUB]</a>
-            <Link href="/dashboard" style={{ color: "inherit", textDecoration: "none" }}>[LOGIN]</Link>
-          </div>
-        </nav>
+      <section className="hero-shell">
+        <header className="site-header section-inner ui-fade-in">
+          <Link href="/" className="brand-mark" aria-label="0ctx home">
+            <span className="brand-orb" aria-hidden="true" />
+            <span className="brand-lockup">
+              <strong>0ctx</strong>
+              <span>persistent project memory</span>
+            </span>
+          </Link>
 
-        <section className="hero section" style={{ borderBottom: "none" }}>
-          <div id="fog-layer"></div>
-          <div className="hero-content">
-            <div className="hero-meta">
-              <span>SYS.STATUS: ONLINE</span>
-              <span>NODES: 4,092</span>
-              <span>LATENCY: 12ms</span>
+          <nav className="site-nav" aria-label="Primary">
+            <Link href="/docs">Docs</Link>
+            <Link href="/install">Install</Link>
+            <a
+              href="https://github.com/0ctx-com/0ctx"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              GitHub
+            </a>
+          </nav>
+
+          <Link href="/install" className="site-cta">
+            Open install
+          </Link>
+        </header>
+
+        <div className="hero-copy-wrap section-inner">
+          <div className="hero-content ui-rise-in">
+            <div className="hero-topline">
+              <span>LOCAL-FIRST CONTEXT ENGINE</span>
             </div>
-            <h1>Total<br />Recall<br />For AI.</h1>
-            <p className="hero-description">
-              The persistent memory layer for autonomous agents.
-              0ctx acts as a durable brain, storing project context in a traversable graph
-              so your AI never hallucinates or forgets.
+            
+            <h1 className="hero-title">
+              YOUR TOOLS<br/>
+              SHOULD<br/>
+              REMEMBER<br/>
+              THE PROJECT.
+            </h1>
+
+            <p className="hero-lead">
+              0ctx keeps sessions, checkpoints, and decisions attached to the
+              repo so the next AI tool can continue the work instead of asking
+              you to restate it.
             </p>
-            <Link href="/dashboard" className="btn">Initialize Daemon</Link>
-          </div>
 
-          <div style={{ position: "absolute", bottom: "4rem", right: 0, width: "300px", textAlign: "right" }}>
-            <div style={{ borderBottom: "1px solid var(--dim-color)", marginBottom: "0.5rem", fontSize: "0.7rem" }}>MEMORY_USAGE</div>
-            <div className="chart-bar-container" id="hero-chart" ref={chartContainerRef}></div>
-          </div>
-        </section>
-
-        <section className="section">
-          <div className="ruler-x"></div>
-          <div className="grid-2">
-            <div>
-              <h2>01 // THE PROBLEM <span className="coord">X:049 Y:201</span></h2>
-              <p style={{ fontSize: "1.2rem", color: "var(--fg-color)" }}>
-                LLMs are brilliant but amnesic.
-              </p>
-              <p>
-                Every new session is a blank slate. Context windows are expensive and ephemeral.
-                Critical architectural decisions, constraints, and user preferences are lost the moment the terminal closes.
-              </p>
-            </div>
-            <div>
-              <h2>02 // THE SOLUTION <span className="coord">X:092 Y:201</span></h2>
-              <p style={{ fontSize: "1.2rem", color: "var(--fg-color)" }}>
-                A connected knowledge graph.
-              </p>
-              <p>
-                0ctx sits alongside your IDE and your AI. As a native MCP server, it exposes your project's historical context, constraints, and decisions. Agents dynamically query the graph via strict traversal to pull in relevant "memories" before generating a single token.
-              </p>
-              <div className="terminal">
-                <div className="prompt">0ctx query "auth system"</div>
-                <div style={{ color: "var(--text-secondary)", marginTop: "0.5rem" }}>&gt; Retrieving nodes: [Auth0, JWT, UserSchema]</div>
-                <div style={{ color: "var(--text-secondary)" }}>&gt; Found constraint: "No 3rd party auth provider" (2023-09-12)</div>
-                <div style={{ color: "var(--text-secondary)" }}>&gt; Context injected into prompt.</div>
-                <div className="prompt"><span className="cursor"></span></div>
-              </div>
+            <div className="hero-actions">
+              <Link href="/install" className="button-primary">
+                Open install guide
+              </Link>
+              <Link href="/docs" className="button-secondary">
+                Read the docs
+              </Link>
             </div>
           </div>
-        </section>
 
-        <section className="section">
-          <div className="ruler-x"></div>
-          <h2>SYSTEM MODULES <span className="coord">SEC:03</span></h2>
-          <div className="grid-4" style={{ marginTop: "3rem" }}>
-            <div className="feature-card">
-              <div className="feature-icon" style={{ borderRadius: 0 }}>D</div>
-              <h3 style={{ fontSize: "1rem", marginBottom: "1rem" }}>Background Daemon</h3>
-              <p style={{ fontSize: "0.8rem", margin: 0 }}>
-                Runs locally. Watches file changes and git commits to automatically update the knowledge graph in real-time.
-              </p>
-            </div>
-
-            <div className="feature-card">
-              <div className="feature-icon" style={{ borderRadius: 0 }}>C</div>
-              <h3 style={{ fontSize: "1rem", marginBottom: "1rem" }}>CLI Integration</h3>
-              <p style={{ fontSize: "0.8rem", margin: 0 }}>
-                Pipe context directly into standard inputs. Works with Copilot, GPT-4, and local LLAMA instances.
-              </p>
-            </div>
-
-            <div className="feature-card">
-              <div className="feature-icon" style={{ borderRadius: "50%" }}>G</div>
-              <h3 style={{ fontSize: "1rem", marginBottom: "1rem" }}>Memory Graph</h3>
-              <p style={{ fontSize: "0.8rem", margin: 0 }}>
-                Visualize the brain of your project. Identify orphaned logic and contradictory requirements via the web dashboard.
-              </p>
-            </div>
-
-            <div className="feature-card">
-              <div className="feature-icon" style={{ borderRadius: 0 }}>API</div>
-              <h3 style={{ fontSize: "1rem", marginBottom: "1rem" }}>Semantic Search</h3>
-              <p style={{ fontSize: "0.8rem", margin: 0 }}>
-                "Why did we choose Postgres?" 0ctx retrieves the specific commit message and Slack discussion from 3 months ago.
-              </p>
-            </div>
+          <div className="hero-side-content ui-rise-in ui-delay-2">
+             <div className="hero-subline">
+                <span>ZERO CONTEXT LOSS ACROSS<br/>TOOL SWITCHES.</span>
+             </div>
+             <p className="hero-note">
+               Built for repo-bound workflows<br/>
+               where local state should stay<br/>
+               recoverable.
+             </p>
           </div>
-        </section>
+        </div>
 
-        <section className="section" style={{ textAlign: "center", borderBottom: "none", padding: "10rem 0" }}>
-          <h2 style={{ border: "none", justifyContent: "center", fontSize: "3rem", marginBottom: "1rem" }}>CURE AMNESIA</h2>
-          <p style={{ margin: "0 auto", marginBottom: "3rem" }}>Start building with a permanent memory.</p>
-          <div style={{ display: "flex", justifyContent: "center", gap: "1rem" }}>
-            <Link href="/dashboard" className="btn">Download v0.9.2</Link>
-            <a href="https://github.com/0ctx-com/0ctx#manifesto" target="_blank" rel="noopener noreferrer" className="btn" style={{ borderStyle: "dashed" }}>Read The Manifesto</a>
+        <footer className="site-footer section-inner ui-fade-in ui-delay-3">
+          <div className="footer-left">
+            <div className="footer-logo">N</div>
+            <span>BUILT AROUND THE REPO</span>
           </div>
-        </section>
-
-        <footer>
-          <div>
-            <div style={{ fontWeight: "bold", marginBottom: "0.5rem" }}>0CTX LABS</div>
-            <div style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>EST. 2024 // SF_CA</div>
-          </div>
-          <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", textAlign: "right" }}>
-            SYSTEM OPTIMAL<br />
-            NO COOKIES DETECTED
+          <div className="footer-right">
+            {heroMeta.map((item, index) => (
+              <span key={index} className={item === "/" ? "separator" : ""}>{item}</span>
+            ))}
           </div>
         </footer>
-      </div>
+      </section>
     </div>
   );
 }

@@ -1,11 +1,7 @@
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
 import readline from 'readline';
 import { spawn } from 'child_process';
-
-const HISTORY_LIMIT = 500;
-const DEFAULT_PROMPT_PLAIN = '0ctx> ';
+import { appendShellHistoryEntry, loadShellHistory, SHELL_HISTORY_LIMIT } from './shell/history.js';
+import { getBestShellSuggestion, getShellCompletionCandidates, printShellHelp } from './shell/ui.js';
 
 export interface ShellOptions {
     cliEntrypoint: string;
@@ -13,142 +9,10 @@ export interface ShellOptions {
     prompt?: string;
 }
 
-function getHistoryPath(): string {
-    return path.join(os.homedir(), '.0ctx', 'history');
-}
-
-function loadHistory(): string[] {
-    const historyPath = getHistoryPath();
-    if (!fs.existsSync(historyPath)) return [];
-    try {
-        const lines = fs
-            .readFileSync(historyPath, 'utf8')
-            .split(/\r?\n/)
-            .map(line => line.trim())
-            .filter(Boolean);
-        return lines.slice(-HISTORY_LIMIT);
-    } catch {
-        return [];
-    }
-}
-
-function appendHistoryEntry(line: string): void {
-    const normalized = line.trim();
-    if (!normalized) return;
-    const historyPath = getHistoryPath();
-    fs.mkdirSync(path.dirname(historyPath), { recursive: true });
-    fs.appendFileSync(historyPath, `${normalized}\n`, 'utf8');
-}
-
 function question(rl: readline.Interface, prompt: string): Promise<string> {
     return new Promise(resolve => {
         rl.question(prompt, answer => resolve(answer));
     });
-}
-
-function getBestSuggestion(line: string, completions: string[]): string {
-    const normalized = line.trim();
-    if (!normalized) return '';
-    return completions.find(c => c.startsWith(normalized) && c !== normalized) ?? '';
-}
-
-function getCompletionCandidates(): string[] {
-    const commands = [
-        'setup',
-        'setup --validate',
-        'install',
-        'bootstrap',
-        'mcp',
-        'mcp setup',
-        'mcp bootstrap',
-        'mcp validate',
-        'doctor',
-        'status',
-        'status --json',
-        'status --compact',
-        'version',
-        'recall',
-        'recall feedback --node-id=',
-        'recall feedback list',
-        'recall feedback stats',
-        'repair',
-        'repair --deep',
-        'repair --json',
-        'logs --snapshot',
-        'logs --snapshot --errors-only',
-        'dashboard',
-        'shell',
-        'release publish',
-        'auth login',
-        'auth logout',
-        'auth status',
-        'auth rotate',
-        'config list',
-        'config get',
-        'config set',
-        'sync status',
-        'sync policy get',
-        'sync policy set',
-        'connector status',
-        'connector verify',
-        'connector register',
-        'connector queue status',
-        'connector queue drain',
-        'connector queue purge',
-        'connector queue logs',
-        'daemon start',
-        'daemon service status',
-    ];
-    const builtins = ['/help', '/clear', '/history', '/exit'];
-    // Also expose slash-prefixed variants of every command so `/auth login` autocompletes
-    const slashVariants = commands.map(c => `/${c}`);
-    return [...builtins, ...commands, ...slashVariants];
-}
-
-async function printShellHelp(): Promise<void> {
-    const color = (await import('picocolors')).default;
-
-    const logo = [
-        `  ___      _          `,
-        ` / _ \\ ___| |____  __ `,
-        `| | | / __| __\\ \\/ /  `,
-        `| |_| \\__ \\ |_ >  <   `,
-        ` \\___/|___/\\__/_/\\_\\  `
-    ];
-
-    console.log();
-    for (const line of logo) {
-        // Color '0' (the O part) in cyan, and 'ctx' in white
-        const coloredLine = line
-            .replace(/___|_\s\\|_\||\___\/|\|_\|/g, match => color.cyan(match)) // Attempting to target the '0'
-            .replace(/_          | \_\_\_\| \|\_\_\_\_  \_\_ |\_\_\| \_\_\\ \\\/ \/  |\\\_\_ \\ \|\_ \>  \<   |\|\_\_\_\/\\_\_\/\_\/\\\_\\  /, match => color.white(match));
-
-        // A simpler approach to coloring the logo block:
-        console.log(color.cyan(line.substring(0, 6)) + color.white(line.substring(6)));
-    }
-    console.log();
-    console.log(color.dim('──────────────────────────────────────────────────'));
-
-    console.log(`\n${color.bold('Built-ins')}`);
-    console.log(`  ${color.cyan('help'.padEnd(10))} ${color.dim('Show shell help')}`);
-    console.log(`  ${color.cyan('history'.padEnd(10))} ${color.dim('Show command history')}`);
-    console.log(`  ${color.cyan('clear'.padEnd(10))} ${color.dim('Clear terminal')}`);
-    console.log(`  ${color.cyan('exit / quit'.padEnd(10))} ${color.dim('Exit shell')}`);
-
-    console.log(`\n${color.bold('Slash Commands')}`);
-    console.log(`  ${color.magenta('/help'.padEnd(20))} ${color.dim('Show shell help')}`);
-    console.log(`  ${color.magenta('/history'.padEnd(20))} ${color.dim('Show command history')}`);
-    console.log(`  ${color.magenta('/clear'.padEnd(20))} ${color.dim('Clear terminal')}`);
-    console.log(`  ${color.magenta('/exit'.padEnd(20))} ${color.dim('Exit shell')}`);
-
-    console.log(`\n${color.bold('Get started')}`);
-    console.log(`  ${color.green('>')} ${color.cyan('status'.padEnd(35))} ${color.dim('(check daemon and system health)')}`);
-    console.log(`  ${color.green('>')} ${color.cyan('mcp'.padEnd(35))} ${color.dim('(interactive MCP setup flow)')}`);
-    console.log(`  ${color.green('>')} ${color.cyan('setup --clients=all'.padEnd(35))} ${color.dim('(configure MCP clients)')}`);
-    console.log(`  ${color.green('>')} ${color.cyan('connector status --cloud'.padEnd(35))} ${color.dim('(check cloud connection)')}`);
-    console.log(`  ${color.green('>')} ${color.cyan('auth login'.padEnd(35))} ${color.dim('(authenticate with 0ctx)')}`);
-
-    console.log(`\n${color.dim('All existing 0ctx commands are supported without the "0ctx" prefix.')}\n`);
 }
 
 export function tokenizeShellInput(input: string): string[] {
@@ -255,12 +119,12 @@ export async function runInteractiveShell(options: ShellOptions): Promise<number
     const color = (await import('picocolors')).default;
     const prompt = options.prompt ?? `${color.cyan('0ctx')}${color.dim('>')} `;
 
-    const history = loadHistory();
-    const completions = getCompletionCandidates();
+    const history = loadShellHistory();
+    const completions = getShellCompletionCandidates();
     const rl = readline.createInterface({
         input: process.stdin,
         output: process.stdout,
-        historySize: HISTORY_LIMIT,
+        historySize: SHELL_HISTORY_LIMIT,
         removeHistoryDuplicates: true,
         completer: (line: string) => {
             const normalized = line.trim();
@@ -277,7 +141,7 @@ export async function runInteractiveShell(options: ShellOptions): Promise<number
 
     const updateGhostText = () => {
         const line: string = (rl as any).line ?? '';
-        const suggestion = getBestSuggestion(line, completions);
+        const suggestion = getBestShellSuggestion(line, completions);
         ghostSuffix = suggestion ? suggestion.slice(line.length) : '';
         if (ghostSuffix) {
             // Save cursor, write dim suggestion suffix, restore cursor
@@ -350,17 +214,17 @@ export async function runInteractiveShell(options: ShellOptions): Promise<number
             }
 
             if (line === 'history' || line === '/history') {
-                const snapshot = loadHistory();
+                const snapshot = loadShellHistory();
                 snapshot.forEach((entry, idx) => {
                     console.log(`${idx + 1}. ${entry}`);
                 });
                 continue;
             }
 
-            appendHistoryEntry(line);
+            appendShellHistoryEntry(line);
 
             // Strip leading '/' from non-built-in slash commands so that
-            // e.g. `/auth login` runs as `auth login`
+            // e.g. `/status` runs as `status`
             const commandLine = line.startsWith('/') ? line.slice(1) : line;
 
             let tokens: string[];

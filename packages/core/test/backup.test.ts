@@ -35,7 +35,14 @@ describe('Graph export/import context dump', () => {
             const second = graph.addNode({
                 contextId: sourceContext.id,
                 type: 'constraint',
-                content: 'Maintain local-first behavior'
+                content: 'Maintain local-first behavior',
+                hidden: true,
+                thread: 'session-restore',
+                rawPayload: {
+                    role: 'assistant',
+                    branch: 'main',
+                    commitSha: 'deadbeef'
+                }
             });
 
             graph.addEdge(first.id, second.id, 'constrains');
@@ -43,12 +50,18 @@ describe('Graph export/import context dump', () => {
 
             const dump = graph.exportContextDump(sourceContext.id);
             const restored = graph.importContextDump(dump, { name: 'restored-context' });
-            const restoredData = graph.getGraphData(restored.id);
+            const restoredData = graph.getGraphData(restored.id, { includeHidden: true });
 
             expect(restored.id).not.toBe(sourceContext.id);
             expect(restoredData.nodes).toHaveLength(2);
             expect(restoredData.edges).toHaveLength(1);
             expect(graph.listCheckpoints(restored.id)).toHaveLength(1);
+
+            const restoredHidden = restoredData.nodes.find(node => node.hidden);
+            expect(restoredHidden).toBeTruthy();
+            const restoredPayload = restoredHidden ? graph.getNodePayload(restoredHidden.id) : null;
+            expect(restoredPayload).not.toBeNull();
+            expect((restoredPayload?.payload as Record<string, unknown>)?.commitSha).toBe('deadbeef');
         } finally {
             db.close();
         }

@@ -1,673 +1,121 @@
-import { randomUUID, randomBytes } from 'crypto';
+import { randomBytes } from 'crypto';
 import type Database from 'better-sqlite3';
 import type {
-    ContextNode,
-    ContextEdge,
-    EdgeType,
-    Checkpoint,
-    Context,
-    AuditEntry,
+    AgentSessionSummary,
     AuditAction,
+    AuditEntry,
     AuditMetadata,
+    BranchLaneSummary,
+    ChatSessionSummary,
+    ChatTurnSummary,
+    Checkpoint,
+    CheckpointDetail,
+    CheckpointKind,
+    CheckpointPayloadRecord,
+    CheckpointSummary,
+    Context,
     ContextDump,
-    SyncPolicy,
+    ContextEdge,
+    ContextNode,
+    EdgeType,
+    HandoffTimelineEntry,
+    InsightPromotionResult,
+    InsightSummary,
+    KnowledgeExtractionResult,
+    KnowledgePreviewResult,
+    NodePayloadCompression,
+    NodePayloadRecord,
     SearchAdvancedOptions,
-    SearchMatchReason,
-    SearchResult
+    SearchResult,
+    SessionDetail,
+    SessionMessage,
+    SyncPolicy
 } from './schema';
 import { getConfigValue, setConfigValue } from './config';
+import { createContextRecord, deleteContextRecord, getContextRecord, getContextSyncPolicyRecord, listContextRecords, setContextSyncPolicyRecord } from './graph/contexts';
+import { buildAuditDeps, buildCheckpointDeps, buildCheckpointDetail, buildDumpDeps, buildInsightDeps, buildKnowledgeCheckpointDeps, buildKnowledgeSessionDeps, buildSessionDeps, buildWorkstreamDeps } from './graph/deps';
+import { exportContextDumpRecord, importContextDumpRecord, replaceContextFromDumpRecord } from './graph/dump';
+import { getInsightEvidenceRecord, getInsightSummaryRecord, listWorkstreamInsightsRecord, promoteInsightNodeRecord } from './graph/insights';
+import { extractKnowledgeFromCheckpointRecord, previewKnowledgeFromCheckpointRecord } from './graph/knowledge-checkpoint';
+import { extractKnowledgeFromSessionRecord, previewKnowledgeFromSessionRecord } from './graph/knowledge-session';
+import { parseCheckpointRow } from './graph/helpers';
+import { addEdgeRecord, addNodeRecord, deleteNodeRecord, ensureEdgeRecord, getByKeyRecord, getEdgesRecord, getNodeRecord, getSubgraphRecords, updateNodeRecord } from './graph/nodes';
+import { getCheckpointPayloadRecord, getNodePayloadRecord, setCheckpointPayloadRecord, setNodePayloadRecord } from './graph/payloads';
+import { getGraphDataRecords, searchAdvancedRecords, searchRecords } from './graph/search';
+import { getSessionDetailRecord, listChatSessionsRecord, listChatTurnsRecord, listSessionMessagesRecord } from './graph/sessions';
+import { createSessionCheckpointRecord, insertCheckpointRecord, listCheckpointsRecord, rewindCheckpointRecord, saveCheckpointRecord } from './graph/checkpoints';
+import { listAuditEventsRecord, recordAuditEventRecord, verifyAuditChainRecord } from './graph/audit';
+import { getHandoffTimelineRecord, listBranchCheckpointsRecord, listBranchLanesRecord, listBranchSessionsRecord, refreshBranchLaneProjectionRecord } from './graph/workstreams';
 
 export class Graph {
     constructor(private db: Database.Database) { }
 
-    private tokenizeQuery(query: string): string[] {
-        const matches = query.toLowerCase().match(/[a-z0-9_]+/g) ?? [];
-        return Array.from(new Set(matches));
-    }
-
-    private buildFtsQuery(query: string): string {
-        const terms = this.tokenizeQuery(query);
-        if (terms.length === 0) {
-            return `"${query.replace(/"/g, '""')}"`;
-        }
-        return terms.map(term => `"${term.replace(/"/g, '""')}"*`).join(' OR ');
-    }
-
-    private escapeRegex(input: string): string {
-        return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    }
-
-    /**
-     * SEC-001: Resolve the per-machine audit HMAC secret.
-     * Priority: CTX_AUDIT_HMAC_SECRET env var → persisted ~/.0ctx/config.json value → auto-generated.
-     * Auto-generated secrets are saved to config.json so the chain stays verifiable across restarts.
-     */
-    private resolveAuditSecret(): string {
-        // 1. Explicit env var override (enterprise/CI)
-        const envSecret = process.env.CTX_AUDIT_HMAC_SECRET;
-        if (envSecret && envSecret.length > 0) return envSecret;
-
-        // 2. Persisted per-machine secret
-        const stored = getConfigValue('audit.hmacSecret');
-        if (stored && stored.length > 0) return stored;
-
-        // 3. First run — generate, persist, and return
+    private resolveAuditSecret() {
+        const existing = getConfigValue('audit.hmacSecret');
+        if (typeof existing === 'string' && existing.length > 0) return existing;
         const generated = randomBytes(32).toString('hex');
-        try {
-            setConfigValue('audit.hmacSecret', generated);
-        } catch {
-            // Config dir not writable — use in-memory for this session only
-        }
+        setConfigValue('audit.hmacSecret', generated);
         return generated;
     }
 
-    // ── Context Management ─────────────────────────────────────────
-
-    createContext(name: string, paths: string[] = [], syncPolicy: SyncPolicy = 'full_sync'): Context {
-        const ctx: Context = { id: randomUUID(), name, paths, syncPolicy, createdAt: Date.now() };
-        this.db.prepare(`
-      INSERT INTO contexts (id, name, paths, syncPolicy, createdAt)
-      VALUES (@id, @name, @paths, @syncPolicy, @createdAt)
-    `).run({ ...ctx, paths: JSON.stringify(ctx.paths) });
-        return ctx;
-    }
-
-    getContext(id: string): Context | null {
-        const row = this.db.prepare('SELECT * FROM contexts WHERE id = ?').get(id) as any;
-        return row ? { ...row, paths: JSON.parse(row.paths), syncPolicy: row.syncPolicy ?? 'metadata_only' } : null;
-    }
-
-    listContexts(): Context[] {
-        const rows = this.db.prepare('SELECT * FROM contexts ORDER BY createdAt DESC').all() as any[];
-        return rows.map(row => ({ ...row, paths: JSON.parse(row.paths), syncPolicy: row.syncPolicy ?? 'metadata_only' }));
-    }
-
-    getContextSyncPolicy(contextId: string): SyncPolicy | null {
-        const row = this.db.prepare('SELECT syncPolicy FROM contexts WHERE id = ?').get(contextId) as { syncPolicy?: string } | undefined;
-        if (!row) return null;
-        if (row.syncPolicy === 'local_only' || row.syncPolicy === 'full_sync' || row.syncPolicy === 'metadata_only') {
-            return row.syncPolicy;
-        }
-        return 'metadata_only';
-    }
-
-    setContextSyncPolicy(contextId: string, policy: SyncPolicy): Context | null {
-        const context = this.getContext(contextId);
-        if (!context) return null;
-
-        this.db.prepare('UPDATE contexts SET syncPolicy = ? WHERE id = ?').run(policy, contextId);
-        return this.getContext(contextId);
-    }
-
-    deleteContext(id: string): void {
-        const nodeIds = (this.db.prepare('SELECT id FROM nodes WHERE contextId = ?').all(id) as any[]).map(r => r.id);
-
-        for (const nodeId of nodeIds) {
-            this.db.prepare('DELETE FROM nodes_fts WHERE id = ?').run(nodeId);
-            this.db.prepare('DELETE FROM edges WHERE fromId = ? OR toId = ?').run(nodeId, nodeId);
-        }
-
-        this.db.prepare('DELETE FROM nodes WHERE contextId = ?').run(id);
-        this.db.prepare('DELETE FROM checkpoints WHERE contextId = ?').run(id);
-        this.db.prepare('DELETE FROM contexts WHERE id = ?').run(id);
-    }
-
-    // ── Nodes ──────────────────────────────────────────────────────
-    addNode(params: Omit<ContextNode, 'id' | 'createdAt'>): ContextNode {
-        const node: ContextNode = { ...params, id: randomUUID(), createdAt: Date.now() };
-        this.db.prepare(`
-      INSERT INTO nodes (id, contextId, thread, type, content, key, tags, source, createdAt)
-      VALUES (@id, @contextId, @thread, @type, @content, @key, @tags, @source, @createdAt)
-    `).run({
-            id: node.id,
-            contextId: node.contextId,
-            thread: node.thread || null,
-            type: node.type,
-            content: node.content,
-            key: node.key || null,
-            tags: JSON.stringify(node.tags ?? []),
-            source: node.source || null,
-            createdAt: node.createdAt
-        });
-
-        this.db.prepare(`
-      INSERT INTO nodes_fts (id, content, tags) VALUES (?, ?, ?)
-    `).run(node.id, node.content, (node.tags ?? []).join(' '));
-
-        return node;
-    }
-
-    getNode(id: string): ContextNode | null {
-        const row = this.db.prepare('SELECT * FROM nodes WHERE id = ?').get(id) as any;
-        return row ? { ...row, tags: JSON.parse(row.tags) } : null;
-    }
-
-    getByKey(contextId: string, key: string): ContextNode | null {
-        const row = this.db.prepare(
-            'SELECT * FROM nodes WHERE contextId = ? AND key = ? ORDER BY createdAt DESC LIMIT 1'
-        ).get(contextId, key) as any;
-        return row ? { ...row, tags: JSON.parse(row.tags) } : null;
-    }
-
-    deleteNode(id: string): void {
-        this.db.prepare('DELETE FROM nodes WHERE id = ?').run(id);
-        this.db.prepare('DELETE FROM nodes_fts WHERE id = ?').run(id);
-        this.db.prepare('DELETE FROM edges WHERE fromId = ? OR toId = ?').run(id, id);
-    }
-
-    updateNode(id: string, updates: Partial<Pick<ContextNode, 'content' | 'tags'>>): ContextNode | null {
-        const node = this.getNode(id);
-        if (!node) return null;
-
-        const newContent = updates.content !== undefined ? updates.content : node.content;
-        const newTags = updates.tags !== undefined ? updates.tags : node.tags;
-
-        this.db.prepare('UPDATE nodes SET content = ?, tags = ? WHERE id = ?').run(newContent, JSON.stringify(newTags), id);
-        this.db.prepare('UPDATE nodes_fts SET content = ?, tags = ? WHERE id = ?').run(newContent, (newTags ?? []).join(' '), id);
-
-        return this.getNode(id);
-    }
-
-    // ── Edges ──────────────────────────────────────────────────────
-    addEdge(fromId: string, toId: string, relation: EdgeType): ContextEdge {
-        const edge: ContextEdge = { id: randomUUID(), fromId, toId, relation, createdAt: Date.now() };
-        this.db.prepare(`
-      INSERT INTO edges (id, fromId, toId, relation, createdAt)
-      VALUES (@id, @fromId, @toId, @relation, @createdAt)
-    `).run(edge);
-        return edge;
-    }
-
-    getEdges(nodeId: string): ContextEdge[] {
-        return this.db.prepare(
-            'SELECT * FROM edges WHERE fromId = ? OR toId = ?'
-        ).all(nodeId, nodeId) as ContextEdge[];
-    }
-
-    // ── Subgraph traversal & Relevance Pruning ─────────────────────
-
-    // Gets a subgraph starting from rootId, constrained by depth, and pruned by relevance limits.
-    getSubgraph(rootId: string, depth = 2, maxNodes = 20): { nodes: ContextNode[]; edges: ContextEdge[] } {
-        const visited = new Set<string>();
-        const nodeScores = new Map<string, number>();
-        const nodes: ContextNode[] = [];
-        const edges: ContextEdge[] = [];
-        const now = Date.now();
-
-        const traverse = (id: string, d: number) => {
-            if (visited.has(id)) return;
-            visited.add(id);
-
-            const node = this.getNode(id);
-            if (!node) return;
-
-            const nodeEdges = this.getEdges(id);
-
-            // Relevance Score = (Recency factor) + (Structural factor)
-            // Newer nodes get higher default scores.
-            const ageHours = (now - node.createdAt) / (1000 * 60 * 60);
-            const recencyScore = Math.max(0, 100 - ageHours); // Decays over ~4 days to 0 base score.
-            const structuralScore = nodeEdges.length * 5;     // Highly connected nodes are important contexts.
-
-            let finalScore = recencyScore + structuralScore;
-
-            // Penalty/Boost based on relationships (e.g., if a node is superseded, tank its score).
-            for (const edge of nodeEdges) {
-                if (edge.relation === 'supersedes' && edge.fromId !== id) {
-                    // This node has been superseded by something else -> drastic penalty.
-                    finalScore -= 200;
-                }
-            }
-
-            nodeScores.set(id, finalScore);
-            nodes.push(node);
-
-            for (const edge of nodeEdges) {
-                if (!edges.some(e => e.id === edge.id)) {
-                    edges.push(edge);
-                }
-                if (d > 0 && finalScore > 0) { // Don't traverse from practically dead nodes.
-                    const nextId = edge.fromId === id ? edge.toId : edge.fromId;
-                    traverse(nextId, d - 1);
-                }
-            }
-        };
-
-        traverse(rootId, depth);
-
-        // Prune by sorting on relevance and slicing.
-        nodes.sort((a, b) => (nodeScores.get(b.id) || 0) - (nodeScores.get(a.id) || 0));
-        const prunedNodes = nodes.slice(0, maxNodes);
-        const prunedNodeIds = new Set(prunedNodes.map(n => n.id));
-
-        // Only return edges where both connected nodes survived the pruning.
-        const prunedEdges = edges.filter(e => prunedNodeIds.has(e.fromId) && prunedNodeIds.has(e.toId));
-
-        return { nodes: prunedNodes, edges: prunedEdges };
-    }
-
-    // ── Search ─────────────────────────────────────────────────────
-    searchAdvanced(contextId: string, query: string, options: SearchAdvancedOptions = {}): SearchResult[] {
-        const normalizedQuery = query.trim();
-        if (!normalizedQuery) return [];
-
-        const limit = Math.max(1, Math.min(options.limit ?? 20, 200));
-        const sinceMs = Math.max(1, Math.floor(options.sinceMs ?? 24 * 60 * 60 * 1000));
-        const includeSuperseded = options.includeSuperseded ?? false;
-        const now = Date.now();
-        const queryTerms = this.tokenizeQuery(normalizedQuery);
-        const ftsQuery = this.buildFtsQuery(normalizedQuery);
-
-        let rows: any[] = [];
-        try {
-            rows = this.db.prepare(`
-          SELECT n.*, bm25(nodes_fts, 5.0, 1.5) AS bm25Rank
-          FROM nodes n
-          JOIN nodes_fts ON n.id = nodes_fts.id
-          WHERE n.contextId = ? AND nodes_fts MATCH ?
-          ORDER BY bm25Rank ASC
-          LIMIT ?
-        `).all(contextId, ftsQuery, Math.max(limit * 5, limit)) as any[];
-        } catch {
-            rows = this.db.prepare(`
-          SELECT * FROM nodes
-          WHERE contextId = ?
-            AND (content LIKE ? OR tags LIKE ?)
-          ORDER BY createdAt DESC
-          LIMIT ?
-        `).all(contextId, `%${normalizedQuery}%`, `%${normalizedQuery}%`, Math.max(limit * 5, limit)) as any[];
-        }
-
-        const supersededRows = this.db.prepare(`
-      SELECT DISTINCT e.toId AS id
-      FROM edges e
-      JOIN nodes n ON n.id = e.toId
-      WHERE n.contextId = ? AND e.relation = 'supersedes'
-    `).all(contextId) as Array<{ id: string }>;
-        const supersededNodeIds = new Set(supersededRows.map(row => row.id));
-
-        const candidateIds = rows
-            .map(row => (typeof row.id === 'string' ? row.id : ''))
-            .filter((id): id is string => id.length > 0);
-        const degreeByNode = new Map<string, number>();
-        if (candidateIds.length > 0) {
-            const placeholders = candidateIds.map(() => '?').join(', ');
-            const degreeRows = this.db.prepare(`
-        SELECT nodeId, SUM(cnt) AS degree FROM (
-          SELECT fromId AS nodeId, COUNT(*) AS cnt
-          FROM edges
-          WHERE fromId IN (${placeholders})
-          GROUP BY fromId
-          UNION ALL
-          SELECT toId AS nodeId, COUNT(*) AS cnt
-          FROM edges
-          WHERE toId IN (${placeholders})
-          GROUP BY toId
-        )
-        GROUP BY nodeId
-      `).all(...candidateIds, ...candidateIds) as Array<{ nodeId: string; degree: number }>;
-            for (const row of degreeRows) {
-                degreeByNode.set(row.nodeId, row.degree ?? 0);
-            }
-        }
-
-        const results: SearchResult[] = [];
-        for (let i = 0; i < rows.length; i += 1) {
-            const row = rows[i];
-            const node: ContextNode = { ...row, tags: JSON.parse(row.tags) };
-            const isSuperseded = supersededNodeIds.has(node.id);
-            if (!includeSuperseded && isSuperseded) {
-                continue;
-            }
-
-            const tagsLower = (node.tags ?? []).map(tag => tag.toLowerCase());
-            const contentLower = node.content.toLowerCase();
-
-            const matchedTerms = queryTerms.filter(
-                term => contentLower.includes(term) || tagsLower.some(tag => tag.includes(term))
-            );
-            const exactTermMatches = queryTerms.filter(term => new RegExp(`\\b${this.escapeRegex(term)}\\b`, 'i').test(node.content));
-            const exactTermMatch = exactTermMatches.length > 0;
-            const exactPhraseMatch = normalizedQuery.length >= 3 && contentLower.includes(normalizedQuery.toLowerCase());
-            const tagMatch = queryTerms.some(term => tagsLower.some(tag => tag.includes(term)));
-            const tagTermMatches = queryTerms.filter(term => tagsLower.some(tag => tag.includes(term))).length;
-            const recentMutation = (now - node.createdAt) <= sinceMs;
-            const degree = degreeByNode.get(node.id) ?? 0;
-            const connectedToHotNode = degree >= 3;
-
-            let matchReason: SearchMatchReason = 'exact_term';
-            if (exactPhraseMatch || exactTermMatch) {
-                matchReason = 'exact_term';
-            } else if (tagMatch) {
-                matchReason = 'tag_match';
-            } else if (recentMutation) {
-                matchReason = 'recent_mutation';
-            } else if (connectedToHotNode) {
-                matchReason = 'connected_to_hot_node';
-            }
-
-            const rankScore = Math.max(0, 110 - (i * 4));
-            const bm25Rank = typeof row.bm25Rank === 'number' ? row.bm25Rank : null;
-            let bm25Score = 0;
-            if (bm25Rank !== null) {
-                bm25Score = bm25Rank < 0
-                    ? 30
-                    : Math.max(0, 30 - (bm25Rank * 12));
-            }
-            const termCoverageScore = matchedTerms.length * 5;
-            const exactTermScore = exactTermMatches.length * 4;
-
-            let score = rankScore + bm25Score + termCoverageScore + exactTermScore;
-            if (exactPhraseMatch) score += 12;
-            if (tagMatch) score += 5 + Math.min(9, tagTermMatches * 3);
-            if (recentMutation) score += 4;
-            if (connectedToHotNode) score += 3;
-            if (isSuperseded) score -= 45;
-            score = Math.max(0, Number(score.toFixed(2)));
-
-            results.push({
-                node,
-                score,
-                matchReason,
-                matchedTerms
-            });
-        }
-
-        results.sort((a, b) => {
-            if (b.score !== a.score) return b.score - a.score;
-            return b.node.createdAt - a.node.createdAt;
-        });
-
-        return results.slice(0, limit);
-    }
-
-    search(contextId: string, query: string, limit = 20): ContextNode[] {
-        return this.searchAdvanced(contextId, query, {
-            limit,
-            includeSuperseded: true
-        }).map(result => result.node);
-    }
-
-    getGraphData(contextId: string) {
-        const nodesRows = this.db.prepare('SELECT * FROM nodes WHERE contextId = ? ORDER BY createdAt DESC').all(contextId) as any[];
-        const edgesRows = this.db.prepare(`SELECT e.* FROM edges e JOIN nodes n ON e.fromId = n.id WHERE n.contextId = ?`).all(contextId) as any[];
-        return {
-            nodes: nodesRows.map(r => ({ ...r, tags: JSON.parse(r.tags) })),
-            edges: edgesRows
-        };
-    }
-
-    // ── Audit ─────────────────────────────────────────────────────
-    recordAuditEvent(params: {
-        action: AuditAction;
-        contextId?: string | null;
-        payload?: Record<string, unknown>;
-        result?: Record<string, unknown> | null;
-        metadata?: AuditMetadata;
-    }): AuditEntry {
-        const entry: AuditEntry = {
-            id: randomUUID(),
-            action: params.action,
-            contextId: params.contextId ?? null,
-            payload: params.payload ?? {},
-            result: params.result ?? null,
-            actor: params.metadata?.actor ?? null,
-            source: params.metadata?.source ?? null,
-            sessionToken: params.metadata?.sessionToken ?? null,
-            connectionId: params.metadata?.connectionId ?? null,
-            requestId: params.metadata?.requestId ?? null,
-            createdAt: Date.now()
-        };
-
-        // SEC-001: Compute HMAC chain — each entry's hash includes the previous entry's hash
-        const prevHash = this.getLastAuditHash();
-        const hmacData = `${prevHash}|${entry.id}|${entry.action}|${entry.createdAt}`;
-        const { createHmac } = require('crypto');
-        const auditSecret = this.resolveAuditSecret();
-        const entryHash = createHmac('sha256', auditSecret).update(hmacData).digest('hex');
-
-        this.db.prepare(`
-      INSERT INTO audit_logs (
-        id, action, contextId, payload, result, actor, source, sessionToken, connectionId, requestId, createdAt, entryHash, prevHash
-      ) VALUES (
-        @id, @action, @contextId, @payload, @result, @actor, @source, @sessionToken, @connectionId, @requestId, @createdAt, @entryHash, @prevHash
-      )
-    `).run({
-            ...entry,
-            payload: JSON.stringify(entry.payload),
-            result: entry.result ? JSON.stringify(entry.result) : null,
-            entryHash,
-            prevHash
-        });
-
-        return { ...entry, entryHash, prevHash } as AuditEntry;
-    }
-
-    /** SEC-001: Get the hash of the most recent audit entry for HMAC chain continuity. */
-    private getLastAuditHash(): string {
-        try {
-            const row = this.db.prepare(
-                'SELECT entryHash FROM audit_logs ORDER BY rowid DESC LIMIT 1'
-            ).get() as { entryHash?: string } | undefined;
-            return row?.entryHash ?? 'genesis';
-        } catch {
-            // Column may not exist yet in older DBs — return genesis
-            return 'genesis';
-        }
-    }
-
-    /** SEC-001: Verify the HMAC chain integrity of audit logs. */
-    verifyAuditChain(limit = 1000): { valid: boolean; checked: number; brokenAt?: string } {
-        const { createHmac } = require('crypto');
-        const auditSecret = this.resolveAuditSecret();
-
-        let rows: Array<{ id: string; action: string; createdAt: number; entryHash: string; prevHash: string }>;
-        try {
-            rows = this.db.prepare(
-                'SELECT id, action, createdAt, entryHash, prevHash FROM audit_logs ORDER BY rowid ASC LIMIT ?'
-            ).all(limit) as any[];
-        } catch {
-            return { valid: false, checked: 0, brokenAt: 'schema_missing_hash_columns' };
-        }
-
-        if (rows.length === 0) return { valid: true, checked: 0 };
-
-        for (let i = 0; i < rows.length; i++) {
-            const row = rows[i];
-            if (!row.entryHash) continue; // Pre-SEC-001 entries without hashes are skipped
-
-            const expectedPrev = i === 0 ? 'genesis' : (rows[i - 1].entryHash ?? 'genesis');
-            if (row.prevHash !== expectedPrev) {
-                return { valid: false, checked: i + 1, brokenAt: row.id };
-            }
-
-            const hmacData = `${row.prevHash}|${row.id}|${row.action}|${row.createdAt}`;
-            const computed = createHmac('sha256', auditSecret).update(hmacData).digest('hex');
-            if (computed !== row.entryHash) {
-                return { valid: false, checked: i + 1, brokenAt: row.id };
-            }
-        }
-
-        return { valid: true, checked: rows.length };
-    }
-
-    listAuditEvents(contextId?: string, limit = 50): AuditEntry[] {
-        const normalizedLimit = Math.max(1, Math.min(limit, 500));
-        const rows = contextId
-            ? this.db.prepare(`
-          SELECT * FROM audit_logs
-          WHERE contextId = ?
-          ORDER BY createdAt DESC
-          LIMIT ?
-        `).all(contextId, normalizedLimit) as any[]
-            : this.db.prepare(`
-          SELECT * FROM audit_logs
-          ORDER BY createdAt DESC
-          LIMIT ?
-        `).all(normalizedLimit) as any[];
-
-        return rows.map((row): AuditEntry => ({
-            id: row.id,
-            action: row.action as AuditAction,
-            contextId: row.contextId ?? null,
-            payload: row.payload ? JSON.parse(row.payload) : {},
-            result: row.result ? JSON.parse(row.result) : null,
-            actor: row.actor ?? null,
-            source: row.source ?? null,
-            sessionToken: row.sessionToken ?? null,
-            connectionId: row.connectionId ?? null,
-            requestId: row.requestId ?? null,
-            createdAt: row.createdAt
-        }));
-    }
-
-    // ── Backup / Restore ──────────────────────────────────────────
-    exportContextDump(contextId: string): ContextDump {
-        const context = this.getContext(contextId);
-        if (!context) {
-            throw new Error(`Context ${contextId} not found`);
-        }
-
-        const nodes = (this.db.prepare('SELECT * FROM nodes WHERE contextId = ? ORDER BY createdAt ASC').all(contextId) as any[])
-            .map(row => ({ ...row, tags: JSON.parse(row.tags) }));
-
-        const nodeIds = nodes.map(node => node.id);
-        const idPlaceholders = nodeIds.map(() => '?').join(', ');
-
-        const edges = nodeIds.length === 0
-            ? []
-            : this.db.prepare(`
-          SELECT * FROM edges
-          WHERE fromId IN (${idPlaceholders}) OR toId IN (${idPlaceholders})
-          ORDER BY createdAt ASC
-        `).all(...nodeIds, ...nodeIds) as ContextEdge[];
-
-        const checkpoints = this.listCheckpoints(contextId);
-
-        return {
-            version: 1,
-            exportedAt: Date.now(),
-            context,
-            nodes,
-            edges,
-            checkpoints
-        };
-    }
-
-    importContextDump(dump: ContextDump, options?: { name?: string }): Context {
-        if (dump.version !== 1) {
-            throw new Error(`Unsupported dump version ${dump.version}`);
-        }
-
-        const context = this.createContext(
-            options?.name || dump.context.name,
-            dump.context.paths,
-            (dump.context as Partial<Context>).syncPolicy ?? 'metadata_only'
-        );
-        const nodeIdMap = new Map<string, string>();
-
-        const insertNode = this.db.prepare(`
-      INSERT INTO nodes (id, contextId, thread, type, content, key, tags, source, createdAt)
-      VALUES (@id, @contextId, @thread, @type, @content, @key, @tags, @source, @createdAt)
-    `);
-
-        const insertNodeFts = this.db.prepare(`
-      INSERT INTO nodes_fts (id, content, tags) VALUES (?, ?, ?)
-    `);
-
-        const insertEdge = this.db.prepare(`
-      INSERT INTO edges (id, fromId, toId, relation, createdAt)
-      VALUES (@id, @fromId, @toId, @relation, @createdAt)
-    `);
-
-        const insertCheckpoint = this.db.prepare(`
-      INSERT INTO checkpoints (id, contextId, name, nodeIds, createdAt)
-      VALUES (@id, @contextId, @name, @nodeIds, @createdAt)
-    `);
-
-        const tx = this.db.transaction(() => {
-            for (const node of dump.nodes) {
-                const newId = randomUUID();
-                nodeIdMap.set(node.id, newId);
-
-                insertNode.run({
-                    id: newId,
-                    contextId: context.id,
-                    thread: node.thread || null,
-                    type: node.type,
-                    content: node.content,
-                    key: node.key || null,
-                    tags: JSON.stringify(node.tags ?? []),
-                    source: node.source || null,
-                    createdAt: node.createdAt
-                });
-
-                insertNodeFts.run(newId, node.content, (node.tags ?? []).join(' '));
-            }
-
-            for (const edge of dump.edges) {
-                const fromId = nodeIdMap.get(edge.fromId);
-                const toId = nodeIdMap.get(edge.toId);
-                if (!fromId || !toId) continue;
-
-                insertEdge.run({
-                    id: randomUUID(),
-                    fromId,
-                    toId,
-                    relation: edge.relation,
-                    createdAt: edge.createdAt
-                });
-            }
-
-            for (const checkpoint of dump.checkpoints) {
-                const mappedNodeIds = checkpoint.nodeIds
-                    .map(nodeId => nodeIdMap.get(nodeId))
-                    .filter((nodeId): nodeId is string => Boolean(nodeId));
-
-                insertCheckpoint.run({
-                    id: randomUUID(),
-                    contextId: context.id,
-                    name: checkpoint.name,
-                    nodeIds: JSON.stringify(mappedNodeIds),
-                    createdAt: checkpoint.createdAt
-                });
-            }
-        });
-
-        tx();
-        return context;
-    }
-
-    // ── Checkpoints ────────────────────────────────────────────────
-    saveCheckpoint(contextId: string, name: string): Checkpoint {
-        const nodeIds = (this.db.prepare(
-            'SELECT id FROM nodes WHERE contextId = ?'
-        ).all(contextId) as any[]).map(r => r.id);
-
-        const cp: Checkpoint = { id: randomUUID(), contextId, name, nodeIds, createdAt: Date.now() };
-        this.db.prepare(`
-      INSERT INTO checkpoints (id, contextId, name, nodeIds, createdAt)
-      VALUES (@id, @contextId, @name, @nodeIds, @createdAt)
-    `).run({ ...cp, nodeIds: JSON.stringify(cp.nodeIds) });
-        return cp;
-    }
-
-    rewind(checkpointId: string): void {
-        const cp = this.db.prepare('SELECT * FROM checkpoints WHERE id = ?').get(checkpointId) as any;
-        if (!cp) throw new Error(`Checkpoint ${checkpointId} not found`);
-        const allowed = new Set<string>(JSON.parse(cp.nodeIds));
-        const current = (this.db.prepare(
-            'SELECT id FROM nodes WHERE contextId = ?'
-        ).all(cp.contextId) as any[]).map(r => r.id);
-
-        for (const id of current) {
-            if (!allowed.has(id)) this.deleteNode(id);
-        }
-    }
-
-    listCheckpoints(contextId: string): Checkpoint[] {
-        return (this.db.prepare(
-            'SELECT * FROM checkpoints WHERE contextId = ? ORDER BY createdAt DESC'
-        ).all(contextId) as any[]).map(r => ({ ...r, nodeIds: JSON.parse(r.nodeIds) }));
-    }
+    private refreshBranchLaneProjection(contextId: string) { refreshBranchLaneProjectionRecord(this.workstreamDeps(), contextId); }
+    private insertCheckpoint(checkpoint: Checkpoint) { insertCheckpointRecord(this.db, checkpoint); }
+    private replaceContextFromDump(contextId: string, dump: ContextDump) { replaceContextFromDumpRecord(this.dumpDeps(), contextId, dump); }
+    private sessionDeps() { return buildSessionDeps(this.db, (nodeId) => this.getNodePayload(nodeId)); }
+    private workstreamDeps() { return buildWorkstreamDeps(this.db, { listChatSessions: (contextId, limit) => this.listChatSessions(contextId, limit) as AgentSessionSummary[], listCheckpoints: (contextId) => this.listCheckpoints(contextId) }); }
+    private insightDeps() { return buildInsightDeps(this.db, { getNode: (id) => this.getNode(id), getByKey: (contextId, key, options) => this.getByKey(contextId, key, options), addNode: (params) => this.addNode(params) }); }
+    private knowledgeSessionDeps() { return buildKnowledgeSessionDeps({ getSessionDetail: (contextId, sessionId) => this.getSessionDetail(contextId, sessionId), getByKey: (contextId, key, options) => this.getByKey(contextId, key, options), getInsightSummary: (nodeId) => getInsightSummaryRecord(this.insightDeps(), nodeId), getInsightEvidence: (nodeId) => getInsightEvidenceRecord(this.insightDeps(), nodeId), addNode: (params) => this.addNode(params), ensureEdge: (fromId, toId, relation) => ensureEdgeRecord(this.db, fromId, toId, relation) }); }
+    private knowledgeCheckpointDeps() { return buildKnowledgeCheckpointDeps(this.db, { previewKnowledgeFromSession: (contextId, sessionId, options) => previewKnowledgeFromSessionRecord(this.knowledgeSessionDeps(), contextId, sessionId, options), extractKnowledgeFromSession: (contextId, sessionId, options) => extractKnowledgeFromSessionRecord(this.knowledgeSessionDeps(), contextId, sessionId, options), getByKey: (contextId, key, options) => this.getByKey(contextId, key, options), getNode: (id) => this.getNode(id), addNode: (params) => this.addNode(params) }); }
+    private dumpDeps() { return buildDumpDeps(this.db, { getContext: (id) => this.getContext(id), listCheckpoints: (contextId) => this.listCheckpoints(contextId), getNodePayload: (nodeId) => this.getNodePayload(nodeId), getCheckpointPayload: (checkpointId) => this.getCheckpointPayload(checkpointId), createContext: (name, paths, syncPolicy) => this.createContext(name, paths, syncPolicy), setNodePayload: (nodeId, contextId, payload, options) => this.setNodePayload(nodeId, contextId, payload, options), setCheckpointPayload: (checkpointId, contextId, payload, options) => this.setCheckpointPayload(checkpointId, contextId, payload, options), refreshBranchLaneProjection: (contextId) => this.refreshBranchLaneProjection(contextId), deleteContext: (contextId) => this.deleteContext(contextId), insertCheckpoint: (checkpoint) => this.insertCheckpoint(checkpoint) }); }
+    private checkpointDeps() { return buildCheckpointDeps(this.db, { getCheckpointPayload: (checkpointId) => this.getCheckpointPayload(checkpointId), setCheckpointPayload: (checkpointId, contextId, payload, options) => this.setCheckpointPayload(checkpointId, contextId, payload, options), exportContextDump: (contextId) => this.exportContextDump(contextId), refreshBranchLaneProjection: (contextId) => this.refreshBranchLaneProjection(contextId), replaceContextFromDump: (contextId, dump) => this.replaceContextFromDump(contextId, dump), listChatSessions: (contextId, limit) => this.listChatSessions(contextId, limit) as AgentSessionSummary[] }); }
+    private auditDeps() { return buildAuditDeps(this.db, () => this.resolveAuditSecret()); }
+
+    createContext(name: string, paths: string[] = [], syncPolicy: SyncPolicy = 'local_only'): Context { return createContextRecord(this.db, name, paths, syncPolicy); }
+    getContext(id: string): Context | null { return getContextRecord(this.db, id); }
+    listContexts(): Context[] { return listContextRecords(this.db); }
+    getContextSyncPolicy(contextId: string): SyncPolicy | null { return getContextSyncPolicyRecord(this.db, contextId); }
+    setContextSyncPolicy(contextId: string, policy: SyncPolicy): Context | null { return setContextSyncPolicyRecord(this.db, contextId, policy); }
+    deleteContext(id: string): void { deleteContextRecord(this.db, id); }
+    addNode(params: Omit<ContextNode, 'id' | 'createdAt'> & { rawPayload?: unknown; payloadContentType?: string; createdAtOverride?: number }): ContextNode { return addNodeRecord(this.db, params); }
+    getNode(id: string): ContextNode | null { return getNodeRecord(this.db, id); }
+    getByKey(contextId: string, key: string, options: { includeHidden?: boolean } = {}): ContextNode | null { return getByKeyRecord(this.db, contextId, key, options); }
+    deleteNode(id: string): void { deleteNodeRecord(this.db, id); }
+    updateNode(id: string, updates: Partial<Pick<ContextNode, 'content' | 'tags' | 'hidden'>>): ContextNode | null { return updateNodeRecord(this.db, id, updates); }
+    addEdge(fromId: string, toId: string, relation: EdgeType): ContextEdge { return addEdgeRecord(this.db, fromId, toId, relation); }
+    getEdges(nodeId: string): ContextEdge[] { return getEdgesRecord(this.db, nodeId); }
+    getSubgraph(rootId: string, depth = 2, maxNodes = 20): { nodes: ContextNode[]; edges: ContextEdge[] } { return getSubgraphRecords(this.db, rootId, depth, maxNodes); }
+    searchAdvanced(contextId: string, query: string, options: SearchAdvancedOptions = {}): SearchResult[] { return searchAdvancedRecords(this.db, contextId, query, options); }
+    search(contextId: string, query: string, limit = 20, options: { includeHidden?: boolean } = {}): ContextNode[] { return searchRecords(this.db, contextId, query, limit, options); }
+    getGraphData(contextId: string, options: { includeHidden?: boolean } = {}) { return getGraphDataRecords(this.db, contextId, options); }
+    setNodePayload(nodeId: string, contextId: string, payload: unknown, options: { contentType?: string; compression?: NodePayloadCompression; createdAt?: number; updatedAt?: number } = {}): NodePayloadRecord { return setNodePayloadRecord(this.db, nodeId, contextId, payload, options); }
+    getNodePayload(nodeId: string): NodePayloadRecord | null { return getNodePayloadRecord(this.db, nodeId); }
+    setCheckpointPayload(checkpointId: string, contextId: string, payload: unknown, options: { contentType?: string; compression?: NodePayloadCompression; createdAt?: number; updatedAt?: number } = {}): CheckpointPayloadRecord { return setCheckpointPayloadRecord(this.db, checkpointId, contextId, payload, options); }
+    getCheckpointPayload(checkpointId: string): CheckpointPayloadRecord | null { return getCheckpointPayloadRecord(this.db, checkpointId); }
+    listChatSessions(contextId: string, limit = 50): ChatSessionSummary[] { return listChatSessionsRecord(this.sessionDeps(), contextId, limit); }
+    listBranchLanes(contextId: string, limit = 200): BranchLaneSummary[] { return listBranchLanesRecord(this.workstreamDeps(), contextId, limit); }
+    listBranchSessions(contextId: string, branch: string, options: { worktreePath?: string | null; limit?: number } = {}): AgentSessionSummary[] { return listBranchSessionsRecord(this.workstreamDeps(), contextId, branch, options); }
+    listChatTurns(contextId: string, sessionId: string, limit = 200): ChatTurnSummary[] { return listChatTurnsRecord(this.sessionDeps(), contextId, sessionId, limit); }
+    listSessionMessages(contextId: string, sessionId: string, limit = 500): SessionMessage[] { return listSessionMessagesRecord(this.sessionDeps(), contextId, sessionId, limit); }
+    getSessionDetail(contextId: string, sessionId: string): SessionDetail { return getSessionDetailRecord(this.sessionDeps(), contextId, sessionId); }
+    listBranchCheckpoints(contextId: string, branch: string, options: { worktreePath?: string | null; limit?: number } = {}): CheckpointSummary[] { return listBranchCheckpointsRecord(this.workstreamDeps(), contextId, branch, options); }
+    getCheckpointDetail(checkpointId: string): CheckpointDetail | null { return buildCheckpointDetail(this.db, (id) => this.getCheckpointPayload(id), checkpointId); }
+    getHandoffTimeline(contextId: string, branch?: string, worktreePath?: string | null, limit = 100): HandoffTimelineEntry[] { return getHandoffTimelineRecord(this.workstreamDeps(), contextId, branch, worktreePath, limit); }
+    listWorkstreamInsights(contextId: string, options: { branch?: string | null; worktreePath?: string | null; limit?: number } = {}): InsightSummary[] { return listWorkstreamInsightsRecord(this.insightDeps(), contextId, options); }
+    promoteInsightNode(sourceContextId: string, sourceNodeId: string, targetContextId: string, options: { branch?: string | null; worktreePath?: string | null } = {}): InsightPromotionResult { return promoteInsightNodeRecord(this.insightDeps(), sourceContextId, sourceNodeId, targetContextId, options); }
+    previewKnowledgeFromSession(contextId: string, sessionId: string, options: { checkpointId?: string | null; maxNodes?: number; source?: 'session' | 'checkpoint'; minConfidence?: number; autoPersistOnly?: boolean } = {}): KnowledgePreviewResult { return previewKnowledgeFromSessionRecord(this.knowledgeSessionDeps(), contextId, sessionId, options); }
+    extractKnowledgeFromSession(contextId: string, sessionId: string, options: { checkpointId?: string | null; maxNodes?: number; source?: 'session' | 'checkpoint'; allowedKeys?: string[] | null; minConfidence?: number; autoPersistOnly?: boolean } = {}): KnowledgeExtractionResult { return extractKnowledgeFromSessionRecord(this.knowledgeSessionDeps(), contextId, sessionId, options); }
+    previewKnowledgeFromCheckpoint(checkpointId: string, options: { maxNodes?: number; minConfidence?: number; autoPersistOnly?: boolean } = {}): KnowledgePreviewResult { return previewKnowledgeFromCheckpointRecord(this.knowledgeCheckpointDeps(), checkpointId, options); }
+    extractKnowledgeFromCheckpoint(checkpointId: string, options: { maxNodes?: number; allowedKeys?: string[] | null; minConfidence?: number; autoPersistOnly?: boolean } = {}): KnowledgeExtractionResult { return extractKnowledgeFromCheckpointRecord(this.knowledgeCheckpointDeps(), checkpointId, options); }
+    recordAuditEvent(params: { action: AuditAction; contextId?: string | null; payload?: Record<string, unknown>; result?: Record<string, unknown> | null; metadata?: AuditMetadata }): AuditEntry { return recordAuditEventRecord(this.auditDeps(), params); }
+    verifyAuditChain(limit = 1000): { valid: boolean; checked: number; brokenAt?: string } { return verifyAuditChainRecord(this.auditDeps(), limit); }
+    listAuditEvents(contextId?: string, limit = 50): AuditEntry[] { return listAuditEventsRecord(this.auditDeps(), contextId, limit); }
+    exportContextDump(contextId: string): ContextDump { return exportContextDumpRecord(this.dumpDeps(), contextId); }
+    importContextDump(dump: ContextDump, options?: { name?: string }): Context { return importContextDumpRecord(this.dumpDeps(), dump, options); }
+    saveCheckpoint(contextId: string, name: string): Checkpoint { return saveCheckpointRecord(this.checkpointDeps(), contextId, name); }
+    createSessionCheckpoint(contextId: string, sessionId: string, options: { name?: string; summary?: string; kind?: CheckpointKind } = {}): Checkpoint { return createSessionCheckpointRecord(this.checkpointDeps(), contextId, sessionId, options); }
+    rewind(checkpointId: string): void { this.rewindCheckpoint(checkpointId); }
+    rewindCheckpoint(checkpointId: string): CheckpointDetail { return rewindCheckpointRecord(this.checkpointDeps(), checkpointId); }
+    resumeSession(contextId: string, sessionId: string): SessionDetail { return this.getSessionDetail(contextId, sessionId); }
+    explainCheckpoint(checkpointId: string): CheckpointDetail | null { return this.getCheckpointDetail(checkpointId); }
+    listCheckpoints(contextId: string): Checkpoint[] { return listCheckpointsRecord(this.db, parseCheckpointRow, contextId); }
 }

@@ -4,10 +4,10 @@ import { tokenizeShellInput } from '../src/shell';
 describe('tokenizeShellInput', () => {
     it('splits simple tokens', () => {
         expect(tokenizeShellInput('status')).toEqual(['status']);
-        expect(tokenizeShellInput('connector verify --require-cloud')).toEqual([
+        expect(tokenizeShellInput('connector verify --json')).toEqual([
             'connector',
             'verify',
-            '--require-cloud'
+            '--json'
         ]);
     });
 

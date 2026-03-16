@@ -18,7 +18,6 @@ function resolveNodePath(): string {
 
 function resolveCliEntry(): string {
     const candidates = [
-        (() => { try { return require.resolve('@0ctx/cli/dist/index.js'); } catch { return ''; } })(),
         path.resolve(__dirname, 'index.js'),
         path.resolve(__dirname, '..', '..', 'cli', 'dist', 'index.js'),
         path.resolve(process.cwd(), 'packages', 'cli', 'dist', 'index.js'),

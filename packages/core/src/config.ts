@@ -11,7 +11,13 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-const CONFIG_PATH = path.join(os.homedir(), '.0ctx', 'config.json');
+function resolveConfigPath(): string {
+    const override = String(process.env.CTX_CONFIG_PATH || '').trim();
+    if (override) {
+        return override;
+    }
+    return path.join(os.homedir(), '.0ctx', 'config.json');
+}
 
 // ─── Schema ──────────────────────────────────────────────────────────────────
 
@@ -20,6 +26,9 @@ export interface AppConfig {
     'sync.enabled': boolean;
     'sync.endpoint': string;
     'ui.url': string;
+    'capture.retentionDays': number;
+    'capture.debugRetentionDays': number;
+    'capture.debugArtifacts': boolean;
     'integration.chatgpt.enabled': boolean;
     'integration.chatgpt.requireApproval': boolean;
     'integration.autoBootstrap': boolean;
@@ -30,10 +39,13 @@ export interface AppConfig {
 }
 
 const DEFAULTS: AppConfig = {
-    'auth.server': 'https://0ctx.com',
+    'auth.server': 'https://www.0ctx.com',
     'sync.enabled': true,
-    'sync.endpoint': 'https://0ctx.com/api/v1/sync',
-    'ui.url': 'https://www.0ctx.com/dashboard/workspace',
+    'sync.endpoint': 'https://www.0ctx.com/api/v1/sync',
+    'ui.url': 'https://www.0ctx.com/install',
+    'capture.retentionDays': 14,
+    'capture.debugRetentionDays': 7,
+    'capture.debugArtifacts': false,
     'integration.chatgpt.enabled': false,
     'integration.chatgpt.requireApproval': true,
     'integration.autoBootstrap': true,
@@ -46,6 +58,9 @@ const ENV_OVERRIDES: Partial<Record<keyof AppConfig, string>> = {
     'auth.server': 'CTX_AUTH_SERVER',
     'sync.enabled': 'CTX_SYNC_ENABLED',
     'sync.endpoint': 'CTX_SYNC_ENDPOINT',
+    'capture.retentionDays': 'CTX_HOOK_DUMP_RETENTION_DAYS',
+    'capture.debugRetentionDays': 'CTX_HOOK_DEBUG_RETENTION_DAYS',
+    'capture.debugArtifacts': 'CTX_HOOK_DEBUG_ARTIFACTS',
     'integration.chatgpt.enabled': 'CTX_INTEGRATION_CHATGPT_ENABLED',
     'integration.chatgpt.requireApproval': 'CTX_INTEGRATION_CHATGPT_REQUIRE_APPROVAL',
     'integration.autoBootstrap': 'CTX_INTEGRATION_AUTO_BOOTSTRAP',
@@ -55,11 +70,22 @@ const ENV_OVERRIDES: Partial<Record<keyof AppConfig, string>> = {
 
 const BOOLEAN_KEYS = new Set<keyof AppConfig>([
     'sync.enabled',
+    'capture.debugArtifacts',
     'integration.chatgpt.enabled',
     'integration.chatgpt.requireApproval',
     'integration.autoBootstrap',
     'telemetry.enabled'
 ]);
+
+const NUMBER_KEYS = new Set<keyof AppConfig>([
+    'capture.retentionDays',
+    'capture.debugRetentionDays'
+]);
+
+function parseNumberValue(value: string, fallback: number): number {
+    const parsed = Number.parseInt(value.trim(), 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
 
 function parseBooleanValue(value: string): boolean {
     return value === '1' || value.toLowerCase() === 'true';
@@ -71,9 +97,10 @@ function parseBooleanValue(value: string): boolean {
  * Load raw config from disk. Returns empty object if file missing/corrupt.
  */
 function loadRawConfig(): Partial<AppConfig> {
+    const configPath = resolveConfigPath();
     try {
-        if (!fs.existsSync(CONFIG_PATH)) return {};
-        return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')) as Partial<AppConfig>;
+        if (!fs.existsSync(configPath)) return {};
+        return JSON.parse(fs.readFileSync(configPath, 'utf8')) as Partial<AppConfig>;
     } catch {
         return {};
     }
@@ -91,11 +118,12 @@ export function loadConfig(): AppConfig {
  * Save partial config (merges with existing).
  */
 export function saveConfig(partial: Partial<AppConfig>): void {
+    const configPath = resolveConfigPath();
     const existing = loadRawConfig();
     const merged = { ...existing, ...partial };
 
-    fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
-    fs.writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2), 'utf8');
+    fs.mkdirSync(path.dirname(configPath), { recursive: true });
+    fs.writeFileSync(configPath, JSON.stringify(merged, null, 2), 'utf8');
 }
 
 // ─── Get / Set ───────────────────────────────────────────────────────────────
@@ -113,6 +141,9 @@ export function getConfigValue<K extends keyof AppConfig>(key: K): AppConfig[K] 
         if (envVal !== undefined && envVal !== '') {
             if (BOOLEAN_KEYS.has(key)) {
                 return parseBooleanValue(envVal) as AppConfig[K];
+            }
+            if (NUMBER_KEYS.has(key)) {
+                return parseNumberValue(envVal, DEFAULTS[key] as number) as AppConfig[K];
             }
             return envVal as AppConfig[K];
         }
@@ -179,5 +210,5 @@ export function isValidConfigKey(key: string): key is keyof AppConfig {
  * Get the config file path (for display/debug).
  */
 export function getConfigPath(): string {
-    return CONFIG_PATH;
+    return resolveConfigPath();
 }

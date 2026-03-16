@@ -2,7 +2,8 @@ param(
     [switch]$DryRun,
     [string]$OTP,
     [string]$Tag = "latest",
-    [switch]$AllowDirty
+    [switch]$AllowDirty,
+    [switch]$AllowVersionDrift
 )
 
 $ErrorActionPreference = "Stop"
@@ -27,7 +28,10 @@ function Get-PackageVersion {
 }
 
 function Assert-VersionsConsistent {
-    param([string]$RepoRoot)
+    param(
+        [string]$RepoRoot,
+        [switch]$AllowVersionDrift
+    )
 
     $packages = @("core", "daemon", "mcp", "cli")
     $versions = @{}
@@ -36,16 +40,21 @@ function Assert-VersionsConsistent {
         $path = Join-Path $RepoRoot "packages/$pkg/package.json"
         $versions[$pkg] = Get-PackageVersion -PackageJsonPath $path
     }
+    $versions["desktop"] = Get-PackageVersion -PackageJsonPath (Join-Path $RepoRoot "desktop-app/package.json")
 
     $unique = @($versions.Values | Sort-Object -Unique)
     if ($unique.Count -gt 1) {
-        Write-Warning "Package versions are not consistent:"
+        $message = "Release surface versions are not consistent:"
+        Write-Error $message
         foreach ($kv in $versions.GetEnumerator()) {
-            Write-Warning "  @0ctx/$($kv.Key): $($kv.Value)"
+            Write-Error "  $($kv.Key): $($kv.Value)"
         }
-        Write-Warning "Proceeding anyway. Consider aligning versions before publishing."
+        if (-not $AllowVersionDrift) {
+            throw "Version alignment failed. Re-run with -AllowVersionDrift only if you intentionally need to bypass the release gate."
+        }
+        Write-Warning "Proceeding because -AllowVersionDrift was set."
     } else {
-        Write-Output "Version: $($unique[0]) (all packages consistent)"
+        Write-Output "Version: $($unique[0]) (all release surfaces consistent)"
     }
 }
 
@@ -109,7 +118,7 @@ try {
     }
 
     # --- Version consistency check ---
-    Assert-VersionsConsistent -RepoRoot $repoRoot
+    Assert-VersionsConsistent -RepoRoot $repoRoot -AllowVersionDrift:$AllowVersionDrift
 
     # --- Deterministic publish order (single package) ---
     $publishOrder = @(

@@ -18,17 +18,22 @@ function Invoke-CheckedCommand {
     param(
         [string]$Name,
         [string]$Command,
-        [switch]$DryRun
+        [switch]$DryRun,
+        [switch]$SafeInDryRun
     )
 
     Write-Output ""
     Write-Output "==> $Name"
     if ($DryRun) {
-        Write-Output "[dry-run] $Command"
-        return
-    }
+        if (-not $SafeInDryRun) {
+            Write-Output "[dry-run] skip mutating command: $Command"
+            return
+        }
 
-    Write-Output "[run] $Command"
+        Write-Output "[dry-run] run safe validation command: $Command"
+    } else {
+        Write-Output "[run] $Command"
+    }
     cmd /c $Command
     if ($LASTEXITCODE -ne 0) {
         throw "Command failed with exit code ${LASTEXITCODE}: $Command"
@@ -42,24 +47,6 @@ try {
     Write-Output "Release validation mode: $(if ($DryRun) { 'dry-run' } else { 'execute' })"
     Write-Output "Repository root: $repoRoot"
 
-    $requiredPaths = @(
-        "CHANGELOG.md",
-        "docs/RELEASE.md",
-        "scripts/release/prepare-changelog.ps1",
-        "scripts/release/tag-preview.ps1"
-    )
-
-    foreach ($path in $requiredPaths) {
-        if (-not (Test-Path -LiteralPath $path)) {
-            throw "Missing required release file: $path"
-        }
-    }
-
-    $changelog = Get-Content -Raw -LiteralPath "CHANGELOG.md"
-    if ($changelog -notmatch "(?m)^## \[Unreleased\]\s*$") {
-        throw "CHANGELOG.md must include a '## [Unreleased]' section."
-    }
-
     $status = git status --porcelain
     if ($status) {
         if ($AllowDirty) {
@@ -70,14 +57,11 @@ try {
     }
 
     $steps = @(
-        @{ Name = "Typecheck"; Command = "npm run typecheck" },
-        @{ Name = "Build"; Command = "npm run build" },
-        @{ Name = "Test"; Command = "npm run test" },
-        @{ Name = "Nested git check"; Command = "npm run repo:check-nested-git" }
+        @{ Name = "Release readiness report"; Command = "npm run release:report"; SafeInDryRun = $true }
     )
 
     foreach ($step in $steps) {
-        Invoke-CheckedCommand -Name $step.Name -Command $step.Command -DryRun:$DryRun
+        Invoke-CheckedCommand -Name $step.Name -Command $step.Command -DryRun:$DryRun -SafeInDryRun:$step.SafeInDryRun
     }
 
     Write-Output ""

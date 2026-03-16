@@ -1,6 +1,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { getConfigValue } from '@0ctx/core';
 
 let opsLogWriteWarningEmitted = false;
 
@@ -17,8 +18,53 @@ export function getCliOpsLogPath(): string {
     return process.env.CTX_CLI_OPS_LOG_PATH || path.join(os.homedir(), '.0ctx', 'ops.log');
 }
 
+export function getCliOpsLogRetentionDays(): number {
+    const configured = getConfigValue('capture.debugRetentionDays');
+    return Number.isFinite(configured) && configured > 0 ? configured : 7;
+}
+
 function ensureDir(filePath: string): void {
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
+}
+
+export function pruneCliOpsLog(options: {
+    filePath?: string;
+    retentionDays?: number;
+    now?: number;
+} = {}): { path: string; retentionDays: number; prunedEntries: number; remainingEntries: number } {
+    const filePath = options.filePath ?? getCliOpsLogPath();
+    const retentionDays = options.retentionDays ?? getCliOpsLogRetentionDays();
+    const now = options.now ?? Date.now();
+    if (!fs.existsSync(filePath)) {
+        return { path: filePath, retentionDays, prunedEntries: 0, remainingEntries: 0 };
+    }
+
+    const cutoffMs = now - (retentionDays * 24 * 60 * 60 * 1000);
+    try {
+        const lines = fs.readFileSync(filePath, 'utf8').split(/\r?\n/).filter(Boolean);
+        const kept: string[] = [];
+        let prunedEntries = 0;
+        for (const line of lines) {
+            try {
+                const parsed = JSON.parse(line) as Partial<CliOpsLogEntry>;
+                if (typeof parsed?.timestamp === 'number' && parsed.timestamp < cutoffMs) {
+                    prunedEntries += 1;
+                    continue;
+                }
+            } catch {
+                // Preserve malformed lines rather than deleting unexpected data.
+            }
+            kept.push(line);
+        }
+        if (prunedEntries > 0) {
+            ensureDir(filePath);
+            const next = kept.length > 0 ? `${kept.join('\n')}\n` : '';
+            fs.writeFileSync(filePath, next, { encoding: 'utf8', mode: 0o600 });
+        }
+        return { path: filePath, retentionDays, prunedEntries, remainingEntries: kept.length };
+    } catch {
+        return { path: filePath, retentionDays, prunedEntries: 0, remainingEntries: 0 };
+    }
 }
 
 export function appendCliOpsLogEntry(entry: Omit<CliOpsLogEntry, 'timestamp'> & { timestamp?: number }): void {
@@ -32,6 +78,7 @@ export function appendCliOpsLogEntry(entry: Omit<CliOpsLogEntry, 'timestamp'> & 
             details: entry.details ?? {}
         });
         fs.appendFileSync(filePath, `${line}\n`, { encoding: 'utf8', mode: 0o600 });
+        pruneCliOpsLog({ filePath });
     } catch {
         // Best-effort local audit logging only; emit one warning for operator visibility.
         if (!opsLogWriteWarningEmitted) {
@@ -47,6 +94,7 @@ export function readCliOpsLog(limit = 100): CliOpsLogEntry[] {
     if (!fs.existsSync(filePath)) return [];
 
     try {
+        pruneCliOpsLog({ filePath });
         const lines = fs.readFileSync(filePath, 'utf8')
             .split(/\r?\n/)
             .filter(Boolean);

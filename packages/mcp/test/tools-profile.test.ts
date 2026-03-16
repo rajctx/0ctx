@@ -6,10 +6,11 @@ import {
 } from '../src/tools';
 
 describe('MCP tool profile resolution', () => {
-    it('defaults to all tools when profile is unset', () => {
+    it('defaults to the core tool surface when profile is unset', () => {
         const resolved = resolveMcpToolProfile(undefined);
-        expect(resolved.all).toBe(true);
-        expect(resolved.normalized).toBe('all');
+        expect(resolved.all).toBe(false);
+        expect(resolved.normalized).toBe('core');
+        expect(resolved.scopes).toEqual(['core']);
     });
 
     it('expands recall profile to include core scope', () => {
@@ -20,9 +21,11 @@ describe('MCP tool profile resolution', () => {
         expect(resolved.scopes).toContain('recall');
     });
 
-    it('falls back to all for invalid profile tokens', () => {
+    it('falls back to core for invalid profile tokens', () => {
         const resolved = resolveMcpToolProfile('bad-token');
-        expect(resolved.all).toBe(true);
+        expect(resolved.all).toBe(false);
+        expect(resolved.normalized).toBe('core');
+        expect(resolved.scopes).toEqual(['core']);
         expect(resolved.invalidTokens).toEqual(['bad-token']);
     });
 });
@@ -33,6 +36,16 @@ describe('MCP tool profile filtering', () => {
         const names = new Set(tools.map(tool => tool.name));
         expect(names.has('ctx_set')).toBe(true);
         expect(names.has('ctx_runtime_status')).toBe(true);
+        expect(names.has('ctx_list_workstreams')).toBe(true);
+        expect(names.has('ctx_list_workstream_insights')).toBe(true);
+        expect(names.has('ctx_get_workstream_brief')).toBe(true);
+        expect(names.has('ctx_get_agent_context')).toBe(true);
+        expect(names.has('ctx_compare_workstreams')).toBe(true);
+        expect(names.has('ctx_compare_workspaces')).toBe(true);
+        expect(names.has('ctx_get_session')).toBe(true);
+        expect(names.has('ctx_create_session_checkpoint')).toBe(true);
+        expect(names.has('ctx_preview_insights')).toBe(true);
+        expect(names.has('ctx_promote_insight')).toBe(true);
         expect(names.has('ctx_recall')).toBe(false);
         expect(names.has('ctx_sync_now')).toBe(false);
     });
@@ -42,6 +55,7 @@ describe('MCP tool profile filtering', () => {
         const names = new Set(tools.map(tool => tool.name));
         expect(names.has('ctx_set')).toBe(true);
         expect(names.has('ctx_sync_now')).toBe(true);
+        expect(names.has('ctx_get_data_policy')).toBe(true);
         expect(names.has('ctx_recall')).toBe(false);
     });
 

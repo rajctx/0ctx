@@ -14,7 +14,7 @@ const DEFAULT_SERVICE_XML_TEMPLATE = `<service>
 
   <id>0ctx-daemon</id>
   <name>0ctx Connector Runtime</name>
-  <description>0ctx connector runtime - cloud bridge and managed local daemon lifecycle</description>
+  <description>0ctx connector runtime - managed local daemon lifecycle</description>
 
   <executable>%NODE_PATH%</executable>
   <arguments>"%CLI_ENTRY%" connector run --quiet --interval-ms=5000</arguments>
@@ -79,10 +79,6 @@ function loadServiceXmlTemplate(): string {
 
 function resolveCliEntry(): string {
     const candidates = [
-        // published install path: cli package owns connector runtime entry
-        (() => {
-            try { return require.resolve('@0ctx/cli/dist/index.js'); } catch { return ''; }
-        })(),
         // local dist sibling in this package
         path.resolve(__dirname, 'index.js'),
         // monorepo fallback

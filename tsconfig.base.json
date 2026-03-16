@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "baseUrl": ".",
     "target": "ES2022",
     "module": "Node16",
     "moduleResolution": "Node16",
@@ -9,6 +10,29 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "outDir": "./dist"
+    "outDir": "./dist",
+    "paths": {
+      "@0ctx/core": [
+        "packages/core/dist/index.d.ts"
+      ],
+      "@0ctx/core/*": [
+        "packages/core/dist/*"
+      ],
+      "@0ctx/daemon": [
+        "packages/daemon/dist/index.d.ts"
+      ],
+      "@0ctx/daemon/*": [
+        "packages/daemon/dist/*"
+      ],
+      "@0ctx/mcp": [
+        "packages/mcp/dist/index.d.ts"
+      ],
+      "@0ctx/mcp/dist/*": [
+        "packages/mcp/dist/*"
+      ],
+      "@0ctx/mcp/*": [
+        "packages/mcp/dist/*"
+      ]
+    }
   }
 }

@@ -1,0 +1,34 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "0ctx connector hook ingest --quiet --agent=factory"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "0ctx connector hook ingest --quiet --agent=factory"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "0ctx connector hook session-start --agent=factory"
+          }
+        ]
+      }
+    ]
+  }
+}

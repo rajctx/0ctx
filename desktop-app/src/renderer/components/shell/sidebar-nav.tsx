@@ -1,0 +1,246 @@
+import { useMemo } from 'react';
+import type { ChatSessionSummary, WorkspaceContext, WorkstreamSummary } from '../../../shared/types/domain';
+import { formatRelativeAge, normalizePath, workstreamKey } from '../../lib/format';
+import { deriveSessionPreview, deriveSessionTitle } from '../../lib/session-display';
+import type { SetupSection } from '../../lib/store';
+
+export type SidebarRoute = 'overview' | 'workstreams' | 'sessions' | 'setup';
+
+interface SidebarNavProps {
+  route: SidebarRoute;
+  contexts: WorkspaceContext[];
+  activeContextId: string | null;
+  workstreams: WorkstreamSummary[];
+  activeWorkstreamKey: string | null;
+  sessions: ChatSessionSummary[];
+  activeSessionId: string | null;
+  activeSetupSection: SetupSection;
+  onNavigate: (route: SidebarRoute) => void;
+  onContextChange: (contextId: string) => void;
+  onWorkstreamChange: (key: string) => void;
+  onSessionChange: (sessionId: string) => void;
+  onSetupSectionChange: (section: SetupSection) => void;
+  onOpenCheckpoint: () => void;
+  onOpenInsight: () => void;
+}
+
+function truncateLine(value: string, max = 44) {
+  return value.length > max ? `${value.slice(0, max - 1)}…` : value;
+}
+
+function sessionLabel(session: ChatSessionSummary, index: number) {
+  return `Session ${index + 1}`;
+}
+
+function sessionSummary(session: ChatSessionSummary) {
+  return truncateLine(deriveSessionPreview(session));
+}
+
+function sessionMeta(session: ChatSessionSummary) {
+  const parts = [
+    session.branch || null,
+    session.agent || null,
+    typeof session.turnCount === 'number' ? `${session.turnCount} turns` : null,
+    session.lastTurnAt ? formatRelativeAge(session.lastTurnAt) : null
+  ].filter(Boolean);
+
+  return truncateLine(parts.join(' · '), 52);
+}
+
+export function SidebarNav({
+  route,
+  contexts,
+  activeContextId,
+  workstreams,
+  activeWorkstreamKey,
+  sessions,
+  activeSessionId,
+  activeSetupSection,
+  onNavigate,
+  onContextChange,
+  onWorkstreamChange,
+  onSessionChange,
+  onSetupSectionChange,
+  onOpenCheckpoint,
+  onOpenInsight
+}: SidebarNavProps) {
+  const activeContext = useMemo(
+    () => contexts.find((context) => context.id === activeContextId) ?? contexts[0] ?? null,
+    [contexts, activeContextId]
+  );
+
+  const visibleContexts = contexts.slice(0, 3);
+  const visibleWorkstreams = workstreams.slice(0, 3);
+  const visibleSessions = route === 'sessions' ? sessions : sessions.slice(0, 3);
+  const setupSections: Array<{ id: SetupSection; label: string }> = [
+    { id: 'repo-enablement', label: 'repo enablement' },
+    { id: 'integrations', label: 'integrations' },
+    { id: 'policy', label: 'policy' },
+    { id: 'runtime', label: 'runtime' }
+  ];
+
+  const workspaceFooter = (
+    <div className="sidebar-footer">
+      <div className="footer-label">Workspace</div>
+      <div className="footer-ws">{activeContext?.name ?? 'No workspace selected'}</div>
+      <div className="footer-meta">
+        {normalizePath(activeContext?.paths?.[0] ?? '') || 'No repository bound'}
+        <br />
+        {`${workstreams.length} workstreams · ${sessions.length} sessions`}
+      </div>
+      <div className="live-badge">
+        <span className="live-dot" />
+        <span className="live-label">Live</span>
+      </div>
+    </div>
+  );
+
+  const workstreamFooter = (
+    <div className="sidebar-footer">
+      <div className="footer-label">Continuity</div>
+      <div className="live-badge">
+        <span className="live-dot" />
+        <span className="live-lbl">Agent handoff is healthy</span>
+      </div>
+      <div className="footer-val">
+        Show state, commit, readiness, recent sessions, and handoff history without oversized hero blocks.
+      </div>
+    </div>
+  );
+
+  const sessionsFooter = (
+    <div className="sidebar-footer">
+      <div className="footer-label">Conversations</div>
+      <div className="footer-note">
+        Thread list should feel like a timeline. Show session hierarchy, message count, workstream, participants, and selected turn.
+      </div>
+    </div>
+  );
+
+  const setupFooter = (
+    <div className="sidebar-footer">
+      <div className="footer-label">Setup Intent</div>
+      <div className="footer-title">Keep the normal path obvious</div>
+      <div className="footer-note">
+        Enable the repo once, leave policy on lean unless needed, and push runtime tools to a lower tier.
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      <div className="sys-header">
+        OCTX_SYS / MEMORY <span className="cursor" />
+      </div>
+
+      <nav className="nav">
+        <button type="button" className={route === 'overview' ? 'nav-row active' : 'nav-row'} onClick={() => onNavigate('overview')}>
+          <span className="brk">{route === 'overview' ? '[-]' : '[+]'}</span> WORKSPACES
+        </button>
+        {route === 'overview' ? (
+          <div className="nav-sub">
+            {visibleContexts.map((context) => {
+              const active = context.id === activeContext?.id;
+              return (
+                <button
+                  key={context.id}
+                  type="button"
+                  className={active ? 'nav-row active' : 'nav-row'}
+                  onClick={() => onContextChange(context.id)}
+                >
+                  <span className="brk">{active ? '[●]' : '[ ]'}</span> {context.name}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+
+        <button type="button" className={route === 'workstreams' ? 'nav-row active' : 'nav-row'} onClick={() => onNavigate('workstreams')}>
+          <span className="brk">{route === 'workstreams' ? '[-]' : '[+]'}</span> WORKSTREAMS
+        </button>
+        {route === 'workstreams' ? (
+          <div className="nav-sub">
+            {visibleWorkstreams.map((stream) => {
+              const key = workstreamKey(stream.branch, stream.worktreePath);
+              const active = key === activeWorkstreamKey;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  className={active ? 'nav-row active' : 'nav-row'}
+                  onClick={() => onWorkstreamChange(key)}
+                >
+                  <span className="brk">{active ? '[●]' : '[ ]'}</span> {`${stream.branch} | ${activeContext?.name ?? 'workspace'}`}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+
+        <button type="button" className={route === 'sessions' ? 'nav-row active' : 'nav-row'} onClick={() => onNavigate('sessions')}>
+          <span className="brk">{route === 'sessions' ? '[-]' : '[+]'}</span> SESSIONS
+        </button>
+        {route === 'sessions' ? (
+          <div className="nav-sub nav-sub-sessions">
+            {visibleSessions.map((session, index) => {
+              const active = session.sessionId === activeSessionId;
+              return (
+                <button
+                  key={session.sessionId}
+                  type="button"
+                  className={active ? 'nav-session-item active' : 'nav-session-item'}
+                  onClick={() => onSessionChange(session.sessionId)}
+                >
+                  <div className="nav-session-row">
+                    <span className="brk">{active ? '[●]' : '[ ]'}</span>
+                    <span className="nav-session-title">{sessionLabel(session, index)}</span>
+                  </div>
+                  <div className="nav-session-meta">{sessionMeta(session)}</div>
+                  <div className="nav-session-note">{truncateLine(deriveSessionTitle(session), 46)}</div>
+                  <div className="nav-session-summary">{sessionSummary(session)}</div>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+
+        <button type="button" className="nav-row" onClick={onOpenCheckpoint}>
+          <span className="brk">[+]</span> CHECKPOINTS
+        </button>
+        <button type="button" className="nav-row" onClick={onOpenInsight}>
+          <span className="brk">[+]</span> INSIGHTS
+        </button>
+
+        <button
+          type="button"
+          className={route === 'setup' ? 'nav-row active nav-row-gap' : 'nav-row nav-row-gap'}
+          onClick={() => onNavigate('setup')}
+        >
+          <span className="brk">{route === 'setup' ? '[-]' : '[+]'}</span> SETUP
+        </button>
+        {route === 'setup' ? (
+          <div className="nav-sub">
+            {setupSections.map((section) => {
+              const active = activeSetupSection === section.id;
+              return (
+                <button
+                  key={section.id}
+                  type="button"
+                  className={active ? 'nav-row active' : 'nav-row'}
+                  onClick={() => onSetupSectionChange(section.id)}
+                >
+                  <span className="brk">{active ? '[●]' : '[ ]'}</span> {section.label}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+      </nav>
+
+      {route === 'overview' ? workspaceFooter : null}
+      {route === 'workstreams' ? workstreamFooter : null}
+      {route === 'sessions' ? sessionsFooter : null}
+      {route === 'setup' ? setupFooter : null}
+    </>
+  );
+}

@@ -7,7 +7,6 @@
  *
  * External (kept as runtime node_modules deps):
  *   - better-sqlite3   — native Node addon (.node binary)
- *   - cross-keychain   — uses @napi-rs/keyring native addon optionally
  */
 
 // esbuild is installed at the monorepo root — Node's module resolution walks
@@ -57,8 +56,6 @@ await esbuild.build({
   // Native addons that cannot be inlined — must remain in node_modules
   external: [
     'better-sqlite3',
-    'cross-keychain',
-    '@napi-rs/keyring',
   ],
 
   // Inline source-map for better stack traces without extra files
@@ -83,8 +80,6 @@ await esbuild.build({
   alias,
   external: [
     'better-sqlite3',
-    'cross-keychain',
-    '@napi-rs/keyring',
   ],
   sourcemap: 'inline',
   logLevel: 'info',
@@ -102,8 +97,6 @@ await esbuild.build({
   alias,
   external: [
     'better-sqlite3',
-    'cross-keychain',
-    '@napi-rs/keyring',
   ],
   sourcemap: 'inline',
   logLevel: 'info',

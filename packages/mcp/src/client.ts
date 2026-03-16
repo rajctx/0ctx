@@ -4,7 +4,8 @@ import os from 'os';
 import { randomUUID } from 'crypto';
 
 const IS_WIN = os.platform() === 'win32';
-const SOCKET_PATH = IS_WIN ? '\\\\.\\pipe\\0ctx.sock' : path.join(os.homedir(), '.0ctx', '0ctx.sock');
+const SOCKET_PATH = process.env.CTX_SOCKET_PATH
+    || (IS_WIN ? '\\\\.\\pipe\\0ctx.sock' : path.join(os.homedir(), '.0ctx', '0ctx.sock'));
 
 export interface SendToDaemonOptions {
     requestId?: string;

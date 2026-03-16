@@ -1,22 +1,22 @@
-# 0ctx Documentation Index
+# Docs Index
 
-Updated: 2026-02-24
+Current product docs:
 
-This is the canonical entrypoint for product and platform documentation.
+- [QUICKSTART.md](C:/Users/Rajesh/development/0ctx-dev/docs/QUICKSTART.md)
+- [INTEGRATIONS.md](C:/Users/Rajesh/development/0ctx-dev/docs/INTEGRATIONS.md)
+- [DATA_POLICY.md](C:/Users/Rajesh/development/0ctx-dev/docs/DATA_POLICY.md)
+- [RELEASE.md](C:/Users/Rajesh/development/0ctx-dev/docs/RELEASE.md)
 
-## Start Here
+Hosted web entrypoints:
 
-- `docs/QUICKSTART.md` - fastest path from install to first working setup.
-- `docs/INSTALL.md` - full install, setup, troubleshooting, and environment variables.
-- `docs/ENV_REFERENCE.md` - canonical runtime env var and config key contract.
-- `docs/RELEASE.md` - release preparation and package publish flow.
+- `/docs`
+- `/install`
 
-## Architecture
+Contributor and implementation references:
 
-- `docs/CONNECTOR_SERVICE_ARCHITECTURE.md` - connector runtime and bridge model.
-- `docs/HYBRID_STORAGE_AND_SYNC_MODEL.md` - local/cloud storage and sync policy model.
-- `docs/SEMANTIC_BLACKBOARD_ARCHITECTURE.md` - blackboard runtime and event model.
-
-## Contributor/Maintainer
-
-- `docs/ONBOARDING.md` - maintainer onboarding and repo operating model.
+- `docs/PRODUCT_REMEDIATION_PLAN.md`
+- `docs/LINEAR_BACKLOG.md`
+- `README.md`
+- `AGENTS.md`
+- CLI help via `0ctx --help` and subcommand help
+- source code in `packages/*`, `desktop-app/`, and `ui/`
