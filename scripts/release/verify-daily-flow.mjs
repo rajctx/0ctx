@@ -219,14 +219,14 @@ async function main() {
     const claudeSessionStart = claudeConfig?.hooks?.SessionStart?.[0]?.hooks?.[0]?.command ?? "";
     const factorySessionStart = factoryConfig?.hooks?.SessionStart?.[0]?.hooks?.[0]?.command ?? "";
     const antigravitySessionStart = antigravityConfig?.hooks?.SessionStart?.[0]?.hooks?.[0]?.command ?? "";
-    assert(String(claudeSessionStart).includes("0ctx connector hook session-start --agent=claude"), "Claude SessionStart hook missing");
-    assert(String(factorySessionStart).includes("0ctx connector hook session-start --agent=factory"), "Factory SessionStart hook missing");
-    assert(String(antigravitySessionStart).includes("0ctx connector hook session-start --agent=antigravity"), "Antigravity SessionStart hook missing");
+    assert(String(claudeSessionStart).includes("0ctx hook session-start --agent=claude"), "Claude SessionStart hook missing");
+    assert(String(factorySessionStart).includes("0ctx hook session-start --agent=factory"), "Factory SessionStart hook missing");
+    assert(String(antigravitySessionStart).includes("0ctx hook session-start --agent=antigravity"), "Antigravity SessionStart hook missing");
 
     const sessionStartPayload = JSON.stringify({ cwd: repoDir });
-    const claudeStart = runCliJson(env, ["connector", "hook", "session-start", "--agent=claude", "--payload", sessionStartPayload, "--json"]);
-    const factoryStart = runCliJson(env, ["connector", "hook", "session-start", "--agent=factory", "--payload", sessionStartPayload, "--json"]);
-    const antigravityStart = runCliJson(env, ["connector", "hook", "session-start", "--agent=antigravity", "--payload", sessionStartPayload, "--json"]);
+    const claudeStart = runCliJson(env, ["hook", "session-start", "--agent=claude", "--payload", sessionStartPayload, "--json"]);
+    const factoryStart = runCliJson(env, ["hook", "session-start", "--agent=factory", "--payload", sessionStartPayload, "--json"]);
+    const antigravityStart = runCliJson(env, ["hook", "session-start", "--agent=antigravity", "--payload", sessionStartPayload, "--json"]);
     for (const [label, result] of [["claude", claudeStart], ["factory", factoryStart], ["antigravity", antigravityStart]]) {
       assert(result.ok === true, `${label} SessionStart did not succeed`);
       assert(result.injected === true, `${label} SessionStart did not inject context`);
@@ -263,7 +263,7 @@ async function main() {
     });
 
     const claudeIngest = runCliJson(env, [
-      "connector", "hook", "ingest", "--agent=claude",
+      "hook", "ingest", "--agent=claude",
       "--payload", JSON.stringify({
         session_id: "claude-daily-flow",
         turn_id: "claude-turn-1",
@@ -274,7 +274,7 @@ async function main() {
       "--json",
     ]);
     const factoryIngest = runCliJson(env, [
-      "connector", "hook", "ingest", "--agent=factory",
+      "hook", "ingest", "--agent=factory",
       "--payload", JSON.stringify({
         session_id: "factory-daily-flow",
         execution_id: "factory-turn-1",
@@ -285,7 +285,7 @@ async function main() {
       "--json",
     ]);
     const antigravityIngest = runCliJson(env, [
-      "connector", "hook", "ingest", "--agent=antigravity",
+      "hook", "ingest", "--agent=antigravity",
       "--payload", JSON.stringify({
         session_id: "antigravity-daily-flow",
         execution_id: "antigravity-turn-1",
