@@ -5,6 +5,10 @@
   "workspaces": [
     "packages/*"
   ],
+  "author": {
+    "name": "Rajesh Kumar",
+    "email": "rajesh@0ctx.com"
+  },
   "scripts": {
     "build": "tsc -b packages/core/tsconfig.json packages/daemon/tsconfig.json packages/mcp/tsconfig.json && node packages/cli/build.mjs",
     "typecheck": "tsc -b packages/core/tsconfig.json packages/daemon/tsconfig.json packages/mcp/tsconfig.json packages/cli/tsconfig.json --pretty false",
