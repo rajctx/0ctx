@@ -7,10 +7,9 @@ Current product docs:
 - [DATA_POLICY.md](./DATA_POLICY.md)
 - [RELEASE.md](./RELEASE.md)
 
-Hosted web entrypoints:
+Local OSS path:
 
-- `/docs`
-- `/install`
+- Use the CLI, local docs, and the source tree in this repo.
 
 Repository docs:
 

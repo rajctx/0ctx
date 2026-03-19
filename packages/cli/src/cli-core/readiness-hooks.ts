@@ -18,7 +18,8 @@ export function isHookCommandPresent(agent: HookSupportedAgent, configContent: s
     }
 
     if (!expectedCommand) return false;
-    return configContent.includes('0ctx connector hook ingest')
+    const hasManagedHookPrefix = configContent.includes('0ctx hook ingest') || configContent.includes('0ctx connector hook ingest');
+    return hasManagedHookPrefix
         && configContent.includes(`--agent=${agent}`)
         && configContent.includes(expectedCommand.replace(/\s+/g, ' ').trim().split(' ').slice(0, 4).join(' '));
 }
@@ -29,7 +30,7 @@ export function isSessionStartCommandPresent(agent: HookSupportedAgent, configCo
     }
 
     return configContent.includes('SessionStart')
-        && configContent.includes('0ctx connector hook session-start')
+        && (configContent.includes('0ctx hook session-start') || configContent.includes('0ctx connector hook session-start'))
         && configContent.includes(`--agent=${agent}`);
 }
 
@@ -57,10 +58,10 @@ export function buildDataPolicyActionHint(policy: {
     const debugArtifactsEnabled = policy?.debugArtifactsEnabled === true;
 
     if (preset === 'custom') {
-        return 'Normalize workspace sync and machine capture with 0ctx data-policy lean, review, debug, or shared.';
+        return 'Normalize workspace sync and machine capture with 0ctx data-policy lean, review, or debug.';
     }
     if (preset === 'shared' || syncPolicy === 'full_sync') {
-        return 'Return this workspace to Lean when it no longer needs richer cloud sync.';
+        return 'Return this workspace to Lean to clear legacy remote-sync settings.';
     }
     if (preset === 'debug' || debugArtifactsEnabled) {
         return 'Return this machine to Lean when troubleshooting is complete.';

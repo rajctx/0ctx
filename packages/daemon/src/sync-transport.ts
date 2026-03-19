@@ -14,7 +14,7 @@ const TIMEOUT_MS = 30_000;
 const MAX_REDIRECTS = 5;
 
 function getSyncEndpoint(): string {
-    return normalize0ctxHostedUrl(getConfigValue('sync.endpoint')).replace(/\/$/, '');
+    return normalizeSyncEndpoint(getConfigValue('sync.endpoint')).replace(/\/$/, '');
 }
 
 // ─── HTTP helpers ────────────────────────────────────────────────────────────
@@ -79,15 +79,12 @@ function request(
     });
 }
 
-function normalize0ctxHostedUrl(value: string): string {
+function normalizeSyncEndpoint(value: string): string {
     try {
         const parsed = new URL(value);
-        if (parsed.hostname === '0ctx.com') {
-            parsed.hostname = 'www.0ctx.com';
-        }
         return parsed.toString();
     } catch {
-        return value.replace(/^https:\/\/0ctx\.com(?=\/|$)/, 'https://www.0ctx.com');
+        return value;
     }
 }
 
@@ -112,8 +109,8 @@ export async function pushEnvelope(token: string, envelope: SyncEnvelope): Promi
 
         let error: string;
         try {
-            // BFF returns { "error": { "code": "...", "message": "..." } } — handle
-            // both flat string and nested object envelopes, same as cloud.ts.
+            // Some sync endpoints return { "error": { "code": "...", "message": "..." } }.
+            // Handle both flat string and nested object envelopes.
             const parsed = JSON.parse(res.body) as {
                 error?: string | { code?: string; message?: string };
                 message?: string;

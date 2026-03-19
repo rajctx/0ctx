@@ -24,16 +24,16 @@ export function resolveCommandOperation(parsed: ParsedArgs): string {
         return parsed.subcommand ? `cli.config.${parsed.subcommand}` : 'cli.config.list';
     }
     if (parsed.command === 'sync') {
-        if (parsed.subcommand === 'policy') {
-            const action = parsed.positionalArgs[0] || 'unknown';
-            return `cli.sync.policy.${action}`;
-        }
-        return parsed.subcommand ? `cli.sync.${parsed.subcommand}` : 'cli.sync.status';
+        return parsed.subcommand ? `cli.sync.${parsed.subcommand}` : 'cli.sync';
     }
     if (parsed.command === 'connector') {
+        if (parsed.subcommand === 'hook') {
+            const action = parsed.positionalArgs[0] || 'status';
+            return `cli.hook.${action}`;
+        }
         if (parsed.subcommand === 'service') {
             const action = parsed.serviceAction || 'unknown';
-            return `cli.connector.service.${action}`;
+            return `cli.daemon.service.${action}`;
         }
         if (parsed.subcommand === 'queue') {
             const action = parsed.positionalArgs[0] || 'status';
@@ -43,7 +43,7 @@ export function resolveCommandOperation(parsed: ParsedArgs): string {
     }
     if (parsed.command === 'hook') {
         const action = parsed.positionalArgs[0] || 'status';
-        return `cli.connector.hook.${action}`;
+        return `cli.hook.${action}`;
     }
     if (parsed.command === 'mcp') {
         return parsed.subcommand ? `cli.mcp.${parsed.subcommand}` : 'cli.mcp';

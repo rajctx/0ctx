@@ -54,8 +54,7 @@ export interface HealthCommandDeps {
 }
 
 export interface SetupCommandDeps {
-    readConnectorState: () => { machineId: string } | null;
-    commandConnector: (action: string, flags: FlagMap) => Promise<number>;
+    commandDaemonService: (action: string | undefined) => Promise<number>;
     parseOptionalStringFlag: (value: string | boolean | undefined) => string | null | undefined;
     validateExplicitPreviewSelection: (raw: string | boolean | undefined, previewList: string) => string | null;
     validatePreviewOptIn: (raw: string | boolean | undefined, allowPreview: boolean, previewList: string, gaExample?: string) => string | null;

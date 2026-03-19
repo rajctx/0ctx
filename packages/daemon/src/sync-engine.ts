@@ -2,8 +2,8 @@
  * SYNC-01: Sync engine orchestrator.
  *
  * Runs a background timer that periodically:
- *   1. Processes the sync queue (push encrypted context dumps to cloud)
- *   2. Pulls remote changes (from other devices/users)
+ *   1. Processes the sync queue (push encrypted context dumps to an optional remote endpoint)
+ *   2. Pulls remote changes (from other devices or environments)
  *
  * Never blocks local graph operations. Failures are logged and retried
  * with exponential backoff via the sync queue.

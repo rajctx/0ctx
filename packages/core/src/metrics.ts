@@ -2,7 +2,7 @@
  * OPS-001: Lightweight in-process metrics collection.
  *
  * Provides counters, gauges, and histograms with Prometheus-compatible text output.
- * No external dependency — suitable for embedding in daemon, BFF, and control-plane.
+ * No external dependency — suitable for embedding in local runtimes and support services.
  *
  * Usage:
  *   import { metrics } from '@0ctx/core/metrics';

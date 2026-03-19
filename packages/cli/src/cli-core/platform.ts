@@ -41,31 +41,12 @@ export function resolveCliEntrypoint(): string {
     return __filename;
 }
 
-function normalizeHostedUiBaseUrl(input: string): string {
-    try {
-        const parsed = new URL(input);
-        const host = parsed.hostname.toLowerCase();
-        const isLegacyHost = host === '0ctx.com'
-            || host === 'www.0ctx.com'
-            || host === 'app.0ctx.com';
-        const isRootPath = parsed.pathname === '' || parsed.pathname === '/';
-        if (isLegacyHost && isRootPath) {
-            parsed.hostname = 'www.0ctx.com';
-            parsed.pathname = '/install';
-            return parsed.toString();
-        }
-        return parsed.toString();
-    } catch {
-        return input;
-    }
-}
-
-export function getHostedUiUrl(): string {
+export function getUiUrl(): string {
     const configured = getConfigValue('ui.url');
     if (typeof configured === 'string' && configured.trim().length > 0) {
-        return normalizeHostedUiBaseUrl(configured.trim());
+        return configured.trim();
     }
-    return normalizeHostedUiBaseUrl('https://www.0ctx.com/install');
+    return '';
 }
 
 export function openUrl(url: string): void {

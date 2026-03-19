@@ -9,14 +9,6 @@ function printSetupJson(ok: boolean, steps: SetupStep[]): void {
     console.log(JSON.stringify({ ok, steps }, null, 2));
 }
 
-function connectorVerifyFlags(flags: FlagMap): FlagMap {
-    return {
-        ...flags,
-        quiet: true,
-        json: false
-    };
-}
-
 export function createSetupCommands(
     deps: SetupCommandDeps,
     collectDoctorChecks: (flags: FlagMap) => Promise<{ checks: DoctorCheck[] }>
@@ -25,16 +17,6 @@ export function createSetupCommands(
         const asJson = Boolean(flags.json);
         const quiet = Boolean(flags.quiet) || asJson;
         const steps: SetupStep[] = [];
-
-        const registration = deps.readConnectorState();
-        steps.push({
-            id: 'connector_state',
-            status: registration ? 'pass' : 'warn',
-            code: 0,
-            message: registration
-                ? 'Connector registration state exists.'
-                : 'Connector registration state not found (setup will need to register this machine).'
-        });
 
         try {
             const { checks } = await collectDoctorChecks({ ...flags, json: false });
@@ -55,14 +37,6 @@ export function createSetupCommands(
                 message: `Doctor checks failed to execute: ${message}`
             });
         }
-
-        const verifyCode = await deps.commandConnector('verify', connectorVerifyFlags(flags));
-        steps.push({
-            id: 'connector_verify',
-            status: verifyCode === 0 ? 'pass' : 'fail',
-            code: verifyCode,
-            message: verifyCode === 0 ? 'Connector verification passed.' : 'Connector verification failed.'
-        });
 
         const ok = steps.every(step => step.status !== 'fail');
 
@@ -112,17 +86,17 @@ export function createSetupCommands(
         if (!quiet) console.log('Running setup workflow...');
 
         if (skipService) {
-            steps.push({ id: 'connector_service', status: 'warn', code: 0, message: 'Service installation/start was skipped by --skip-service.' });
+            steps.push({ id: 'daemon_service', status: 'warn', code: 0, message: 'Service installation/start was skipped by --skip-service.' });
         } else {
             for (const action of ['install', 'enable', 'start'] as const) {
-                const code = await deps.commandConnector(action, { ...flags, quiet });
+                const code = await deps.commandDaemonService(action);
                 steps.push({
-                    id: `connector_service_${action}`,
+                    id: `daemon_service_${action}`,
                     status: code === 0 ? 'pass' : 'warn',
                     code,
-                    message: code === 0 ? `Connector service ${action} succeeded.` : `Connector service ${action} failed; continuing with local runtime flow.`
+                    message: code === 0 ? `Daemon service ${action} succeeded.` : `Daemon service ${action} failed; continuing with local runtime flow.`
                 });
-                if (code !== 0 && !quiet) console.log(`connector ${action}: warning (continuing with local runtime flow)`);
+                if (code !== 0 && !quiet) console.log(`daemon service ${action}: warning (continuing with local runtime flow)`);
             }
         }
 
@@ -153,22 +127,6 @@ export function createSetupCommands(
                 if (asJson) printSetupJson(false, steps);
                 return hooksCode;
             }
-        }
-
-        const registerCode = await deps.commandConnector('register', { ...flags, quiet: true, json: false });
-        steps.push({ id: 'connector_register', status: registerCode === 0 ? 'pass' : 'fail', code: registerCode, message: registerCode === 0 ? 'Connector registration completed.' : 'Connector registration failed.' });
-        if (registerCode !== 0) {
-            console.error('setup_register_failed: unable to register connector metadata');
-            if (asJson) printSetupJson(false, steps);
-            return registerCode;
-        }
-
-        const verifyCode = await deps.commandConnector('verify', connectorVerifyFlags(flags));
-        steps.push({ id: 'connector_verify', status: verifyCode === 0 ? 'pass' : 'fail', code: verifyCode, message: verifyCode === 0 ? 'Connector verification passed.' : 'Connector verification failed.' });
-        if (verifyCode !== 0) {
-            console.error('setup_verify_failed: connector/runtime verification failed');
-            if (asJson) printSetupJson(false, steps);
-            return verifyCode;
         }
 
         const setupRepoRoot = deps.resolveRepoRoot(null);

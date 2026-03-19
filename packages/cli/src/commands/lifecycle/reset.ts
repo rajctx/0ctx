@@ -13,7 +13,7 @@ export function createResetCommand(deps: ResetCommandDeps) {
             const p = await import('@clack/prompts');
             const accepted = await p.confirm({
                 message: full
-                    ? 'Reset local 0ctx runtime data, hook state, connector state, and backups on this machine?'
+                    ? 'Reset local 0ctx runtime data, hook state, legacy runtime state, and backups on this machine?'
                     : 'Reset local 0ctx runtime data on this machine?',
                 initialValue: false
             });
@@ -29,7 +29,7 @@ export function createResetCommand(deps: ResetCommandDeps) {
         const daemonBefore = await deps.isDaemonReachable();
         if (daemonBefore.ok) {
             console.error('reset_requires_daemon_stop: stop the daemon/service before resetting local data.');
-            console.error('Try: 0ctx connector service stop');
+            console.error('Try: 0ctx daemon service stop');
             return 1;
         }
 

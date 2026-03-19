@@ -16,18 +16,18 @@ function resolveNodePath(): string {
     return process.execPath;
 }
 
-function resolveCliEntry(): string {
+function resolveDaemonEntry(): string {
     const candidates = [
-        path.resolve(__dirname, 'index.js'),
-        path.resolve(__dirname, '..', '..', 'cli', 'dist', 'index.js'),
-        path.resolve(process.cwd(), 'packages', 'cli', 'dist', 'index.js'),
+        path.resolve(__dirname, 'daemon.js'),
+        path.resolve(process.cwd(), 'packages', 'daemon', 'dist', 'index.js'),
+        path.resolve(__dirname, '..', '..', 'daemon', 'dist', 'index.js'),
     ].filter(Boolean);
 
     for (const c of candidates) {
         if (fs.existsSync(c)) return c;
     }
     throw new Error(
-        'Cannot resolve CLI entry point. Run `npm run build` or install @0ctx/cli.'
+        'Cannot resolve daemon entry point. Run `npm run build` or install @0ctx/cli.'
     );
 }
 
@@ -43,18 +43,19 @@ export function installService(): void {
     }
 
     const nodePath = resolveNodePath();
-    const cliEntry = resolveCliEntry();
+    const daemonEntry = resolveDaemonEntry();
 
     let unit = fs.readFileSync(UNIT_TEMPLATE_PATH, 'utf8');
     unit = unit.replace(/%NODE_PATH%/g, nodePath);
-    unit = unit.replace(/%CLI_ENTRY%/g, cliEntry);
+    unit = unit.replace(/%DAEMON_ENTRY%/g, daemonEntry);
+    unit = unit.replace(/%CLI_ENTRY%/g, daemonEntry);
 
     fs.writeFileSync(INSTALLED_UNIT, unit, 'utf8');
     systemctl('daemon-reload');
 
     console.log(`Unit '${SERVICE_NAME}.service' installed.`);
     console.log(`Node:  ${nodePath}`);
-    console.log(`Entry: ${cliEntry}`);
+    console.log(`Daemon entry: ${daemonEntry}`);
     console.log(`Unit:  ${INSTALLED_UNIT}`);
     console.log('Run: 0ctx daemon service enable  →  to set auto-start');
     console.log('Run: 0ctx daemon service start   →  to start immediately');

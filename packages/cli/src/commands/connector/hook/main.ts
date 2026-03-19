@@ -16,7 +16,7 @@ export function createHookMainCommand(deps: HookCommandDeps) {
         const safeAction = action ?? 'status';
         const validActions = ['install', 'status', 'ingest', 'prune', 'session-start'];
         if (!validActions.includes(safeAction)) {
-            console.error(`Unknown connector hook action: '${action ?? ''}'`);
+            console.error(`Unknown hook action: '${action ?? ''}'`);
             console.error(`Valid actions: ${validActions.join(', ')}`);
             return 1;
         }
@@ -28,7 +28,7 @@ export function createHookMainCommand(deps: HookCommandDeps) {
         const rawAgentFlag = deps.parseOptionalStringFlag(flags.agent)?.trim().toLowerCase() ?? null;
         const agent = deps.extractSupportedHookAgent(rawAgentFlag);
         if (!agent) {
-            console.error("connector_hook_ingest_requires_agent: pass --agent=claude|factory|antigravity for the supported path. Use `0ctx help --advanced` only if you intentionally need explicit preview integrations.");
+            console.error("hook_ingest_requires_agent: pass --agent=claude|factory|antigravity for the supported path. Use `0ctx help --advanced` only if you intentionally need explicit preview integrations.");
             return 1;
         }
 

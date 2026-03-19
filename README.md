@@ -18,9 +18,7 @@ and the other surfaces in this monorepo build on top of the same runtime.
 - `packages/core`, `packages/daemon`, `packages/mcp`: Internal runtime packages
   that power the CLI and local daemon.
 - `desktop-app/`: Contributor and dev-focused Electron management surface.
-- `ui/`: Hosted web surface for docs and install guidance.
-- `cloud/`: Dev/reference services and release helpers for hosted or managed
-  integrations.
+- `ui/`: Contributor and dev web surface for docs and install guidance.
 
 ## Open-Source Quickstart
 
@@ -70,38 +68,14 @@ cd <repo>
 0ctx doctor --json
 0ctx repair
 
-# Check connector posture (advanced)
-0ctx connector status --json
-0ctx connector status --json --require-bridge
-0ctx connector verify --json
-
-# Get/set per-context sync policy
-0ctx sync policy get --repo-root=.
-0ctx sync policy set local_only --repo-root=.
-# Opt in to richer cloud sync explicitly
-0ctx sync policy set metadata_only --repo-root=.
-0ctx sync policy set full_sync --repo-root=. --confirm-full-sync
-
-# Run connector control loop in foreground (service target mode)
-0ctx connector run --interval-ms=5000
-
-# Install managed connector runtime service (preferred)
-0ctx connector service install
-0ctx connector service enable
-0ctx connector service start
-
-# Inspect/drain/purge connector event queue
-0ctx connector queue status --json
-0ctx connector queue drain --max-batches=10 --wait --strict --timeout-ms=120000
-0ctx connector queue purge --older-than-hours=168 --dry-run
-0ctx connector queue logs --limit=50
-0ctx connector queue logs --clear --dry-run
-
 # Workstream/session/checkpoint flows
 0ctx workstreams --repo-root .
 0ctx sessions --repo-root .
 0ctx checkpoints --repo-root .
 ```
+
+Capture hooks are part of the normal local product path via `0ctx hook ...`.
+Older `0ctx connector hook ...` installs still work as compatibility aliases.
 
 For monorepo development:
 
@@ -143,13 +117,16 @@ cd <repo>
 That binds the repo, starts or verifies the local runtime, installs supported
 capture integrations, and turns on automatic retrieval for supported agents.
 
+`hook` commands are the supported capture-management surface for local installs.
+Most users should not need anything beyond `0ctx enable` and `0ctx status`.
+
 ## Documentation
 
 - `AGENTS.md`: implementation guidance and architecture.
 - `docs/INDEX.md`: docs entrypoint.
 - `docs/QUICKSTART.md`: repo-first product path.
 - `docs/INTEGRATIONS.md`: GA vs preview integration model.
-- `docs/DATA_POLICY.md`: local-first retention and sync defaults.
+- `docs/DATA_POLICY.md`: local-first retention and debug defaults.
 - `docs/RELEASE.md`: release validation and verification flow.
 
 ## Contributing And Support
@@ -162,7 +139,7 @@ capture integrations, and turns on automatic retrieval for supported agents.
 ## Privacy Defaults
 
 - A clean source build does not send CLI telemetry unless it is explicitly enabled and configured.
-- The hosted UI does not initialize Sentry unless `NEXT_PUBLIC_SENTRY_DSN` is set.
+- UI surfaces do not initialize Sentry unless `NEXT_PUBLIC_SENTRY_DSN` is set.
 
 ## Repository Policy
 

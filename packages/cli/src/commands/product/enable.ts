@@ -4,10 +4,10 @@ import type { ProductCommandDeps, FlagMap, CheckStatus, BootstrapResult } from '
 import { createInstallCommand } from './install';
 import { buildRepoReadinessLines } from './repo-readiness-display';
 
-type DataPolicyPreset = 'lean' | 'review' | 'debug' | 'shared';
+type DataPolicyPreset = 'lean' | 'review' | 'debug';
 
 function parseDataPolicyPreset(value: string | null): DataPolicyPreset | null {
-    if (value === 'lean' || value === 'review' || value === 'debug' || value === 'shared') {
+    if (value === 'lean' || value === 'review' || value === 'debug') {
         return value;
     }
     return null;
@@ -32,7 +32,7 @@ export function createEnableCommands(deps: ProductCommandDeps & { commandBootstr
             return 1;
         }
         if (requestedDataPolicy && !dataPolicyPreset) {
-            console.error('Invalid data policy. Use lean, review, debug, or shared.');
+            console.error('Invalid data policy. Use lean, review, or debug.');
             return 1;
         }
         const selectedPreviewMcp = deps.detectPreviewSelections(flags['mcp-clients'] ?? flags.mcpClients, 'codex');

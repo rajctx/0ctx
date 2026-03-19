@@ -8,7 +8,7 @@ Local daemon + SQLite are the source of truth.
 
 New workspaces default to:
 
-- sync policy: `metadata_only`
+- workspace data policy: `local_only`
 - local capture retention: `14` days
 - debug-heavy artifacts retention: `7` days
 - debug-heavy artifacts: off by default
@@ -20,26 +20,23 @@ This is the lean normal path.
 Local state lives under `~/.0ctx/` and can include:
 
 - SQLite database
-- connector state
-- queue state
 - hook dumps
 - transcript snapshots
 - backups
 
 Debug-heavy artifacts are reduced by default.
 
-## What cloud sync means
+## Legacy remote sync states
 
 `metadata_only`:
 
-- the normal default
-- keeps local capture rich
-- sends only minimal synced metadata
+- legacy workspace setting from older builds
+- no longer part of the supported local-only path
 
 `full_sync`:
 
-- explicit opt-in only
-- should be chosen deliberately
+- legacy workspace setting from older builds
+- should be normalized back to `local_only`
 
 ## Product rule
 

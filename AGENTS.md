@@ -45,7 +45,7 @@ npm run bootstrap:mcp
 # Preview MCP registration changes without writing files
 npm run bootstrap:mcp:dry
 
-# Run local UI (contributor/dev only; end-user runtime uses hosted UI)
+# Run local UI (contributor/dev only)
 npm run dev:ui
 
 # Build desktop app debug bundle
@@ -74,7 +74,7 @@ This is an npm workspaces monorepo. Build/reference order matters:
 Current top-level app surfaces outside `packages/`:
 
 - `desktop-app/` - Electron desktop management surface
-- `ui/` - hosted web UI (contributor/dev surface)
+- `ui/` - contributor/dev web UI surface
 
 ### `packages/core` (`@0ctx/core`)
 
@@ -141,8 +141,8 @@ Product-facing command-line surface for install and support workflows.
 - `src/index.ts`:
   - Thin entrypoint and command wiring
 - `src/commands/`:
-  - Product commands (`enable`, `status`, `bootstrap`, `sync`, `workstreams`, `sessions`, `checkpoints`, `insights`)
-  - Connector/hook commands
+  - Product commands (`enable`, `status`, `bootstrap`, `workstreams`, `sessions`, `checkpoints`, `insights`)
+  - Hook and local support commands
   - Lifecycle and support commands
 - `src/cli-core/`:
   - Shared argument parsing, readiness, repo resolution, daemon helpers, output formatting
@@ -162,7 +162,7 @@ Electron desktop management surface.
 
 ### `ui/`
 
-Hosted UI codebase (dev/contributor surface). End-user runtime is hosted UI plus local connector/daemon.
+Contributor/dev web UI codebase. The supported open-source runtime path is local CLI + daemon.
 
 ## Key Design Constraints
 
@@ -261,8 +261,8 @@ Local state under `~/.0ctx/`:
 - `0ctx.db` - SQLite database (WAL mode, foreign keys enabled)
 - `0ctx.sock` - Unix domain socket (or `\\.\pipe\0ctx.sock` on Windows)
 - `master.key` - local encryption key fallback (when `CTX_MASTER_KEY` is not provided)
-- `connector.json` - connector registration + runtime bridge state
-- `connector-event-queue.json` - persistent connector event replay queue (override: `CTX_CONNECTOR_QUEUE_PATH`)
+- `connector.json` - legacy compatibility state from older connector-based installs
+- `connector-event-queue.json` - legacy compatibility queue from older connector-based installs
 - `ops.log` - local CLI operations audit log (queue/auth/runtime actions; override: `CTX_CLI_OPS_LOG_PATH`)
 - `backups/` - encrypted backup files (`.enc`) and optional plaintext dumps (`.json`)
 
@@ -271,9 +271,7 @@ Local state under `~/.0ctx/`:
 - Unit/integration tests use Vitest:
   - `packages/core/test/*`
   - `packages/daemon/test/*`
-- CI workflow:
-  - active location: `.github/workflows/ci.yml`
-  - Runs `npm ci`, `npm run typecheck`, `npm run build`, `npm run test`
+- GitHub Actions workflows are currently kept disabled under `.github/workflows-disabled/`
 
 ## Repo Governance
 

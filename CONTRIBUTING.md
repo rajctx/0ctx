@@ -7,7 +7,7 @@ Thanks for contributing. External pull requests are welcome.
 The main open-source support surface is the repo-first CLI/runtime workflow.
 
 - `@0ctx/cli` and the local runtime are the primary review targets.
-- `desktop-app/`, `ui/`, and `cloud/` are public but maintained on a best-effort basis.
+- `desktop-app/` and `ui/` are public but maintained on a best-effort basis.
 - Security issues should follow `SECURITY.md` instead of public issue flow.
 
 ## Workflow
@@ -41,7 +41,7 @@ npm run repo:check-nested-git
 - Prefer small diffs over broad refactors.
 - Add tests for behavior changes whenever practical.
 - Preserve existing CLI, daemon, and MCP public behavior unless the change is intentional and documented.
-- Avoid introducing new telemetry, hosted dependencies, or network defaults without explicit justification.
+- Avoid introducing new telemetry, remote service dependencies, or network defaults without explicit justification.
 
 ## Release Notes And Breaking Changes
 

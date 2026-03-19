@@ -2,13 +2,12 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type { DesktopApi } from '../shared/contracts/api';
 import { desktopChannels } from '../shared/ipc/channels';
 import {
-  ensureConnectorStatus,
   ensureDaemonStatus,
   ensureEventMessage,
   ensureOptionalString,
   ensurePreferences,
+  ensureRuntimeStatus,
   ensureString,
-  ensureUpdateStatus,
   ensureDesktopPosture
 } from '../shared/ipc/validation';
 
@@ -38,12 +37,12 @@ const desktopApi: DesktopApi = {
       return ipcRenderer.invoke(desktopChannels.daemon.call, ensureString(method, 'Daemon method'), params);
     }
   },
-  connector: {
-    async restart() {
-      return ensureConnectorStatus(await ipcRenderer.invoke(desktopChannels.connector.restart));
+  runtime: {
+    async refresh() {
+      return ensureRuntimeStatus(await ipcRenderer.invoke(desktopChannels.runtime.refresh));
     },
     async getStatus() {
-      return ensureConnectorStatus(await ipcRenderer.invoke(desktopChannels.connector.status));
+      return ensureRuntimeStatus(await ipcRenderer.invoke(desktopChannels.runtime.status));
     }
   },
   dialog: {
@@ -54,11 +53,6 @@ const desktopApi: DesktopApi = {
   shell: {
     async openPath(targetPath) {
       return ipcRenderer.invoke(desktopChannels.shell.openPath, ensureString(targetPath, 'Target path'));
-    }
-  },
-  updates: {
-    async check() {
-      return ensureUpdateStatus(await ipcRenderer.invoke(desktopChannels.updates.check));
     }
   },
   events: {

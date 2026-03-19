@@ -74,7 +74,7 @@ function getHookConfigPath(projectRoot: string, agent: GaHookAgent): string {
 
 function isManagedCommandPresent(agent: GaHookAgent, configContent: string, expectedCommand: string | null): boolean {
     if (!expectedCommand) return false;
-    if (!configContent.includes('0ctx connector hook ingest')) return false;
+    if (!configContent.includes('0ctx hook ingest') && !configContent.includes('0ctx connector hook ingest')) return false;
     if (!configContent.includes(`--agent=${agent}`)) return false;
     const expectedPrefix = expectedCommand.replace(/\s+/g, ' ').trim().split(' ').slice(0, 4).join(' ');
     return configContent.includes(expectedPrefix);
@@ -82,7 +82,7 @@ function isManagedCommandPresent(agent: GaHookAgent, configContent: string, expe
 
 function isSessionStartPresent(agent: GaHookAgent, configContent: string): boolean {
     return configContent.includes('SessionStart')
-        && configContent.includes('0ctx connector hook session-start')
+        && (configContent.includes('0ctx hook session-start') || configContent.includes('0ctx connector hook session-start'))
         && configContent.includes(`--agent=${agent}`);
 }
 

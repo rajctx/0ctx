@@ -94,7 +94,7 @@ describe('CLI entry flow', () => {
         expect(registry.runCommandWithOpsSummary).toHaveBeenCalledWith(
             'cli.enable',
             expect.any(Function),
-            expect.objectContaining({ reason: 'first_run_repo' })
+            expect.objectContaining({ reason: 'repo_entrypoint' })
         );
     });
 

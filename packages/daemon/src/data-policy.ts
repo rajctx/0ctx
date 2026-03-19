@@ -48,9 +48,9 @@ function formatWorkspaceSyncSummary(syncPolicy: SyncPolicy, workspaceResolved: b
     hint: string;
 } {
     const syncLabel = syncPolicy === 'full_sync'
-        ? 'full_sync (opt-in)'
+        ? 'full_sync (legacy)'
         : syncPolicy === 'metadata_only'
-            ? 'metadata_only (opt-in)'
+            ? 'metadata_only (legacy)'
             : 'local_only (default)';
     if (workspaceResolved) {
         return {
@@ -93,13 +93,13 @@ function buildDataPolicyActionHint(summary: {
     preset: DataPolicyPreset;
 }): string | null {
     if (!summary.workspaceResolved) {
-        return 'Full sync is available only after a workspace is active.';
+        return 'Lean, Review, or Debug will apply once a workspace is active.';
     }
     if (summary.preset === 'custom') {
-        return 'Choose Lean, Review, or Debug to return machine defaults to a supported path. Use Shared only when a workspace explicitly needs richer cloud sync.';
+        return 'Choose Lean, Review, or Debug to return machine defaults to a supported local-only path.';
     }
     if (summary.preset === 'shared' || summary.syncPolicy === 'metadata_only' || summary.syncPolicy === 'full_sync') {
-        return 'Return this workspace to local_only when cloud sync is no longer needed.';
+            return 'Return this workspace to local_only to clear legacy remote-sync settings.';
     }
     if (summary.preset === 'debug' || summary.debugArtifactsEnabled) {
         return 'Turn off debug trails when troubleshooting is complete.';
@@ -120,10 +120,10 @@ function buildNormalPathSummary(summary: {
         return 'No active workspace yet. Machine capture defaults are ready, and workspace sync stays local_only once a workspace is active.';
     }
     if (summary.syncPolicy === 'full_sync') {
-        return 'Workspace sync is explicitly opted into full_sync. Machine capture defaults remain local.';
+        return 'Workspace still carries a legacy full_sync setting. Machine capture defaults remain local.';
     }
     if (summary.preset === 'shared' || summary.syncPolicy === 'metadata_only') {
-        return 'Workspace sync is explicitly opted into metadata_only. Machine capture defaults remain local.';
+        return 'Workspace still carries a legacy metadata_only setting. Machine capture defaults remain local.';
     }
     if (summary.preset === 'custom') {
         return 'Workspace sync and machine capture defaults use a custom combination.';

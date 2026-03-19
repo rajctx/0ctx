@@ -19,7 +19,7 @@ import { detectInstalledGaHookClients, detectInstalledGaMcpClients, detectRegist
 import { formatAgentList, formatDebugArtifactsLabel, formatLabelValue, formatRetentionLabel, formatSyncPolicyLabel } from '../cli-core/format';
 import { createOpsSummaryRunner } from '../cli-core/ops';
 import { printJsonOrValue } from '../cli-core/output';
-import { getHostedUiUrl, openUrl, printBootstrapResults, resolveCliEntrypoint, runBootstrap } from '../cli-core/platform';
+import { getUiUrl, openUrl, printBootstrapResults, resolveCliEntrypoint, runBootstrap } from '../cli-core/platform';
 import { createHookHealthCollector, createRepoReadinessCollector } from '../cli-core/readiness';
 import { findGitRepoRoot, getCurrentWorkstream, resolveRepoRoot, safeGitValue } from '../cli-core/repo';
 import { commandDaemonService } from '../cli-core/service';
@@ -84,17 +84,17 @@ export function createCliRegistry() {
     const { commandHook: commandConnectorHook } = createHookCommands({
         resolveRepoRoot, parseOptionalStringFlag, resolveContextIdForHookIngest: (repoRoot, explicitContextId) => resolveContextIdForHookIngest(repoRoot, explicitContextId), validateExplicitPreviewSelection, validatePreviewOptIn, parseHookClients: raw => parseHookClients(raw), installHooks, readHookInstallState, parsePositiveIntegerFlag, getHookDumpRetentionDays, pruneHookDumps, extractSupportedHookAgent, readStdinPayload, normalizeHookPayload, resolveHookTranscriptPath, resolveCodexSessionArchivePath, readCodexArchiveCapture, readTranscriptCapture, readCodexCapture, readInlineHookCapture, persistHookTranscriptSnapshot, persistHookTranscriptHistory, appendHookEventLog, persistHookDump, resolveHookCaptureRoot, validateHookIngestWorkspace, buildHookCaptureMeta, ensureChatSessionNode, ensureChatCommitNode, asRecord, safeGitValue, sendToDaemon
     });
-    const { commandDataPolicy, commandSyncStatus, commandSyncPolicyGet, commandSyncPolicySet } = createPolicyCommands({
+    const { commandDataPolicy } = createPolicyCommands({
         requireCommandContextId, resolveCommandContextId, parseOptionalStringFlag, parseOptionalPositiveNumberFlag, parseOptionalBooleanLikeFlag, ensureDaemonCapabilities, printCapabilityMismatch, formatSyncPolicyLabel, formatDebugArtifactsLabel, printJsonOrValue, pruneHookDumps
     });
     const { commandStatus, commandBootstrap, commandMcp, commandInstall, commandEnable, commandLogs, commandWorkspaces } = createProductCommands({
         DB_PATH: dbPath, KEY_PATH: keyPath, SOCKET_PATH: socketPath, DEFAULT_MCP_CLIENTS: defaultEnableMcpClients, isDaemonReachable, startDaemonDetached, waitForDaemon, inferDaemonRecoverySteps, sendToDaemon, findGitRepoRoot, collectRepoReadiness, validateExplicitPreviewSelection, validatePreviewOptIn, detectPreviewSelections, parseClients: raw => parseClients(raw), parseHookClients: raw => parseHookClients(raw), parseEnableMcpClients: raw => parseEnableMcpClients(raw), deriveEnableMcpClientsFromHookClients: hookClients => deriveEnableMcpClientsFromHookClients(hookClients as HookInstallClient[]), detectInstalledGaHookClients, detectInstalledGaMcpClients, parseOptionalStringFlag, parsePositiveIntegerFlag, parseOptionalPositiveNumberFlag, runBootstrap: (clients, dryRun, explicitEntrypoint, profile) => runBootstrap(clients as SupportedClient[], dryRun, explicitEntrypoint, profile), printBootstrapResults, resolveRepoRoot, selectHookContextId, installHooks, commandInstall: flags => commandInstall(flags), openUrl, getConnectorStatePath, readConnectorState, getConnectorQueuePath, listQueuedConnectorEvents, getConnectorQueueStats, getCliOpsLogPath, readCliOpsLog, startLogsServer, formatAgentList, formatLabelValue, formatRetentionLabel, formatSyncPolicyLabel, printJsonOrValue
     });
     const { commandConnector } = createConnectorCommands({
-        isDaemonReachable, readConnectorState, getHostedUiUrl, getConnectorStatePath, writeConnectorState, sendToDaemon, inferDaemonRecoverySteps, runConnectorRuntime, parsePositiveIntegerFlag, commandLogs, commandDaemonService, commandConnectorQueue, registerConnector
+        isDaemonReachable, readConnectorState, getUiUrl, getConnectorStatePath, writeConnectorState, sendToDaemon, inferDaemonRecoverySteps, runConnectorRuntime, parsePositiveIntegerFlag, commandLogs, commandDaemonService, commandConnectorQueue, registerConnector
     });
     const { collectDoctorChecks, commandDoctor, commandRepair, commandReset, commandSetup } = createLifecycleCommands({
-        DB_PATH: dbPath, KEY_PATH: keyPath, isDaemonReachable, findGitRepoRoot, collectRepoReadiness, getHookDumpDir, getConnectorQueuePath, getConnectorStatePath, getHookStatePath, inferDaemonRecoverySteps, getCliOpsLogPath, runBootstrap: (clients, dryRun) => runBootstrap(clients as SupportedClient[], dryRun), parseClients: raw => parseClients(raw), collectHookHealth, readHookInstallState, resolveContextIdForHookIngest: (projectRoot, preferredContextId) => resolveContextIdForHookIngest(projectRoot, preferredContextId ?? null), installHooks, commandBootstrap, waitForDaemon, startDaemonDetached, ensureDaemonCapabilities, readConnectorState, commandConnector, parseOptionalStringFlag, validateExplicitPreviewSelection, validatePreviewOptIn, commandInstall, commandConnectorHook, resolveRepoRoot, sendToDaemon
+        DB_PATH: dbPath, KEY_PATH: keyPath, isDaemonReachable, findGitRepoRoot, collectRepoReadiness, getHookDumpDir, getConnectorQueuePath, getConnectorStatePath, getHookStatePath, inferDaemonRecoverySteps, getCliOpsLogPath, runBootstrap: (clients, dryRun) => runBootstrap(clients as SupportedClient[], dryRun), parseClients: raw => parseClients(raw), collectHookHealth, readHookInstallState, resolveContextIdForHookIngest: (projectRoot, preferredContextId) => resolveContextIdForHookIngest(projectRoot, preferredContextId ?? null), installHooks, commandBootstrap, waitForDaemon, startDaemonDetached, ensureDaemonCapabilities, commandDaemonService, parseOptionalStringFlag, validateExplicitPreviewSelection, validatePreviewOptIn, commandInstall, commandConnectorHook, resolveRepoRoot, sendToDaemon
     });
     const { commandRecall } = createRecallCommands({
         parseOptionalStringFlag, parsePositiveIntegerFlag, parsePositiveNumberFlag, getContextIdFlag, checkDaemonCapabilities, printCapabilityMismatch, sendToDaemon
@@ -142,9 +142,6 @@ export function createCliRegistry() {
         commandConfigGet,
         commandConfigSet,
         commandDataPolicy,
-        commandSyncStatus,
-        commandSyncPolicyGet,
-        commandSyncPolicySet,
         commandConnector,
         commandConnectorQueue,
         commandConnectorHook,

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildRepoReadinessLines } from '../src/commands/product/repo-readiness-display';
 
 describe('repo readiness display', () => {
-    it('prints shared as a workspace override with explicit full_sync opt-in in the normal repo readiness path', () => {
+    it('prints legacy remote-sync policy states as compatibility-only labels in the normal repo readiness path', () => {
         const lines = buildRepoReadinessLines({
             mode: 'status',
             repoReadiness: {
@@ -26,12 +26,12 @@ describe('repo readiness display', () => {
                 zeroTouchReady: true,
                 nextActionHint: null,
                 dataPolicyPreset: 'shared',
-                dataPolicyActionHint: 'Return this workspace to Lean when richer cloud sync is no longer needed.',
+                dataPolicyActionHint: 'Return this workspace to Lean to clear legacy remote-sync settings.',
                 captureRetentionDays: 14,
                 debugRetentionDays: 7,
                 debugArtifactsEnabled: false,
-                normalPathSummary: 'Workspace sync is explicitly opted into full_sync. Machine capture defaults remain local.',
-                workspaceSyncSummary: 'full_sync (opt-in)',
+                normalPathSummary: 'Workspace still carries a legacy full_sync setting. Machine capture defaults remain local.',
+                workspaceSyncSummary: 'full_sync (legacy)',
                 workspaceSyncHint: '',
                 machineCaptureSummary: '14d local capture; debug trails off by default (7d if enabled)',
                 debugUtilitySummary: 'Off in the normal path (7d retention if enabled)'
@@ -39,13 +39,13 @@ describe('repo readiness display', () => {
             formatAgentList: (agents) => agents.join(', '),
             formatLabelValue: (label, value) => `${label}: ${value}`,
             formatRetentionLabel: (summary) => `${summary.captureRetentionDays}d local capture`,
-            formatSyncPolicyLabel: (policy) => policy === 'full_sync' ? 'full_sync (opt-in)' : String(policy ?? '')
+            formatSyncPolicyLabel: (policy) => policy === 'full_sync' ? 'full_sync (legacy)' : String(policy ?? '')
         });
 
-        expect(lines).toContain('Policy: Workspace sync is explicitly opted into full_sync. Machine capture defaults remain local.');
-        expect(lines).toContain('Policy mode: Shared (workspace override)');
-        expect(lines).toContain('Workspace sync: full_sync (opt-in)');
-        expect(lines).toContain('Policy step: Return this workspace to Lean when richer cloud sync is no longer needed.');
+        expect(lines).toContain('Policy: Workspace still carries a legacy full_sync setting. Machine capture defaults remain local.');
+        expect(lines).toContain('Policy mode: Legacy Remote Sync (workspace override)');
+        expect(lines).toContain('Workspace sync: full_sync (legacy)');
+        expect(lines).toContain('Policy step: Return this workspace to Lean to clear legacy remote-sync settings.');
         expect(lines.some((line) => line.startsWith('Utility debug:'))).toBe(false);
     });
 

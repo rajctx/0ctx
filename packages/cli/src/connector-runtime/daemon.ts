@@ -27,12 +27,12 @@ function resolveDaemonEntrypoint(): string {
     throw new Error('Could not resolve daemon entrypoint. Run `npm run build` (repo) or reinstall/repair the CLI package.');
 }
 
-export function getHostedUiUrl(): string {
+export function getUiUrl(): string {
     const configured = getConfigValue('ui.url');
     if (typeof configured === 'string' && configured.trim().length > 0) {
         return configured.trim();
     }
-    return 'https://www.0ctx.com/install';
+    return '';
 }
 
 export function startDaemonDetached(): void {

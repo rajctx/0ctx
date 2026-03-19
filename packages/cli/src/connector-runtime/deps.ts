@@ -1,7 +1,7 @@
 import { readConnectorState, registerConnector, writeConnectorState } from '../connector.js';
 import { getConnectorQueueStats } from '../connector-queue.js';
 import {
-    getHostedUiUrl,
+    getUiUrl,
     getSyncStatus,
     isDaemonReachable,
     startDaemonDetached,
@@ -22,7 +22,7 @@ export function getRuntimeDependencies(): ConnectorRuntimeDependencies {
         readConnectorState,
         registerConnector,
         writeConnectorState,
-        getHostedUiUrl,
+        getUiUrl,
         getQueueStats: now => getConnectorQueueStats(now)
     };
 }

@@ -5,9 +5,9 @@ export function createConnectorRegisterCommand(deps: ConnectorCommandDeps) {
     return async function commandConnectorRegister(flags: FlagMap): Promise<number> {
         const asJson = Boolean(flags.json);
         const force = Boolean(flags.force);
-        const hostedUiUrl = deps.getHostedUiUrl();
+        const uiUrl = deps.getUiUrl();
         const { state, created } = deps.registerConnector({
-            uiUrl: hostedUiUrl,
+            uiUrl,
             force
         });
 
@@ -15,7 +15,7 @@ export function createConnectorRegisterCommand(deps: ConnectorCommandDeps) {
             ok: true,
             created,
             machineId: state.machineId,
-            hostedUrl: state.uiUrl,
+            uiUrl: state.uiUrl,
             platform: os.platform(),
             statePath: deps.getConnectorStatePath()
         };
@@ -25,7 +25,7 @@ export function createConnectorRegisterCommand(deps: ConnectorCommandDeps) {
         } else if (!Boolean(flags.quiet)) {
             console.log(`connector_registration: ${created ? 'created' : 'existing'}`);
             console.log(`machine_id: ${state.machineId}`);
-            console.log(`hosted_url: ${state.uiUrl}`);
+            console.log(`ui_url: ${state.uiUrl}`);
             console.log(`platform: ${os.platform()}`);
             console.log(`state_path: ${deps.getConnectorStatePath()}`);
         }

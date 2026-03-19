@@ -53,7 +53,7 @@ function isSessionStartConfigured(projectRoot: string | null, agent: string): bo
     try {
         const content = fs.readFileSync(configPath, 'utf8');
         return content.includes('SessionStart')
-            && content.includes('0ctx connector hook session-start')
+            && (content.includes('0ctx hook session-start') || content.includes('0ctx connector hook session-start'))
             && content.includes(`--agent=${agent}`);
     } catch {
         return false;

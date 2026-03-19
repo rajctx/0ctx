@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
 
 /**
- * Public hosted UI compatibility redirects.
+ * Legacy route redirects for the public docs surface.
  *
- * The current hosted surface is docs/install only. Older dashboard URLs
- * redirect to /install so stale links do not 404.
+ * Older routes redirect to /install so stale links do not 404.
  */
 
 export async function proxy(request: Request): Promise<Response> {

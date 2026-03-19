@@ -38,10 +38,15 @@ export function bumpAllPackageVersions(repoRoot: string, taggedVersion: string):
             throw new Error(`Package file not found: ${packageJsonPath}`);
         }
 
-        const parsed = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+        const originalContent = fs.readFileSync(packageJsonPath, 'utf-8');
+        const parsed = JSON.parse(originalContent);
         const oldVersion = parsed.version;
-        parsed.version = bareVersion;
-        fs.writeFileSync(packageJsonPath, JSON.stringify(parsed, null, 2) + '\n', 'utf-8');
+        if (oldVersion !== bareVersion) {
+            parsed.version = bareVersion;
+            const newline = originalContent.includes('\r\n') ? '\r\n' : '\n';
+            const nextContent = JSON.stringify(parsed, null, 2).replace(/\n/g, newline) + newline;
+            fs.writeFileSync(packageJsonPath, nextContent, 'utf-8');
+        }
         bumped.push(`${surface.name} ${oldVersion} -> ${bareVersion}`);
     }
 

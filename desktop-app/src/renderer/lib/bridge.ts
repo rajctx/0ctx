@@ -16,18 +16,15 @@ export const desktopBridge = {
   daemon: {
     call: <T = unknown>(method: string, params: Record<string, unknown> = {}) => resolveDesktopApi().daemon.call<T>(method, params)
   },
-  connector: {
-    restart: () => resolveDesktopApi().connector.restart(),
-    getStatus: () => resolveDesktopApi().connector.getStatus()
+  runtime: {
+    refresh: () => resolveDesktopApi().runtime.refresh(),
+    getStatus: () => resolveDesktopApi().runtime.getStatus()
   },
   dialog: {
     pickWorkspaceFolder: () => resolveDesktopApi().dialog.pickWorkspaceFolder()
   },
   shell: {
     openPath: (targetPath: string) => resolveDesktopApi().shell.openPath(targetPath)
-  },
-  updates: {
-    check: () => resolveDesktopApi().updates.check()
   },
   tray: {
     show: () => resolveDesktopApi().tray.show()

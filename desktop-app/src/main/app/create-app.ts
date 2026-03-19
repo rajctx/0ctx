@@ -3,7 +3,6 @@ import { app, ipcMain } from 'electron';
 import type { BrowserWindow } from 'electron';
 import { desktopChannels } from '../../shared/ipc/channels';
 import type { DesktopEventMessage } from '../../shared/types/domain';
-import { ConnectorService } from '../connector/connector-service';
 import { DaemonService } from '../daemon/daemon-service';
 import { DaemonClient } from '../daemon/ipc-client';
 import { LocalGraphService } from '../daemon/local-graph-service';
@@ -14,7 +13,6 @@ import { DesktopEventsService } from '../events/events-service';
 import { PreferencesService } from '../preferences/preferences-service';
 import { DesktopShellService } from '../shell/shell-service';
 import { DesktopTrayService } from '../tray/tray-service';
-import { DesktopUpdaterService } from '../updater/updater-service';
 import { createWindowManager } from '../windows/create-main-window';
 
 export async function createDesktopApplication() {
@@ -31,26 +29,35 @@ export async function createDesktopApplication() {
   const localGraph = new LocalGraphService();
   const shell = new DesktopShellService();
   const dialog = new DesktopDialogService();
-  const updater = new DesktopUpdaterService();
-  const connector = new ConnectorService(repoRoot);
   const windows = createWindowManager(preferences);
   const events = new DesktopEventsService(daemon, (message: DesktopEventMessage) => {
     windows.broadcast(desktopChannels.events.push, message);
   });
+  const getRuntimeStatus = async (startIfNeeded = false) => {
+    const running = startIfNeeded
+      ? await daemonRuntime.ensureStarted(5_000).catch(() => false)
+      : await daemonRuntime.isRunning().catch(() => false);
+
+    return {
+      running,
+      lastError: running ? null : (daemonRuntime.getLastError() ?? 'Local runtime unavailable.')
+    };
+  };
   const tray = new DesktopTrayService({
     onShow: () => windows.showMainWindow(),
-    onRestartConnector: () => {
-      connector.restart();
-    },
-    onCheckUpdates: async () => {
-      const result = await updater.checkForUpdates();
-      windows.broadcast(desktopChannels.events.push, {
-        kind: 'daemon-event',
-        payload: {
-          type: 'DesktopUpdateStatus',
-          result
-        }
-      });
+    onRefreshRuntime: () => {
+      void (async () => {
+        await getRuntimeStatus(true);
+        await refreshPosture();
+        const status = await getRuntimeStatus(false);
+        windows.broadcast(desktopChannels.events.push, {
+          kind: 'daemon-event',
+          payload: {
+            method: 'desktopRuntimeRefresh',
+            running: status.running
+          }
+        });
+      })();
     }
   });
 
@@ -111,11 +118,10 @@ export async function createDesktopApplication() {
         throw error;
       }
     });
-    ipcMain.handle(desktopChannels.connector.restart, () => connector.restart());
-    ipcMain.handle(desktopChannels.connector.status, () => connector.getStatus());
+    ipcMain.handle(desktopChannels.runtime.refresh, () => getRuntimeStatus(true));
+    ipcMain.handle(desktopChannels.runtime.status, () => getRuntimeStatus(false));
     ipcMain.handle(desktopChannels.dialog.pickWorkspaceFolder, () => dialog.pickWorkspaceFolder(getMainWindow()));
     ipcMain.handle(desktopChannels.shell.openPath, (_event, targetPath: string) => shell.openPath(targetPath));
-    ipcMain.handle(desktopChannels.updates.check, () => updater.checkForUpdates());
     ipcMain.handle(desktopChannels.events.start, async (_event, contextId?: string | null) => {
       try {
         return await callWithDaemonRecovery(() => events.start(contextId));
@@ -151,16 +157,14 @@ export async function createDesktopApplication() {
     }
     tray.destroy();
     localGraph.dispose();
-    connector.dispose();
     events.dispose();
   });
 
   await app.whenReady();
-  await daemonRuntime.ensureStarted().catch(() => false);
+  await getRuntimeStatus(true);
   registerIpcHandlers();
   windows.ensureMainWindow();
   tray.create();
-  connector.start();
   await events.start(null).catch(() => ({ subscriptionId: null }));
   await refreshPosture();
   postureTimer = setInterval(() => {

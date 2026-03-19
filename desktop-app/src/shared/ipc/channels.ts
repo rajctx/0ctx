@@ -7,18 +7,15 @@ export const desktopChannels = {
   daemon: {
     call: 'desktop:daemon/call'
   },
-  connector: {
-    restart: 'desktop:connector/restart',
-    status: 'desktop:connector/status'
+  runtime: {
+    refresh: 'desktop:runtime/refresh',
+    status: 'desktop:runtime/status'
   },
   dialog: {
     pickWorkspaceFolder: 'desktop:dialog/pick-workspace-folder'
   },
   shell: {
     openPath: 'desktop:shell/open-path'
-  },
-  updates: {
-    check: 'desktop:updates/check'
   },
   events: {
     start: 'desktop:events/start',

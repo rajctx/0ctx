@@ -12,8 +12,8 @@ export function getLogsUiMarkup(port: number): string {
       <button class="active" onclick="switchView('activity')">Activity Log <span class="code">01</span></button>
       <button onclick="switchView('timeline')">Timeline <span class="code">02</span></button>
       <button onclick="switchView('audit')">Audit Trail <span class="code">03</span></button>
-      <button onclick="switchView('connector')">Connector State <span class="code">04</span></button>
-      <button onclick="switchView('queue')">Event Queue <span class="code">05</span></button>
+      <button onclick="switchView('connector')">Legacy State <span class="code">04</span></button>
+      <button onclick="switchView('queue')">Legacy Queue <span class="code">05</span></button>
       <button onclick="switchView('daemon')">Daemon Health <span class="code">06</span></button>
     </nav>
     <div class="status-footer" id="status-footer">
@@ -89,7 +89,7 @@ export function getLogsUiMarkup(port: number): string {
 
       <div id="view-connector" class="hidden">
         <div id="connector-content">
-          <div class="empty-state">Loading connector state...<span class="cursor"></span></div>
+          <div class="empty-state">Loading legacy state...<span class="cursor"></span></div>
         </div>
       </div>
 

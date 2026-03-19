@@ -2,7 +2,7 @@
  * SYNC-01: SQLite-backed persistent sync queue.
  *
  * Queue entries survive daemon restarts. Each entry represents a context
- * that needs to be pushed to the cloud. Entries progress through states:
+ * that needs to be pushed to an optional remote endpoint. Entries progress through states:
  *   pending → in_flight → done | failed
  *
  * Failed entries are retried with exponential backoff up to MAX_RETRIES.

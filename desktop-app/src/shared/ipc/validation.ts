@@ -1,10 +1,9 @@
 import type {
-  ConnectorStatus,
   DaemonStatus,
   DesktopEventMessage,
   DesktopPreferences,
   DesktopPosture,
-  UpdateStatus
+  RuntimeStatus
 } from '../types/domain';
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -54,24 +53,11 @@ export function ensureDaemonStatus(value: unknown): DaemonStatus {
   };
 }
 
-export function ensureConnectorStatus(value: unknown): ConnectorStatus {
-  const payload = ensureObject(value, 'Connector status');
+export function ensureRuntimeStatus(value: unknown): RuntimeStatus {
+  const payload = ensureObject(value, 'Runtime status');
   return {
     running: Boolean(payload.running),
-    pid: typeof payload.pid === 'number' ? payload.pid : null,
-    restartCount: typeof payload.restartCount === 'number' ? payload.restartCount : 0,
-    command: typeof payload.command === 'string' ? payload.command : null,
     lastError: typeof payload.lastError === 'string' ? payload.lastError : null
-  };
-}
-
-export function ensureUpdateStatus(value: unknown): UpdateStatus {
-  const payload = ensureObject(value, 'Update status');
-  const state = ensureString(payload.state, 'Update state') as UpdateStatus['state'];
-  return {
-    state,
-    message: ensureString(payload.message, 'Update message'),
-    version: typeof payload.version === 'string' ? payload.version : null
   };
 }
 

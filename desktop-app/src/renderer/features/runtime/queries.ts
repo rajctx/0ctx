@@ -108,7 +108,7 @@ function invalidateDesktopQueryKinds(
         return false;
       }
 
-      if (kind === 'status' || kind === 'posture' || kind === 'connector' || kind === 'hook-health' || kind === 'checkpoint-detail') {
+      if (kind === 'status' || kind === 'posture' || kind === 'runtime' || kind === 'hook-health' || kind === 'checkpoint-detail') {
         return true;
       }
 
@@ -137,6 +137,7 @@ function invalidateDesktopEventQueries(
 
   if (CONTEXT_MUTATION_TYPES.has(type) || CONTEXT_MUTATION_METHODS.has(method)) {
     void queryClient.invalidateQueries({ queryKey: desktopQueryKeys.status });
+    void queryClient.invalidateQueries({ queryKey: desktopQueryKeys.runtime });
     invalidateDesktopQueryKinds(queryClient, ACTIVE_CONTEXT_QUERY_KINDS, activeContextId);
     invalidateDesktopQueryKinds(queryClient, POLICY_QUERY_KINDS, activeContextId);
     return;
@@ -145,18 +146,21 @@ function invalidateDesktopEventQueries(
   if (POLICY_MUTATION_METHODS.has(method)) {
     void queryClient.invalidateQueries({ queryKey: desktopQueryKeys.status });
     void queryClient.invalidateQueries({ queryKey: desktopQueryKeys.posture });
+    void queryClient.invalidateQueries({ queryKey: desktopQueryKeys.runtime });
     invalidateDesktopQueryKinds(queryClient, POLICY_QUERY_KINDS, activeContextId);
     return;
   }
 
   if (CHECKPOINT_MUTATION_TYPES.has(type) || CHECKPOINT_MUTATION_METHODS.has(method)) {
     void queryClient.invalidateQueries({ queryKey: desktopQueryKeys.status });
+    void queryClient.invalidateQueries({ queryKey: desktopQueryKeys.runtime });
     invalidateDesktopQueryKinds(queryClient, ACTIVE_CONTEXT_QUERY_KINDS, activeContextId);
     return;
   }
 
   if (DESKTOP_MUTATION_TYPES.has(type) || method) {
     void queryClient.invalidateQueries({ queryKey: desktopQueryKeys.status });
+    void queryClient.invalidateQueries({ queryKey: desktopQueryKeys.runtime });
     invalidateDesktopQueryKinds(queryClient, ACTIVE_CONTEXT_QUERY_KINDS, activeContextId);
   }
 }
@@ -166,7 +170,7 @@ export const desktopQueryKeys = {
   posture: ['desktop', 'posture'] as const,
   version: ['desktop', 'version'] as const,
   preferences: ['desktop', 'preferences'] as const,
-  connector: ['desktop', 'connector'] as const,
+  runtime: ['desktop', 'runtime'] as const,
   workstreams: (contextId: string | null) => ['desktop', 'workstreams', contextId] as const,
   sessions: (contextId: string | null, workstreamId: string | null) => ['desktop', 'sessions', contextId, workstreamId] as const,
   sessionDetail: (contextId: string | null, sessionId: string | null) => ['desktop', 'session-detail', contextId, sessionId] as const,
@@ -224,10 +228,10 @@ export function useUpdatePreferences() {
   });
 }
 
-export function useConnectorStatus() {
+export function useRuntimeStatus() {
   return useQuery({
-    queryKey: desktopQueryKeys.connector,
-    queryFn: () => desktopBridge.connector.getStatus()
+    queryKey: desktopQueryKeys.runtime,
+    queryFn: () => desktopBridge.runtime.getStatus()
   });
 }
 
@@ -504,22 +508,16 @@ export function useCreateSessionCheckpoint() {
   });
 }
 
-export function useRestartConnector() {
+export function useRefreshRuntime() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => desktopBridge.connector.restart(),
+    mutationFn: () => desktopBridge.runtime.refresh(),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: desktopQueryKeys.connector });
+      void queryClient.invalidateQueries({ queryKey: desktopQueryKeys.runtime });
       void queryClient.invalidateQueries({ queryKey: desktopQueryKeys.hookHealth });
       void queryClient.invalidateQueries({ queryKey: desktopQueryKeys.status });
       void queryClient.invalidateQueries({ queryKey: desktopQueryKeys.posture });
     }
-  });
-}
-
-export function useCheckForUpdates() {
-  return useMutation({
-    mutationFn: () => desktopBridge.updates.check()
   });
 }
 

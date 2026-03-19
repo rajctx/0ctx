@@ -1,16 +1,16 @@
-# 0ctx Hosted UI
+# 0ctx UI
 
-This app is the hosted web surface for 0ctx docs and install guidance.
+Contributor and docs-oriented web surface for 0ctx.
 
-It is public in this monorepo, but it is not the primary open-source entrypoint.
-For normal OSS usage, start with `@0ctx/cli` and the repo-first local runtime
-flow from the repository root.
+This app is public in the monorepo, but it is not the primary open-source
+entrypoint. For normal usage, start with `@0ctx/cli` and the repo-first local
+runtime flow from the repository root.
 
-## Status
+## What This UI Covers
 
-- Purpose: hosted docs and install surface
-- Audience: contributors and maintainers working on the hosted web experience
-- Support level: best-effort compared with the CLI/runtime path
+- The public docs and install guidance pages.
+- A lightweight landing page that points users back to the local-first CLI flow.
+- Compatibility redirects for old legacy routes.
 
 ## Local Development
 
@@ -29,8 +29,8 @@ npm run dev
 
 ## Environment
 
-Copy `ui/.env.example` to `.env.local` only if you need optional hosted-service
-configuration such as Sentry. A clean local build does not initialize Sentry
+Copy [`ui/.env.example`](./.env.example) to `.env.local` only if you need optional
+UI configuration such as Sentry. A clean local build does not initialize Sentry
 unless `NEXT_PUBLIC_SENTRY_DSN` is set.
 
 ## Build And Checks
@@ -40,8 +40,14 @@ npm run build
 npm run typecheck
 ```
 
+## Key Pages
+
+- `/` is the public landing page.
+- `/docs` is the docs index for the local-first product path.
+- `/install` is the repo-first setup guide.
+
 ## Related Docs
 
-- `../README.md`
-- `../docs/INDEX.md`
-- `../SUPPORT.md`
+- [`../README.md`](../README.md)
+- [`../docs/INDEX.md`](../docs/INDEX.md)
+- [`../SUPPORT.md`](../SUPPORT.md)

@@ -8,16 +8,16 @@ const SERVICE_DIR = path.join(os.homedir(), '.0ctx', 'service');
 const INSTALLED_XML_PATH = path.join(SERVICE_DIR, `${SERVICE_ID}.xml`);
 const INSTALLED_EXE_PATH = path.join(SERVICE_DIR, `${SERVICE_ID}.exe`);
 const DEFAULT_SERVICE_XML_TEMPLATE = `<service>
-  <!-- Windows Service definition for the 0ctx connector runtime -->
+  <!-- Windows Service definition for the 0ctx local runtime -->
   <!-- This fallback template is used when no local template file is found -->
-  <!-- The CLI replaces %NODE_PATH% and %CLI_ENTRY% before writing -->
+  <!-- The CLI replaces %NODE_PATH% and %DAEMON_ENTRY% before writing -->
 
   <id>0ctx-daemon</id>
-  <name>0ctx Connector Runtime</name>
-  <description>0ctx connector runtime - managed local daemon lifecycle</description>
+  <name>0ctx Local Runtime</name>
+  <description>0ctx local daemon runtime</description>
 
   <executable>%NODE_PATH%</executable>
-  <arguments>"%CLI_ENTRY%" connector run --quiet --interval-ms=5000</arguments>
+  <arguments>"%DAEMON_ENTRY%"</arguments>
 
   <startmode>Automatic</startmode>
   <delayedAutoStart>false</delayedAutoStart>
@@ -28,7 +28,7 @@ const DEFAULT_SERVICE_XML_TEMPLATE = `<service>
   <onfailure action="restart" delay="30 sec"/>
   <resetfailure>1 hour</resetfailure>
 
-  <!-- Log output from the connector runtime process -->
+  <!-- Log output from the daemon process -->
   <logpath>%LOG_PATH%</logpath>
   <log mode="roll-by-size">
     <sizeThreshold>10240</sizeThreshold>
@@ -77,20 +77,18 @@ function loadServiceXmlTemplate(): string {
     return DEFAULT_SERVICE_XML_TEMPLATE;
 }
 
-function resolveCliEntry(): string {
+function resolveDaemonEntry(): string {
     const candidates = [
-        // local dist sibling in this package
-        path.resolve(__dirname, 'index.js'),
-        // monorepo fallback
-        path.resolve(__dirname, '..', '..', 'cli', 'dist', 'index.js'),
-        path.resolve(process.cwd(), 'packages', 'cli', 'dist', 'index.js'),
+        path.resolve(__dirname, 'daemon.js'),
+        path.resolve(process.cwd(), 'packages', 'daemon', 'dist', 'index.js'),
+        path.resolve(__dirname, '..', '..', 'daemon', 'dist', 'index.js'),
     ].filter(Boolean);
 
     for (const c of candidates) {
         if (fs.existsSync(c)) return c;
     }
     throw new Error(
-        'Cannot resolve CLI entry point. Run `npm run build` or install @0ctx/cli.'
+        'Cannot resolve daemon entry point. Run `npm run build` or install @0ctx/cli.'
     );
 }
 
@@ -182,12 +180,12 @@ export function installService(): void {
     ensureServiceDir();
 
     const nodePath = resolveNodePath();
-    const cliEntry = resolveCliEntry();
+    const daemonEntry = resolveDaemonEntry();
     const winswPath = resolveWinSW();
     const userHome = os.homedir();
     const logDir = path.join(userHome, '.0ctx', 'logs');
     const escapedNodePath = nodePath.replace(/\\/g, '\\\\');
-    const escapedCliEntry = cliEntry.replace(/\\/g, '\\\\');
+    const escapedDaemonEntry = daemonEntry.replace(/\\/g, '\\\\');
     const escapedLogDir = logDir.replace(/\\/g, '\\\\');
     const escapedUserHome = userHome.replace(/\\/g, '\\\\');
 
@@ -200,7 +198,8 @@ export function installService(): void {
     // Write substituted XML
     let xml = loadServiceXmlTemplate();
     xml = xml.replace(/%NODE_PATH%/g, escapedNodePath);
-    xml = xml.replace(/%CLI_ENTRY%/g, escapedCliEntry);
+    xml = xml.replace(/%DAEMON_ENTRY%/g, escapedDaemonEntry);
+    xml = xml.replace(/%CLI_ENTRY%/g, escapedDaemonEntry);
     xml = xml.replace(/%LOG_PATH%/g, escapedLogDir);
     xml = xml.replace(/%USER_HOME%/g, escapedUserHome);
     // Backward compatibility for older templates before %LOG_PATH% existed.
@@ -210,7 +209,7 @@ export function installService(): void {
     runWinSW(INSTALLED_EXE_PATH, ['install']);
     console.log(`Service '${SERVICE_ID}' installed.`);
     console.log(`Node: ${nodePath}`);
-    console.log(`CLI entry: ${cliEntry}`);
+    console.log(`Daemon entry: ${daemonEntry}`);
     console.log(`Service dir: ${SERVICE_DIR}`);
     console.log('Run: 0ctx daemon service enable  →  to set auto-start');
     console.log('Run: 0ctx daemon service start   →  to start immediately');

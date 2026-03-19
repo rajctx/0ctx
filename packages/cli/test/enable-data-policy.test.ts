@@ -8,7 +8,7 @@ describe('commandEnable data policy output', () => {
         vi.restoreAllMocks();
     });
 
-    it('preserves shared as a workspace override with full_sync opt-in in the json payload', async () => {
+    it('applies a supported local-only preset in the json payload', async () => {
         const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
         const sendToDaemon = vi.fn(async (method: string) => {
             switch (method) {
@@ -20,12 +20,12 @@ describe('commandEnable data policy output', () => {
                     return { ok: true };
                 case 'setDataPolicy':
                     return {
-                        preset: 'shared',
+                        preset: 'review',
                         syncScope: 'workspace',
                         captureScope: 'machine',
                         debugScope: 'machine',
-                        syncPolicy: 'full_sync',
-                        captureRetentionDays: 14,
+                        syncPolicy: 'local_only',
+                        captureRetentionDays: 30,
                         debugRetentionDays: 7,
                         debugArtifactsEnabled: false
                     };
@@ -68,15 +68,15 @@ describe('commandEnable data policy output', () => {
                 autoContextMissingAgents: [],
                 sessionStartMissingAgents: [],
                 mcpRegistrationMissingAgents: [],
-                syncPolicy: 'full_sync',
+                syncPolicy: 'local_only',
                 syncScope: 'workspace',
                 captureScope: 'machine',
                 debugScope: 'machine',
                 zeroTouchReady: false,
                 nextActionHint: null,
-                dataPolicyPreset: 'shared',
-                dataPolicyActionHint: 'Return this workspace to Lean when richer cloud sync is no longer needed.',
-                captureRetentionDays: 14,
+                dataPolicyPreset: 'review',
+                dataPolicyActionHint: 'Return this machine to Lean when the longer local review window is no longer needed.',
+                captureRetentionDays: 30,
                 debugRetentionDays: 7,
                 debugArtifactsEnabled: false
             })),
@@ -85,10 +85,11 @@ describe('commandEnable data policy output', () => {
             printBootstrapResults: vi.fn(async () => {}),
             formatAgentList: (agents: string[]) => agents.join(', '),
             formatLabelValue: (label: string, value: string) => `${label}: ${value}`,
-            formatRetentionLabel: () => '14d capture, 7d debug',
+            formatRetentionLabel: () => '30d capture, 7d debug',
             formatSyncPolicyLabel: (policy: string | null | undefined) => {
-                if (policy === 'metadata_only') return 'metadata_only (default)';
-                if (policy === 'full_sync') return 'full_sync (opt-in)';
+                if (policy === 'metadata_only') return 'metadata_only (legacy)';
+                if (policy === 'full_sync') return 'full_sync (legacy)';
+                if (policy === 'local_only') return 'local_only (default)';
                 return policy ?? 'none';
             }
         };
@@ -96,22 +97,22 @@ describe('commandEnable data policy output', () => {
         const { commandEnable } = createEnableCommands(deps as never);
         const exitCode = await commandEnable({
             json: true,
-            'data-policy': 'shared',
+            'data-policy': 'review',
             'skip-bootstrap': true,
             'skip-hooks': true
         });
 
         expect(exitCode).toBe(0);
-        expect(sendToDaemon).toHaveBeenCalledWith('setDataPolicy', { contextId: 'ctx-1', preset: 'shared' });
+        expect(sendToDaemon).toHaveBeenCalledWith('setDataPolicy', { contextId: 'ctx-1', preset: 'review' });
 
         const payload = JSON.parse(String(consoleSpy.mock.calls[0]?.[0] ?? '{}'));
         expect(payload.steps.find((step: { id: string }) => step.id === 'data_policy')).toMatchObject({
             status: 'pass',
-            message: 'Applied the shared data policy preset.'
+            message: 'Applied the review data policy preset.'
         });
         expect(payload.dataPolicy).toMatchObject({
-            preset: 'shared',
-            syncPolicy: 'full_sync (opt-in)',
+            preset: 'review',
+            syncPolicy: 'local_only (default)',
             syncScope: 'workspace',
             captureScope: 'machine',
             debugScope: 'machine'

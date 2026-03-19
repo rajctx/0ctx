@@ -36,8 +36,8 @@ async function getSyncStatusIfAvailable(
     return daemonOk ? deps.getSyncStatus() : null;
 }
 
-function ensureLocalRegistration(deps: ConnectorRuntimeDependencies, hostedUiUrl: string) {
-    return deps.registerConnector({ uiUrl: hostedUiUrl }).state;
+function ensureLocalRegistration(deps: ConnectorRuntimeDependencies, uiUrl: string) {
+    return deps.registerConnector({ uiUrl }).state;
 }
 
 function persistLocalRuntimeState(params: {
@@ -67,8 +67,8 @@ export async function runConnectorRuntimeCycle(
     deps: ConnectorRuntimeDependencies = getRuntimeDependencies()
 ): Promise<ConnectorRuntimeSummary> {
     const { daemon, lastError } = await ensureDaemonHealth(options, deps);
-    const hostedUiUrl = deps.getHostedUiUrl();
-    const registration = deps.readConnectorState() ?? ensureLocalRegistration(deps, hostedUiUrl);
+    const uiUrl = deps.getUiUrl();
+    const registration = deps.readConnectorState() ?? ensureLocalRegistration(deps, uiUrl);
     const sync = await getSyncStatusIfAvailable(daemon.ok, deps);
 
     const queueStats = deps.getQueueStats(deps.now());

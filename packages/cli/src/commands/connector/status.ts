@@ -71,7 +71,7 @@ export function createConnectorStatusCommand(deps: ConnectorCommandDeps) {
                 lastError: daemon.ok ? 'sync_status_unavailable' : 'daemon_unreachable',
                 queue: { pending: 0, inFlight: 0, failed: 0, done: 0 }
             },
-            hostedUrl: deps.getHostedUiUrl()
+            uiUrl: deps.getUiUrl()
         };
 
         const exitCode = posture === 'connected' ? 0 : 1;
@@ -87,7 +87,7 @@ export function createConnectorStatusCommand(deps: ConnectorCommandDeps) {
         console.log(`  daemon:       ${payload.daemon.running ? 'running' : 'not running'}`);
         console.log(`  registration: ${payload.registration.registered ? 'registered' : 'not registered'}`);
         console.log('  mode:         local');
-        console.log(`  hosted:       ${payload.hostedUrl}`);
+        console.log(`  ui:           ${payload.uiUrl}`);
         if (payload.registration.registered && payload.registration.runtime) {
             console.log(`  machine_id:   ${payload.registration.machineId}`);
             console.log(`  event_queue:  pending=${payload.registration.runtime.queue.pending} ready=${payload.registration.runtime.queue.ready} backoff=${payload.registration.runtime.queue.backoff}`);

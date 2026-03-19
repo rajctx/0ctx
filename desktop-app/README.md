@@ -19,7 +19,7 @@ installer artifacts without code-signing metadata.
 
 ## Architecture
 
-- `src/main/*` owns Electron, tray, updater, shell access, connector supervision, and daemon IPC.
+- `src/main/*` owns Electron, tray, updater, shell access, and daemon IPC.
 - `src/preload` exposes the typed `window.octxDesktop` bridge.
 - `src/shared/*` defines contracts shared by main, preload, renderer, and tests.
 - `src/renderer/routes/*` owns the four-route shell and page composition boundaries.

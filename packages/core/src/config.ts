@@ -39,10 +39,10 @@ export interface AppConfig {
 }
 
 const DEFAULTS: AppConfig = {
-    'auth.server': 'https://www.0ctx.com',
-    'sync.enabled': true,
-    'sync.endpoint': 'https://www.0ctx.com/api/v1/sync',
-    'ui.url': 'https://www.0ctx.com/install',
+    'auth.server': '',
+    'sync.enabled': false,
+    'sync.endpoint': '',
+    'ui.url': '',
     'capture.retentionDays': 14,
     'capture.debugRetentionDays': 7,
     'capture.debugArtifacts': false,

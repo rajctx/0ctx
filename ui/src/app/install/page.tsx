@@ -62,7 +62,7 @@ export default function InstallPage() {
               <span className="ml-2 font-mono text-[var(--text-secondary)]">cd &lt;repo&gt; && 0ctx enable</span>
             </p>
             <p className="text-sm text-[var(--text-secondary)]">
-              No account, hosted control plane, or cloud sync is required for the current product path.
+              No account or external backend is required for the current product path.
             </p>
           </div>
         </div>
@@ -119,7 +119,7 @@ export default function InstallPage() {
               </div>
               <div className="space-y-3 text-sm text-[var(--text-secondary)]">
                 <div className="flex items-center justify-between gap-3">
-                  <span>Hosted docs</span>
+                  <span>Public docs</span>
                   <Badge>enabled</Badge>
                 </div>
                 <div className="flex items-center justify-between gap-3">
@@ -127,11 +127,11 @@ export default function InstallPage() {
                   <Badge muted>removed</Badge>
                 </div>
                 <div className="flex items-center justify-between gap-3">
-                  <span>Hosted APIs</span>
+                  <span>External APIs</span>
                   <Badge muted>removed</Badge>
                 </div>
                 <div className="flex items-center justify-between gap-3">
-                  <span>Cloud sync</span>
+                  <span>External sync</span>
                   <Badge muted>out of scope</Badge>
                 </div>
               </div>

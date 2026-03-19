@@ -1,11 +1,11 @@
 [Unit]
-Description=0ctx Connector Runtime — cloud bridge + managed daemon lifecycle
+Description=0ctx Local Runtime
 Documentation=https://github.com/0ctx-com/0ctx
 After=network.target
 
 [Service]
 Type=simple
-ExecStart=%NODE_PATH% %CLI_ENTRY% connector run --quiet --interval-ms=5000
+ExecStart=%NODE_PATH% %DAEMON_ENTRY%
 Restart=on-failure
 RestartSec=5s
 # Escalating restart delays

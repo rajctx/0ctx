@@ -63,15 +63,34 @@ export default function DocsPage() {
       </header>
 
       <div className="mx-auto w-full max-w-[900px] space-y-8 px-4 pb-16 pt-8">
+        <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
+          <div>
+            <Badge>
+              <BookOpen className="mr-1 h-3 w-3" />
+              Documentation Index
+            </Badge>
+            <h1 className="mt-2 text-2xl font-semibold">0ctx Documentation</h1>
+            <p className="mt-1 text-sm text-[var(--text-muted)]">
+              Public docs, install guidance, and operating references for the current repo-first product path.
+            </p>
+          </div>
+
+          <Panel className="space-y-2 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">Use this site for</p>
+            <p className="text-sm text-[var(--text-secondary)]">
+              Getting the local runtime running, enabling one repository, and finding the canonical docs that explain the product model.
+            </p>
+            <p className="text-xs text-[var(--text-muted)]">
+              The CLI/runtime remains the primary open-source surface. This UI keeps the docs and install path easy to find.
+            </p>
+          </Panel>
+        </div>
+
         <div>
           <Badge>
             <BookOpen className="mr-1 h-3 w-3" />
-            Documentation Index
+            Public docs
           </Badge>
-          <h1 className="mt-2 text-2xl font-semibold">0ctx Documentation</h1>
-          <p className="mt-1 text-sm text-[var(--text-muted)]">
-            Docs, install guidance, and operating references for the current repo-first product path.
-          </p>
         </div>
 
         {SECTIONS.map(section => (

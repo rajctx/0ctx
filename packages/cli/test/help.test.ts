@@ -15,7 +15,7 @@ describe('printHelp', () => {
         printHelp(false);
 
         const output = String(consoleSpy.mock.calls[0]?.[0] ?? '');
-        expect(output).toContain('0ctx enable [--repo-root=<path>] [--name=<workspace>] [--data-policy=<lean|review|debug|shared>] [--json]');
+        expect(output).toContain('0ctx enable [--repo-root=<path>] [--name=<workspace>] [--data-policy=<lean|review|debug>] [--json]');
         expect(output).toContain('[--clients=ga|claude,factory,antigravity]');
         expect(output).not.toContain('--mcp-clients');
         expect(output).not.toContain('--mcp-profile');

@@ -43,7 +43,7 @@ export interface ConnectorRuntimeDependencies {
         force?: boolean;
     }): { state: ConnectorState; created: boolean };
     writeConnectorState(state: ConnectorState): void;
-    getHostedUiUrl(): string;
+    getUiUrl(): string;
     getQueueStats(now: number): {
         pending: number;
         ready: number;

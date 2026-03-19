@@ -35,6 +35,8 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+!ui/.env.example
 
 # vercel
 .vercel
@@ -64,6 +66,13 @@ tsc_errors.txt
 
 # generated verification artifacts
 releases/verification/*.json
+releases/desktop/
+
+# local tool state
+.0ctx/settings.local.json
+.claude/settings.local.json
+.factory/settings.json
+.gemini/settings.json
 
 # Rust build artifacts
 target/

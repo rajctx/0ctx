@@ -4,7 +4,7 @@ export function printHelp(showAdvanced = false): void {
 
 Usage:
   0ctx                    Auto-enable inside a repo. Outside a repo, show readiness/help.
-  0ctx enable [--repo-root=<path>] [--name=<workspace>] [--data-policy=<lean|review|debug|shared>] [--json]
+  0ctx enable [--repo-root=<path>] [--name=<workspace>] [--data-policy=<lean|review|debug>] [--json]
               [--clients=ga|claude,factory,antigravity]
 
 Daily use:
@@ -48,7 +48,7 @@ Usage:
   0ctx --version | -v
 
 Recommended daily flow:
-  0ctx enable [--repo-root=<path>] [--name=<workspace>] [--data-policy=<lean|review|debug|shared>] [--json]
+  0ctx enable [--repo-root=<path>] [--name=<workspace>] [--data-policy=<lean|review|debug>] [--json]
               [--clients=ga|claude,factory,antigravity] [--mcp-clients=none|ga|claude,antigravity]
               [--skip-bootstrap] [--skip-hooks] [--mcp-profile=core|recall|ops]
 
@@ -117,50 +117,27 @@ Configuration:
   0ctx data-policy [--repo-root=<path>] [--json]
   0ctx data-policy presets [--json]
   0ctx data-policy cleanup [--repo-root=<path>] [--json]
-  0ctx data-policy set [--repo-root=<path>] [--sync-policy=<local_only|metadata_only|full_sync>]
+  0ctx data-policy set [--repo-root=<path>] [--preset=<lean|review|debug>]
                        [--capture-retention-days=<days>] [--debug-retention-days=<days>]
-                       [--debug-artifacts=<on|off>] [--confirm-full-sync] [--json]
-  0ctx data-policy shared --repo-root=<path> --confirm-full-sync [--json]
+                       [--debug-artifacts=<on|off>] [--json]
+  0ctx data-policy <lean|review|debug> [--repo-root=<path>] [--json]
 
-  Config keys: auth.server, sync.enabled, sync.endpoint, ui.url,
-               capture.retentionDays, capture.debugRetentionDays, capture.debugArtifacts,
+  Config keys: capture.retentionDays, capture.debugRetentionDays, capture.debugArtifacts,
                integration.chatgpt.enabled, integration.chatgpt.requireApproval, integration.autoBootstrap
-
-Sync:
-  0ctx sync status   Show sync engine health and queue
-  0ctx sync policy get [--repo-root=<path>] [--json]
-  0ctx sync policy set <local_only|metadata_only|full_sync> [--repo-root=<path>] [--confirm-full-sync] [--json]
-                    local_only is the normal default; metadata_only and full_sync are explicit opt-in
-
-Connector:
-  0ctx connector service install|enable|disable|uninstall|status|start|stop|restart
-  0ctx connector install|enable|disable|uninstall|status|start|stop|restart
-  0ctx connector status [--json]
-  0ctx connector verify [--json]
-  0ctx connector register [--force] [--json]
-  0ctx connector run [--once] [--interval-ms=5000] [--no-daemon-autostart]
-  0ctx connector hook install [--clients=ga|claude,factory,antigravity] [--repo-root=<path>] [--global]
-  0ctx connector hook status [--json] [--include-preview]
-  0ctx connector hook prune [--days=14] [--json]
-  0ctx connector hook session-start --agent=claude|factory|antigravity [--repo-root=<path>]
-                                     [--input-file=<path>|--payload='<json>'|stdin] [--json]
-  0ctx connector hook ingest --agent=claude|factory|antigravity [--repo-root=<path>]
-                              [--input-file=<path>|--payload='<json>'|stdin]
-  0ctx hook install|status|prune|session-start|ingest  Alias for "0ctx connector hook ..."
-  0ctx connector queue status [--json]
-  0ctx connector queue purge [--all|--older-than-hours=N|--min-attempts=N] [--dry-run|--confirm] [--json]
-  0ctx connector queue logs [--limit=50] [--json] [--clear --confirm|--dry-run]
-  0ctx connector logs [--service|--system] [--no-open] [--snapshot] [--limit=50] [--since-hours=N] [--grep=text] [--errors-only]
 
 Support overrides:
   Use --context-id only for support, debugging, or automation outside a bound repo.
 
-Service management compatibility (requires Admin on Windows):
-  Both command paths manage the same underlying OS service.
-  Preferred: 0ctx connector service <action>
-  Legacy:    0ctx daemon service <action>
+Local capture hooks:
+  0ctx hook install [--clients=ga|claude,factory,antigravity] [--repo-root=<path>] [--global]
+  0ctx hook status [--json] [--include-preview]
+  0ctx hook prune [--days=14] [--json]
+  0ctx hook session-start --agent=claude|factory|antigravity [--repo-root=<path>]
+                          [--input-file=<path>|--payload='<json>'|stdin] [--json]
+  0ctx hook ingest --agent=claude|factory|antigravity [--repo-root=<path>]
+                   [--input-file=<path>|--payload='<json>'|stdin]
 
-Legacy daemon service commands:
+Daemon service commands (requires Admin on Windows):
   0ctx daemon service install    Register daemon as a service
   0ctx daemon service enable     Set service start type to Automatic
   0ctx daemon service disable    Set service start type to Manual

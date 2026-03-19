@@ -1,12 +1,12 @@
 import {
-  useConnectorStatus,
   useDesktopPosture,
   useDesktopStatus,
   useDesktopVersion,
   useDataPolicy,
+  useRefreshRuntime,
   useHookHealth,
   useOpenPath,
-  useRestartConnector
+  useRuntimeStatus
 } from '../../features/runtime/queries';
 import { getGaIntegrationCounts } from '../../lib/setup-integrations';
 
@@ -14,7 +14,7 @@ function getMutationErrorMessage(error: unknown) {
   if (error instanceof Error && error.message.trim()) {
     return error.message.trim();
   }
-  return 'The connector restart did not complete.';
+  return 'The local runtime refresh did not complete.';
 }
 
 function formatStateLabel(value?: string | null) {
@@ -46,13 +46,13 @@ export function SetupContextPanel({ contextId }: SetupContextPanelProps) {
   const posture = useDesktopPosture();
   const version = useDesktopVersion();
   const hookHealth = useHookHealth();
-  const connector = useConnectorStatus();
-  const restartConnector = useRestartConnector();
+  const runtime = useRuntimeStatus();
+  const refreshRuntime = useRefreshRuntime();
   const status = useDesktopStatus();
   const openPath = useOpenPath();
 
   const { readyCount, totalCount } = getGaIntegrationCounts(hookHealth.data);
-  const restartError = restartConnector.isError ? getMutationErrorMessage(restartConnector.error) : null;
+  const runtimeError = refreshRuntime.isError ? getMutationErrorMessage(refreshRuntime.error) : null;
 
   return (
     <>
@@ -119,14 +119,14 @@ export function SetupContextPanel({ contextId }: SetupContextPanelProps) {
             type="button"
             className="ctx-action"
             onClick={() => {
-              restartConnector.mutate();
+              refreshRuntime.mutate();
             }}
-            disabled={restartConnector.isPending}
+            disabled={refreshRuntime.isPending}
           >
-            <span className="brk">[↻]</span> {restartConnector.isPending ? 'RESTARTING CONNECTOR' : 'RESTART CONNECTOR'}
+            <span className="brk">[↻]</span> {refreshRuntime.isPending ? 'REFRESHING LOCAL RUNTIME' : 'REFRESH LOCAL RUNTIME'}
           </button>
         </div>
-        {restartError ? <div className="ctx-prose ctx-error">Connector restart failed: {restartError}</div> : null}
+        {runtimeError ? <div className="ctx-prose ctx-error">Runtime refresh failed: {runtimeError}</div> : null}
       </div>
 
       <div className="ctx-section ctx-footer">
@@ -137,8 +137,8 @@ export function SetupContextPanel({ contextId }: SetupContextPanelProps) {
           <span className="cdv bright">{formatStateLabel(posture.data)}</span>
           <span className="cdk">Integrations:</span>
           <span className="cdv">{`${readyCount} / ${totalCount} ready`}</span>
-          <span className="cdk">Connector:</span>
-          <span className="cdv">{connector.data?.running ? 'Running' : 'Unavailable'}</span>
+          <span className="cdk">Runtime:</span>
+          <span className="cdv">{runtime.data?.running ? 'Running' : 'Unavailable'}</span>
           <span className="cdk">Node:</span>
           <span className="cdv">{status.data?.storage.socketPath ?? 'Unavailable'}</span>
           <span className="cdk">Version:</span>

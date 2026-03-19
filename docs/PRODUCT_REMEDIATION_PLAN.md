@@ -125,7 +125,7 @@ For GA integrations, users should not need to think about MCP or SessionStart me
 
 ### Goal
 
-Make local storage rich but bounded, and make cloud behavior lean by default.
+Make local storage rich but bounded, and keep any optional remote behavior lean by default.
 
 ### Scope
 
@@ -246,7 +246,7 @@ Do not spend roadmap time on:
 
 - making preview integrations feel GA
 - graph-first storytelling
-- rich cloud sync as a default
+- rich remote sync as a default
 - keeping legacy operator flows alive for unreleased behavior
 
 ## Release Gate

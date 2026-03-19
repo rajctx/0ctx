@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import {
-  useConnectorStatus,
   useDataPolicy,
   useDesktopStatus,
+  useRefreshRuntime,
   useHookHealth,
   useOpenPath,
-  useRestartConnector,
+  useRuntimeStatus,
   useSetDataPolicy
 } from '../../features/runtime/queries';
 import { getGaIntegrationCounts } from '../../lib/setup-integrations';
@@ -19,7 +19,7 @@ function getMutationErrorMessage(error: unknown) {
   if (error instanceof Error && error.message.trim()) {
     return error.message.trim();
   }
-  return 'The connector restart did not complete.';
+  return 'The local runtime refresh did not complete.';
 }
 
 export function SetupScreen() {
@@ -29,10 +29,10 @@ export function SetupScreen() {
   const setActiveSetupSection = useShellStore((state) => state.setActiveSetupSection);
   const search = useShellStore((state) => state.search);
   const status = useDesktopStatus();
-  const connector = useConnectorStatus();
+  const runtime = useRuntimeStatus();
   const hookHealth = useHookHealth();
   const openPath = useOpenPath();
-  const restartConnector = useRestartConnector();
+  const refreshRuntime = useRefreshRuntime();
   const dataPolicy = useDataPolicy(activeContextId);
   const setDataPolicy = useSetDataPolicy();
   const [pendingPreset, setPendingPreset] = useState<string | null>(null);
@@ -46,7 +46,7 @@ export function SetupScreen() {
   const enableCommand = `0ctx enable --repo-root "${repoRoot}"`;
   const currentPreset = String(dataPolicy.data?.preset ?? 'lean').toLowerCase();
   const { integrations, readyCount, totalCount } = getGaIntegrationCounts(hookHealth.data);
-  const restartError = restartConnector.isError ? getMutationErrorMessage(restartConnector.error) : null;
+  const runtimeError = refreshRuntime.isError ? getMutationErrorMessage(refreshRuntime.error) : null;
   const runtimeActions = [
     {
       key: 'data-dir',
@@ -75,16 +75,18 @@ export function SetupScreen() {
       disabled: !(hookHealth.data?.statePath ?? status.data?.storage.hookStatePath)
     },
     {
-      key: 'restart',
-      label: restartConnector.isPending ? 'RESTARTING CONNECTOR' : 'RESTART CONNECTOR',
+      key: 'runtime-refresh',
+      label: refreshRuntime.isPending
+        ? 'REFRESHING LOCAL RUNTIME'
+        : (runtime.data?.running ? 'RECHECK LOCAL RUNTIME' : 'START LOCAL RUNTIME'),
       symbol: '[↻]',
-      description: connector.data?.running
-        ? `Connector running${connector.data?.pid ? ` · PID ${connector.data.pid}` : ''}`
-        : 'Connector is stopped or unavailable',
+      description: runtime.data?.running
+        ? 'Local daemon is running'
+        : 'Local daemon is unavailable',
       onClick: () => {
-        restartConnector.mutate();
+        refreshRuntime.mutate();
       },
-      disabled: restartConnector.isPending
+      disabled: refreshRuntime.isPending
     }
   ] as const;
   const normalizedSearch = search.trim().toLowerCase();
@@ -119,7 +121,7 @@ export function SetupScreen() {
     ),
     runtime: shouldRenderSection(
       'runtime',
-      'runtime support data directory hook state connector storage socket database',
+      'runtime support data directory hook state local daemon storage socket database',
       status.data?.storage.dataDir,
       status.data?.storage.dbPath,
       status.data?.storage.socketPath,
@@ -298,11 +300,11 @@ export function SetupScreen() {
               type="button"
               className="cmd-action"
               onClick={() => {
-                restartConnector.mutate();
+                refreshRuntime.mutate();
               }}
-              disabled={restartConnector.isPending}
+              disabled={refreshRuntime.isPending}
             >
-              <span className="brk">[↻]</span> {restartConnector.isPending ? 'RESTARTING CONNECTOR' : 'RESTART CONNECTOR'}
+              <span className="brk">[↻]</span> {refreshRuntime.isPending ? 'REFRESHING LOCAL RUNTIME' : 'REFRESH LOCAL RUNTIME'}
             </button>
             <button
               type="button"
@@ -318,7 +320,7 @@ export function SetupScreen() {
               <span className="brk">[→]</span> OPEN HOOK STATE
             </button>
           </div>
-          {restartError ? <div className="cmd-note cmd-note-error">Connector restart failed: {restartError}</div> : null}
+          {runtimeError ? <div className="cmd-note cmd-note-error">Runtime refresh failed: {runtimeError}</div> : null}
         </div>
       ) : null}
 
@@ -372,8 +374,8 @@ export function SetupScreen() {
           </div>
           <div className="runtime-grid">
             <div className="runtime-row">
-              <span className="dk">Connector</span>
-              <span className="dv">{connector.data?.running ? 'Running' : 'Unavailable'}</span>
+              <span className="dk">Runtime</span>
+              <span className="dv">{runtime.data?.running ? 'Running' : 'Unavailable'}</span>
               <span className="dk">Socket</span>
               <span className="dv mono">{status.data?.storage.socketPath ?? 'Unavailable'}</span>
             </div>
@@ -387,7 +389,7 @@ export function SetupScreen() {
               <span className="dk">Data Dir</span>
               <span className="dv mono">{status.data?.storage.dataDir ?? 'Unavailable'}</span>
               <span className="dk">Last Error</span>
-              <span className="dv">{connector.data?.lastError ?? 'None recorded'}</span>
+              <span className="dv">{runtime.data?.lastError ?? 'None recorded'}</span>
             </div>
           </div>
           <div className="runtime-actions">

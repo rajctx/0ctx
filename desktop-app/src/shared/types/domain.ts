@@ -206,18 +206,9 @@ export interface DaemonStatus {
   };
 }
 
-export interface ConnectorStatus {
+export interface RuntimeStatus {
   running: boolean;
-  pid: number | null;
-  restartCount: number;
-  command: string | null;
   lastError: string | null;
-}
-
-export interface UpdateStatus {
-  state: 'idle' | 'available' | 'downloaded' | 'error';
-  message: string;
-  version?: string | null;
 }
 
 export interface WorkstreamComparison {

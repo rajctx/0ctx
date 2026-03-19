@@ -4,5 +4,5 @@ export type {
     ConnectorRuntimeSummary,
     ConnectorRuntimeSyncStatus
 } from './connector-runtime/types.js';
-export { getHostedUiUrl, isDaemonReachable, startDaemonDetached, waitForDaemon } from './connector-runtime/daemon.js';
+export { getUiUrl, isDaemonReachable, startDaemonDetached, waitForDaemon } from './connector-runtime/daemon.js';
 export { runConnectorRuntime, runConnectorRuntimeCycle } from './connector-runtime/runtime.js';

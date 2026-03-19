@@ -2,7 +2,6 @@ import type {
   ChatMessage,
   ChatSessionDetail,
   CheckpointDetail,
-  ConnectorStatus,
   DaemonStatus,
   DataPolicy,
   DesktopEventMessage,
@@ -11,7 +10,7 @@ import type {
   HookHealth,
   InsightSummary,
   RepoReadiness,
-  UpdateStatus,
+  RuntimeStatus,
   WorkstreamSummary,
   WorkspaceContext,
   ChatSessionSummary,
@@ -28,11 +27,6 @@ export interface DesktopDaemonApi {
   call<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T>;
 }
 
-export interface DesktopConnectorApi {
-  restart(): Promise<ConnectorStatus>;
-  getStatus(): Promise<ConnectorStatus>;
-}
-
 export interface DesktopDialogApi {
   pickWorkspaceFolder(): Promise<string | null>;
 }
@@ -41,8 +35,9 @@ export interface DesktopShellApi {
   openPath(path: string): Promise<{ ok: boolean; message: string }>;
 }
 
-export interface DesktopUpdatesApi {
-  check(): Promise<UpdateStatus>;
+export interface DesktopRuntimeApi {
+  refresh(): Promise<RuntimeStatus>;
+  getStatus(): Promise<RuntimeStatus>;
 }
 
 export interface DesktopTrayApi {
@@ -63,10 +58,9 @@ export interface DesktopEventsApi {
 export interface DesktopApi {
   app: DesktopAppApi;
   daemon: DesktopDaemonApi;
-  connector: DesktopConnectorApi;
+  runtime: DesktopRuntimeApi;
   dialog: DesktopDialogApi;
   shell: DesktopShellApi;
-  updates: DesktopUpdatesApi;
   events: DesktopEventsApi;
   tray: DesktopTrayApi;
   preferences: DesktopPreferencesApi;

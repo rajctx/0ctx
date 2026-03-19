@@ -17,7 +17,7 @@ What `0ctx enable` does:
 3. starts or verifies the local daemon
 4. installs supported GA capture integrations
 5. bootstraps supported GA retrieval integrations
-6. reports repo readiness, sync policy, and retention defaults
+6. reports repo readiness and local retention defaults
 
 ## Daily use
 
@@ -27,16 +27,14 @@ For supported GA agents, the intended flow is:
 2. use the agent normally in that repo
 3. let 0ctx capture sessions and inject retrieval context automatically
 
-Hosted web pages are optional and currently limited to:
-
-- docs
-- install guidance
-
 ## Useful commands
 
 ```bash
 # repo readiness
 0ctx status
+
+# manage local capture hooks
+0ctx hook status
 
 # inspect workstreams
 0ctx workstreams --repo-root .

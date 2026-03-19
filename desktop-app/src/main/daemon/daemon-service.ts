@@ -56,6 +56,10 @@ export class DaemonService {
     return this.lastError;
   }
 
+  async isRunning() {
+    return this.isReachable();
+  }
+
   private resolveLaunches() {
     const launches: DaemonLaunch[] = [];
     const custom = String(process.env.CTX_DAEMON_BIN || '').trim();

@@ -37,11 +37,11 @@ export default function HomePage() {
             </span>
           </Link>
 
-          <nav className="site-nav" aria-label="Primary">
-            <Link href="/docs">Docs</Link>
-            <Link href="/install">Install</Link>
-            <a
-              href="https://github.com/0ctx-com/0ctx"
+            <nav className="site-nav" aria-label="Primary">
+              <Link href="/docs">Docs</Link>
+              <Link href="/install">Install</Link>
+              <a
+                href="https://github.com/0ctx-com/0ctx"
               target="_blank"
               rel="noopener noreferrer"
             >
@@ -49,8 +49,8 @@ export default function HomePage() {
             </a>
           </nav>
 
-          <Link href="/install" className="site-cta">
-            Open install
+            <Link href="/install" className="site-cta">
+            Open install guide
           </Link>
         </header>
 

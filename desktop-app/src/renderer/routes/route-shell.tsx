@@ -5,7 +5,7 @@ import { SidebarNav, type SidebarRoute } from '../components/shell/sidebar-nav';
 import {
   useCreateSessionCheckpoint,
   useOpenPath,
-  useRestartConnector,
+  useRefreshRuntime,
   useSessions,
   useUpdatePreferences,
   useWorkstreams,
@@ -40,7 +40,7 @@ export function RouteShell() {
   const route = resolveRoute(location.pathname);
   const { data: status } = useDesktopStatus();
   const openPath = useOpenPath();
-  const restartConnector = useRestartConnector();
+  const refreshRuntime = useRefreshRuntime();
   const updatePreferences = useUpdatePreferences();
   const createSessionCheckpoint = useCreateSessionCheckpoint();
   const {
@@ -339,11 +339,11 @@ export function RouteShell() {
                   type="button"
                   className="action"
                   onClick={() => {
-                    restartConnector.mutate();
+                    refreshRuntime.mutate();
                   }}
-                  disabled={restartConnector.isPending}
+                  disabled={refreshRuntime.isPending}
                 >
-                  <span className="brk">[↻]</span> {restartConnector.isPending ? 'RESTARTING CONNECTOR' : 'RESTART CONNECTOR'}
+                  <span className="brk">[↻]</span> {refreshRuntime.isPending ? 'REFRESHING LOCAL RUNTIME' : 'REFRESH LOCAL RUNTIME'}
                 </button>
               ) : null}
               {activeSetupSection === 'runtime' ? (

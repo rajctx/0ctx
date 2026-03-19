@@ -10,14 +10,7 @@ const cli = createCliRegistry();
 
 async function main(): Promise<number> {
     const argv = normalizeVersionCommandArgs(process.argv.slice(2));
-    let deviceId: string | undefined;
-    try {
-        const state = cli.readConnectorState();
-        if (state) deviceId = state.machineId;
-    } catch {
-        // Read failures only affect telemetry enrichment.
-    }
-    initTelemetry(deviceId);
+    initTelemetry();
     if (argv.length === 0) {
         return runWithoutArgs({
             ...cli,

@@ -4,8 +4,7 @@ import { createAppIcon } from '../app/app-icon';
 
 interface TrayHandlers {
   onShow: () => void;
-  onRestartConnector: () => void;
-  onCheckUpdates: () => Promise<void>;
+  onRefreshRuntime: () => void;
 }
 
 export class DesktopTrayService {
@@ -55,14 +54,8 @@ export class DesktopTrayService {
       },
       { type: 'separator' },
       {
-        label: 'Restart Connector',
-        click: this.handlers.onRestartConnector
-      },
-      {
-        label: 'Check for Updates',
-        click: () => {
-          void this.handlers.onCheckUpdates();
-        }
+        label: 'Refresh Local Runtime',
+        click: this.handlers.onRefreshRuntime
       },
       { type: 'separator' },
       {

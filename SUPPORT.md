@@ -19,7 +19,6 @@ best-effort basis unless explicitly documented otherwise:
 
 - `desktop-app/`
 - `ui/`
-- `cloud/`
 - private workspace packages under `packages/*`
 
 ## Before Opening an Issue

@@ -124,7 +124,7 @@ export function createRecallCommand(deps: RecallCommandDeps) {
                     methods: [],
                     missingMethods: ['recall'],
                     error: text,
-                    recoverySteps: ['0ctx daemon start', '0ctx connector service restart']
+                    recoverySteps: ['0ctx daemon start', '0ctx daemon service restart']
                 });
                 return 1;
             }

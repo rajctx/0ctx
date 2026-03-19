@@ -29,8 +29,8 @@ Include the following when possible:
 - Fix timing depends on severity, exploitability, and maintainer availability.
 - Public disclosure should wait until a fix or mitigation is available.
 
-## Telemetry and Hosted Integrations
+## Telemetry and Optional Surfaces
 
 - A clean source build does not send CLI telemetry unless it is explicitly enabled and configured.
-- The hosted UI does not initialize Sentry unless `NEXT_PUBLIC_SENTRY_DSN` is set.
-- When reporting a vulnerability, mention whether the issue affects the local runtime, the CLI package, or optional hosted/dev surfaces such as `ui/`, `desktop-app/`, or `cloud/`.
+- The dev UI does not initialize Sentry unless `NEXT_PUBLIC_SENTRY_DSN` is set.
+- When reporting a vulnerability, mention whether the issue affects the local runtime, the CLI package, or optional dev surfaces such as `ui/` or `desktop-app/`.

@@ -22,7 +22,7 @@ export function createHookStatusCommand(deps: HookCommandDeps) {
         }
 
         if (!quiet) {
-            console.log('\nConnector Hook Status\n');
+            console.log('\nHook Status\n');
             console.log(`  project_root:   ${state.projectRoot ?? 'n/a'}`);
             console.log(`  project_config: ${state.projectConfigPath ?? 'n/a'}`);
             console.log(`  updated_at:     ${new Date(state.updatedAt).toISOString()}`);

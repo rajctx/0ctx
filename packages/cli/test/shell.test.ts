@@ -4,9 +4,9 @@ import { tokenizeShellInput } from '../src/shell';
 describe('tokenizeShellInput', () => {
     it('splits simple tokens', () => {
         expect(tokenizeShellInput('status')).toEqual(['status']);
-        expect(tokenizeShellInput('connector verify --json')).toEqual([
-            'connector',
-            'verify',
+        expect(tokenizeShellInput('hook status --json')).toEqual([
+            'hook',
+            'status',
             '--json'
         ]);
     });

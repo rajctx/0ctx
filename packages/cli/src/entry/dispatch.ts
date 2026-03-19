@@ -15,8 +15,7 @@ type DispatchDeps = Pick<CliRegistry,
     | 'commandCheckpoints' | 'commandInsights' | 'commandExtract' | 'commandResume'
     | 'commandRewind' | 'commandExplain' | 'commandRecall' | 'startDaemonDetached'
     | 'waitForDaemon' | 'commandDaemonService' | 'printHelp' | 'commandConfigList'
-    | 'commandConfigGet' | 'commandConfigSet' | 'commandDataPolicy' | 'commandSyncStatus'
-    | 'commandSyncPolicyGet' | 'commandSyncPolicySet' | 'commandConnector'
+    | 'commandConfigGet' | 'commandConfigSet' | 'commandDataPolicy' | 'commandConnector'
     | 'commandConnectorQueue' | 'commandConnectorHook' | 'commandLogs'
     | 'commandShell' | 'commandReleasePublish'
 >;
@@ -75,24 +74,20 @@ export async function runParsedCommand(parsed: ParsedArgs, deps: DispatchDeps): 
         case 'data-policy':
             return deps.commandDataPolicy(resolveDataPolicySubcommand(parsed.subcommand ?? parsed.positionalArgs[0] ?? null), parsed.flags);
         case 'sync': {
-            const sub = parsed.subcommand;
-            if (sub === 'status' || !sub) return deps.commandSyncStatus();
-            if (sub === 'policy') {
-                const action = parsed.positionalArgs[0];
-                if (action === 'get') return deps.commandSyncPolicyGet(parsed.flags);
-                if (action === 'set') return deps.commandSyncPolicySet(parsed.positionalArgs[1], parsed.flags);
-                console.error('Usage: 0ctx sync policy get [--repo-root=<path>] [--json]');
-                console.error('   or: 0ctx sync policy set <local_only|metadata_only|full_sync> [--repo-root=<path>] [--json]');
-                return 1;
-            }
-            deps.printHelp(Boolean(parsed.flags.advanced));
+            console.error('`0ctx sync` has been removed from the local-only product surface.');
+            console.error('Workspace data stays local by default. Use `0ctx data-policy` to manage local capture and debug retention.');
             return 1;
         }
         case 'connector':
-            if (parsed.subcommand === 'service') return deps.commandDaemonService(parsed.serviceAction);
-            if (parsed.subcommand === 'queue') return deps.commandConnectorQueue(parsed.positionalArgs[0], parsed.flags);
             if (parsed.subcommand === 'hook') return deps.commandConnectorHook(parsed.positionalArgs[0], parsed.flags);
-            return deps.commandConnector(parsed.subcommand, parsed.flags);
+            if (parsed.subcommand === 'run') return deps.commandConnector(parsed.subcommand, parsed.flags);
+            if (parsed.subcommand === 'service') return deps.commandDaemonService(parsed.serviceAction);
+            if (parsed.subcommand && ['install', 'enable', 'disable', 'uninstall', 'start', 'stop', 'restart'].includes(parsed.subcommand)) {
+                return deps.commandDaemonService(parsed.subcommand);
+            }
+            console.error('`0ctx connector` is no longer part of the normal local product surface.');
+            console.error('Use `0ctx hook ...` for capture hooks, `0ctx daemon service ...` for service management, and `0ctx logs` for runtime diagnostics.');
+            return 1;
         case 'hook': return deps.commandConnectorHook(parsed.positionalArgs[0], parsed.flags);
         case 'logs': return deps.commandLogs(parsed.flags);
         case 'shell': return deps.commandShell();
@@ -102,7 +97,7 @@ export async function runParsedCommand(parsed: ParsedArgs, deps: DispatchDeps): 
             return 1;
         case 'ui':
             console.error('`0ctx ui` has been removed from the end-user flow.');
-            console.error('Use `0ctx enable` inside a repo for the normal product flow. Hosted docs and install guidance live on 0ctx.com.');
+            console.error('Use `0ctx enable` inside a repo for the normal local product flow.');
             return 1;
         case 'help':
             deps.printHelp(Boolean(parsed.flags.advanced));

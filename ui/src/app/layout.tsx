@@ -38,8 +38,8 @@ const cormorantGaramond = Cormorant_Garamond({
 });
 
 export const metadata: Metadata = {
-  title: '0ctx | The Context Engine for AI',
-  description: 'Zero context loss across AI tools. A persistent, local-first graph-based context engine.',
+  title: '0ctx UI | Docs and Install Guide',
+  description: 'Public docs and install guidance for the local-first 0ctx CLI and daemon.',
 };
 
 const themeBootstrapScript = `(() => {

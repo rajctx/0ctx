@@ -9,12 +9,12 @@
 
 Ingestion is deterministic. It comes from:
 
-- hooks
-- notify integrations
+- repo-installed hooks
 - session-start integrations
 - transcript/archive readers
 
-Integrations feed the local daemon. The daemon remains the source of truth.
+Integrations feed the local daemon. The daemon remains the source of truth for
+the local product path.
 
 ## Retrieval
 
@@ -25,6 +25,24 @@ The intended user experience is:
 - enable once
 - use the agent normally
 - get the right workstream context automatically
+
+## Local OSS focus
+
+The open-source local path focuses on:
+
+- repo-installed capture
+- daemon-backed retrieval
+- local workstream state and checkpoints
+
+Users should normally use:
+
+- `0ctx enable`
+- `0ctx status`
+- `0ctx repair`
+
+`hook` commands are the supported local capture-management surface. Older
+`connector hook` installs still work as compatibility aliases, but they are not
+part of the normal local-first flow.
 
 ## GA integrations
 

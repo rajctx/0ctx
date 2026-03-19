@@ -84,7 +84,7 @@ describe('hook install workflow', () => {
             .flatMap(group => (group.hooks ?? []).map(entry => String(entry.command ?? '')));
         const claudeSubagentCommands = (claudeConfig.hooks?.SubagentStop ?? [])
             .flatMap(group => (group.hooks ?? []).map(entry => String(entry.command ?? '')));
-        expect(claudeSessionStartCommands.some(command => command.includes('connector hook session-start'))).toBe(true);
+        expect(claudeSessionStartCommands.some(command => command.includes('hook session-start'))).toBe(true);
         expect(claudeStopCommands.some(command => command.includes('--agent=claude'))).toBe(true);
         expect(claudeSubagentCommands.some(command => command.includes('--agent=claude'))).toBe(true);
         expect(claudeSessionStartCommands.some(command => command.includes('--context-id='))).toBe(false);
@@ -147,7 +147,7 @@ describe('hook install workflow', () => {
         expect(subagentStopHooks.length).toBeGreaterThan(0);
         expect(
             sessionStartHooks.some(group =>
-                (group.hooks ?? []).some(entry => String(entry.command ?? '').includes('connector hook session-start --agent=claude'))
+                (group.hooks ?? []).some(entry => String(entry.command ?? '').includes('hook session-start --agent=claude'))
             )
         ).toBe(true);
         expect(
@@ -206,7 +206,7 @@ describe('hook install workflow', () => {
         const subagentStopHooks = parsed.hooks?.SubagentStop ?? [];
 
         expect(sessionStartHooks.some(group =>
-            (group.hooks ?? []).some(entry => String(entry.command ?? '').includes('connector hook session-start --agent=claude'))
+            (group.hooks ?? []).some(entry => String(entry.command ?? '').includes('hook session-start --agent=claude'))
         )).toBe(true);
         expect(stopHooks.some(group =>
             (group.hooks ?? []).some(entry => String(entry.command ?? '').includes('--agent=claude'))
@@ -284,7 +284,7 @@ describe('hook install workflow', () => {
         expect(subagentStopHooks.length).toBeGreaterThan(0);
         expect(
             sessionStartHooks.some(group =>
-                (group.hooks ?? []).some(entry => String(entry.command ?? '').includes('connector hook session-start --agent=factory'))
+                (group.hooks ?? []).some(entry => String(entry.command ?? '').includes('hook session-start --agent=factory'))
             )
         ).toBe(true);
         expect(
@@ -347,7 +347,7 @@ describe('hook install workflow', () => {
         expect(
             sessionStartHooks.some(group =>
                 group.matcher === '*'
-                && (group.hooks ?? []).some(entry => String(entry.command ?? '').includes('connector hook session-start --agent=antigravity'))
+                && (group.hooks ?? []).some(entry => String(entry.command ?? '').includes('hook session-start --agent=antigravity'))
             )
         ).toBe(true);
         expect(
@@ -423,7 +423,7 @@ describe('hook install workflow', () => {
                         hooks: [
                             {
                                 type: 'command',
-                                command: '0ctx connector hook session-start --agent=factory'
+                                command: '0ctx hook session-start --agent=factory'
                             }
                         ]
                     }
@@ -433,7 +433,7 @@ describe('hook install workflow', () => {
                         hooks: [
                             {
                                 type: 'command',
-                                command: '0ctx connector hook ingest --agent=antigravity --repo-root="C:\\\\tmp"'
+                                command: '0ctx hook ingest --agent=antigravity --repo-root="C:\\\\tmp"'
                             },
                             {
                                 type: 'command',
@@ -447,7 +447,7 @@ describe('hook install workflow', () => {
                         hooks: [
                             {
                                 type: 'command',
-                                command: '0ctx connector hook ingest --agent=factory --repo-root="C:\\\\tmp"'
+                                command: '0ctx hook ingest --agent=factory --repo-root="C:\\\\tmp"'
                             }
                         ]
                     }
@@ -474,7 +474,7 @@ describe('hook install workflow', () => {
         const subagentCommands = (localConfig.hooks?.SubagentStop ?? [])
             .flatMap(group => (group.hooks ?? []).map(entry => String(entry.command ?? '')));
 
-        expect(sessionStartCommands.some(command => command.includes('connector hook session-start'))).toBe(false);
+        expect(sessionStartCommands.some(command => command.includes('hook session-start'))).toBe(false);
         expect(stopCommands.some(command => command.includes('keep-me'))).toBe(true);
         expect(stopCommands.some(command => command.includes('--agent=antigravity'))).toBe(false);
         expect(subagentCommands.some(command => command.includes('--agent=factory'))).toBe(false);
@@ -496,7 +496,7 @@ describe('hook install workflow', () => {
                         hooks: [
                             {
                                 type: 'command',
-                                command: '0ctx connector hook session-start --agent=factory'
+                                command: '0ctx hook session-start --agent=factory'
                             }
                         ]
                     }
@@ -506,7 +506,7 @@ describe('hook install workflow', () => {
                         hooks: [
                             {
                                 type: 'command',
-                                command: '0ctx connector hook ingest --quiet --agent=factory --context-id=ctx-home'
+                                command: '0ctx hook ingest --quiet --agent=factory --context-id=ctx-home'
                             },
                             {
                                 type: 'command',
@@ -520,7 +520,7 @@ describe('hook install workflow', () => {
                         hooks: [
                             {
                                 type: 'command',
-                                command: '0ctx connector hook ingest --quiet --agent=factory --context-id=ctx-home'
+                                command: '0ctx hook ingest --quiet --agent=factory --context-id=ctx-home'
                             }
                         ]
                     }
@@ -548,10 +548,10 @@ describe('hook install workflow', () => {
         const subagentCommands = (homeConfig.hooks?.SubagentStop ?? [])
             .flatMap(group => (group.hooks ?? []).map(entry => String(entry.command ?? '')));
 
-        expect(sessionStartCommands.some(command => command.includes('connector hook session-start'))).toBe(false);
+        expect(sessionStartCommands.some(command => command.includes('hook session-start'))).toBe(false);
         expect(stopCommands.some(command => command.includes('keep-stop'))).toBe(true);
-        expect(stopCommands.some(command => command.includes('connector hook ingest'))).toBe(false);
-        expect(subagentCommands.some(command => command.includes('connector hook ingest'))).toBe(false);
+        expect(stopCommands.some(command => command.includes('hook ingest'))).toBe(false);
+        expect(subagentCommands.some(command => command.includes('hook ingest'))).toBe(false);
     });
 
     it('cleans legacy managed commands from the home .gemini/settings.json', () => {
@@ -571,7 +571,7 @@ describe('hook install workflow', () => {
                         hooks: [
                             {
                                 type: 'command',
-                                command: '0ctx connector hook session-start --agent=antigravity'
+                                command: '0ctx hook session-start --agent=antigravity'
                             }
                         ]
                     }
@@ -582,7 +582,7 @@ describe('hook install workflow', () => {
                         hooks: [
                             {
                                 type: 'command',
-                                command: '0ctx connector hook ingest --quiet --agent=antigravity --context-id=ctx-home'
+                                command: '0ctx hook ingest --quiet --agent=antigravity --context-id=ctx-home'
                             },
                             {
                                 type: 'command',
@@ -597,7 +597,7 @@ describe('hook install workflow', () => {
                         hooks: [
                             {
                                 type: 'command',
-                                command: '0ctx connector hook ingest --quiet --agent=antigravity --context-id=ctx-home'
+                                command: '0ctx hook ingest --quiet --agent=antigravity --context-id=ctx-home'
                             }
                         ]
                     }
@@ -625,10 +625,10 @@ describe('hook install workflow', () => {
         const subagentCommands = (homeConfig.hooks?.SubagentStop ?? [])
             .flatMap(group => (group.hooks ?? []).map(entry => String(entry.command ?? '')));
 
-        expect(sessionStartCommands.some(command => command.includes('connector hook session-start'))).toBe(false);
+        expect(sessionStartCommands.some(command => command.includes('hook session-start'))).toBe(false);
         expect(stopCommands.some(command => command.includes('keep-stop'))).toBe(true);
-        expect(stopCommands.some(command => command.includes('connector hook ingest'))).toBe(false);
-        expect(subagentCommands.some(command => command.includes('connector hook ingest'))).toBe(false);
+        expect(stopCommands.some(command => command.includes('hook ingest'))).toBe(false);
+        expect(subagentCommands.some(command => command.includes('hook ingest'))).toBe(false);
     });
 
     it('does not overwrite existing codex notify and reports a warning', () => {

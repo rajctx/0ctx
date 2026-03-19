@@ -48,12 +48,11 @@ describe('data-policy command surface', () => {
         expect((captured as { presets: Array<{ preset: string }> }).presets.map((item) => item.preset)).toEqual([
             'lean',
             'review',
-            'debug',
-            'shared'
+            'debug'
         ]);
     });
 
-    it('prints scoped preset labels and keeps shared tied to full_sync opt-in in the catalog', async () => {
+    it('prints scoped preset labels for the supported local-only catalog', async () => {
         const lines: string[] = [];
         const log = vi.spyOn(console, 'log').mockImplementation((value?: unknown) => {
             lines.push(String(value ?? ''));
@@ -75,7 +74,7 @@ describe('data-policy command surface', () => {
                 recoverySteps: []
             }),
             printCapabilityMismatch: vi.fn(),
-            formatSyncPolicyLabel: (policy) => policy === 'full_sync' ? 'full_sync (opt-in)' : policy === 'metadata_only' ? 'metadata_only (opt-in)' : policy === 'local_only' ? 'local_only (default)' : String(policy ?? ''),
+            formatSyncPolicyLabel: (policy) => policy === 'full_sync' ? 'full_sync (legacy)' : policy === 'metadata_only' ? 'metadata_only (legacy)' : policy === 'local_only' ? 'local_only (default)' : String(policy ?? ''),
             formatDebugArtifactsLabel: (enabled) => enabled ? 'enabled' : 'disabled',
             printJsonOrValue: (_asJson, _value, render) => {
                 render();
@@ -99,8 +98,7 @@ describe('data-policy command surface', () => {
         expect(lines.some((line) => line.includes('Lean (machine default)'))).toBe(true);
         expect(lines.some((line) => line.includes('Review (machine default)'))).toBe(true);
         expect(lines.some((line) => line.includes('Debug (machine default)'))).toBe(true);
-        expect(lines.some((line) => line.includes('Shared (workspace override)'))).toBe(true);
-        expect(lines.some((line) => line.includes('Workspace sync:') && line.includes('metadata_only (opt-in)'))).toBe(true);
+        expect(lines.some((line) => line.includes('Legacy Remote Sync'))).toBe(false);
         log.mockRestore();
     });
 
@@ -221,7 +219,7 @@ describe('data-policy command surface', () => {
         log.mockRestore();
     });
 
-    it('shows shared as a workspace override with full_sync opt-in in show output', async () => {
+    it('shows legacy remote-sync policy states as compatibility-only output', async () => {
         const lines: string[] = [];
         const log = vi.spyOn(console, 'log').mockImplementation((value?: unknown) => {
             lines.push(String(value ?? ''));
@@ -243,7 +241,7 @@ describe('data-policy command surface', () => {
                 recoverySteps: []
             }),
             printCapabilityMismatch: vi.fn(),
-            formatSyncPolicyLabel: (policy) => policy === 'full_sync' ? 'full_sync (opt-in)' : policy === 'metadata_only' ? 'metadata_only (opt-in)' : policy === 'local_only' ? 'local_only (default)' : String(policy ?? ''),
+            formatSyncPolicyLabel: (policy) => policy === 'full_sync' ? 'full_sync (legacy)' : policy === 'metadata_only' ? 'metadata_only (legacy)' : policy === 'local_only' ? 'local_only (default)' : String(policy ?? ''),
             formatDebugArtifactsLabel: (enabled) => enabled ? 'enabled' : 'disabled',
             printJsonOrValue: (_asJson, _value, render) => {
                 render();
@@ -273,9 +271,10 @@ describe('data-policy command surface', () => {
         const code = await commandDataPolicy('show', {});
 
         expect(code).toBe(0);
-        expect(lines.some((line) => line.includes('Policy mode:') && line.includes('Shared (workspace override)'))).toBe(true);
-        expect(lines.some((line) => line.includes('Workspace sync:') && line.includes('metadata_only (opt-in)'))).toBe(true);
-        expect(lines.some((line) => line.includes('Normal path:') && line.includes('metadata_only'))).toBe(true);
+        expect(lines.some((line) => line.includes('Policy mode:') && line.includes('Legacy Remote Sync (workspace override)'))).toBe(true);
+        expect(lines.some((line) => line.includes('Workspace sync:') && line.includes('metadata_only (legacy)'))).toBe(true);
+        expect(lines.some((line) => line.includes('Normal path:') && line.includes('legacy metadata_only'))).toBe(true);
+        expect(lines.some((line) => line.includes('Recommended for:') && line.includes('Legacy remote-sync state'))).toBe(true);
         sendToDaemon.mockRestore();
         log.mockRestore();
     });
@@ -401,7 +400,7 @@ describe('data-policy command surface', () => {
         sendToDaemon.mockRestore();
     });
 
-    it('requires explicit confirmation before enabling shared full_sync', async () => {
+    it('rejects the removed shared preset from the local-only surface', async () => {
         const error = vi.spyOn(console, 'error').mockImplementation(() => {});
         const sendToDaemon = vi.spyOn(client, 'sendToDaemon').mockResolvedValue({});
         const { commandDataPolicy } = createDataPolicyCommands({
@@ -438,7 +437,7 @@ describe('data-policy command surface', () => {
         const code = await commandDataPolicy('shared', {});
 
         expect(code).toBe(1);
-        expect(error).toHaveBeenCalledWith(expect.stringContaining('--confirm-full-sync'));
+        expect(error).toHaveBeenCalledWith(expect.stringContaining('removed from the local-only product surface'));
         expect(sendToDaemon).not.toHaveBeenCalled();
         sendToDaemon.mockRestore();
         error.mockRestore();

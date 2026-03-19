@@ -2,8 +2,8 @@ import color from 'picocolors';
 import type { CliRegistry } from './registry';
 
 type NoArgDeps = Pick<CliRegistry,
-    'runCommandWithOpsSummary' | 'printHelp' | 'readConnectorState'
-    | 'findGitRepoRoot' | 'commandEnable' | 'isDaemonReachable' | 'commandBranches'
+    'runCommandWithOpsSummary' | 'printHelp' | 'findGitRepoRoot'
+    | 'commandEnable' | 'isDaemonReachable' | 'commandBranches'
 > & {
     captureEvent: (name: string, properties: Record<string, unknown>) => void;
     stdinIsTTY: boolean;
@@ -26,7 +26,6 @@ export async function runWithoutArgs(deps: NoArgDeps): Promise<number> {
             return 0;
         }, { command: 'help', interactive: false });
     }
-    const connectorState = deps.readConnectorState();
     const detectedRepoRoot = deps.findGitRepoRoot(null);
     console.log(color.bold('\nWelcome to 0ctx!'));
     if (detectedRepoRoot) {
@@ -34,7 +33,7 @@ export async function runWithoutArgs(deps: NoArgDeps): Promise<number> {
         return deps.runCommandWithOpsSummary('cli.enable', () => deps.commandEnable({ 'repo-root': detectedRepoRoot }), {
             command: 'enable',
             interactive: true,
-            reason: connectorState ? 'repo_entrypoint' : 'first_run_repo'
+            reason: 'repo_entrypoint'
         });
     }
     console.log(color.dim("0ctx works repo-first. Move into a project repo and run `0ctx enable`.\n"));

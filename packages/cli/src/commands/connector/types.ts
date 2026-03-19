@@ -20,7 +20,7 @@ export interface QueueCommandDeps {
 export interface ConnectorCommandDeps {
     isDaemonReachable: () => Promise<{ ok: boolean; error?: string; health?: any }>;
     readConnectorState: () => any | null;
-    getHostedUiUrl: () => string;
+    getUiUrl: () => string;
     getConnectorStatePath: () => string;
     writeConnectorState: (state: any) => void;
     sendToDaemon: <T = unknown>(method: string, params?: Record<string, unknown>) => Promise<T>;

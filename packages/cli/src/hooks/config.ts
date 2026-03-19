@@ -14,16 +14,16 @@ export function buildHookCommand(
     _contextId: string | null
 ): string {
     if (agent === 'codex') {
-        return `${cliCommand} connector hook ingest --quiet --agent=codex --payload`;
+        return `${cliCommand} hook ingest --quiet --agent=codex --payload`;
     }
-    return `${cliCommand} connector hook ingest --quiet --agent=${agent}`;
+    return `${cliCommand} hook ingest --quiet --agent=${agent}`;
 }
 
 export function buildSessionStartCommand(
     agent: Extract<HookSupportedAgent, 'claude' | 'factory' | 'antigravity'>,
     cliCommand: string
 ): string {
-    return `${cliCommand} connector hook session-start --agent=${agent}`;
+    return `${cliCommand} hook session-start --agent=${agent}`;
 }
 
 function toTomlString(value: string): string {
@@ -31,7 +31,7 @@ function toTomlString(value: string): string {
 }
 
 function buildCodexNotifyBlock(_projectRoot: string, cliCommand: string, _contextId: string | null): string {
-    const args = [cliCommand, 'connector', 'hook', 'ingest', '--agent=codex', '--payload'];
+    const args = [cliCommand, 'hook', 'ingest', '--agent=codex', '--payload'];
     const notifyLine = `notify = [${args.map(toTomlString).join(', ')}]`;
     return `${CODEX_NOTIFY_BEGIN}\n${notifyLine}\n${CODEX_NOTIFY_END}\n`;
 }
@@ -118,7 +118,10 @@ export function writeJsonConfig(configPath: string, value: Record<string, unknow
 
 export function isManagedHookCommand(command: unknown, agent: HookSupportedAgent): boolean {
     if (typeof command !== 'string') return false;
-    if (!command.includes('0ctx connector hook ingest') && !command.includes('0ctx connector hook session-start')) {
+    if (!command.includes('0ctx hook ingest')
+        && !command.includes('0ctx hook session-start')
+        && !command.includes('0ctx connector hook ingest')
+        && !command.includes('0ctx connector hook session-start')) {
         return false;
     }
     if (agent === 'factory') {

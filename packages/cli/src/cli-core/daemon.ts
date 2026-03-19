@@ -60,7 +60,7 @@ export async function checkDaemonCapabilities(requiredMethods: string[]): Promis
             methods,
             missingMethods,
             error: versionMismatch ? `api_version_mismatch:${apiVersion}` : null,
-            recoverySteps: ['0ctx daemon start', '0ctx connector service restart']
+            recoverySteps: ['0ctx daemon start', '0ctx daemon service restart']
         };
     } catch (error) {
         return {
@@ -70,7 +70,7 @@ export async function checkDaemonCapabilities(requiredMethods: string[]): Promis
             methods: [],
             missingMethods: [...requiredMethods],
             error: error instanceof Error ? error.message : String(error),
-            recoverySteps: ['0ctx daemon start', '0ctx connector service restart']
+            recoverySteps: ['0ctx daemon start', '0ctx daemon service restart']
         };
     }
 }
@@ -80,8 +80,8 @@ export function inferDaemonRecoverySteps(error?: string): string[] {
     const steps: string[] = ['0ctx daemon start'];
 
     if (normalized.includes('enoent') || normalized.includes('econnrefused') || normalized.includes('not running')) {
-        steps.push('0ctx connector service status');
-        steps.push('0ctx connector service start');
+        steps.push('0ctx daemon service status');
+        steps.push('0ctx daemon service start');
     }
 
     if (normalized.includes('eacces') || normalized.includes('permission') || normalized.includes('access is denied')) {

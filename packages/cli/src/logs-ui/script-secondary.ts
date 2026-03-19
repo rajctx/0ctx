@@ -10,7 +10,7 @@ export const LOGS_UI_SCRIPT_SECONDARY = `  function kv(label, value, cls) {
     const state = await api('/api/identity');
     const el = document.getElementById('connector-content');
     if (!state || state._missing) {
-      el.innerHTML = '<div class="empty-state">No connector state found.<br>Run <code>0ctx connector register</code> to register this machine.</div>';
+      el.innerHTML = '<div class="empty-state">No legacy connector state found.<br>New local-only installs do not require machine registration.</div>';
       return;
     }
 
@@ -18,13 +18,13 @@ export const LOGS_UI_SCRIPT_SECONDARY = `  function kv(label, value, cls) {
     const updatedAt = state.updatedAt ? new Date(state.updatedAt).toISOString() : '--';
 
     el.innerHTML =
-      section('Identity', [
+      section('Legacy Identity', [
         kv('Machine ID', state.machineId),
-        kv('Hosted URL', state.uiUrl),
+        kv('UI URL', state.uiUrl),
         kv('Registered', registeredAt, 'dim'),
         kv('Updated', updatedAt, 'dim'),
       ].join('')) +
-      section('Runtime State', [
+      section('Legacy Runtime State', [
         kv('Event Queue Pending', state.runtime?.eventQueuePending ?? 0, state.runtime?.eventQueuePending > 0 ? 'amber' : ''),
         kv('Event Queue Ready', state.runtime?.eventQueueReady ?? 0, state.runtime?.eventQueueReady > 0 ? 'green' : ''),
         kv('Event Queue Backoff', state.runtime?.eventQueueBackoff ?? 0, state.runtime?.eventQueueBackoff > 0 ? 'red' : ''),

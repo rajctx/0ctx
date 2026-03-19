@@ -123,4 +123,28 @@ describe('bumpAllPackageVersions', () => {
         ));
         expect(desktopContent.version).toBe('0.6.0');
     });
+
+    it('does not rewrite package files when the target version is already set', () => {
+        const beforeCli = fs.readFileSync(path.join(tmpDir, 'packages', 'cli', 'package.json'), 'utf-8');
+        const beforeDesktop = fs.readFileSync(path.join(tmpDir, 'desktop-app', 'package.json'), 'utf-8');
+
+        bumpAllPackageVersions(tmpDir, 'v0.1.0');
+
+        const afterCli = fs.readFileSync(path.join(tmpDir, 'packages', 'cli', 'package.json'), 'utf-8');
+        const afterDesktop = fs.readFileSync(path.join(tmpDir, 'desktop-app', 'package.json'), 'utf-8');
+        expect(afterCli).toBe(beforeCli);
+        expect(afterDesktop).toBe(beforeDesktop);
+    });
+
+    it('preserves CRLF newlines when rewriting a release surface package file', () => {
+        const desktopPath = path.join(tmpDir, 'desktop-app', 'package.json');
+        const crlfContent = '{\r\n  "name": "@0ctx/desktop-electron",\r\n  "version": "0.1.0",\r\n  "private": true\r\n}\r\n';
+        fs.writeFileSync(desktopPath, crlfContent, 'utf-8');
+
+        bumpAllPackageVersions(tmpDir, 'v0.7.0');
+
+        const nextContent = fs.readFileSync(desktopPath, 'utf-8');
+        expect(nextContent).toContain('\r\n');
+        expect(nextContent).toContain('"version": "0.7.0"');
+    });
 });
