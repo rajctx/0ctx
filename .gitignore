@@ -76,3 +76,7 @@ releases/desktop/
 
 # Rust build artifacts
 target/
+
+# npm cache
+.npm-cache/
+.npm-cache-local
