@@ -33,13 +33,13 @@
   ],
   "author": "",
   "license": "Apache-2.0",
-  "homepage": "https://github.com/0ctx-com/0ctx#readme",
+  "homepage": "https://github.com/rajctx/0ctx#readme",
   "bugs": {
-    "url": "https://github.com/0ctx-com/0ctx/issues"
+    "url": "https://github.com/rajctx/0ctx/issues"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/0ctx-com/0ctx.git",
+    "url": "git+https://github.com/rajctx/0ctx.git",
     "directory": "packages/cli"
   },
   "dependencies": {
