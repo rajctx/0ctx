@@ -1,4 +1,10 @@
-import { Graph, openDb } from '@0ctx/core';
+import type { Graph as CoreGraph, openDb as openCoreDb } from '@0ctx/core';
+
+type CoreModule = {
+  Graph: typeof CoreGraph;
+  openDb: typeof openCoreDb;
+};
+type CoreDb = ReturnType<CoreModule['openDb']>;
 
 function readString(params: Record<string, unknown>, key: string) {
   const value = params[key];
@@ -42,24 +48,30 @@ function isEmptySessionDetail(value: unknown) {
 }
 
 export class LocalGraphService {
-  private graph: Graph | null = null;
-  private db: ReturnType<typeof openDb> | null = null;
+  private graph: CoreGraph | null = null;
+  private db: CoreDb | null = null;
+  private coreModule: CoreModule | null | undefined = undefined;
 
   resolvePreferredRead(method: string, params: Record<string, unknown>) {
     const contextId = readString(params, 'contextId');
+    const graph = this.getGraph();
+
+    if (!graph) {
+      return undefined;
+    }
 
     try {
       switch (method) {
         case 'listChatSessions':
-          return contextId ? this.getGraph().listChatSessions(contextId, readLimit(params, 250)) : undefined;
+          return contextId ? graph.listChatSessions(contextId, readLimit(params, 250)) : undefined;
         case 'listBranchLanes':
-          return contextId ? this.getGraph().listBranchLanes(contextId, readLimit(params, 250)) : undefined;
+          return contextId ? graph.listBranchLanes(contextId, readLimit(params, 250)) : undefined;
         case 'listBranchSessions': {
           const branch = readString(params, 'branch');
           if (!contextId || !branch) {
             return undefined;
           }
-          return this.getGraph().listBranchSessions(contextId, branch, {
+          return graph.listBranchSessions(contextId, branch, {
             worktreePath: readString(params, 'worktreePath'),
             limit: readLimit(params, 250)
           });
@@ -67,13 +79,13 @@ export class LocalGraphService {
         case 'listSessionMessages': {
           const sessionId = readString(params, 'sessionId');
           return contextId && sessionId
-            ? this.getGraph().listSessionMessages(contextId, sessionId, readLimit(params, 500))
+            ? graph.listSessionMessages(contextId, sessionId, readLimit(params, 500))
             : undefined;
         }
         case 'getSessionDetail': {
           const sessionId = readString(params, 'sessionId');
           return contextId && sessionId
-            ? this.getGraph().getSessionDetail(contextId, sessionId)
+            ? graph.getSessionDetail(contextId, sessionId)
             : undefined;
         }
         case 'listBranchCheckpoints': {
@@ -81,7 +93,7 @@ export class LocalGraphService {
           if (!contextId || !branch) {
             return undefined;
           }
-          return this.getGraph().listBranchCheckpoints(contextId, branch, {
+          return graph.listBranchCheckpoints(contextId, branch, {
             worktreePath: readString(params, 'worktreePath'),
             limit: readLimit(params, 250)
           });
@@ -96,29 +108,34 @@ export class LocalGraphService {
 
   resolveReadFallback(method: string, params: Record<string, unknown>, currentResult?: unknown) {
     const contextId = readString(params, 'contextId');
+    const graph = this.getGraph();
+
+    if (!graph) {
+      return currentResult;
+    }
 
     try {
       switch (method) {
         case 'listContexts':
           return Array.isArray(currentResult) && currentResult.length > 0
             ? currentResult
-            : this.getGraph().listContexts();
+            : graph.listContexts();
         case 'listChatSessions':
           if (!contextId || (Array.isArray(currentResult) && currentResult.length > 0)) {
             return currentResult;
           }
-          return this.getGraph().listChatSessions(contextId, readLimit(params, 250));
+          return graph.listChatSessions(contextId, readLimit(params, 250));
         case 'listBranchLanes':
           if (!contextId || (Array.isArray(currentResult) && currentResult.length > 0)) {
             return currentResult;
           }
-          return this.getGraph().listBranchLanes(contextId, readLimit(params, 250));
+          return graph.listBranchLanes(contextId, readLimit(params, 250));
         case 'listBranchSessions': {
           const branch = readString(params, 'branch');
           if (!contextId || !branch || (Array.isArray(currentResult) && currentResult.length > 0)) {
             return currentResult;
           }
-          return this.getGraph().listBranchSessions(contextId, branch, {
+          return graph.listBranchSessions(contextId, branch, {
             worktreePath: readString(params, 'worktreePath'),
             limit: readLimit(params, 250)
           });
@@ -128,21 +145,21 @@ export class LocalGraphService {
           if (!contextId || !sessionId || (Array.isArray(currentResult) && currentResult.length > 0)) {
             return currentResult;
           }
-          return this.getGraph().listSessionMessages(contextId, sessionId, readLimit(params, 500));
+          return graph.listSessionMessages(contextId, sessionId, readLimit(params, 500));
         }
         case 'getSessionDetail': {
           const sessionId = readString(params, 'sessionId');
           if (!contextId || !sessionId || !isEmptySessionDetail(currentResult)) {
             return currentResult;
           }
-          return this.getGraph().getSessionDetail(contextId, sessionId);
+          return graph.getSessionDetail(contextId, sessionId);
         }
         case 'listBranchCheckpoints': {
           const branch = readString(params, 'branch');
           if (!contextId || !branch || (Array.isArray(currentResult) && currentResult.length > 0)) {
             return currentResult;
           }
-          return this.getGraph().listBranchCheckpoints(contextId, branch, {
+          return graph.listBranchCheckpoints(contextId, branch, {
             worktreePath: readString(params, 'worktreePath'),
             limit: readLimit(params, 250)
           });
@@ -164,13 +181,32 @@ export class LocalGraphService {
     this.graph = null;
   }
 
+  protected loadCoreModule(): CoreModule | null {
+    if (this.coreModule !== undefined) {
+      return this.coreModule;
+    }
+
+    try {
+      this.coreModule = require('@0ctx/core') as CoreModule;
+    } catch {
+      this.coreModule = null;
+    }
+
+    return this.coreModule;
+  }
+
   private getGraph() {
     if (this.graph) {
       return this.graph;
     }
 
-    this.db = openDb();
-    this.graph = new Graph(this.db);
+    const core = this.loadCoreModule();
+    if (!core) {
+      return null;
+    }
+
+    this.db = core.openDb();
+    this.graph = new core.Graph(this.db);
     return this.graph;
   }
 }
