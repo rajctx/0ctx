@@ -16,6 +16,22 @@ All notable changes to 0ctx are tracked here.
 ### Security & Compliance
 - _None recorded._
 
+## [v0.1.18] - 2026-03-21
+
+### Platform (Core/Daemon/MCP)
+- _None recorded._
+
+### Product (CLI/UI)
+- Added the desktop shell with overview, workstreams, sessions, and setup surfaces.
+- Added workspace deletion to the CLI and desktop app, including desktop row actions and confirmation flow.
+- Simplified Codex notify configuration back to the direct `0ctx hook ingest` path without extra local launcher indirection.
+
+### Governance & Release
+- Updated dependency baselines used by the desktop and CLI release surfaces.
+
+### Security & Compliance
+- _None recorded._
+
 ## [v0.1.17] - 2026-03-19
 
 ### Platform (Core/Daemon/MCP)
