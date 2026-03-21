@@ -30,8 +30,17 @@ function toTomlString(value: string): string {
     return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 }
 
-function buildCodexNotifyBlock(_projectRoot: string, cliCommand: string, _contextId: string | null): string {
-    const args = [cliCommand, 'hook', 'ingest', '--agent=codex', '--payload'];
+function resolveCodexNotifyCommand(cliCommand: string): string[] {
+    const trimmed = cliCommand.trim();
+    if (trimmed.length > 0 && path.isAbsolute(trimmed) && fs.existsSync(trimmed)) {
+        return [trimmed];
+    }
+
+    return [trimmed || '0ctx'];
+}
+
+function buildCodexNotifyBlock(_projectRoot: string, _cliCommand: string, _contextId: string | null): string {
+    const args = [...resolveCodexNotifyCommand(_cliCommand), 'hook', 'ingest', '--agent=codex', '--payload'];
     const notifyLine = `notify = [${args.map(toTomlString).join(', ')}]`;
     return `${CODEX_NOTIFY_BEGIN}\n${notifyLine}\n${CODEX_NOTIFY_END}\n`;
 }
@@ -51,8 +60,9 @@ export function ensureCodexNotifyConfig(options: {
         if (!options.dryRun) {
             fs.mkdirSync(path.dirname(configPath), { recursive: true });
             fs.writeFileSync(configPath, block, 'utf8');
+            return { changed: true, configPath, configured: true, reason: null };
         }
-        return { changed: !options.dryRun, configPath, configured: true, reason: null };
+        return { changed: false, configPath, configured: true, reason: null };
     }
 
     const current = fs.readFileSync(configPath, 'utf8');
@@ -77,8 +87,9 @@ export function ensureCodexNotifyConfig(options: {
     const separator = current.endsWith('\n') ? '' : '\n';
     if (!options.dryRun) {
         fs.writeFileSync(configPath, `${current}${separator}${block}`, 'utf8');
+        return { changed: true, configPath, configured: true, reason: null };
     }
-    return { changed: !options.dryRun, configPath, configured: true, reason: null };
+    return { changed: false, configPath, configured: true, reason: null };
 }
 
 export function readJsonConfig(configPath: string): {

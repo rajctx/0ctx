@@ -45,6 +45,23 @@ afterEach(() => {
 });
 
 describe('hook install workflow', () => {
+    it('keeps Codex notify config generic for installed users', () => {
+        const repoRoot = createTempDir();
+        process.env.CTX_HOOK_STATE_PATH = path.join(repoRoot, '.0ctx', 'hooks-state.json');
+
+        const result = installHooks({
+            projectRoot: repoRoot,
+            clients: ['codex']
+        });
+
+        expect(result.codexNotifyConfigured).toBe(true);
+
+        const configToml = fs.readFileSync(result.codexConfigPath, 'utf8');
+        expect(configToml).toContain('notify = ["0ctx", "hook", "ingest", "--agent=codex", "--payload"]');
+        expect(configToml).not.toContain(process.execPath);
+        expect(fs.existsSync(path.join(repoRoot, '.0ctx', 'codex-notify.js'))).toBe(false);
+    });
+
     it('is idempotent across repeated installs', () => {
         const repoRoot = createTempDir();
         process.env.CTX_HOOK_STATE_PATH = path.join(repoRoot, '.0ctx', 'hooks-state.json');

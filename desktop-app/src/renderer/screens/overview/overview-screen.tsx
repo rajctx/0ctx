@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Trash2 } from 'lucide-react';
 import type { WorkspaceContext } from '../../../shared/types/domain';
-import { useCreateWorkspace, useDesktopStatus, useRepoReadiness, useSessions, useWorkstreams } from '../../features/runtime/queries';
+import { useCreateWorkspace, useDeleteWorkspace, useDesktopStatus, useRepoReadiness, useSessions, useWorkstreams } from '../../features/runtime/queries';
 import { useShellStore } from '../../lib/store';
 
 function displayPath(value?: string | null) {
@@ -29,11 +29,15 @@ function WorkspaceRow({
   context,
   active,
   onSelect,
+  onDelete,
+  deletePending,
   activeStats
 }: {
   context: WorkspaceContext;
   active: boolean;
   onSelect: (contextId: string) => void;
+  onDelete: (context: WorkspaceContext) => void;
+  deletePending: boolean;
   activeStats?: {
     workstreamCount: number;
     sessionCount: number;
@@ -48,24 +52,35 @@ function WorkspaceRow({
   const meta = active
     ? `Repo bound · ${preset} · ${workstreamCount ?? 0} workstreams · ${sessionCount ?? 0} sessions`
     : isBound
-      ? 'Open workspace to load workstream and session detail.'
+      ? 'Select workspace to inspect workstream and session detail.'
       : 'No repository folder bound yet. Needs repository binding.';
 
   return (
-    <button type="button" className="ws-row" onClick={() => onSelect(context.id)}>
-      <div className="ws-row-header">
-        <span className="brk">{active ? '[●]' : '[ ]'}</span>
-        <span className={active ? 'ws-name' : 'ws-name dim'}>{context.name}</span>
-        <span className={active ? 'ws-status bright' : 'ws-status'}>{status}</span>
-      </div>
-      <div className={active ? 'ws-meta' : 'ws-meta dim'}>{meta}</div>
-      {context.paths?.[0] ? <div className="ws-path">{displayPath(context.paths[0])}</div> : null}
-    </button>
+    <div className="ws-row">
+      <button type="button" className="ws-row-main" onClick={() => onSelect(context.id)}>
+        <div className="ws-row-header">
+          <span className="brk">{active ? '[●]' : '[ ]'}</span>
+          <span className={active ? 'ws-name' : 'ws-name dim'}>{context.name}</span>
+          <span className={active ? 'ws-status bright' : 'ws-status'}>{status}</span>
+        </div>
+        <div className={active ? 'ws-meta' : 'ws-meta dim'}>{meta}</div>
+        {context.paths?.[0] ? <div className="ws-path">{displayPath(context.paths[0])}</div> : null}
+      </button>
+      <button
+        type="button"
+        className="ws-row-delete"
+        disabled={deletePending}
+        aria-label={`Delete workspace ${context.name}`}
+        title={`Delete workspace ${context.name}`}
+        onClick={() => onDelete(context)}
+      >
+        <Trash2 size={14} />
+      </button>
+    </div>
   );
 }
 
 export function OverviewScreen() {
-  const navigate = useNavigate();
   const { data: status } = useDesktopStatus();
   const {
     activeContextId,
@@ -77,6 +92,7 @@ export function OverviewScreen() {
     setActiveInsightId
   } = useShellStore();
   const createWorkspace = useCreateWorkspace();
+  const deleteWorkspace = useDeleteWorkspace();
   const [name, setName] = useState('');
   const [repoPath, setRepoPath] = useState('');
   const contexts = status?.contexts ?? [];
@@ -105,7 +121,6 @@ export function OverviewScreen() {
     setActiveSessionId(null);
     setActiveCheckpointId(null);
     setActiveInsightId(null);
-    navigate('/workstreams');
   };
 
   const activeStats = activeContext
@@ -131,6 +146,23 @@ export function OverviewScreen() {
     setRepoPath('');
   };
 
+  const onDeleteWorkspace = async (context: WorkspaceContext) => {
+    if (!context) {
+      return;
+    }
+
+    const accepted = window.confirm(
+      `Delete workspace "${context.name}" and all of its local 0ctx history?\n\nThis does not modify repository files.`
+    );
+    if (!accepted) {
+      return;
+    }
+
+    await deleteWorkspace.mutateAsync({ contextId: context.id });
+  };
+
+  const deleteError = deleteWorkspace.error instanceof Error ? deleteWorkspace.error.message : null;
+
   return (
     <>
       <div>
@@ -150,10 +182,19 @@ export function OverviewScreen() {
               context={context}
               active={context.id === activeContext?.id}
               onSelect={handleWorkspaceSelect}
+              onDelete={(targetContext) => {
+                void onDeleteWorkspace(targetContext);
+              }}
+              deletePending={deleteWorkspace.isPending}
               activeStats={context.id === activeContext?.id ? activeStats : null}
             />
           ))}
         </div>
+        {deleteError ? (
+          <div className="form-note">
+            {`Delete failed: ${deleteError}`}
+          </div>
+        ) : null}
       </div>
 
       <form className="form-section" onSubmit={onSubmit}>

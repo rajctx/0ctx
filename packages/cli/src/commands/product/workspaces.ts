@@ -27,10 +27,68 @@ function resolveWorkspaceContextId(
 }
 
 export function createWorkspaceCommands(deps: ProductCommandDeps) {
+    async function commandDeleteWorkspace(flags: FlagMap): Promise<number> {
+        const asJson = Boolean(flags.json);
+        const confirmed = Boolean(flags.confirm);
+        const explicitContextId = deps.parseOptionalStringFlag(flags['context-id'] ?? flags.contextId);
+        const repoRootInput = deps.parseOptionalStringFlag(flags['repo-root'] ?? flags.repoRoot);
+        const resolvedRepoRoot = repoRootInput
+            ? deps.resolveRepoRoot(repoRootInput)
+            : deps.findGitRepoRoot(null);
+        const contexts = await deps.sendToDaemon<WorkspaceRecord[]>('listContexts', {});
+        const contextId = resolveWorkspaceContextId(deps, contexts, explicitContextId, resolvedRepoRoot);
+
+        if (!contextId) {
+            console.error('Missing workspace. Pass --context-id=<id>, --repo-root=<path>, or run inside a bound repo.');
+            return 1;
+        }
+
+        const workspace = contexts.find((context) => context.id === contextId);
+        const workspaceLabel = describeWorkspace(workspace, contextId);
+
+        if (!confirmed && !asJson) {
+            const p = await import('@clack/prompts');
+            const accepted = await p.confirm({
+                message: `Delete workspace "${workspaceLabel}" and all of its local 0ctx history? This does not modify repo files.`,
+                initialValue: false
+            });
+            if (p.isCancel(accepted) || !accepted) {
+                p.cancel('Workspace deletion cancelled.');
+                return 1;
+            }
+        } else if (!confirmed && asJson) {
+            console.error('workspaces_delete_requires_confirm: pass --confirm to run non-interactively.');
+            return 1;
+        }
+
+        await deps.sendToDaemon('deleteContext', { id: contextId });
+        const payload = {
+            success: true,
+            contextId,
+            workspaceName: workspace?.name ?? null,
+            repoRoot: workspace?.paths?.[0] ?? null
+        };
+
+        return deps.printJsonOrValue(asJson, payload, () => {
+            console.log('\nWorkspace deleted\n');
+            console.log(`  Workspace: ${workspaceLabel}`);
+            console.log(`  Local history: Removed from local 0ctx storage`);
+            console.log(`  Files: Repository files were not modified`);
+            if (workspace?.paths?.[0]) {
+                console.log(`  Repo: ${workspace.paths[0]}`);
+            }
+            console.log('');
+        });
+    }
+
     async function commandWorkspaces(args: string[], flags: FlagMap): Promise<number> {
         const subcommand = String(args[0] || '').trim().toLowerCase();
+        if (subcommand === 'delete') {
+            return commandDeleteWorkspace(flags);
+        }
         if (subcommand !== 'compare') {
             console.error('Usage: 0ctx workspaces compare [--repo-root=<path>|--source-context-id=<id>] (--target-context-id=<id>|--target-repo-root=<path>) [--json]');
+            console.error('       0ctx workspaces delete [--context-id=<id>|--repo-root=<path>] [--confirm] [--json]');
             return 1;
         }
 
@@ -43,7 +101,9 @@ export function createWorkspaceCommands(deps: ProductCommandDeps) {
         const targetRepoRootInput = deps.parseOptionalStringFlag(flags['target-repo-root'] ?? flags.targetRepoRoot);
 
         const contexts = await deps.sendToDaemon<WorkspaceRecord[]>('listContexts', {});
-        const sourceRepoRoot = sourceRepoRootInput ? deps.resolveRepoRoot(sourceRepoRootInput) : null;
+        const sourceRepoRoot = sourceRepoRootInput
+            ? deps.resolveRepoRoot(sourceRepoRootInput)
+            : deps.findGitRepoRoot(null);
         const targetRepoRoot = targetRepoRootInput ? deps.resolveRepoRoot(targetRepoRootInput) : null;
 
         const sourceContextId = resolveWorkspaceContextId(deps, contexts, sourceContextIdFlag, sourceRepoRoot);

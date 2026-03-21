@@ -461,13 +461,20 @@ button:focus {
 .drawer-list-item {
   width: 100%;
   display: flex;
-  flex-direction: column;
-  gap: 5px;
   padding: 11px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   cursor: default;
   text-align: left;
   transition: background 0.1s;
+}
+
+.ws-row {
+  gap: 10px;
+}
+
+.drawer-list-item {
+  flex-direction: column;
+  gap: 5px;
 }
 
 .ws-row:hover,
@@ -476,6 +483,19 @@ button:focus {
   padding-left: 6px;
   margin-left: -6px;
   padding-right: 6px;
+}
+
+.ws-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  padding: 0;
 }
 
 .ws-row-header,
@@ -513,6 +533,30 @@ button:focus {
   margin-left: auto;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+.ws-row-delete {
+  flex-shrink: 0;
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  color: var(--text-muted);
+  transition: color 0.15s, opacity 0.15s;
+  opacity: 0.72;
+  padding-top: 1px;
+}
+
+.ws-row-delete:hover:not(:disabled) {
+  color: var(--text-primary);
+  opacity: 1;
+}
+
+.ws-row-delete:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .ws-status.bright,

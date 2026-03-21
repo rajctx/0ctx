@@ -486,6 +486,21 @@ export function useCreateWorkspace() {
   });
 }
 
+export function useDeleteWorkspace() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { contextId: string }) => desktopBridge.daemon.call<{ success?: boolean }>('deleteContext', {
+      id: payload.contextId
+    }),
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({ queryKey: desktopQueryKeys.status });
+      void queryClient.invalidateQueries({ queryKey: desktopQueryKeys.runtime });
+      invalidateDesktopQueryKinds(queryClient, ACTIVE_CONTEXT_QUERY_KINDS, variables.contextId);
+      invalidateDesktopQueryKinds(queryClient, POLICY_QUERY_KINDS, variables.contextId);
+    }
+  });
+}
+
 export function useCreateSessionCheckpoint() {
   const queryClient = useQueryClient();
   return useMutation({

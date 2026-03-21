@@ -16,6 +16,7 @@ Daily use:
                           [--session-limit=3] [--checkpoint-limit=2] [--json]
   0ctx workspaces compare [--repo-root=<path>|--source-context-id=<id>]
                          (--target-context-id=<id>|--target-repo-root=<path>) [--json]
+  0ctx workspaces delete [--context-id=<id>|--repo-root=<path>] [--confirm] [--json]
   0ctx sessions [--repo-root=<path>] [--branch=<name>] [--session-id=<id>] [--worktree-path=<path>] [--limit=100] [--json]
   0ctx checkpoints [list] [--repo-root=<path>] [--branch=<name>] [--worktree-path=<path>] [--limit=100] [--json]
   0ctx checkpoints create [--repo-root=<path>] [--session-id=<id>] [--name="..."] [--summary="..."] [--json]
@@ -75,6 +76,7 @@ Advanced / machine management:
                         [--session-limit=3] [--checkpoint-limit=2] [--json]
   0ctx workspaces compare [--repo-root=<path>|--source-context-id=<id>]
                         (--target-context-id=<id>|--target-repo-root=<path>) [--json]
+  0ctx workspaces delete [--context-id=<id>|--repo-root=<path>] [--confirm] [--json]
   0ctx branches [--repo-root=<path>] [--limit=100] [--json]
   0ctx branches compare [--repo-root=<path>] --source=<branch> --target=<branch>
                      [--source-worktree-path=<path>] [--target-worktree-path=<path>]

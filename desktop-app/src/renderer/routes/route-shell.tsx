@@ -98,10 +98,48 @@ export function RouteShell() {
   );
 
   useEffect(() => {
+    if (contexts.length === 0) {
+      if (activeContextId || activeWorkstreamKey || activeSessionId) {
+        setActiveContextId(null);
+        setSearch('');
+        setActiveWorkstreamKey(null);
+        setActiveSessionId(null);
+        setActiveCheckpointId(null);
+        setActiveInsightId(null);
+      }
+      if (route !== 'overview') {
+        navigate('/overview');
+      }
+      return;
+    }
+
     if (!activeContextId && contexts[0]?.id) {
       setActiveContextId(contexts[0].id);
+      return;
     }
-  }, [activeContextId, contexts, setActiveContextId]);
+
+    if (activeContextId && !contexts.some((context) => context.id === activeContextId)) {
+      setActiveContextId(contexts[0]?.id ?? null);
+      setSearch('');
+      setActiveWorkstreamKey(null);
+      setActiveSessionId(null);
+      setActiveCheckpointId(null);
+      setActiveInsightId(null);
+    }
+  }, [
+    activeContextId,
+    activeSessionId,
+    activeWorkstreamKey,
+    contexts,
+    navigate,
+    route,
+    setActiveCheckpointId,
+    setActiveContextId,
+    setActiveInsightId,
+    setActiveSessionId,
+    setActiveWorkstreamKey,
+    setSearch
+  ]);
 
   useEffect(() => {
     if (workstreams.length > 0 && (!activeWorkstreamKey || !workstreams.some((stream) => workstreamKey(stream.branch, stream.worktreePath) === activeWorkstreamKey))) {
