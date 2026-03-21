@@ -1,2 +1,0 @@
-f2304e067c5fd7ebbaf228551cfd9be45f0febd6bd891cc37ada4e0bf405dc68  msi\0ctx Desktop_0.1.0_x64_en-US.msi
-272fa31f0f4ce7a6a5bf98516206e1662aef22ae6a7fdc941b9591f29400c176  nsis\0ctx Desktop_0.1.0_x64-setup.exe
