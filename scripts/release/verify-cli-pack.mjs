@@ -28,6 +28,10 @@ const forbiddenPathMatchers = [
   /^package-lock\.json$/i,
   /\.env/i,
 ];
+const allowedRepositoryUrls = new Set([
+  "https://github.com/rajctx/0ctx.git",
+  "git+https://github.com/rajctx/0ctx.git",
+]);
 
 function runPackDryRun() {
   const result = spawnSync("npm", ["pack", "--workspace=@0ctx/cli", "--dry-run", "--json"], {
@@ -60,6 +64,17 @@ function readPackageJson() {
   return JSON.parse(fs.readFileSync(cliPackagePath, "utf8"));
 }
 
+function normalizeRepositoryUrl(value) {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  return trimmed.replace(/^git\+/, "");
+}
+
 function main() {
   const pack = runPackDryRun();
   const packageJson = readPackageJson();
@@ -76,9 +91,8 @@ function main() {
     license: packageJson.license === "Apache-2.0",
     homepage: typeof packageJson.homepage === "string" && packageJson.homepage.startsWith("https://"),
     bugsUrl: typeof packageJson.bugs?.url === "string" && packageJson.bugs.url.startsWith("https://"),
-    repositoryUrl:
-      typeof packageJson.repository?.url === "string" &&
-      packageJson.repository.url === "https://github.com/0ctx-com/0ctx.git",
+    repositoryUrl: allowedRepositoryUrls.has(String(packageJson.repository?.url ?? "").trim())
+      || allowedRepositoryUrls.has(normalizeRepositoryUrl(packageJson.repository?.url) ?? ""),
   };
 
   const ok =
