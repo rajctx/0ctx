@@ -4,14 +4,20 @@ export function createAppIcon(size = 64) {
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 64 64">
       <defs>
-        <linearGradient id="bg" x1="8" x2="56" y1="8" y2="56" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stop-color="#17c3b2" />
-          <stop offset="1" stop-color="#ff9f1c" />
+        <linearGradient id="bg" x1="7" x2="56" y1="6" y2="57" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stop-color="#151313" />
+          <stop offset="1" stop-color="#050505" />
+        </linearGradient>
+        <linearGradient id="mark" x1="13" x2="48" y1="14" y2="49" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stop-color="#ffd8a8" />
+          <stop offset="0.55" stop-color="#f39158" />
+          <stop offset="1" stop-color="#d56333" />
         </linearGradient>
       </defs>
-      <rect width="64" height="64" rx="18" fill="#111827" />
-      <path d="M17 32c0-8.3 6.7-15 15-15h10v7H32c-4.4 0-8 3.6-8 8s3.6 8 8 8h10v7H32c-8.3 0-15-6.7-15-15z" fill="url(#bg)"/>
-      <circle cx="45.5" cy="32" r="5.5" fill="#f8fafc"/>
+      <rect width="64" height="64" rx="16" fill="url(#bg)" />
+      <path d="M38.46 21.04A15.5 15.5 0 1 0 38.46 42.96" stroke="url(#mark)" stroke-width="7" stroke-linecap="round" fill="none" />
+      <path d="M14.5 38.5L42.75 25.75" stroke="url(#mark)" stroke-width="6" stroke-linecap="round" fill="none" />
+      <circle cx="46" cy="24.5" r="4.5" fill="#fff3e7" />
     </svg>
   `.trim();
 

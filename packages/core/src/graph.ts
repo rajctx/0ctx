@@ -39,7 +39,7 @@ import { getInsightEvidenceRecord, getInsightSummaryRecord, listWorkstreamInsigh
 import { extractKnowledgeFromCheckpointRecord, previewKnowledgeFromCheckpointRecord } from './graph/knowledge-checkpoint';
 import { extractKnowledgeFromSessionRecord, previewKnowledgeFromSessionRecord } from './graph/knowledge-session';
 import { parseCheckpointRow } from './graph/helpers';
-import { addEdgeRecord, addNodeRecord, deleteNodeRecord, ensureEdgeRecord, getByKeyRecord, getEdgesRecord, getNodeRecord, getSubgraphRecords, updateNodeRecord } from './graph/nodes';
+import { addEdgeRecord, addNodeRecord, deleteNodeRecord, ensureEdgeRecord, ensureNodeByKeyRecord, getByKeyRecord, getEdgesRecord, getNodeRecord, getSubgraphRecords, updateNodeRecord } from './graph/nodes';
 import { getCheckpointPayloadRecord, getNodePayloadRecord, setCheckpointPayloadRecord, setNodePayloadRecord } from './graph/payloads';
 import { getGraphDataRecords, searchAdvancedRecords, searchRecords } from './graph/search';
 import { getSessionDetailRecord, listChatSessionsRecord, listChatTurnsRecord, listSessionMessagesRecord } from './graph/sessions';
@@ -56,6 +56,17 @@ export class Graph {
         const generated = randomBytes(32).toString('hex');
         setConfigValue('audit.hmacSecret', generated);
         return generated;
+    }
+
+    private shouldRefreshBranchLaneProjectionForNode(node: Pick<ContextNode, 'type' | 'key'> | null | undefined) {
+        if (!node || node.type !== 'artifact') return false;
+        return Boolean(node.key?.startsWith('chat_turn:') || node.key?.startsWith('chat_session:'));
+    }
+
+    private refreshBranchLaneProjectionForNode(node: Pick<ContextNode, 'contextId' | 'type' | 'key'> | null | undefined) {
+        if (node && this.shouldRefreshBranchLaneProjectionForNode(node)) {
+            this.refreshBranchLaneProjection(node.contextId);
+        }
     }
 
     private refreshBranchLaneProjection(contextId: string) { refreshBranchLaneProjectionRecord(this.workstreamDeps(), contextId); }
@@ -76,11 +87,30 @@ export class Graph {
     getContextSyncPolicy(contextId: string): SyncPolicy | null { return getContextSyncPolicyRecord(this.db, contextId); }
     setContextSyncPolicy(contextId: string, policy: SyncPolicy): Context | null { return setContextSyncPolicyRecord(this.db, contextId, policy); }
     deleteContext(id: string): void { deleteContextRecord(this.db, id); }
-    addNode(params: Omit<ContextNode, 'id' | 'createdAt'> & { rawPayload?: unknown; payloadContentType?: string; createdAtOverride?: number }): ContextNode { return addNodeRecord(this.db, params); }
+    addNode(params: Omit<ContextNode, 'id' | 'createdAt'> & { rawPayload?: unknown; payloadContentType?: string; createdAtOverride?: number }): ContextNode {
+        const node = addNodeRecord(this.db, params);
+        this.refreshBranchLaneProjectionForNode(node);
+        return node;
+    }
+    ensureNodeByKey(params: Omit<ContextNode, 'id' | 'createdAt'> & { rawPayload?: unknown; payloadContentType?: string; createdAtOverride?: number }): { node: ContextNode; created: boolean } {
+        const result = ensureNodeByKeyRecord(this.db, params);
+        if (result.created) {
+            this.refreshBranchLaneProjectionForNode(result.node);
+        }
+        return result;
+    }
     getNode(id: string): ContextNode | null { return getNodeRecord(this.db, id); }
     getByKey(contextId: string, key: string, options: { includeHidden?: boolean } = {}): ContextNode | null { return getByKeyRecord(this.db, contextId, key, options); }
-    deleteNode(id: string): void { deleteNodeRecord(this.db, id); }
-    updateNode(id: string, updates: Partial<Pick<ContextNode, 'content' | 'tags' | 'hidden'>>): ContextNode | null { return updateNodeRecord(this.db, id, updates); }
+    deleteNode(id: string): void {
+        const existing = this.getNode(id);
+        deleteNodeRecord(this.db, id);
+        this.refreshBranchLaneProjectionForNode(existing);
+    }
+    updateNode(id: string, updates: Partial<Pick<ContextNode, 'content' | 'tags' | 'hidden'>>): ContextNode | null {
+        const updated = updateNodeRecord(this.db, id, updates);
+        this.refreshBranchLaneProjectionForNode(updated);
+        return updated;
+    }
     addEdge(fromId: string, toId: string, relation: EdgeType): ContextEdge { return addEdgeRecord(this.db, fromId, toId, relation); }
     getEdges(nodeId: string): ContextEdge[] { return getEdgesRecord(this.db, nodeId); }
     getSubgraph(rootId: string, depth = 2, maxNodes = 20): { nodes: ContextNode[]; edges: ContextEdge[] } { return getSubgraphRecords(this.db, rootId, depth, maxNodes); }

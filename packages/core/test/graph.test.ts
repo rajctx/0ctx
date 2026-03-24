@@ -22,6 +22,37 @@ afterEach(() => {
 });
 
 describe('Graph context isolation', () => {
+    it('can reuse an existing keyed node instead of inserting a duplicate', () => {
+        const { db, graph } = createGraph();
+        try {
+            const ctx = graph.createContext('dedupe-by-key');
+
+            const first = graph.ensureNodeByKey({
+                contextId: ctx.id,
+                type: 'artifact',
+                hidden: true,
+                key: 'chat_turn:claude:session-1:turn-1',
+                content: 'hello',
+                tags: ['chat_turn', 'agent:claude']
+            });
+            const second = graph.ensureNodeByKey({
+                contextId: ctx.id,
+                type: 'artifact',
+                hidden: true,
+                key: 'chat_turn:claude:session-1:turn-1',
+                content: 'hello',
+                tags: ['chat_turn', 'agent:claude']
+            });
+
+            expect(first.created).toBe(true);
+            expect(second.created).toBe(false);
+            expect(second.node.id).toBe(first.node.id);
+            expect(graph.search(ctx.id, 'hello', 10, { includeHidden: true })).toHaveLength(1);
+        } finally {
+            db.close();
+        }
+    });
+
     it('keeps lookup and search scoped by context', () => {
         const { db, graph } = createGraph();
         try {

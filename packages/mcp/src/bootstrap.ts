@@ -34,6 +34,10 @@ interface BootstrapResult {
     message?: string;
 }
 
+function prefersPrimaryConfigPath(client: SupportedClient): boolean {
+    return client === 'cursor' || client === 'windsurf';
+}
+
 export function parseBootstrapClients(raw: string | undefined): SupportedClient[] {
     const source = (raw || 'ga').trim().toLowerCase();
     if (!source || source === 'ga') return DEFAULT_CLIENTS;
@@ -126,7 +130,9 @@ export function bootstrapMcpRegistration(options: BootstrapOptions): BootstrapRe
 
     for (const client of options.clients) {
         const candidates = getCandidatePaths(client, platform, homeDir, appDataDir);
-        const targetPath = pickWritablePath(candidates);
+        const targetPath = prefersPrimaryConfigPath(client)
+            ? candidates[0]
+            : pickWritablePath(candidates);
 
         if (!targetPath) {
             results.push({

@@ -67,6 +67,7 @@ export interface HookSessionStartResult {
     ok: boolean;
     injected: boolean;
     reason?: string;
+    error?: string;
     contextId?: string;
     workspaceName?: string;
     captureRoot?: string;

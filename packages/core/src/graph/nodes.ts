@@ -15,6 +15,11 @@ export type AddNodeParams = Omit<ContextNode, 'id' | 'createdAt'> & {
     createdAtOverride?: number;
 };
 
+export interface EnsureNodeByKeyResult {
+    node: ContextNode;
+    created: boolean;
+}
+
 export function addNodeRecord(
     db: Database.Database,
     params: AddNodeParams
@@ -53,6 +58,22 @@ export function addNodeRecord(
     }
 
     return getNodeRecord(db, node.id)!;
+}
+
+export function ensureNodeByKeyRecord(
+    db: Database.Database,
+    params: AddNodeParams
+): EnsureNodeByKeyResult {
+    if (!params.key || params.key.trim().length === 0) {
+        return { node: addNodeRecord(db, params), created: true };
+    }
+
+    const existing = getByKeyRecord(db, params.contextId, params.key, { includeHidden: true });
+    if (existing) {
+        return { node: existing, created: false };
+    }
+
+    return { node: addNodeRecord(db, params), created: true };
 }
 
 export function getNodeRecord(db: Database.Database, id: string): ContextNode | null {

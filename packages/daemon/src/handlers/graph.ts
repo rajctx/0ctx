@@ -50,6 +50,23 @@ export function dispatchGraphRequest(context: HandlerMethodContext): MethodDispa
             runtime.syncEngine?.enqueue(contextId!);
             return handled(result);
         }
+        case 'ensureNodeByKey': {
+            const result = graph.ensureNodeByKey({ ...params, contextId: contextId! } as Parameters<typeof graph.ensureNodeByKey>[0]);
+            recordMutationAudit(graph, req, 'add_node', contextId, params, {
+                id: result.node.id,
+                contextId: result.node.contextId,
+                created: result.created
+            }, auditMetadata);
+            recordMutationEvent(runtime, connectionId, req, contextId, params, {
+                id: result.node.id,
+                contextId: result.node.contextId,
+                created: result.created
+            });
+            if (result.created) {
+                runtime.syncEngine?.enqueue(contextId!);
+            }
+            return handled(result);
+        }
         case 'getNode':
             return handled(graph.getNode(params.id as string));
         case 'updateNode': {

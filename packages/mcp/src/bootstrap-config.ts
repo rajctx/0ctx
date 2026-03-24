@@ -24,28 +24,34 @@ export function getCandidatePaths(
 
         case 'cursor':
             if (platform === 'win32') return [
-                path.join(appDataDir, 'Cursor', 'User', 'mcp.json'),
-                path.join(homeDir, '.cursor', 'mcp.json')
+                path.join(homeDir, '.cursor', 'mcp.json'),
+                path.join(appDataDir, 'Cursor', 'User', 'mcp.json')
             ];
             if (platform === 'darwin') return [
-                path.join(homeDir, 'Library', 'Application Support', 'Cursor', 'User', 'mcp.json'),
-                path.join(homeDir, '.cursor', 'mcp.json')
+                path.join(homeDir, '.cursor', 'mcp.json'),
+                path.join(homeDir, 'Library', 'Application Support', 'Cursor', 'User', 'mcp.json')
             ];
             return [
-                path.join(homeDir, '.config', 'Cursor', 'User', 'mcp.json'),
-                path.join(homeDir, '.cursor', 'mcp.json')
+                path.join(homeDir, '.cursor', 'mcp.json'),
+                path.join(homeDir, '.config', 'Cursor', 'User', 'mcp.json')
             ];
 
         case 'windsurf':
             if (platform === 'win32') return [
+                path.join(homeDir, '.codeium', 'windsurf', 'mcp_config.json'),
+                path.join(homeDir, '.codeium', 'mcp_config.json'),
                 path.join(appDataDir, 'Windsurf', 'User', 'mcp.json'),
                 path.join(homeDir, '.windsurf', 'mcp.json')
             ];
             if (platform === 'darwin') return [
+                path.join(homeDir, '.codeium', 'windsurf', 'mcp_config.json'),
+                path.join(homeDir, '.codeium', 'mcp_config.json'),
                 path.join(homeDir, 'Library', 'Application Support', 'Windsurf', 'User', 'mcp.json'),
                 path.join(homeDir, '.windsurf', 'mcp.json')
             ];
             return [
+                path.join(homeDir, '.codeium', 'windsurf', 'mcp_config.json'),
+                path.join(homeDir, '.codeium', 'mcp_config.json'),
                 path.join(homeDir, '.config', 'Windsurf', 'User', 'mcp.json'),
                 path.join(homeDir, '.windsurf', 'mcp.json')
             ];

@@ -59,11 +59,12 @@
 }
 
 #landing-page .brand-orb {
-  width: 44px;
-  height: 44px;
-  border-radius: 999px;
-  background: radial-gradient(circle at 38% 36%, #f3c7a3 0%, #c46d37 42%, #6f3014 100%);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.4);
+  width: 46px;
+  height: 46px;
+  display: block;
+  overflow: visible;
+  filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.45));
+  flex-shrink: 0;
 }
 
 #landing-page .brand-lockup {

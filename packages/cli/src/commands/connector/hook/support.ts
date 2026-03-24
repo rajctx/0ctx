@@ -2,6 +2,11 @@ import path from 'path';
 import type { HookSupportedAgent } from '../../../hooks';
 import type { HookArtifactPaths } from './types';
 
+function isEnsureNodeByKeyUnsupported(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error);
+    return message.includes('Unknown method: ensureNodeByKey');
+}
+
 interface HookSupportDeps {
     sendToDaemon: <T = unknown>(method: string, params?: Record<string, unknown>) => Promise<T>;
     selectHookContextId: (contexts: Array<{ id?: string; paths?: string[] }>, repoRoot: string, preferredContextId: string | null) => string | null;
@@ -110,47 +115,62 @@ export function createHookSupport(deps: HookSupportDeps) {
         sessionTitle?: string | null;
     }): Promise<{ id?: string; content?: string } | null> {
         const sessionKey = `chat_session:${options.agent}:${options.sessionId}`;
-        let sessionNode = await deps.sendToDaemon('getByKey', {
+        const nodeParams = {
             contextId: options.contextId,
+            type: 'artifact',
+            hidden: true,
+            thread: options.sessionId,
             key: sessionKey,
-            includeHidden: true
-        }) as { id?: string; content?: string } | null;
-
-        if (!sessionNode?.id) {
-            sessionNode = await deps.sendToDaemon('addNode', {
-                contextId: options.contextId,
-                type: 'artifact',
-                hidden: true,
-                thread: options.sessionId,
-                key: sessionKey,
-                tags: ['chat_session', `agent:${options.agent}`],
-                source: `hook:${options.agent}`,
-                content: options.summary,
-                createdAtOverride: options.startedAt,
-                rawPayload: {
+            tags: ['chat_session', `agent:${options.agent}`],
+            source: `hook:${options.agent}`,
+            content: options.summary,
+            createdAtOverride: options.startedAt,
+            rawPayload: {
+                agent: options.agent,
+                sessionId: options.sessionId,
+                sessionTitle: options.sessionTitle ?? null,
+                branch: options.branch,
+                commitSha: options.commitSha,
+                worktreePath: options.worktreePath,
+                repositoryRoot: options.repositoryRoot,
+                meta: buildHookCaptureMeta({
                     agent: options.agent,
                     sessionId: options.sessionId,
-                    sessionTitle: options.sessionTitle ?? null,
+                    turnId: `session-${options.sessionId}`,
+                    role: 'session',
+                    occurredAt: options.startedAt,
                     branch: options.branch,
                     commitSha: options.commitSha,
                     worktreePath: options.worktreePath,
                     repositoryRoot: options.repositoryRoot,
-                    meta: buildHookCaptureMeta({
-                        agent: options.agent,
-                        sessionId: options.sessionId,
-                        turnId: `session-${options.sessionId}`,
-                        role: 'session',
-                        occurredAt: options.startedAt,
-                        branch: options.branch,
-                        commitSha: options.commitSha,
-                        worktreePath: options.worktreePath,
-                        repositoryRoot: options.repositoryRoot,
-                        artifacts: options.artifacts,
-                        extra: { sessionTitle: options.sessionTitle ?? null }
-                    })
-                }
+                    artifacts: options.artifacts,
+                    extra: { sessionTitle: options.sessionTitle ?? null }
+                })
+            }
+        };
+
+        let sessionNode: { id?: string; content?: string } | null = null;
+        try {
+            const ensured = await deps.sendToDaemon('ensureNodeByKey', nodeParams) as {
+                node?: { id?: string; content?: string };
+                created?: boolean;
+            } | null;
+            sessionNode = ensured?.node ?? null;
+        } catch (error) {
+            if (!isEnsureNodeByKeyUnsupported(error)) {
+                throw error;
+            }
+            sessionNode = await deps.sendToDaemon('getByKey', {
+                contextId: options.contextId,
+                key: sessionKey,
+                includeHidden: true
             }) as { id?: string; content?: string } | null;
-        } else if (sessionNode.content !== options.summary) {
+            if (!sessionNode?.id) {
+                sessionNode = await deps.sendToDaemon('addNode', nodeParams) as { id?: string; content?: string } | null;
+            }
+        }
+
+        if (sessionNode?.id && sessionNode.content !== options.summary) {
             sessionNode = await deps.sendToDaemon('updateNode', {
                 id: sessionNode.id,
                 updates: { content: options.summary, hidden: true }

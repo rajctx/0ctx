@@ -30,7 +30,28 @@ export default function HomePage() {
       <section className="hero-shell">
         <header className="site-header section-inner ui-fade-in">
           <Link href="/" className="brand-mark" aria-label="0ctx home">
-            <span className="brand-orb" aria-hidden="true" />
+            <svg className="brand-orb" aria-hidden="true" viewBox="0 0 256 256" fill="none">
+              <defs>
+                <linearGradient id="brandMarkGradient" x1="50" y1="58" x2="192" y2="196" gradientUnits="userSpaceOnUse">
+                  <stop stopColor="#FFD8A8" />
+                  <stop offset="0.55" stopColor="#F39158" />
+                  <stop offset="1" stopColor="#D56333" />
+                </linearGradient>
+              </defs>
+              <path
+                d="M153.84 84.16A62 62 0 1 0 153.84 171.84"
+                stroke="url(#brandMarkGradient)"
+                strokeWidth="28"
+                strokeLinecap="round"
+              />
+              <path
+                d="M58 154L171 103"
+                stroke="url(#brandMarkGradient)"
+                strokeWidth="24"
+                strokeLinecap="round"
+              />
+              <circle cx="184" cy="98" r="18" fill="#FFF3E7" />
+            </svg>
             <span className="brand-lockup">
               <strong>0ctx</strong>
               <span>persistent project memory</span>

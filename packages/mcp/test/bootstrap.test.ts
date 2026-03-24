@@ -76,12 +76,12 @@ describe('bootstrapMcpRegistration', () => {
         expect(second[0].status).toBe('unchanged');
     });
 
-    it('skips when no known client directory exists', () => {
+    it('skips when no known Claude config directory exists', () => {
         const root = createTempRoot('0ctx-mcp-bootstrap-');
         const entrypoint = createEntrypoint(root);
 
         const results = bootstrapMcpRegistration({
-            clients: ['cursor'],
+            clients: ['claude'],
             entrypoint,
             platform: 'win32',
             homeDir: path.join(root, 'home'),
@@ -89,6 +89,48 @@ describe('bootstrapMcpRegistration', () => {
         });
 
         expect(results[0].status).toBe('skipped');
+    });
+
+    it('targets the global Cursor mcp.json path before legacy app-data fallbacks', () => {
+        const root = createTempRoot('0ctx-mcp-bootstrap-');
+        const homeDir = path.join(root, 'home');
+        const appDataDir = path.join(root, 'AppData', 'Roaming');
+        const cursorLegacyDir = path.join(appDataDir, 'Cursor', 'User');
+        const entrypoint = createEntrypoint(root);
+        fs.mkdirSync(cursorLegacyDir, { recursive: true });
+
+        const results = bootstrapMcpRegistration({
+            clients: ['cursor'],
+            entrypoint,
+            platform: 'win32',
+            homeDir,
+            appDataDir
+        });
+
+        expect(results).toHaveLength(1);
+        expect(results[0].configPath).toBe(path.join(homeDir, '.cursor', 'mcp.json'));
+        expect(results[0].status).toBe('created');
+    });
+
+    it('targets the documented Windsurf Codeium config path before legacy fallbacks', () => {
+        const root = createTempRoot('0ctx-mcp-bootstrap-');
+        const homeDir = path.join(root, 'home');
+        const appDataDir = path.join(root, 'AppData', 'Roaming');
+        const windsurfLegacyDir = path.join(appDataDir, 'Windsurf', 'User');
+        const entrypoint = createEntrypoint(root);
+        fs.mkdirSync(windsurfLegacyDir, { recursive: true });
+
+        const results = bootstrapMcpRegistration({
+            clients: ['windsurf'],
+            entrypoint,
+            platform: 'win32',
+            homeDir,
+            appDataDir
+        });
+
+        expect(results).toHaveLength(1);
+        expect(results[0].configPath).toBe(path.join(homeDir, '.codeium', 'windsurf', 'mcp_config.json'));
+        expect(results[0].status).toBe('created');
     });
 
     it('resolves entrypoint from cwd dist when no explicit entrypoint is provided', () => {

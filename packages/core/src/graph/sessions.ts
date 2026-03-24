@@ -1,3 +1,4 @@
+import { gunzipSync } from 'zlib';
 import type Database from 'better-sqlite3';
 import type {
     AgentSessionSummary,
@@ -9,6 +10,7 @@ import type {
     SessionDetail,
     SessionMessage
 } from '../schema';
+import { parsePayloadValue } from './helpers';
 import type { TurnMetadata } from './metadata';
 
 type SessionDeps = {
@@ -24,62 +26,210 @@ type SessionDeps = {
 };
 
 function findSessionSummary(deps: SessionDeps, contextId: string, sessionId: string): AgentSessionSummary | null {
-    return listChatSessionsRecord(deps, contextId, 5000).find((entry) => entry.sessionId === sessionId) ?? null;
+    return queryChatSessionSummaries(deps, contextId, 1, sessionId)[0] ?? null;
 }
 
-export function listChatSessionsRecord(
-    deps: SessionDeps,
-    contextId: string,
-    limit = 50
-): AgentSessionSummary[] {
-    const safeLimit = Math.max(1, Math.min(limit, 5000));
+type SessionSummaryRow = {
+    sessionId: string;
+    startedAt: number;
+    lastTurnAt: number;
+    turnCount: number;
+    latestId: string | null;
+    latestContent: string | null;
+    latestKey: string | null;
+    latestTags: string | null;
+    latestSource: string | null;
+    latestCreatedAt: number | null;
+    sessionNodeId: string | null;
+    sessionNodeContent: string | null;
+    sessionNodeKey: string | null;
+    sessionNodeTags: string | null;
+    sessionNodeSource: string | null;
+    sessionNodeCreatedAt: number | null;
+    firstId: string | null;
+    firstContent: string | null;
+    firstKey: string | null;
+    firstTags: string | null;
+    firstSource: string | null;
+    firstCreatedAt: number | null;
+};
+
+type SessionNodeSummary = {
+    id: string;
+    content: string;
+    key: string | null;
+    tags: string[] | null;
+    source: string | null;
+    createdAt: number;
+};
+
+function parseTags(raw: string | null): string[] | null {
+    if (!raw) return null;
+    try {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed)
+            ? parsed.filter((tag): tag is string => typeof tag === 'string')
+            : [];
+    } catch {
+        return [];
+    }
+}
+
+function toSessionNode(row: SessionSummaryRow, prefix: 'latest' | 'sessionNode' | 'first'): SessionNodeSummary | null {
+    const id = row[`${prefix}Id`];
+    if (!id) return null;
+    return {
+        id,
+        content: row[`${prefix}Content`] ?? '',
+        key: row[`${prefix}Key`] ?? null,
+        tags: parseTags(row[`${prefix}Tags`] ?? null),
+        source: row[`${prefix}Source`] ?? null,
+        createdAt: row[`${prefix}CreatedAt`] ?? 0
+    };
+}
+
+function loadPayloadMap(deps: SessionDeps, nodeIds: string[]): Map<string, unknown> {
+    const uniqueNodeIds = Array.from(new Set(nodeIds.filter((nodeId) => typeof nodeId === 'string' && nodeId.length > 0)));
+    const payloads = new Map<string, unknown>();
+    if (uniqueNodeIds.length === 0) return payloads;
+
+    const placeholders = uniqueNodeIds.map(() => '?').join(', ');
     const rows = deps.db.prepare(`
-      SELECT
-        thread AS sessionId,
-        MIN(createdAt) AS startedAt,
-        MAX(createdAt) AS lastTurnAt,
-        COUNT(*) AS turnCount
-      FROM nodes
-      WHERE contextId = ? AND type = 'artifact' AND thread IS NOT NULL AND key LIKE 'chat_turn:%'
-      GROUP BY thread
-      ORDER BY lastTurnAt DESC
-      LIMIT ?
-    `).all(contextId, safeLimit) as Array<{
-        sessionId: string;
-        startedAt: number;
-        lastTurnAt: number;
-        turnCount: number;
+      SELECT nodeId, contentType, compression, payload
+      FROM node_payloads
+      WHERE nodeId IN (${placeholders})
+    `).all(...uniqueNodeIds) as Array<{
+        nodeId: string;
+        contentType: string;
+        compression: string;
+        payload: Buffer;
     }>;
 
-    return rows.map((row): AgentSessionSummary => {
-        const latestRow = deps.db.prepare(`
-        SELECT *
-        FROM nodes
-        WHERE contextId = ? AND thread = ? AND key LIKE 'chat_turn:%'
-        ORDER BY createdAt DESC
-        LIMIT 1
-      `).get(contextId, row.sessionId) as any;
-        const sessionRow = deps.db.prepare(`
-        SELECT *
-        FROM nodes
-        WHERE contextId = ? AND thread = ? AND key LIKE 'chat_session:%'
-        ORDER BY createdAt DESC
-        LIMIT 1
-      `).get(contextId, row.sessionId) as any;
-        const firstRow = deps.db.prepare(`
-        SELECT *
-        FROM nodes
-        WHERE contextId = ? AND thread = ? AND key LIKE 'chat_turn:%'
-        ORDER BY createdAt ASC
-        LIMIT 1
-      `).get(contextId, row.sessionId) as any;
+    for (const row of rows) {
+        const decoded = row.compression === 'gzip'
+            ? gunzipSync(row.payload)
+            : Buffer.from(row.payload);
+        payloads.set(row.nodeId, parsePayloadValue(decoded.toString('utf8'), row.contentType));
+    }
 
-        const latestNode = latestRow ? deps.parseNodeRow(latestRow) : null;
-        const sessionNode = sessionRow ? deps.parseNodeRow(sessionRow) : null;
-        const firstNode = firstRow ? deps.parseNodeRow(firstRow) : null;
-        const latestMetadata = deps.extractTurnMetadata(deps.getNodePayload(latestNode?.id ?? '')?.payload);
-        const firstMetadata = deps.extractTurnMetadata(deps.getNodePayload(firstNode?.id ?? '')?.payload);
-        const sessionMetadata = deps.extractTurnMetadata(deps.getNodePayload(sessionNode?.id ?? '')?.payload);
+    return payloads;
+}
+
+function queryChatSessionSummaries(
+    deps: SessionDeps,
+    contextId: string,
+    limit = 50,
+    sessionId?: string
+): AgentSessionSummary[] {
+    const safeLimit = Math.max(1, Math.min(limit, 5000));
+    const sessionFilterSql = sessionId ? ' AND thread = ?' : '';
+    const repeatedParams = sessionId ? [contextId, sessionId, contextId, sessionId, contextId, sessionId, contextId, sessionId, safeLimit] : [contextId, contextId, contextId, contextId, safeLimit];
+    const rows = deps.db.prepare(`
+      WITH turn_sessions AS (
+        SELECT
+          thread AS sessionId,
+          MIN(createdAt) AS startedAt,
+          MAX(createdAt) AS lastTurnAt,
+          COUNT(*) AS turnCount
+        FROM nodes
+        WHERE contextId = ?
+          AND type = 'artifact'
+          AND thread IS NOT NULL
+          AND key LIKE 'chat_turn:%'${sessionFilterSql}
+        GROUP BY thread
+      ),
+      latest_turns AS (
+        SELECT
+          thread AS sessionId,
+          id,
+          content,
+          key,
+          tags,
+          source,
+          createdAt,
+          ROW_NUMBER() OVER (PARTITION BY thread ORDER BY createdAt DESC, id DESC) AS rn
+        FROM nodes
+        WHERE contextId = ?
+          AND thread IS NOT NULL
+          AND key LIKE 'chat_turn:%'${sessionFilterSql}
+      ),
+      first_turns AS (
+        SELECT
+          thread AS sessionId,
+          id,
+          content,
+          key,
+          tags,
+          source,
+          createdAt,
+          ROW_NUMBER() OVER (PARTITION BY thread ORDER BY createdAt ASC, id ASC) AS rn
+        FROM nodes
+        WHERE contextId = ?
+          AND thread IS NOT NULL
+          AND key LIKE 'chat_turn:%'${sessionFilterSql}
+      ),
+      session_nodes AS (
+        SELECT
+          thread AS sessionId,
+          id,
+          content,
+          key,
+          tags,
+          source,
+          createdAt,
+          ROW_NUMBER() OVER (PARTITION BY thread ORDER BY createdAt DESC, id DESC) AS rn
+        FROM nodes
+        WHERE contextId = ?
+          AND thread IS NOT NULL
+          AND key LIKE 'chat_session:%'${sessionFilterSql}
+      )
+      SELECT
+        sessions.sessionId,
+        sessions.startedAt,
+        sessions.lastTurnAt,
+        sessions.turnCount,
+        latest.id AS latestId,
+        latest.content AS latestContent,
+        latest.key AS latestKey,
+        latest.tags AS latestTags,
+        latest.source AS latestSource,
+        latest.createdAt AS latestCreatedAt,
+        sessionNode.id AS sessionNodeId,
+        sessionNode.content AS sessionNodeContent,
+        sessionNode.key AS sessionNodeKey,
+        sessionNode.tags AS sessionNodeTags,
+        sessionNode.source AS sessionNodeSource,
+        sessionNode.createdAt AS sessionNodeCreatedAt,
+        firstTurn.id AS firstId,
+        firstTurn.content AS firstContent,
+        firstTurn.key AS firstKey,
+        firstTurn.tags AS firstTags,
+        firstTurn.source AS firstSource,
+        firstTurn.createdAt AS firstCreatedAt
+      FROM turn_sessions sessions
+      LEFT JOIN latest_turns latest
+        ON latest.sessionId = sessions.sessionId AND latest.rn = 1
+      LEFT JOIN session_nodes sessionNode
+        ON sessionNode.sessionId = sessions.sessionId AND sessionNode.rn = 1
+      LEFT JOIN first_turns firstTurn
+        ON firstTurn.sessionId = sessions.sessionId AND firstTurn.rn = 1
+      ORDER BY sessions.lastTurnAt DESC, sessions.sessionId DESC
+      LIMIT ?
+    `).all(...repeatedParams) as SessionSummaryRow[];
+
+    const payloadMap = loadPayloadMap(deps, rows.flatMap((row) => [
+        row.latestId,
+        row.sessionNodeId,
+        row.firstId
+    ]).filter((nodeId): nodeId is string => typeof nodeId === 'string' && nodeId.length > 0));
+
+    return rows.map((row): AgentSessionSummary => {
+        const latestNode = toSessionNode(row, 'latest');
+        const sessionNode = toSessionNode(row, 'sessionNode');
+        const firstNode = toSessionNode(row, 'first');
+        const latestMetadata = deps.extractTurnMetadata(payloadMap.get(latestNode?.id ?? ''));
+        const firstMetadata = deps.extractTurnMetadata(payloadMap.get(firstNode?.id ?? ''));
+        const sessionMetadata = deps.extractTurnMetadata(payloadMap.get(sessionNode?.id ?? ''));
 
         const agent =
             latestMetadata.agent
@@ -103,6 +253,14 @@ export function listChatSessionsRecord(
             captureSource: latestMetadata.captureSource ?? sessionMetadata.captureSource ?? latestNode?.source ?? sessionNode?.source ?? null
         };
     });
+}
+
+export function listChatSessionsRecord(
+    deps: SessionDeps,
+    contextId: string,
+    limit = 50
+): AgentSessionSummary[] {
+    return queryChatSessionSummaries(deps, contextId, limit);
 }
 
 export function listChatTurnsRecord(

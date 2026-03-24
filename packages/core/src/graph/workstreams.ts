@@ -106,7 +106,6 @@ export function listBranchLanesRecord(
     contextId: string,
     limit = 200
 ): BranchLaneSummary[] {
-    refreshBranchLaneProjectionRecord(deps, contextId);
     const safeLimit = Math.max(1, Math.min(limit, 1000));
     const rows = deps.db.prepare(`
       SELECT *

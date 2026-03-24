@@ -1,6 +1,11 @@
 import type { HookSupportedAgent } from '../../../cli-core/types';
 import type { HookCommandDeps, FlagMap, HookArtifactPaths } from './types';
 
+function isEnsureNodeByKeyUnsupported(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error);
+    return message.includes('Unknown method: ensureNodeByKey');
+}
+
 function parsePayloadText(deps: HookCommandDeps, flags: FlagMap): string {
     const inputFile = deps.parseOptionalStringFlag(flags['input-file']);
     const inlinePayload = deps.parseOptionalStringFlag(flags.payload);
@@ -194,13 +199,7 @@ export function createHookIngestCommand(deps: HookCommandDeps) {
             content: string,
             rawPayload: Record<string, unknown>
         ) => {
-            const existing = await deps.sendToDaemon('getByKey', { contextId, key, includeHidden: true }) as { id?: string } | null;
-            if (existing?.id) {
-                capturedNodes.push({ id: existing.id, key, role, occurredAt, deduped: true });
-                return;
-            }
-
-            const node = await deps.sendToDaemon('addNode', {
+            const nodeParams = {
                 contextId,
                 type: 'artifact',
                 hidden: true,
@@ -211,8 +210,35 @@ export function createHookIngestCommand(deps: HookCommandDeps) {
                 content,
                 createdAtOverride: occurredAt,
                 rawPayload
-            }) as { id: string };
+            };
 
+            try {
+                const ensured = await deps.sendToDaemon('ensureNodeByKey', nodeParams) as {
+                    node?: { id?: string };
+                    created?: boolean;
+                } | null;
+                const nodeId = ensured?.node?.id;
+                if (!nodeId) {
+                    throw new Error(`hook_ingest_failed_to_ensure_node: ${key}`);
+                }
+
+                capturedNodes.push({ id: nodeId, key, role, occurredAt, deduped: ensured.created !== true });
+                if (sessionNode?.id) await deps.sendToDaemon('addEdge', { fromId: nodeId, toId: sessionNode.id, relation: 'depends_on' });
+                if (commitNode?.id) await deps.sendToDaemon('addEdge', { fromId: nodeId, toId: commitNode.id, relation: 'depends_on' });
+                return;
+            } catch (error) {
+                if (!isEnsureNodeByKeyUnsupported(error)) {
+                    throw error;
+                }
+            }
+
+            const existing = await deps.sendToDaemon('getByKey', { contextId, key, includeHidden: true }) as { id?: string } | null;
+            if (existing?.id) {
+                capturedNodes.push({ id: existing.id, key, role, occurredAt, deduped: true });
+                return;
+            }
+
+            const node = await deps.sendToDaemon('addNode', nodeParams) as { id: string };
             capturedNodes.push({ id: node.id, key, role, occurredAt, deduped: false });
             if (sessionNode?.id) await deps.sendToDaemon('addEdge', { fromId: node.id, toId: sessionNode.id, relation: 'depends_on' });
             if (commitNode?.id) await deps.sendToDaemon('addEdge', { fromId: node.id, toId: commitNode.id, relation: 'depends_on' });
