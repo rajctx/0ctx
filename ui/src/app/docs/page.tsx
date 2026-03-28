@@ -1,131 +1,109 @@
-import Link from 'next/link';
-import { ArrowLeft, BookOpen, Network } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { Panel } from '@/components/ui/panel';
+import Link from "next/link";
+import { Breadcrumb } from "@/components/docs/breadcrumb";
 
-const REPO_BASE = 'https://github.com/rajctx/0ctx/blob/main';
-
-type DocItem = {
-  label: string;
-  href: string;
-  description: string;
-  external?: boolean;
-};
-
-const SECTIONS = [
+const cards = [
   {
-    title: 'Start Here',
-    items: [
-      { label: 'Install Guide', href: '/install', description: 'Machine readiness and the repo-first install path for the current product surface.' },
-      { label: 'Quickstart', href: `${REPO_BASE}/docs/QUICKSTART.md`, description: 'Fastest path from install to first working setup.', external: true },
-      { label: 'README', href: `${REPO_BASE}/README.md`, description: 'High-level product overview, commands, and architecture.', external: true }
-    ] satisfies DocItem[]
+    title: "Installation",
+    desc: "Install the CLI globally and verify your machine is ready.",
+    href: "/docs/installation",
   },
   {
-    title: 'Product Model',
-    items: [
-      { label: 'Integrations', href: `${REPO_BASE}/docs/INTEGRATIONS.md`, description: 'GA versus preview agents and how capture/retrieval works.', external: true },
-      { label: 'Data Policy', href: `${REPO_BASE}/docs/DATA_POLICY.md`, description: 'Local-first defaults, retention, and sync posture.', external: true },
-      { label: 'Documentation Index', href: `${REPO_BASE}/docs/INDEX.md`, description: 'Canonical entrypoint for maintained repo docs.', external: true }
-    ] satisfies DocItem[]
+    title: "Quickstart",
+    desc: "Enable your first repo and start capturing context in under a minute.",
+    href: "/docs/quickstart",
   },
   {
-    title: 'Operate',
-    items: [
-      { label: 'Release Guide', href: `${REPO_BASE}/docs/RELEASE.md`, description: 'Release preparation and validation flow for maintainers.', external: true },
-      { label: 'GitHub Issues', href: 'https://github.com/rajctx/0ctx/issues', description: 'Report bugs, track work, or follow current issues.', external: true },
-      { label: 'Source Repository', href: 'https://github.com/rajctx/0ctx', description: 'Browse the source, scripts, and current documentation set.', external: true }
-    ] satisfies DocItem[]
-  }
+    title: "Integrations",
+    desc: "How 0ctx captures and retrieves context for Claude Code, Factory, and more.",
+    href: "/docs/integrations",
+  },
+  {
+    title: "Data Policy",
+    desc: "Local-first defaults, retention windows, and what stays on your machine.",
+    href: "/docs/data-policy",
+  },
+  {
+    title: "CLI Reference",
+    desc: "Every command, flag, and workflow available in the 0ctx CLI.",
+    href: "/docs/cli-reference",
+  },
 ];
 
-export default function DocsPage() {
+export default function DocsOverview() {
   return (
-    <main className="min-h-screen text-[var(--text-primary)]">
-      <header className="sticky top-0 z-40 border-b border-[var(--border-muted)] bg-[var(--surface-overlay)]/92 backdrop-blur-xl">
-        <div className="mx-auto flex w-full max-w-[900px] items-center justify-between px-4 py-3">
-          <Link href="/" className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--surface-subtle)]">
-              <Network className="h-4 w-4 text-[var(--accent-strong)]" />
-            </div>
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.16em] text-[var(--text-muted)]">0ctx</p>
-              <p className="text-sm font-semibold">Documentation</p>
-            </div>
-          </Link>
-          <Link href="/">
-            <Badge muted>
-              <ArrowLeft className="mr-1 h-3 w-3" />
-              Back to home
-            </Badge>
-          </Link>
-        </div>
-      </header>
+    <>
+      <Breadcrumb items={[]} />
+      <div className="docs-content">
+        <h1>0ctx Documentation</h1>
+        <p className="docs-subtitle">
+          0ctx is a local-first project memory runtime for AI workflows. It captures
+          sessions, checkpoints, and decisions per repo and makes them available to
+          any supported agent through the local daemon.
+        </p>
 
-      <div className="mx-auto w-full max-w-[900px] space-y-8 px-4 pb-16 pt-8">
-        <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
-          <div>
-            <Badge>
-              <BookOpen className="mr-1 h-3 w-3" />
-              Documentation Index
-            </Badge>
-            <h1 className="mt-2 text-2xl font-semibold">0ctx Documentation</h1>
-            <p className="mt-1 text-sm text-[var(--text-muted)]">
-              Public docs, install guidance, and operating references for the current repo-first product path.
-            </p>
-          </div>
-
-          <Panel className="space-y-2 p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">Use this site for</p>
-            <p className="text-sm text-[var(--text-secondary)]">
-              Getting the local runtime running, enabling one repository, and finding the canonical docs that explain the product model.
-            </p>
-            <p className="text-xs text-[var(--text-muted)]">
-              The CLI/runtime remains the primary open-source surface. This UI keeps the docs and install path easy to find.
-            </p>
-          </Panel>
+        <h2>Start here</h2>
+        <div className="docs-cards">
+          {cards.slice(0, 2).map((c) => (
+            <Link key={c.href} href={c.href} className="docs-card">
+              <div className="docs-card-title">{c.title}</div>
+              <div className="docs-card-desc">{c.desc}</div>
+              <div className="docs-card-arrow">&rarr;</div>
+            </Link>
+          ))}
         </div>
 
-        <div>
-          <Badge>
-            <BookOpen className="mr-1 h-3 w-3" />
-            Public docs
-          </Badge>
+        <h2>Core concepts</h2>
+        <div className="docs-cards">
+          {cards.slice(2).map((c) => (
+            <Link key={c.href} href={c.href} className="docs-card">
+              <div className="docs-card-title">{c.title}</div>
+              <div className="docs-card-desc">{c.desc}</div>
+              <div className="docs-card-arrow">&rarr;</div>
+            </Link>
+          ))}
         </div>
 
-        {SECTIONS.map(section => (
-          <section key={section.title}>
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">{section.title}</h2>
-            <div className="space-y-2">
-              {section.items.map(item => {
-                const content = (
-                  <Panel className="flex items-center justify-between p-3 transition-colors hover:bg-[var(--surface-subtle)]">
-                    <div>
-                      <p className="text-sm font-medium text-[var(--text-primary)]">{item.label}</p>
-                      <p className="text-xs text-[var(--text-muted)]">{item.description}</p>
-                    </div>
-                    <ArrowLeft className="h-4 w-4 rotate-180 text-[var(--text-muted)]" />
-                  </Panel>
-                );
+        <h2>Why 0ctx exists</h2>
+        <ul>
+          <li>Most AI workflows lose context between sessions, tools, and branches.</li>
+          <li>
+            0ctx keeps one durable workspace per repo and groups activity into
+            workstreams, sessions, checkpoints, and reviewed insights.
+          </li>
+          <li>
+            The daemon is the source of truth. Supported agents retrieve through the
+            local runtime after <code>0ctx enable</code>.
+          </li>
+        </ul>
 
-                if (item.external) {
-                  return (
-                    <a key={item.label} href={item.href} target="_blank" rel="noopener noreferrer">
-                      {content}
-                    </a>
-                  );
-                }
-
-                return (
-                  <Link key={item.label} href={item.href}>
-                    {content}
-                  </Link>
-                );
-              })}
-            </div>
-          </section>
-        ))}
+        <h2>Repository surfaces</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Surface</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>@0ctx/cli</code></td>
+              <td>Primary open-source CLI for enablement, repair, and support workflows</td>
+            </tr>
+            <tr>
+              <td><code>packages/*</code></td>
+              <td>Core, daemon, and MCP runtime packages</td>
+            </tr>
+            <tr>
+              <td><code>desktop-app/</code></td>
+              <td>Electron management surface for contributors</td>
+            </tr>
+            <tr>
+              <td><code>ui/</code></td>
+              <td>Web surface for docs and install guidance</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-    </main>
+    </>
   );
 }
