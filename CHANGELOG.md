@@ -16,6 +16,22 @@ All notable changes to 0ctx are tracked here.
 ### Security & Compliance
 - _None recorded._
 
+## [v0.1.20] - 2026-03-28
+
+### Platform (Core/Daemon/MCP)
+- Fixed desktop dev-mode session/workstream loading by falling back cleanly when Electron cannot initialize the local graph fast-path.
+
+### Product (CLI/UI)
+- Fixed Claude transcript ingestion so captured sessions preserve full turn history instead of collapsing to a fallback assistant summary.
+- Preserved markdown structure during capture and added desktop rendering for headings, lists, code blocks, links, and tables.
+- Corrected desktop workspace/session counts on overview and sessions surfaces and aligned the dev app bootstrap path with the packaged desktop runtime.
+
+### Governance & Release
+- Rebuilt the CLI and desktop release surfaces for version `v0.1.20`.
+
+### Security & Compliance
+- _None recorded._
+
 ## [v0.1.19] - 2026-03-21
 
 ### Platform (Core/Daemon/MCP)
