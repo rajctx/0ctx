@@ -154,14 +154,14 @@ export function WorkflowSteps() {
     const observer = new IntersectionObserver(
       (entries) => {
         // Pick the most visible entry
-        let best: IntersectionObserverEntry | null = null;
-        entries.forEach((e) => {
-          if (e.isIntersecting && (!best || e.intersectionRatio > best.intersectionRatio)) {
-            best = e;
+        let bestEntry: IntersectionObserverEntry | undefined;
+        for (const e of entries) {
+          if (e.isIntersecting && (!bestEntry || e.intersectionRatio > bestEntry.intersectionRatio)) {
+            bestEntry = e;
           }
-        });
-        if (best) {
-          const idx = els.indexOf(best.target as HTMLDivElement);
+        }
+        if (bestEntry) {
+          const idx = els.indexOf(bestEntry.target as HTMLDivElement);
           if (idx !== -1) setActiveIdx(idx);
         }
       },
