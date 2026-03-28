@@ -1,6 +1,6 @@
 [Unit]
 Description=0ctx Local Runtime
-Documentation=https://github.com/0ctx-com/0ctx
+Documentation=https://github.com/rajctx/0ctx
 After=network.target
 
 [Service]

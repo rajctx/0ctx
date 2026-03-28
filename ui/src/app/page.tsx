@@ -62,7 +62,7 @@ export default function HomePage() {
               <Link href="/docs">Docs</Link>
               <Link href="/install">Install</Link>
               <a
-                href="https://github.com/0ctx-com/0ctx"
+                href="https://github.com/rajctx/0ctx"
               target="_blank"
               rel="noopener noreferrer"
             >

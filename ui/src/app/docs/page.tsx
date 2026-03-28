@@ -3,7 +3,7 @@ import { ArrowLeft, BookOpen, Network } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Panel } from '@/components/ui/panel';
 
-const REPO_BASE = 'https://github.com/0ctx-com/0ctx/blob/main';
+const REPO_BASE = 'https://github.com/rajctx/0ctx/blob/main';
 
 type DocItem = {
   label: string;
@@ -33,8 +33,8 @@ const SECTIONS = [
     title: 'Operate',
     items: [
       { label: 'Release Guide', href: `${REPO_BASE}/docs/RELEASE.md`, description: 'Release preparation and validation flow for maintainers.', external: true },
-      { label: 'GitHub Issues', href: 'https://github.com/0ctx-com/0ctx/issues', description: 'Report bugs, track work, or follow current issues.', external: true },
-      { label: 'Source Repository', href: 'https://github.com/0ctx-com/0ctx', description: 'Browse the source, scripts, and current documentation set.', external: true }
+      { label: 'GitHub Issues', href: 'https://github.com/rajctx/0ctx/issues', description: 'Report bugs, track work, or follow current issues.', external: true },
+      { label: 'Source Repository', href: 'https://github.com/rajctx/0ctx', description: 'Browse the source, scripts, and current documentation set.', external: true }
     ] satisfies DocItem[]
   }
 ];
