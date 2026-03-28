@@ -60,21 +60,29 @@ export function readTranscriptCapture(filePath: string | null): TranscriptCaptur
             if (!isRecord(parsed)) continue;
 
             const lineType = typeof parsed.type === 'string' ? parsed.type : null;
+            cwd = pickString(parsed, ['cwd']) ?? cwd;
+            sessionTitle = pickString(parsed, ['title', 'sessionTitle']) ?? sessionTitle;
             if (lineType === 'session_start') {
                 cwd = pickString(parsed, ['cwd']) ?? cwd;
                 sessionTitle = pickString(parsed, ['title', 'sessionTitle']) ?? sessionTitle;
                 continue;
             }
-            if (lineType !== 'message') continue;
+            if (lineType !== 'message' && lineType !== 'user' && lineType !== 'assistant') continue;
 
-            const message = isRecord(parsed.message) ? parsed.message : null;
+            const message = lineType === 'message'
+                ? (isRecord(parsed.message) ? parsed.message : null)
+                : (isRecord(parsed.message) ? parsed.message : parsed);
             if (!message) continue;
 
-            const role = typeof message.role === 'string' ? message.role.trim().toLowerCase() : null;
-            const visibleText = extractTranscriptTextParts(message.content).join(' ').trim();
+            const role = typeof message.role === 'string'
+                ? message.role.trim().toLowerCase()
+                : lineType === 'user' || lineType === 'assistant'
+                    ? lineType
+                    : null;
+            const visibleText = extractTranscriptTextParts('content' in message ? message.content : message).join(' ').trim();
             if (!visibleText) continue;
 
-            const baseMessageId = pickString(parsed, ['id', 'message.id']) ?? `line-${index + 1}`;
+            const baseMessageId = pickString(parsed, ['id', 'uuid', 'message.id']) ?? `line-${index + 1}`;
             const seenCount = usedIds.get(baseMessageId) ?? 0;
             usedIds.set(baseMessageId, seenCount + 1);
             const messageId = seenCount === 0 ? baseMessageId : `${baseMessageId}-${seenCount + 1}`;
@@ -84,7 +92,7 @@ export function readTranscriptCapture(filePath: string | null): TranscriptCaptur
                 role: role ?? 'unknown',
                 text: visibleText,
                 occurredAt: pickTimestamp(parsed, ['timestamp', 'createdAt', 'created_at'], Date.now()),
-                parentId: pickString(parsed, ['parentId']),
+                parentId: pickString(parsed, ['parentId', 'parentUuid']),
                 lineNumber: index + 1,
                 raw: parsed
             });

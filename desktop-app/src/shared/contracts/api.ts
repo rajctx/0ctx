@@ -33,6 +33,7 @@ export interface DesktopDialogApi {
 
 export interface DesktopShellApi {
   openPath(path: string): Promise<{ ok: boolean; message: string }>;
+  openExternal(url: string): Promise<{ ok: boolean; message: string }>;
 }
 
 export interface DesktopRuntimeApi {

@@ -67,17 +67,18 @@ export function RouteShell() {
     () => contexts.find((context) => context.id === activeContextId) ?? contexts[0] ?? null,
     [contexts, activeContextId]
   );
-  const needsWorkstreams = route !== 'overview';
+  const needsWorkstreams = Boolean(activeWorkspace?.id);
   const needsSessions = route === 'sessions';
+  const needsWorkspaceSessions = Boolean(activeWorkspace?.id);
   const workstreamsQuery = useWorkstreams(needsWorkstreams ? (activeWorkspace?.id ?? null) : null);
   const workstreams = workstreamsQuery.data ?? [];
   const selectedWorkstream = workstreams.find((stream) => workstreamKey(stream.branch, stream.worktreePath) === activeWorkstreamKey) ?? workstreams[0] ?? null;
   const allSessionsQuery = useSessions(
-    needsSessions ? (activeWorkspace?.id ?? null) : null,
+    needsWorkspaceSessions ? (activeWorkspace?.id ?? null) : null,
     null,
     null,
     `shell:${activeWorkspace?.id ?? 'none'}`,
-    { enabled: needsSessions }
+    { enabled: needsWorkspaceSessions }
   );
   const branchSessionsQuery = useSessions(
     needsSessions ? (activeWorkspace?.id ?? null) : null,

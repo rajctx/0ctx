@@ -24,7 +24,8 @@ export const desktopBridge = {
     pickWorkspaceFolder: () => resolveDesktopApi().dialog.pickWorkspaceFolder()
   },
   shell: {
-    openPath: (targetPath: string) => resolveDesktopApi().shell.openPath(targetPath)
+    openPath: (targetPath: string) => resolveDesktopApi().shell.openPath(targetPath),
+    openExternal: (targetUrl: string) => resolveDesktopApi().shell.openExternal(targetUrl)
   },
   tray: {
     show: () => resolveDesktopApi().tray.show()

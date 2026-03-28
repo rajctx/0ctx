@@ -53,6 +53,9 @@ const desktopApi: DesktopApi = {
   shell: {
     async openPath(targetPath) {
       return ipcRenderer.invoke(desktopChannels.shell.openPath, ensureString(targetPath, 'Target path'));
+    },
+    async openExternal(targetUrl) {
+      return ipcRenderer.invoke(desktopChannels.shell.openExternal, ensureString(targetUrl, 'Target URL'));
     }
   },
   events: {

@@ -75,11 +75,16 @@ export function pickString(record: Record<string, unknown>, keys: string[]): str
 }
 
 export function compactTranscriptText(value: string): string | null {
-    const withoutReminders = value
-        .replace(/<system-reminder>[\s\S]*?<\/system-reminder>/gi, ' ')
-        .replace(/\s+/g, ' ')
+    const withoutReminders = value.replace(/<system-reminder>[\s\S]*?<\/system-reminder>/gi, ' ');
+    const normalized = withoutReminders
+        .replace(/\r\n/g, '\n')
+        .replace(/\r/g, '\n')
+        .split('\n')
+        .map((line) => line.replace(/[ \t]+$/g, ''))
+        .join('\n')
+        .replace(/\n{3,}/g, '\n\n')
         .trim();
-    return withoutReminders.length > 0 ? withoutReminders : null;
+    return normalized.length > 0 ? normalized : null;
 }
 
 export function extractTranscriptTextParts(value: unknown): string[] {

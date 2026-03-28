@@ -868,6 +868,78 @@ describe('hook install workflow', () => {
         expect(capture.startedAt).toBe(Date.parse('2026-03-06T05:00:00.000Z'));
     });
 
+    it('reads Claude desktop transcripts with top-level user and assistant events', () => {
+        const transcriptDir = createTempDir();
+        const transcriptPath = path.join(transcriptDir, 'claude-transcript.jsonl');
+        fs.writeFileSync(transcriptPath, [
+            JSON.stringify({
+                type: 'queue-operation',
+                operation: 'enqueue',
+                sessionId: 'claude-session-1',
+                content: 'ignored queue content'
+            }),
+            JSON.stringify({
+                type: 'user',
+                uuid: 'claude-user-1',
+                timestamp: '2026-03-28T01:11:40.653Z',
+                cwd: 'C:\\repo',
+                message: {
+                    role: 'user',
+                    content: 'please compare this repo with ours'
+                }
+            }),
+            JSON.stringify({
+                type: 'assistant',
+                uuid: 'claude-thinking-1',
+                parentUuid: 'claude-user-1',
+                timestamp: '2026-03-28T01:11:44.645Z',
+                cwd: 'C:\\repo',
+                message: {
+                    role: 'assistant',
+                    content: [
+                        { type: 'thinking', thinking: 'internal only' }
+                    ]
+                }
+            }),
+            JSON.stringify({
+                type: 'assistant',
+                uuid: 'claude-assistant-1',
+                parentUuid: 'claude-user-1',
+                timestamp: '2026-03-28T01:11:46.730Z',
+                cwd: 'C:\\repo',
+                message: {
+                    role: 'assistant',
+                    content: [
+                        {
+                            type: 'text',
+                            text: 'Codex is stronger on provenance.\n\n| Layer | Winner |\n| --- | --- |\n| Provenance | 0ctx |\n| Review | CQ |'
+                        }
+                    ]
+                }
+            })
+        ].join('\n'), 'utf8');
+
+        const capture = readTranscriptCapture(transcriptPath);
+
+        expect(capture.cwd).toBe('C:\\repo');
+        expect(capture.messages).toHaveLength(2);
+        expect(capture.messages[0]).toMatchObject({
+            messageId: 'claude-user-1',
+            role: 'user',
+            text: 'please compare this repo with ours',
+            lineNumber: 2
+        });
+        expect(capture.messages[1]).toMatchObject({
+            messageId: 'claude-assistant-1',
+            role: 'assistant',
+            text: 'Codex is stronger on provenance.\n\n| Layer | Winner |\n| --- | --- |\n| Provenance | 0ctx |\n| Review | CQ |',
+            parentId: 'claude-user-1',
+            lineNumber: 4
+        });
+        expect(capture.summary).toBe('please compare this repo with ours -> Codex is stronger on provenance.\n\n| Layer | Winner |\n| --- | --- |\n| Provenance | 0ctx |\n| Review | CQ |');
+        expect(capture.startedAt).toBe(Date.parse('2026-03-28T01:11:40.653Z'));
+    });
+
     it('derives a turn-scoped Codex capture from inline notify payloads', () => {
         const occurredAt = Date.parse('2026-03-06T05:10:00.000Z');
         const capture = readCodexCapture({

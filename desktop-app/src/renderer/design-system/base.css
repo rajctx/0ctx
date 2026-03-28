@@ -997,6 +997,56 @@ button:focus {
   color: var(--text-primary);
 }
 
+.msg-link {
+  color: var(--accent-primary);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.msg-link:hover {
+  color: var(--text-bright);
+}
+
+.msg-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--bg-hover);
+}
+
+.msg-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.msg-rich.compact .msg-table {
+  font-size: 10px;
+}
+
+.msg-table th,
+.msg-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  text-align: left;
+  vertical-align: top;
+}
+
+.msg-table th {
+  color: var(--text-bright);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.msg-rich.compact .msg-table th,
+.msg-rich.compact .msg-table td {
+  padding: 6px 8px;
+}
+
 .idx-item {
   display: grid;
   grid-template-columns: 16px 26px 1fr;

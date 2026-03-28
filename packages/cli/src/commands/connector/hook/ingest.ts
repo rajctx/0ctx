@@ -214,12 +214,19 @@ export function createHookIngestCommand(deps: HookCommandDeps) {
 
             try {
                 const ensured = await deps.sendToDaemon('ensureNodeByKey', nodeParams) as {
-                    node?: { id?: string };
+                    node?: { id?: string; content?: string };
                     created?: boolean;
                 } | null;
                 const nodeId = ensured?.node?.id;
                 if (!nodeId) {
                     throw new Error(`hook_ingest_failed_to_ensure_node: ${key}`);
+                }
+
+                if (ensured.created !== true && ensured.node?.content !== content) {
+                    await deps.sendToDaemon('updateNode', {
+                        id: nodeId,
+                        updates: { content, hidden: true }
+                    });
                 }
 
                 capturedNodes.push({ id: nodeId, key, role, occurredAt, deduped: ensured.created !== true });
@@ -232,8 +239,14 @@ export function createHookIngestCommand(deps: HookCommandDeps) {
                 }
             }
 
-            const existing = await deps.sendToDaemon('getByKey', { contextId, key, includeHidden: true }) as { id?: string } | null;
+            const existing = await deps.sendToDaemon('getByKey', { contextId, key, includeHidden: true }) as { id?: string; content?: string } | null;
             if (existing?.id) {
+                if (existing.content !== content) {
+                    await deps.sendToDaemon('updateNode', {
+                        id: existing.id,
+                        updates: { content, hidden: true }
+                    });
+                }
                 capturedNodes.push({ id: existing.id, key, role, occurredAt, deduped: true });
                 return;
             }

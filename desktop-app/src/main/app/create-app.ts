@@ -16,7 +16,12 @@ import { DesktopTrayService } from '../tray/tray-service';
 import { createWindowManager } from '../windows/create-main-window';
 
 export async function createDesktopApplication() {
-  const singleInstance = app.requestSingleInstanceLock();
+  const isDevDesktop = !app.isPackaged || Boolean(process.env.OCTX_ELECTRON_DEV_SERVER_URL);
+  if (isDevDesktop) {
+    app.setPath('userData', path.join(app.getPath('appData'), '@0ctx/desktop-electron-dev'));
+  }
+
+  const singleInstance = isDevDesktop ? true : app.requestSingleInstanceLock();
   if (!singleInstance) {
     app.quit();
     return;
@@ -122,6 +127,7 @@ export async function createDesktopApplication() {
     ipcMain.handle(desktopChannels.runtime.status, () => getRuntimeStatus(false));
     ipcMain.handle(desktopChannels.dialog.pickWorkspaceFolder, () => dialog.pickWorkspaceFolder(getMainWindow()));
     ipcMain.handle(desktopChannels.shell.openPath, (_event, targetPath: string) => shell.openPath(targetPath));
+    ipcMain.handle(desktopChannels.shell.openExternal, (_event, targetUrl: string) => shell.openExternal(targetUrl));
     ipcMain.handle(desktopChannels.events.start, async (_event, contextId?: string | null) => {
       try {
         return await callWithDaemonRecovery(() => events.start(contextId));

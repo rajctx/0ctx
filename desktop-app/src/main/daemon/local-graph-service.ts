@@ -51,6 +51,7 @@ export class LocalGraphService {
   private graph: CoreGraph | null = null;
   private db: CoreDb | null = null;
   private coreModule: CoreModule | null | undefined = undefined;
+  private disabled = false;
 
   resolvePreferredRead(method: string, params: Record<string, unknown>) {
     const contextId = readString(params, 'contextId');
@@ -173,12 +174,7 @@ export class LocalGraphService {
   }
 
   dispose() {
-    if (!this.db) {
-      return;
-    }
-    this.db.close();
-    this.db = null;
-    this.graph = null;
+    this.resetGraph();
   }
 
   protected loadCoreModule(): CoreModule | null {
@@ -196,6 +192,10 @@ export class LocalGraphService {
   }
 
   private getGraph() {
+    if (this.disabled) {
+      return null;
+    }
+
     if (this.graph) {
       return this.graph;
     }
@@ -205,8 +205,27 @@ export class LocalGraphService {
       return null;
     }
 
-    this.db = core.openDb();
-    this.graph = new core.Graph(this.db);
-    return this.graph;
+    try {
+      this.db = core.openDb();
+      this.graph = new core.Graph(this.db);
+      return this.graph;
+    } catch {
+      this.disabled = true;
+      this.resetGraph();
+      return null;
+    }
+  }
+
+  private resetGraph() {
+    if (this.db) {
+      try {
+        this.db.close();
+      } catch {
+        // Ignore cleanup errors after a failed local-graph init.
+      }
+    }
+
+    this.db = null;
+    this.graph = null;
   }
 }

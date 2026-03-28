@@ -20,4 +20,17 @@ export class DesktopShellService {
       message: `Opened ${candidate}`
     };
   }
+
+  async openExternal(targetUrl: string) {
+    const candidate = String(targetUrl || '').trim();
+    if (!candidate) {
+      throw new Error('URL is required.');
+    }
+
+    await shell.openExternal(candidate);
+    return {
+      ok: true,
+      message: `Opened ${candidate}`
+    };
+  }
 }

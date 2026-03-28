@@ -1,122 +1,97 @@
-import { Fragment } from 'react';
+import { Fragment, type ReactNode } from 'react';
+import { desktopBridge } from '../../lib/bridge';
+import { parseMarkdownBlocks } from '../../lib/message-markdown';
 
-type Block =
-  | { kind: 'heading'; text: string }
-  | { kind: 'paragraph'; text: string }
-  | { kind: 'list'; ordered: boolean; items: string[] }
-  | { kind: 'code'; text: string };
-
-function normalizeText(value: string) {
-  let text = value.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  text = text.replace(/\s+(##\s+)/g, '\n$1');
-  text = text.replace(/\s+\*\*(\d+\.\s[^*]+)\*\*/g, '\n$1');
-
-  const lines: string[] = [];
-  for (const originalLine of text.split('\n')) {
-    const line = originalLine.trimEnd();
-    const headingMatch = line.match(/^(#{1,6}\s+[^-]+?)\s+-\s+(.+)$/);
-    if (headingMatch) {
-      lines.push(headingMatch[1]);
-      for (const item of headingMatch[2].split(/\s+-\s+/)) {
-        const trimmed = item.trim();
-        if (trimmed) {
-          lines.push(`- ${trimmed}`);
-        }
-      }
-      continue;
-    }
-    lines.push(line);
-  }
-
-  return lines.join('\n');
+function renderTextWithBreaks(value: string, keyPrefix: string) {
+  const segments = value.split('\n');
+  return segments.map((segment, index) => (
+    <Fragment key={`${keyPrefix}-${index}`}>
+      {index > 0 ? <br /> : null}
+      {segment}
+    </Fragment>
+  ));
 }
 
-function parseBlocks(value: string): Block[] {
-  const source = normalizeText(value);
-  const lines = source.split('\n');
-  const blocks: Block[] = [];
-  let index = 0;
-
-  while (index < lines.length) {
-    const current = lines[index].trim();
-    if (!current) {
-      index += 1;
-      continue;
-    }
-
-    if (current.startsWith('```')) {
-      const codeLines: string[] = [];
-      index += 1;
-      while (index < lines.length && !lines[index].trim().startsWith('```')) {
-        codeLines.push(lines[index]);
-        index += 1;
-      }
-      if (index < lines.length) {
-        index += 1;
-      }
-      blocks.push({ kind: 'code', text: codeLines.join('\n').trim() });
-      continue;
-    }
-
-    if (/^#{1,6}\s+/.test(current)) {
-      blocks.push({ kind: 'heading', text: current.replace(/^#{1,6}\s+/, '').trim() });
-      index += 1;
-      continue;
-    }
-
-    if (/^\d+\.\s+/.test(current) || /^[-*+]\s+/.test(current)) {
-      const ordered = /^\d+\.\s+/.test(current);
-      const items: string[] = [];
-      while (index < lines.length) {
-        const line = lines[index].trim();
-        if (!line) {
-          index += 1;
-          break;
-        }
-        if (ordered && /^\d+\.\s+/.test(line)) {
-          items.push(line.replace(/^\d+\.\s+/, '').trim());
-          index += 1;
-          continue;
-        }
-        if (!ordered && /^[-*+]\s+/.test(line)) {
-          items.push(line.replace(/^[-*+]\s+/, '').trim());
-          index += 1;
-          continue;
-        }
-        break;
-      }
-      blocks.push({ kind: 'list', ordered, items });
-      continue;
-    }
-
-    const paragraphLines: string[] = [];
-    while (index < lines.length) {
-      const line = lines[index].trim();
-      if (!line || line.startsWith('```') || /^#{1,6}\s+/.test(line) || /^\d+\.\s+/.test(line) || /^[-*+]\s+/.test(line)) {
-        break;
-      }
-      paragraphLines.push(line);
-      index += 1;
-    }
-    blocks.push({ kind: 'paragraph', text: paragraphLines.join(' ') });
+function normalizeLinkTarget(href: string) {
+  const trimmed = href.trim();
+  if (/^https?:\/\//i.test(trimmed)) {
+    return { kind: 'external' as const, target: trimmed };
   }
-
-  return blocks;
+  if (/^\/[A-Za-z]:\//.test(trimmed)) {
+    return { kind: 'path' as const, target: trimmed.slice(1) };
+  }
+  if (/^[A-Za-z]:[\\/]/.test(trimmed)) {
+    return { kind: 'path' as const, target: trimmed };
+  }
+  if (/^file:\/\//i.test(trimmed)) {
+    const normalized = trimmed.replace(/^file:\/\//i, '');
+    return { kind: 'path' as const, target: normalized.replace(/^\/([A-Za-z]:\/)/, '$1') };
+  }
+  return null;
 }
 
-function renderInline(value: string) {
-  const normalized = value.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/`([^`]+)`/g, '<code>$1</code>');
-  const parts = normalized.split(/(<strong>.*?<\/strong>|<code>.*?<\/code>)/g).filter(Boolean);
+async function openMarkdownTarget(href: string) {
+  const resolved = normalizeLinkTarget(href);
+  if (!resolved) {
+    return;
+  }
+  if (resolved.kind === 'external') {
+    await desktopBridge.shell.openExternal(resolved.target);
+    return;
+  }
+  await desktopBridge.shell.openPath(resolved.target.replace(/\//g, '\\'));
+}
 
-  return parts.map((part, index) => {
-    if (part.startsWith('<strong>') && part.endsWith('</strong>')) {
-      return <strong key={index}>{part.slice(8, -9)}</strong>;
+function renderInline(value: string): ReactNode[] {
+  const pattern = /\[([^\]]+)\]\(([^)]+)\)|\*\*([^*]+)\*\*|`([^`]+)`/g;
+  const nodes: ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(value)) !== null) {
+    if (match.index > lastIndex) {
+      const text = value.slice(lastIndex, match.index);
+      nodes.push(
+        <Fragment key={`text-${lastIndex}`}>
+          {renderTextWithBreaks(text, `text-${lastIndex}`)}
+        </Fragment>
+      );
     }
-    if (part.startsWith('<code>') && part.endsWith('</code>')) {
-      return <code key={index} className="msg-inline-code">{part.slice(6, -7)}</code>;
+
+    if (match[1] && match[2]) {
+      const href = match[2];
+      nodes.push(
+        <a
+          key={`link-${match.index}`}
+          href={href}
+          className="msg-link"
+          onClick={(event) => {
+            event.preventDefault();
+            void openMarkdownTarget(href);
+          }}
+        >
+          {match[1]}
+        </a>
+      );
+    } else if (match[3]) {
+      nodes.push(<strong key={`strong-${match.index}`}>{renderTextWithBreaks(match[3], `strong-${match.index}`)}</strong>);
+    } else if (match[4]) {
+      nodes.push(<code key={`code-${match.index}`} className="msg-inline-code">{match[4]}</code>);
     }
-    return <Fragment key={index}>{part}</Fragment>;
-  });
+
+    lastIndex = pattern.lastIndex;
+  }
+
+  if (lastIndex < value.length) {
+    const text = value.slice(lastIndex);
+    nodes.push(
+      <Fragment key={`text-${lastIndex}`}>
+        {renderTextWithBreaks(text, `text-${lastIndex}`)}
+      </Fragment>
+    );
+  }
+
+  return nodes;
 }
 
 export function MessageRichText({
@@ -126,7 +101,7 @@ export function MessageRichText({
   content: string;
   compact?: boolean;
 }) {
-  const blocks = parseBlocks(content);
+  const blocks = parseMarkdownBlocks(content);
 
   return (
     <div className={compact ? 'msg-rich compact' : 'msg-rich'}>
@@ -134,7 +109,7 @@ export function MessageRichText({
         switch (block.kind) {
           case 'heading':
             return (
-              <div key={index} className="msg-heading">
+              <div key={index} className={`msg-heading level-${block.level}`}>
                 {renderInline(block.text)}
               </div>
             );
@@ -153,6 +128,29 @@ export function MessageRichText({
               <pre key={index} className="msg-code">
                 {block.text}
               </pre>
+            );
+          case 'table':
+            return (
+              <div key={index} className="msg-table-wrap">
+                <table className="msg-table">
+                  <thead>
+                    <tr>
+                      {block.headers.map((header, headerIndex) => (
+                        <th key={headerIndex}>{renderInline(header)}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {block.rows.map((row, rowIndex) => (
+                      <tr key={rowIndex}>
+                        {row.map((cell, cellIndex) => (
+                          <td key={cellIndex}>{renderInline(cell)}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             );
           case 'paragraph':
           default:

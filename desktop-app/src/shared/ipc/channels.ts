@@ -15,7 +15,8 @@ export const desktopChannels = {
     pickWorkspaceFolder: 'desktop:dialog/pick-workspace-folder'
   },
   shell: {
-    openPath: 'desktop:shell/open-path'
+    openPath: 'desktop:shell/open-path',
+    openExternal: 'desktop:shell/open-external'
   },
   events: {
     start: 'desktop:events/start',
