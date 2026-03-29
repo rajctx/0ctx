@@ -98,7 +98,7 @@ export default function HomePage() {
 
           <nav className="site-nav" aria-label="Primary">
             <Link href="/docs">Docs</Link>
-            <Link href="/install">Install</Link>
+            <Link href="/docs/installation">Install</Link>
             <a
               href="https://github.com/nicholasgriffintn/0ctx"
               target="_blank"
@@ -108,7 +108,7 @@ export default function HomePage() {
             </a>
           </nav>
 
-          <Link href="/install" className="site-cta">
+          <Link href="/docs/installation" className="site-cta">
             Get started
           </Link>
         </header>
@@ -554,7 +554,7 @@ export default function HomePage() {
                 GitHub
               </a>
               <span className="cta-sep">&middot;</span>
-              <Link href="/install">Install guide</Link>
+              <Link href="/docs/installation">Install guide</Link>
             </div>
           </div>
         </section>
@@ -575,7 +575,7 @@ export default function HomePage() {
             <div className="footer-col">
               <h4 className="footer-col-title">Product</h4>
               <Link href="/docs">Documentation</Link>
-              <Link href="/install">Install guide</Link>
+              <Link href="/docs/installation">Install guide</Link>
               <a href="https://github.com/nicholasgriffintn/0ctx/releases" target="_blank" rel="noopener noreferrer">Changelog</a>
             </div>
             <div className="footer-col">

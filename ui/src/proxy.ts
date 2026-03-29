@@ -9,7 +9,7 @@ import { NextResponse } from 'next/server';
 export async function proxy(request: Request): Promise<Response> {
   const url = new URL(request.url);
   if (url.pathname === '/dashboard' || url.pathname.startsWith('/dashboard/')) {
-    return Response.redirect(new URL('/install', url), 307);
+    return Response.redirect(new URL('/docs/installation', url), 307);
   }
   return NextResponse.next();
 }
