@@ -100,7 +100,7 @@ export default function HomePage() {
             <Link href="/docs">Docs</Link>
             <Link href="/docs/installation">Install</Link>
             <a
-              href="https://github.com/nicholasgriffintn/0ctx"
+              href="https://github.com/rajctx/0ctx"
               target="_blank"
               rel="noopener noreferrer"
             >
@@ -547,7 +547,7 @@ export default function HomePage() {
               <Link href="/docs">Documentation</Link>
               <span className="cta-sep">&middot;</span>
               <a
-                href="https://github.com/nicholasgriffintn/0ctx"
+                href="https://github.com/rajctx/0ctx"
                 target="_blank"
                 rel="noopener noreferrer"
               >
@@ -576,13 +576,13 @@ export default function HomePage() {
               <h4 className="footer-col-title">Product</h4>
               <Link href="/docs">Documentation</Link>
               <Link href="/docs/installation">Install guide</Link>
-              <a href="https://github.com/nicholasgriffintn/0ctx/releases" target="_blank" rel="noopener noreferrer">Changelog</a>
+              <a href="https://github.com/rajctx/0ctx/releases" target="_blank" rel="noopener noreferrer">Changelog</a>
             </div>
             <div className="footer-col">
               <h4 className="footer-col-title">Developers</h4>
-              <a href="https://github.com/nicholasgriffintn/0ctx" target="_blank" rel="noopener noreferrer">GitHub</a>
-              <a href="https://github.com/nicholasgriffintn/0ctx/issues" target="_blank" rel="noopener noreferrer">Issues</a>
-              <a href="https://github.com/nicholasgriffintn/0ctx/discussions" target="_blank" rel="noopener noreferrer">Discussions</a>
+              <a href="https://github.com/rajctx/0ctx" target="_blank" rel="noopener noreferrer">GitHub</a>
+              <a href="https://github.com/rajctx/0ctx/issues" target="_blank" rel="noopener noreferrer">Issues</a>
+              <a href="https://github.com/rajctx/0ctx/discussions" target="_blank" rel="noopener noreferrer">Discussions</a>
             </div>
             <div className="footer-col">
               <h4 className="footer-col-title">Resources</h4>
