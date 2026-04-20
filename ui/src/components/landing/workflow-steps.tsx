@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import posthog from "posthog-js";
 
 const steps = [
   {
@@ -162,7 +163,14 @@ export function WorkflowSteps() {
         }
         if (bestEntry) {
           const idx = els.indexOf(bestEntry.target as HTMLDivElement);
-          if (idx !== -1) setActiveIdx(idx);
+          if (idx !== -1) {
+            setActiveIdx(idx);
+            posthog.capture("workflow_step_engaged", {
+              step_id: steps[idx].id,
+              step_name: steps[idx].name,
+              step_index: idx,
+            });
+          }
         }
       },
       { threshold: [0.3, 0.5, 0.7], rootMargin: "-10% 0px -30% 0px" }
