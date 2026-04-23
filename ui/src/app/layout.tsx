@@ -36,8 +36,37 @@ const instrumentSerif = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
-  title: '0ctx UI | Docs and Install Guide',
-  description: 'Public docs and install guidance for the local-first 0ctx CLI and daemon.',
+  metadataBase: new URL('https://0ctx.com'),
+  title: {
+    default: '0ctx | Persistent repo memory for AI coding tools',
+    template: '%s | 0ctx'
+  },
+  description: '0ctx keeps sessions, checkpoints, and decisions attached to your repo so AI tools can continue work without losing project context. Local-first runtime, SQLite-backed graph, repo-first setup.',
+  keywords: ['0ctx', 'AI coding tools', 'project context', 'local-first', 'context memory', 'AI agent'],
+  openGraph: {
+    type: 'website',
+    locale: 'en_US',
+    url: 'https://0ctx.com',
+    title: '0ctx | Persistent repo memory for AI coding tools',
+    description: '0ctx gives AI workflows durable repo memory instead of session-by-session amnesia.',
+    siteName: '0ctx',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: '0ctx | Persistent repo memory for AI coding tools',
+    description: '0ctx gives AI workflows durable repo memory instead of session-by-session amnesia.',
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
 };
 
 const themeBootstrapScript = `(() => {
